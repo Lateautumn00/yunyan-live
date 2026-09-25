@@ -1,0 +1,31 @@
+export interface LiveConfig {
+  version: string;
+  liveServer: string;
+  messageWs: string;
+  userApi: string;
+  liveApi: string;
+  uploadUrl: string;
+  audioUrl: string;
+  userAgreement: string;
+  uploadImageUrl: string;
+  uploadPptUrl: string;
+  smallClassNum: number;
+}
+
+export type EnvRecord = Record<string, string | undefined>;
+
+export function loadConfig(env: EnvRecord): LiveConfig {
+  return {
+    version: env.VITE_VERSION ?? '0.0.0',
+    liveServer: env.VITE_LIVE_SERVER ?? '',
+    messageWs: env.VITE_MESSAGE_WS ?? '',
+    userApi: env.VITE_USER_API ?? '',
+    liveApi: env.VITE_LIVE_API ?? '',
+    uploadUrl: env.VITE_UPLOAD_URL ?? '',
+    audioUrl: env.VITE_AUDIO_URL ?? '',
+    userAgreement: env.VITE_USER_AGREEMENT ?? '',
+    uploadImageUrl: env.VITE_UPLOAD_IMAGE_URL ?? '',
+    uploadPptUrl: env.VITE_UPLOAD_PPT_URL ?? '',
+    smallClassNum: Number(env.VITE_SMALL_CLASS_NUM ?? 10)
+  };
+}

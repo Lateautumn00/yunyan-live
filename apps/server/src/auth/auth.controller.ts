@@ -1,0 +1,139 @@
+import { Controller, Post, Get, Body, Query, UseGuards, Request, Inject, OnModuleInit } from '@nestjs/common';
+import { ClientGrpc } from '@nestjs/microservices';
+import { JwtService } from '@nestjs/jwt';
+import { Metadata } from '@grpc/grpc-js';
+import { Observable } from 'rxjs';
+import { grpcCall } from '../common/helpers/grpc.helper';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { LoginDto, RegisterDto, ResetPasswordDto, ChangePasswordDto, UpdateUserNameDto } from './dto/auth.dto';
+
+interface AuthResponse {
+  code: string;
+  msg: string;
+  data?: string;
+  access_token?: string;
+  expires_in?: number;
+  guid?: string;
+  role?: number;
+}
+
+interface RegisterResponse {
+  code: string;
+  msg: string;
+  guid?: string;
+}
+
+interface CommonResponse {
+  code: string;
+  msg: string;
+}
+
+interface UserResponse {
+  code: string;
+  msg: string;
+  data?: { id: string; username: string; email: string; role: number };
+}
+
+interface AuthServiceClient {
+  login(data: { email: string; password: string }): Observable<AuthResponse>;
+  register(data: { username: string; email: string; password: string; code: string; role: number }): Observable<RegisterResponse>;
+  resetPassword(data: { email: string; code: string; password: string }): Observable<CommonResponse>;
+  changePassword(data: { user_id: string; old_password: string; new_password: string }, metadata?: Metadata): Observable<CommonResponse>;
+  getUser(data: { user_id: string }): Observable<UserResponse>;
+  updateUserName(data: { user_id: string; username: string }): Observable<CommonResponse>;
+}
+
+@Controller('user/user')
+export class AuthController implements OnModuleInit {
+  constructor(
+    @Inject('AUTH_GRPC') private authClient: ClientGrpc,
+    private jwtService: JwtService,
+  ) {}
+
+  private authService: AuthServiceClient;
+
+  onModuleInit() {
+    this.authService = this.authClient.getService<AuthServiceClient>('AuthService');
+  }
+
+  @Post('login')
+  async login(@Body() dto: LoginDto) {
+    const result = await grpcCall(this.authService.login(dto));
+    return {
+      token: result.access_token,
+      guid: result.guid,
+      role: result.role,
+    };
+  }
+
+  @Post('register')
+  register(@Body() dto: RegisterDto) {
+    return grpcCall(this.authService.register({
+      username: dto.userName,
+      email: dto.email,
+      password: dto.password,
+      code: dto.code,
+      role: dto.role ?? 2,
+    }));
+  }
+
+  @Post('logout')
+  logout() {
+    return { success: true };
+  }
+
+  @Post('resetPassword')
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return grpcCall(this.authService.resetPassword(dto));
+  }
+
+  @Post('changePassword')
+  @UseGuards(JwtAuthGuard)
+  changePassword(@Body() dto: ChangePasswordDto, @Request() req: { user: { userId: string } }) {
+    const metadata = new Metadata();
+    metadata.add('user-id', req.user.userId);
+    return grpcCall(this.authService.changePassword(
+      { user_id: req.user.userId, old_password: dto.oldPassword, new_password: dto.password },
+      metadata,
+    ));
+  }
+
+  @Get('getUserMsg')
+  @UseGuards(JwtAuthGuard)
+  async getMe(@Request() req: { user: { userId: string; email: string; role: number } }) {
+    const result = await grpcCall(this.authService.getUser({ user_id: req.user.userId }));
+    const userData = result.data!;
+    const token = this.jwtService.sign({
+      sub: req.user.userId,
+      email: req.user.email,
+      role: req.user.role,
+    });
+    return {
+      token,
+      guid: userData.id,
+      userName: userData.username,
+      email: userData.email,
+      role: userData.role,
+    };
+  }
+
+  @Post('updateUserName')
+  @UseGuards(JwtAuthGuard)
+  async updateUserName(@Body() dto: UpdateUserNameDto, @Request() req: { user: { userId: string } }) {
+    return grpcCall(this.authService.updateUserName({
+      user_id: req.user.userId,
+      username: dto.userName,
+    }));
+  }
+
+  @Get('getUserById')
+  @UseGuards(JwtAuthGuard)
+  async getUserById(@Query('userId') userId: string) {
+    const result = await grpcCall(this.authService.getUser({ user_id: userId }));
+    const userData = result.data!;
+    return {
+      userId: userData.id,
+      userName: userData.username,
+    };
+  }
+}
