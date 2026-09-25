@@ -17,7 +17,8 @@ pnpm install
 
 # 复制各服务的环境变量模板并按需填写
 cp apps/server/.env.example    apps/server/.env
-cp apps/desktop/.env.example   apps/desktop/.env.development
+cp apps/desktop/.env.example   apps/desktop/.env.development   # pnpm dev:desktop 使用
+cp apps/desktop/.env.example   apps/desktop/.env.production    # pnpm build:desktop 打包时使用
 cp init/.env.example           init/.env
 
 # 启动基础设施

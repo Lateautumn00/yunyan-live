@@ -35,7 +35,9 @@ yunyan-live/
 │   │   │           ├── Video.vue         # 大班视频组件
 │   │   │           ├── Chat.vue          # 大班聊天组件
 │   │   │           └── WhiteBoard.vue    # 白板组件
-│   │   └── .env.development                # 前端环境变量（不提交 git）
+│   │   ├── .env.example                     # 桌面端环境模板（入库）
+│   │   ├── .env.development                 # 开发用，pnpm dev:desktop 读取（不提交）
+│   │   └── .env.production                  # 打包用，pnpm build:desktop 读取（不提交）
 │   │
 │   ├── server/                           # API 网关 (NestJS)
 │   │   └── src/
@@ -153,6 +155,17 @@ VITE_LIVE_SERVER=ws://192.168.x.x:8188/janus
 VITE_UPLOAD_IMAGE_URL=http://192.168.x.x:3001/upload/image
 VITE_UPLOAD_PPT_URL=http://192.168.x.x:3001/upload/ppt
 ```
+
+桌面端（`apps/desktop/`）有两个环境文件，`electron-vite` 按运行模式自动加载，无需手动指定；
+两者都由 `.env.example` 复制而来，键完全一致，只是填入的地址不同：
+
+| 文件 | 触发命令 | 用途 |
+|------|----------|------|
+| `.env.development` | `pnpm dev:desktop`（mode=development） | 日常开发，指向本地/内网服务 |
+| `.env.production` | `pnpm build:desktop` / `pnpm build:desktop:win`（mode=production） | 打包进产物的地址，指向生产服务器 |
+
+覆盖规则（优先级从高到低）：`.env.[mode].local` > `.env.[mode]` > `.env.local` > `.env`。
+除 `.env.example` 外均已 gitignore，可放心填真实地址。
 
 ### 3. 启动 Docker 服务
 
@@ -352,7 +365,10 @@ JANUS_URL=http://192.168.x.x:8088
 GRPC_PORT=50052
 ```
 
-### Desktop (`apps/desktop/.env.development`)
+### Desktop (`apps/desktop/.env.development` / `.env.production`)
+
+两个文件键完全相同（均由 `.env.example` 复制）：开发用 `.env.development` 填内网地址，
+打包用 `.env.production` 填生产地址 —— 改哪份就影响对应命令的产物。
 
 ```bash
 VITE_USER_API=http://192.168.x.x:3001/user
