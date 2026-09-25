@@ -1,0 +1,100 @@
+syntax = "proto3";
+package auth;
+
+service AuthService {
+  rpc Login (LoginRequest) returns (AuthResponse) {}
+  rpc Register (RegisterRequest) returns (RegisterResponse) {}
+  rpc ResetPassword (ResetPasswordRequest) returns (CommonResponse) {}
+  rpc ChangePassword (ChangePasswordRequest) returns (CommonResponse) {}
+  rpc GetUser (GetUserRequest) returns (UserResponse) {}
+  rpc UpdateUserName (UpdateUserNameRequest) returns (CommonResponse) {}
+  rpc BatchGetUsers (BatchGetUsersRequest) returns (BatchGetUsersResponse) {}
+  rpc SearchTeachers (SearchTeachersRequest) returns (SearchTeachersResponse) {}
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message RegisterRequest {
+  string username = 1;
+  string email = 2;
+  string password = 3;
+  string code = 4;
+  int32 role = 5;
+}
+
+message ResetPasswordRequest {
+  string email = 1;
+  string code = 2;
+  string password = 3;
+}
+
+message ChangePasswordRequest {
+  string user_id = 1;
+  string old_password = 2;
+  string new_password = 3;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message AuthResponse {
+  string code = 1;
+  string msg = 2;
+  string access_token = 3;
+  int32 expires_in = 4;
+  string guid = 5;
+  int32 role = 6;
+}
+
+message RegisterResponse {
+  string code = 1;
+  string msg = 2;
+  string guid = 3;
+}
+
+message UserResponse {
+  string code = 1;
+  string msg = 2;
+  UserData data = 3;
+}
+
+message UserData {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  int32 role = 4;
+}
+
+message CommonResponse {
+  string code = 1;
+  string msg = 2;
+}
+
+message UpdateUserNameRequest {
+  string user_id = 1;
+  string username = 2;
+}
+
+message BatchGetUsersRequest {
+  repeated string user_ids = 1;
+}
+
+message BatchGetUsersResponse {
+  string code = 1;
+  string msg = 2;
+  repeated UserData data = 3;
+}
+
+message SearchTeachersRequest {
+  string keyword = 1;
+}
+
+message SearchTeachersResponse {
+  string code = 1;
+  string msg = 2;
+  repeated UserData data = 3;
+}

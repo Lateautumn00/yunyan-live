@@ -1,0 +1,76 @@
+{
+  "name": "edu-live-monorepo",
+  "version": "0.5.0",
+  "private": true,
+  "description": "云砚直播 Monorepo",
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=24.13.0",
+    "pnpm": ">=10.28.2"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:desktop": "pnpm --filter @yunyan-live/desktop dev",
+    "dev:all": "concurrently -n all,desktop -c green,red --delay 2 \"pnpm dev:server\" \"pnpm dev:desktop\"",
+    "dev:mail": "pnpm --filter @yunyan-live/mail-service dev",
+    "dev:auth": "pnpm --filter @yunyan-live/auth-service dev",
+    "dev:live": "pnpm --filter @yunyan-live/live-service dev",
+    "dev:chat-ws": "pnpm --filter @yunyan-live/chat-ws-service dev",
+    "dev:yjs-ws": "pnpm --filter @yunyan-live/yjs-ws-service dev",
+    "dev:gateway": "pnpm --filter @yunyan-live/server dev",
+    "dev:server": "concurrently -n mail,auth,live,chat-ws,yjs-ws,gw -c blue,green,yellow,cyan,magenta,red \"pnpm dev:mail\" \"pnpm dev:auth\" \"pnpm dev:live\" \"pnpm dev:chat-ws\" \"pnpm dev:yjs-ws\" \"pnpm dev:gateway\"",
+    "build": "turbo run build",
+    "build:desktop": "pnpm --filter @yunyan-live/desktop build",
+    "build:desktop:win": "pnpm --filter @yunyan-live/desktop build:win",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:desktop": "pnpm --filter @yunyan-live/desktop test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,mts,cts,tsx,vue}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,mjs,cjs,json,less,css,html,md}": [
+      "prettier --write"
+    ]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ],
+    "overrides": {
+      "@grpc/grpc-js": "~1.10.0"
+    }
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^9.1.0",
+    "eslint": "^10.8.1",
+    "eslint-plugin-vue": "^10.10.0",
+    "globals": "^17.11.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.10",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "vue-eslint-parser": "^10.4.1"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lateautumn00/yunyan-live.git"
+  },
+  "homepage": "https://github.com/Lateautumn00/yunyan-live#readme",
+  "bugs": {
+    "url": "https://github.com/Lateautumn00/yunyan-live/issues"
+  }
+}

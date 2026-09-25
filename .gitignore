@@ -1,0 +1,50 @@
+# --- general ---
+.DS_Store
+thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log
+
+# --- editor / os ---
+.vscode/
+.idea/
+!.gitkeep
+
+# --- local workspace ---
+.project-rules/
+docs/plans/
+AGENTS.md
+
+# --- pnpm ---
+node_modules/
+**/node_modules/
+.pnpm-store/
+pnpm-debug.log*
+
+# --- turbo / vite / vitest ---
+.turbo/
+**/.turbo/
+**/dist/
+**/out/
+**/coverage/
+**/.vite/
+
+# --- electron-builder artifacts ---
+**/*.exe
+**/*.dmg
+**/*.blockmap
+*.app.asar
+**/dist-release/
+
+# --- env (real values stay local) ---
+.env
+.env.*
+!.env.example
+.npmrc.example
+.npmrc.local
+*.local
+
+# --- auto-generated types ---
+**/auto-imports.d.ts
+**/components.d.ts

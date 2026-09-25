@@ -1,0 +1,151 @@
+// 全局变量
+// 背景图片地址和大小
+.bis(@url) {
+  background-image: url(@url);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+//定位全屏
+.allcover {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+//transform上下左右居中
+.ctt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+//定位上下左右居中
+.ctp(@width, @height) {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-top: -@height / 2;
+  margin-left: -@width / 2;
+}
+
+//定位上下居中
+.tb {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+//定位左右居中
+.lr {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+//宽高
+.wh(@width, @height) {
+  width: @width;
+  height: @height;
+}
+
+//字体大小、行高、字体
+.ft(@size, @line-height) {
+  font-size: @size;
+  line-height: @line-height;
+}
+
+//字体大小，颜色
+.sc(@size, @color) {
+  font-size: @size;
+  color: @color;
+}
+
+//flex 布局和 子元素 对其方式
+.flex(@dir, @x, @y, @wrap) {
+  display: flex;
+  display: -webkit-flex;
+  flex-direction: @dir;
+  justify-content: @x;
+  align-items: @y;
+  flex-wrap: @wrap;
+  -ms-flex-wrap: @wrap;
+}
+
+/* 导航高度 */
+@nav-height: 50px;
+
+/* 主体背景色 */
+@color-bg: #f7f7fa;
+
+/* 字体大小 */
+@fs12: 12px;
+@fs14: 14px;
+@fs15: 15px;
+@fs16: 16px;
+@fs18: 18px;
+@fs20: 20px;
+@fs24: 24px;
+@fs32: 32px;
+@fs47: 47px;
+
+/* 颜色 */
+@color-FFF: #fff;
+@color-000: #000;
+@color-217FFF: #217fff;
+@color-13254A: #13254a;
+@color-3B3B3B: #3b3b3b;
+@color-DCDCDC: #dcdcdc;
+@color-202224: #202224;
+@color-EF3826: #ef3826;
+@color-F1F4F9: #f1f4f9;
+@color-020248: #020248;
+@color-40BE65: #40be65;
+@color-2BB915: #2bb915;
+@color-606266: #606266;
+@color-F8FAFB: #f8fafb;
+@color-FF8743: #ff8743;
+@color-1078F1: #1078f1;
+@color-DBDFE7: #dbdfe7;
+@color-F2F4F9: #f2f4f9;
+@color-EBF8EF: #ebf8ef;
+@color-F3F5Fa: #2f374d;
+@color-2E3035: #2e3035;
+@color-505d6f: #505d6f;
+@color-F7F7FA: #f7f7fa;
+@color-D8D8D8: #d8d8d8;
+@color-FF3F3F: #ff3f3f;
+@color-008C5E: #008c5e;
+@color-8b8b8b: #8b8b8b;
+@color-E71919: #e71919;
+@color-DDDDDD: #dddddd;
+@color-e5e9f2: #e5e9f2;
+@color-a4a4a4: #a4a4a4;
+@color-95A2BE: #95a2be;
+@color-E9EBF1: #e9ebf1;
+@color-1989fa: #1989fa;
+@color-dcdfe6: #dcdfe6;
+@color-1f7cff: #1f7cff;
+@color-0165ed: #0165ed;
+@color-979797: #979797;
+@color-BFCAE1: #bfcae1;
+@color-666666: #666666;
+@color-2c2c34: #2c2c34;
+@color-333333: #333333;
+@color-051540: #051540;
+@color-286bff: #286bff;
+@color-eff1fd: #eff1fd;
+@color-222222: #222222;
+
+/* 有透明度颜色 */
+@color-217fff1a: #217fff1a;
+@color-217fff0d: #217fff0d;
+@color-BFCAE11A: #bfcae11a;
+@color-bfcae133: #bfcae133;
+@color-0000001a: #0000001a;
+@color-00000033: #00000033;
+@color-e282000d: #e282000d;
+@color-DDDDDD33: #dddddd33;
+@color-DDDDDD00: #dddddd00;
+@color-13254A99: #13254a99;

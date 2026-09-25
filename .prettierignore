@@ -1,0 +1,20 @@
+# legacy app to be migrated/removed (P3/P4)
+src/
+static/
+test/
+.electron-vue/
+build/
+dist/
+out/
+coverage/
+node_modules/
+.turbo/
+docs/legacy/
+pnpm-lock.yaml
+tsconfig.json
+.babelrc
+.travis.yml
+appveyor.yml
+babel.config.js
+README.md
+README.en.md

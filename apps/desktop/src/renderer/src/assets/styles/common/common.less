@@ -1,0 +1,63 @@
+@import '~@/assets/styles/common/mixin.less';
+
+* {
+  font-family: PingFang-SC-Bold, PingFang-SC;
+}
+
+.tc-page {
+  margin-top: 40px;
+  display: flex;
+  justify-content: center;
+
+  .el-pagination.is-background .el-pager li:not(.disabled).active {
+    background-color: #286bff;
+  }
+}
+
+.el-form {
+  .el-form-item .el-form-item__label {
+    text-align: left;
+  }
+}
+
+// .el-menu {
+//   .el-menu-item {
+//     height: 45px;
+//     line-height: 44px;
+//   }
+//   .el-menu-item.is-active {
+//     background: @color-eff1fd;
+//     border-left: 4px solid @color-286BFF;
+//     span {
+//       color: @color-286BFF;
+//     }
+//   }
+// }
+
+.el-dialog {
+  .el-dialog__body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    >.jinggao {
+      margin-right: 12px;
+      font-size: 24px;
+      color: #f8821a;
+    }
+  }
+  .el-dialog__footer .dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+
+    >:first-of-type {
+      margin-right: 20px;
+    }
+
+    .el-button.el-button--primary {
+      position: relative;
+      right: 0;
+      bottom: 0;
+    }
+  }
+}

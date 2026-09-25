@@ -1,0 +1,21 @@
+﻿window 
+���·�ʽ�ɽ������󴰿����Ͻ�ͼ�겻��ʾ����
+1��package.json
+  
+"win": {
+      "icon": "build/icons/icon.png" ��Ϊ256*256ͼƬ��
+    }
+
+2������yarn run build:dir ���ϼ�Ŀ¼������һ��icon.icon�ļ��� 
+
+3�������ɵ�iconճ������ǰĿ¼
+4���޸�package.json
+
+"win": {
+      "icon": "build/icons/icon.ico" 
+    }
+
+5������yarn run build:dir  or   yarn run build
+
+
+Ŀ¼/data01/yunyan/imagepool_test/2021-02-05/

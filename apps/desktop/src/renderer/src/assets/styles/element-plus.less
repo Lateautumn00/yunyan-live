@@ -1,0 +1,35 @@
+/**
+* @title: Element Plus 主题令牌 + 全局适配层
+*/
+@import '~@/assets/styles/common/mixin.less';
+
+:root {
+  --el-color-primary: #286bff;
+  --el-color-primary-light-3: #6897ff;
+  --el-color-primary-light-5: #93b5ff;
+  --el-color-primary-light-7: #bed2ff;
+  --el-color-primary-light-8: #d4e1ff;
+  --el-color-primary-light-9: #e9f0ff;
+  --el-color-primary-dark-2: #2056cc;
+  --el-font-size-base: 12px;
+  --el-font-size-small: 12px;
+  --el-border-radius-base: 4px;
+  --el-border-radius-small: 2px;
+}
+
+.el-message {
+  z-index: 3000;
+}
+
+.el-dialog {
+  .el-dialog__footer {
+    .dialog-footer {
+      display: flex;
+      justify-content: flex-end;
+
+      > :first-of-type {
+        margin-right: 20px;
+      }
+    }
+  }
+}

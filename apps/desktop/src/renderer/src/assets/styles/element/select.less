@@ -1,0 +1,32 @@
+/**
+* @title: element el-select 输入框的样式文件 (Element Plus DOM)
+*/
+@import '~@/assets/styles/common/mixin.less';
+
+.el-select {
+  .el-select__wrapper {
+    min-height: 34px;
+    border-radius: 2px;
+    border: 1px solid @color-BFCAE1;
+    box-shadow: none;
+    font-size: @fs12;
+    color: @color-2E3035;
+    padding: 1px 12px;
+  }
+  .el-select__wrapper.is-focused {
+    border-color: @color-217FFF;
+    box-shadow: none;
+  }
+}
+
+.el-select.search-select {
+  width: 180px;
+  min-height: 32px;
+  line-height: 32px;
+
+  .el-select__wrapper {
+    min-height: 32px;
+    border-radius: 2px;
+    border: 1px solid @color-BFCAE1;
+  }
+}

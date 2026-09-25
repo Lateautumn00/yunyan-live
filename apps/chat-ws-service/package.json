@@ -1,0 +1,26 @@
+{
+  "name": "@yunyan-live/chat-ws-service",
+  "version": "0.5.0",
+  "private": true,
+  "scripts": {
+    "dev": "ts-node src/main.ts",
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "koa": "^2.15.0",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/koa": "^2.15.0",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
+    "ts-node": "^10.0.0",
+    "typescript": "^5.9.3"
+  },
+  "license": "MIT"
+}

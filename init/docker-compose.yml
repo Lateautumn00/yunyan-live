@@ -1,0 +1,50 @@
+﻿services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: edu-live-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: yunyan_live
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: edu-live-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+
+  janus-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: edu-live-janus:latest
+    container_name: janus-gateway
+    restart: unless-stopped
+    ports:
+      - '8188:8188'
+      - '8088:8088'
+      - '20000-20100:20000-20100/udp'
+    environment:
+      - GATEWAY_IP=0.0.0.0
+      - STUN_SERVER=stun.l.google.com
+      - STUN_PORT=19302
+      - RTP_PORT_RANGE=20000-20100
+    volumes:
+      - /home/janus/recordings:/tmp/janus/recordings
+      - janus-logs:/var/log/janus
+
+volumes:
+  pgdata:
+  janus-logs:

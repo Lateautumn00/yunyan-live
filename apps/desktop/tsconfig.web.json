@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/renderer/src/*"],
+      "~@/*": ["src/renderer/src/*"],
+      "@yunyan-live/*": ["../../packages/*/src"]
+    },
+    "types": ["vite/client", "element-plus/global"]
+  },
+  "include": ["src/renderer/src/**/*", "src/renderer/src/**/*.vue"]
+}
