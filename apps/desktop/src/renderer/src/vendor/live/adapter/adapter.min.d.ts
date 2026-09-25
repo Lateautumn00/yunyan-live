@@ -1,0 +1,1 @@
+declare module '@/vendor/live/adapter/adapter.min';
