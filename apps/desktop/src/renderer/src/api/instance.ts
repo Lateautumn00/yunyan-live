@@ -9,6 +9,7 @@ export const config = loadConfig(import.meta.env as unknown as Record<string, st
 export const http = createHttpClient({
   baseURL: '',
   timeout: 10000,
+  withCredentials: false,
   tokenProvider: () => ({
     token: localStorage.getItem('token'),
     guid: localStorage.getItem('guid')
