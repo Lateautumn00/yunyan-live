@@ -21,7 +21,7 @@ export interface ResponseInterceptorOptions {
 }
 
 export interface ResponseErrorInterceptorOptions {
-  onUnauthorized?: () => void;
+  onUnauthorized?: (data?: ApiResult) => void;
   onServerError?: (msg: string) => void;
 }
 
@@ -30,7 +30,7 @@ export interface HttpClientOptions extends RequestInterceptorOptions, ResponseIn
   timeout?: number;
   withCredentials?: boolean;
   headers?: Record<string, string>;
-  onUnauthorized?: () => void;
+  onUnauthorized?: (data?: ApiResult) => void;
   onServerError?: (msg: string) => void;
 }
 
@@ -64,9 +64,13 @@ export function createResponseErrorInterceptor(opts: ResponseErrorInterceptorOpt
   return (error: AxiosError<unknown>): Promise<never> => {
     if (error.response) {
       switch (error.response.status) {
-        case 401:
-          opts.onUnauthorized?.();
+        case 401: {
+          const data = error.response.data;
+          opts.onUnauthorized?.(
+            data && typeof data === 'object' ? (data as ApiResult) : undefined
+          );
           break;
+        }
         case 503:
           opts.onServerError?.('服务器异常，请求超时');
           break;

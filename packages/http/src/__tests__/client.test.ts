@@ -93,12 +93,28 @@ describe('createResponseErrorInterceptor', () => {
     return error;
   };
 
-  it('calls onUnauthorized on 401', async () => {
+  it('calls onUnauthorized on 401 with the response body', async () => {
     const onUnauthorized = vi.fn();
     const interceptor = createResponseErrorInterceptor({ onUnauthorized });
+    const error = new AxiosError('boom', 'ERR_BAD_REQUEST');
+    error.response = {
+      status: 401,
+      data: { code: 4001, msg: '登录已过期，请重新登录' }
+    } as AxiosError['response'];
 
-    await expect(interceptor(makeError(401))).rejects.toMatchObject({ code: 401 });
+    await expect(interceptor(error)).rejects.toMatchObject({ code: 4001 });
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(onUnauthorized).toHaveBeenCalledWith({ code: 4001, msg: '登录已过期，请重新登录' });
+  });
+
+  it('calls onUnauthorized with undefined when 401 body is not an object', async () => {
+    const onUnauthorized = vi.fn();
+    const interceptor = createResponseErrorInterceptor({ onUnauthorized });
+    const error = new AxiosError('boom', 'ERR_BAD_REQUEST');
+    error.response = { status: 401, data: 'plain text' } as AxiosError['response'];
+
+    await expect(interceptor(error)).rejects.toBe('plain text');
+    expect(onUnauthorized).toHaveBeenCalledWith(undefined);
   });
 
   it('calls onServerError with fixed message on 503', async () => {
