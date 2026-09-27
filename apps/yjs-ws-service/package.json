@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "dotenv": "^16.0.0",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
     "koa": "^2.15.0",
     "lib0": "^0.2.117",

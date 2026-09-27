@@ -10,8 +10,12 @@ ws://<host>:50055?token=<JWT>&roomId=<docName>
 
 | 查询参数 | 必填 | 说明                                               |
 | -------- | ---- | -------------------------------------------------- |
-| token    | 是   | JWT，用 `JWT_SECRET` 校验，无效则断开（code 4001） |
+| token    | 是   | JWT，用 `JWT_SECRET` 校验，无效则断开（code 4402） |
 | roomId   | 否   | Yjs 文档名（docName），默认 `default`              |
+
+连接建立时会校验 JWT 中的会话 `sid`（Redis `session:<guid>`）：不匹配 → `close 4401`，会话过期/不存在 → `close 4402`，Redis 故障时放行（fail-open）。
+
+> **关闭码落在 4400–4499 区间是刻意设计**：y-websocket 的 `defaultShouldReconnect` 对该区间的关闭码停止重连并发出 `closed` 事件，客户端据此区分「被踢/过期」与可重试的网络错误。
 
 `connection.binaryType = 'arraybuffer'`。
 
@@ -45,9 +49,17 @@ ws://<host>:50055?token=<JWT>&roomId=<docName>
 - 文档按 `roomId` 在服务端内存中缓存（`Map<string, Y.Doc>`），无人连接时（`conns.size === 0`）销毁。
 - 断开连接时移除该连接的 awareness 状态。
 
+## 断开
+
+- `close 4401`：**单端登录踢出**（服务端订阅 `session:kick` 频道后主动断开）
+- `close 4402`：token 缺失/无效，或会话过期
+- `close 1001`：服务端关闭
+
 ## 相关环境变量
 
-| 变量        | 说明                                       |
-| ----------- | ------------------------------------------ |
-| YJS_WS_PORT | 端口，默认 50055                           |
-| JWT_SECRET  | JWT 密钥，**必填**（未设置时服务拒绝启动） |
+| 变量        | 说明                                           |
+| ----------- | ---------------------------------------------- |
+| YJS_WS_PORT | 端口，默认 50055                               |
+| JWT_SECRET  | JWT 密钥，**必填**（未设置时服务拒绝启动）     |
+| REDIS_HOST  | Redis 地址，用于会话校验与踢出，默认 127.0.0.1 |
+| REDIS_PORT  | Redis 端口，默认 6379                          |

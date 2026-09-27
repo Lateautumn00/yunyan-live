@@ -5,6 +5,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { URL } from 'url';
 import * as Y from 'yjs';
 import * as jwt from 'jsonwebtoken';
+import Redis from 'ioredis';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -27,8 +28,90 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
+// y-websocket stops reconnecting on close codes 4400-4499 and emits a terminal
+// `closed` event, so every unrecoverable auth failure must use this range.
+const CLOSE_KICKED = 4401;
+const CLOSE_SESSION_INVALID = 4402;
+const SESSION_KICK_CHANNEL = 'session:kick';
+
+interface ConnMeta {
+  docName: string;
+  authUserId?: string;
+  sid?: string;
+}
+
 const docs = new Map<string, Y.Doc>();
-const connMeta = new WeakMap<WebSocket, string>();
+const connMeta = new WeakMap<WebSocket, ConnMeta>();
+
+const redis = new Redis({
+  host: process.env.REDIS_HOST || '127.0.0.1',
+  port: Number(process.env.REDIS_PORT) || 6379,
+  enableOfflineQueue: false,
+  maxRetriesPerRequest: 1,
+});
+redis.on('error', (err: unknown) => {
+  console.error('[YjsWS] Redis error:', err instanceof Error ? err.message : String(err));
+});
+
+// 'ok' | 'expired' | 'kicked' | 'fail-open' �?fail-open on Redis outage.
+async function validateSession(guid?: string, sid?: string): Promise<string> {
+  if (!guid || !sid) return 'expired';
+  try {
+    const current = await redis.get(`session:${guid}`);
+    if (current === null) return 'expired';
+    return current === sid ? 'ok' : 'kicked';
+  } catch (err) {
+    console.error('[YjsWS] session check fail-open:', err instanceof Error ? err.message : String(err));
+    return 'fail-open';
+  }
+}
+
+function findKickConns(guid: string, oldSid: string): WebSocket[] {
+  const targets: WebSocket[] = [];
+  for (const doc of docs.values()) {
+    const conns = (doc as any).conns as Map<WebSocket, Set<unknown>> | undefined;
+    if (!conns) continue;
+    for (const conn of conns.keys()) {
+      const meta = connMeta.get(conn);
+      if (meta?.authUserId === guid && meta.sid === oldSid) {
+        targets.push(conn);
+      }
+    }
+  }
+  return targets;
+}
+
+const redisSubscriber = redis.duplicate();
+redisSubscriber.on('error', (err: unknown) => {
+  console.error('[YjsWS] Redis subscriber error:', err instanceof Error ? err.message : String(err));
+});
+function subscribeKickChannel() {
+  redisSubscriber.subscribe(SESSION_KICK_CHANNEL).catch((err: unknown) => {
+    console.error('[YjsWS] subscribe failed, retrying:', err instanceof Error ? err.message : String(err));
+    setTimeout(subscribeKickChannel, 3000);
+  });
+}
+subscribeKickChannel();
+redisSubscriber.on('message', (channel: string, message: string) => {
+  if (channel !== SESSION_KICK_CHANNEL) return;
+  try {
+    const { guid, oldSid } = JSON.parse(message) as { guid?: string; oldSid?: string };
+    if (!guid || !oldSid) return;
+    for (const conn of findKickConns(guid, oldSid)) {
+      if (conn.readyState === WebSocket.OPEN) {
+        conn.close(CLOSE_KICKED, 'Session replaced by another login');
+      }
+      const meta = connMeta.get(conn);
+      if (meta) {
+        const doc = docs.get(meta.docName);
+        if (doc) closeConn(doc, conn);
+      }
+      console.log(`[YjsWS] Kicked conn for guid=${guid}`);
+    }
+  } catch (err) {
+    console.error('[YjsWS] bad kick payload:', err);
+  }
+});
 
 function broadcast(doc: Y.Doc, msg: Uint8Array, origin: WebSocket | null = null) {
   const conns = (doc as any).conns as Map<WebSocket, Set<any>> | undefined;
@@ -72,8 +155,8 @@ function send(_doc: Y.Doc, conn: WebSocket, m: Uint8Array) {
 }
 
 function closeConn(doc: Y.Doc, conn: WebSocket) {
-  const docName = connMeta.get(conn);
-  if (docName) {
+  const meta = connMeta.get(conn);
+  if (meta) {
     awarenessProtocol.removeAwarenessStates((doc as any).awareness, [conn], null);
   }
   connMeta.delete(conn);
@@ -110,46 +193,74 @@ function messageListener(conn: WebSocket, doc: Y.Doc, message: Uint8Array) {
   }
 }
 
-function handleYjsConnection(connection: WebSocket, req: http.IncomingMessage) {
+async function handleYjsConnection(connection: WebSocket, req: http.IncomingMessage) {
   const url = new URL(req.url!, `http://${req.headers.host}`);
 
   const token = url.searchParams.get('token');
   if (!token) {
-    connection.close(4001, 'Token required');
+    connection.close(CLOSE_SESSION_INVALID, 'Token required');
     return;
   }
+  let payload: jwt.JwtPayload;
   try {
-    jwt.verify(token, JWT_SECRET);
+    payload = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
   } catch {
-    connection.close(4001, 'Invalid token');
+    connection.close(CLOSE_SESSION_INVALID, 'Invalid token');
     return;
   }
+
+  // Buffer frames that arrive while the async session check is in flight and
+  // replay them once the doc is attached, so early sync messages are not lost.
+  const pending: Uint8Array[] = [];
+  let doc: Y.Doc | null = null;
+  connection.on('message', (message: Buffer | ArrayBuffer) => {
+    const bytes = new Uint8Array(message);
+    if (!doc) {
+      pending.push(bytes);
+      return;
+    }
+    messageListener(connection, doc, bytes);
+  });
+
+  const sessionState = await validateSession(payload.sub, payload.sid as string | undefined);
+  if (sessionState === 'kicked') {
+    connection.close(CLOSE_KICKED, 'Session replaced by another login');
+    return;
+  }
+  if (sessionState === 'expired') {
+    connection.close(CLOSE_SESSION_INVALID, 'Session expired');
+    return;
+  }
+  if (connection.readyState !== WebSocket.OPEN) return;
 
   const docName = url.searchParams.get('roomId') || 'default';
 
-  const doc = getYDoc(docName);
-  (doc as any).conns = (doc as any).conns || new Map();
-  (doc as any).conns.set(connection, new Set());
-  connMeta.set(connection, docName);
+  doc = getYDoc(docName);
+  const liveDoc = doc;
+  (liveDoc as any).conns = (liveDoc as any).conns || new Map();
+  (liveDoc as any).conns.set(connection, new Set());
+  connMeta.set(connection, {
+    docName,
+    authUserId: payload.sub,
+    sid: payload.sid as string | undefined,
+  });
 
   connection.binaryType = 'arraybuffer';
 
-  connection.on('message', (message: Buffer | ArrayBuffer) => {
-    messageListener(connection, doc, new Uint8Array(message));
+  connection.on('close', () => {
+    closeConn(liveDoc, connection);
   });
 
-  connection.on('close', () => {
-    closeConn(doc, connection);
-  });
+  for (const bytes of pending) messageListener(connection, liveDoc, bytes);
 
   // Send sync step 1
   const encoder = encoding.createEncoder();
   encoding.writeVarUint(encoder, messageSync);
-  syncProtocol.writeSyncStep1(encoder, doc);
-  send(doc, connection, encoding.toUint8Array(encoder));
+  syncProtocol.writeSyncStep1(encoder, liveDoc);
+  send(liveDoc, connection, encoding.toUint8Array(encoder));
 
   // Send current awareness states
-  const awareness = (doc as any).awareness;
+  const awareness = (liveDoc as any).awareness;
   if (awareness) {
     const states = awareness.getStates();
     if (states.size > 0) {
@@ -159,15 +270,15 @@ function handleYjsConnection(connection: WebSocket, req: http.IncomingMessage) {
         awarenessEncoder,
         awarenessProtocol.encodeAwarenessUpdate(awareness, Array.from(states.keys())),
       );
-      send(doc, connection, encoding.toUint8Array(awarenessEncoder));
+      send(liveDoc, connection, encoding.toUint8Array(awarenessEncoder));
     }
   }
 
   // Send sync step 2
   const encoder2 = encoding.createEncoder();
   encoding.writeVarUint(encoder2, messageSync);
-  syncProtocol.writeSyncStep2(encoder2, doc);
-  send(doc, connection, encoding.toUint8Array(encoder2));
+  syncProtocol.writeSyncStep2(encoder2, liveDoc);
+  send(liveDoc, connection, encoding.toUint8Array(encoder2));
 }
 
 const app = new Koa();

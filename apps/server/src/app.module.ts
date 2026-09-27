@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module';
 import { LiveModule } from './live/live.module';
 import { MailModule } from './mail/mail.module';
 import { UploadModule } from './upload/upload.module';
+import { RedisModule } from './redis/redis.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -17,6 +18,7 @@ import { AppService } from './app.service';
       ttl: 60000,
       limit: 100,
     }]),
+    RedisModule,
     GatewayClientsModule,
     AuthModule,
     UsersModule,

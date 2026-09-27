@@ -5,6 +5,7 @@ import { Metadata } from '@grpc/grpc-js';
 import { Observable } from 'rxjs';
 import { grpcCall } from '../common/helpers/grpc.helper';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { SessionService } from './session.service';
 import { LoginDto, RegisterDto, ResetPasswordDto, ChangePasswordDto, UpdateUserNameDto } from './dto/auth.dto';
 
 interface AuthResponse {
@@ -48,6 +49,7 @@ export class AuthController implements OnModuleInit {
   constructor(
     @Inject('AUTH_GRPC') private authClient: ClientGrpc,
     private jwtService: JwtService,
+    private sessionService: SessionService,
   ) {}
 
   private authService: AuthServiceClient;
@@ -59,8 +61,20 @@ export class AuthController implements OnModuleInit {
   @Post('login')
   async login(@Body() dto: LoginDto) {
     const result = await grpcCall(this.authService.login(dto));
+    const { sid } = await this.sessionService.createSession(result.guid!);
+    // Token comes from the internal gRPC response (already authenticated by auth-service),
+    // so decode instead of verify to avoid coupling to its JWT_SECRET.
+    const payload = this.jwtService.decode<{ sub: string; email: string; role: number }>(
+      result.access_token ?? '',
+    );
+    const token = this.jwtService.sign({
+      sub: payload?.sub ?? result.guid,
+      email: payload?.email ?? dto.email,
+      role: payload?.role ?? result.role ?? 2,
+      sid,
+    });
     return {
-      token: result.access_token,
+      token,
       guid: result.guid,
       role: result.role,
     };
@@ -78,7 +92,9 @@ export class AuthController implements OnModuleInit {
   }
 
   @Post('logout')
-  logout() {
+  @UseGuards(JwtAuthGuard)
+  async logout(@Request() req: { user: { userId: string; sid?: string } }) {
+    await this.sessionService.removeSession(req.user.userId, req.user.sid);
     return { success: true };
   }
 
@@ -100,13 +116,15 @@ export class AuthController implements OnModuleInit {
 
   @Get('getUserMsg')
   @UseGuards(JwtAuthGuard)
-  async getMe(@Request() req: { user: { userId: string; email: string; role: number } }) {
+  async getMe(@Request() req: { user: { userId: string; email: string; role: number; sid?: string } }) {
     const result = await grpcCall(this.authService.getUser({ user_id: req.user.userId }));
     const userData = result.data!;
+    await this.sessionService.touchSession(req.user.userId);
     const token = this.jwtService.sign({
       sub: req.user.userId,
       email: req.user.email,
       role: req.user.role,
+      sid: req.user.sid,
     });
     return {
       token,

@@ -132,6 +132,9 @@ importers:
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
@@ -494,6 +497,9 @@ importers:
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3

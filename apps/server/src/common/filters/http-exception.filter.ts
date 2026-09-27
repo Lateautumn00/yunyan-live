@@ -37,13 +37,23 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const res = exception.getResponse();
-      message = typeof res === 'string' ? res : (res as Record<string, unknown>).message?.toString() || exception.message;
+      const resObj = typeof res === 'string' ? null : (res as Record<string, unknown>);
+      message =
+        typeof res === 'string'
+          ? res
+          : resObj?.message?.toString() || exception.message;
 
-      switch (status) {
-        case 401: code = 4001; break;
-        case 404: code = 4003; break;
-        case 409: code = 4004; break;
-        default: code = status;
+      const explicitCode = resObj?.code;
+      if (typeof explicitCode === 'number') {
+        // e.g. session kicked: HttpException({ code: 4002, message }, 401)
+        code = explicitCode;
+      } else {
+        switch (status) {
+          case 401: code = 4001; break;
+          case 404: code = 4003; break;
+          case 409: code = 4004; break;
+          default: code = status;
+        }
       }
     } else if (exception && typeof exception === 'object' && 'code' in exception) {
       const grpcError = exception as { code: number; details?: string; message?: string };
