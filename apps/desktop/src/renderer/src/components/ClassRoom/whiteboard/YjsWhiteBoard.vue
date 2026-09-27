@@ -52,6 +52,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { YjsProvider } from './YjsProvider';
 import { KonvaRenderer } from './KonvaRenderer';
+import { useUserStore } from '@/store/user';
 import { ToolState, DEFAULT_TOOL } from './types';
 import { BrushTool } from './tools/BrushTool';
 import { EraserTool } from './tools/EraserTool';
@@ -150,6 +151,9 @@ onMounted(() => {
     props.userId,
     props.userName,
     userColor,
+    (kind) => {
+      useUserStore().sessionInterrupted(kind);
+    },
   );
 
   renderer = new KonvaRenderer(canvasRef.value);

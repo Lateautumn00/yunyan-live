@@ -12,6 +12,15 @@
         <h2>云砚直播</h2>
       </div>
 
+      <el-alert
+        v-if="sessionNotice"
+        :title="sessionNotice"
+        :type="sessionNoticeType"
+        show-icon
+        :closable="false"
+        class="session-alert"
+      />
+
       <el-tabs
         v-model="activeTab"
         class="login-tabs"
@@ -338,14 +347,20 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useUserStore } from '@/store/user';
 import api from '@/api';
 import { ElMessage } from 'element-plus';
 import type { FormInstance, FormRules } from 'element-plus';
 
+const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
+
+const sessionNotice = ref('');
+const sessionNoticeType = computed<'warning' | 'error'>(() =>
+  sessionNotice.value.includes('其他设备') ? 'error' : 'warning'
+);
 
 const activeTab = ref('login');
 const showPass = ref(false);
@@ -506,6 +521,12 @@ const forgotStrengthWidth = computed(() => {
 });
 
 onMounted(() => {
+  const reason = route.query.reason;
+  if (reason === 'kicked' || reason === 'expired') {
+    sessionNotice.value =
+      reason === 'kicked' ? '账号已在其他设备登录，请重新登录' : '登录已过期，请重新登录';
+    void router.replace({ path: '/login' });
+  }
   const savedEmail = localStorage.getItem('savedEmail');
   const savedPass = localStorage.getItem('savedPass');
   if (savedEmail) {
@@ -671,6 +692,10 @@ async function handleResetPassword() {
     color: @color-333333;
     font-size: 24px;
   }
+}
+
+.session-alert {
+  margin-bottom: 16px;
 }
 
 .login-tabs {

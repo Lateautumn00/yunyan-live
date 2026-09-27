@@ -486,6 +486,7 @@ import { useRoute } from 'vue-router';
 import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { PRESET_COLORS } from './whiteboard/types';
+import { useUserStore } from '@/store/user';
 
 const props = defineProps<{
   roomId: string;
@@ -668,7 +669,9 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 onMounted(() => {
-  provider = new YjsProvider(props.roomId, userId, displayName, userColor);
+  provider = new YjsProvider(props.roomId, userId, displayName, userColor, (kind) => {
+    useUserStore().sessionInterrupted(kind);
+  });
   renderer = new KonvaRenderer(document.getElementById(containerId.value)!);
   renderer.showPage(0);
 

@@ -158,6 +158,7 @@ import { ElMessage } from 'element-plus';
 import { Top as RaiseHand } from '@element-plus/icons-vue';
 import api from '@/api';
 import { config } from '@/api';
+import { useUserStore } from '@/store/user';
 
 interface TanmuItem {
   userName?: string;
@@ -199,6 +200,7 @@ const isBottom = ref(true);
 const noSpeakMessageNum = ref(0);
 let lockReconnect = false;
 let time = 0;
+let sessionClosed = false;
 const speechClose = ref(1);
 const sockets = ref<{
   liveSocket: WebSocket | null;
@@ -262,6 +264,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.onkeydown = null;
+  stopReconnect();
+  clearLiveSocket();
 });
 
 function apply(status: boolean, num: number) {
@@ -285,6 +289,10 @@ async function updateForbid(status: number) {
 }
 
 function createTutorSocket() {
+  if (sessionClosed) {
+    stopReconnect();
+    return;
+  }
   const token = props.useToken ? localStorage.getItem('token') || '' : '';
   const tokenParam = token ? `&token=${token}` : '';
   const url = `${sockets.value.socketUrl}?roomId=${props.roomId ?? ''}&liveUserId=${props.liveUserId ?? ''}${tokenParam}`;
@@ -386,13 +394,39 @@ function liveSocketMessage(e: MessageEvent) {
 
 function liveSocketClose(e?: Event) {
   clearLiveSocket();
+  const code = e instanceof CloseEvent ? e.code : 0;
+  if (code === 4002) {
+    sessionClosed = true;
+    stopReconnect();
+    useUserStore().sessionInterrupted('kicked');
+    return;
+  }
+  if (code === 4001 && localStorage.getItem('token')) {
+    sessionClosed = true;
+    stopReconnect();
+    useUserStore().sessionInterrupted('expired');
+    return;
+  }
   console.error('聊天网络已断开...', e);
 }
 
+function stopReconnect() {
+  if (time > 0) {
+    clearInterval(time);
+    time = 0;
+  }
+}
+
 function reconnect() {
+  if (sessionClosed) return;
+  if (props.useToken && !localStorage.getItem('token')) return;
   if (lockReconnect) return;
   lockReconnect = true;
   time = setInterval(function () {
+    if (props.useToken && !localStorage.getItem('token')) {
+      stopReconnect();
+      return;
+    }
     createTutorSocket();
   }, 4000);
 }
@@ -466,10 +500,11 @@ function socketUpdateFun() {
 
 function clearLiveSocket() {
   const { liveSocketTimer, liveSocket, updateTimer } = sockets.value;
+  // Detach before close() so the resulting onclose callback cannot re-enter.
+  sockets.value.liveSocket = null;
   if (liveSocket) {
     liveSocket.close();
     lockReconnect = false;
-    sockets.value.liveSocket = null;
   }
   if (liveSocketTimer) clearInterval(liveSocketTimer);
   if (updateTimer) clearInterval(updateTimer);

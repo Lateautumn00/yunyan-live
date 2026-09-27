@@ -15,7 +15,13 @@ export class YjsProvider {
   fileList: Y.Array<Y.Map<any>>;
   viewportOffset: Y.Map<any>;
 
-  constructor(roomId: string, userId: string, userName: string, userColor: string) {
+  constructor(
+    roomId: string,
+    userId: string,
+    userName: string,
+    userColor: string,
+    onSessionClosed?: (kind: 'kicked' | 'expired') => void
+  ) {
     this.doc = new Y.Doc();
     this.toolState = this.doc.getMap('toolState');
     this.pages = this.doc.getArray('pages');
@@ -34,6 +40,16 @@ export class YjsProvider {
     this.provider = new WebsocketProvider(wsUrl, roomId, this.doc, {
       connect: true,
       params: { roomId, token },
+    });
+
+    // y-websocket only emits `closed` for terminal close codes (4400-4499):
+    // 4401 = kicked by another login, 4402 = session expired/invalid.
+    this.provider.on('closed', (event: { code: number; reason: string }) => {
+      if (event.code === 4401) {
+        onSessionClosed?.('kicked');
+      } else if (event.code === 4402) {
+        onSessionClosed?.('expired');
+      }
     });
 
   // After sync completes, if pages is still empty (student joined before teacher),

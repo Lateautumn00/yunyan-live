@@ -1,6 +1,8 @@
 ﻿import { defineStore } from 'pinia';
+import { ElMessage } from 'element-plus';
 import type { LiveInfo, UserInfo } from '@yunyan-live/types';
 import api from '@/api';
+import router from '@/router';
 
 interface UserState {
   userInfo: UserInfo;
@@ -12,6 +14,20 @@ interface UserState {
 const emptyUser: UserInfo = { guid: '', token: '', userName: '', email: '', role: 2 };
 const emptyLive: LiveInfo = { liveUserId: '', nickName: '', joinCode: '' };
 
+export type SessionInterrupt = 'kicked' | 'expired';
+
+const SESSION_MESSAGES: Record<SessionInterrupt, string> = {
+  kicked: '账号已在其他设备登录',
+  expired: '登录已过期，请重新登录'
+};
+
+// Multiple in-flight requests can all hit 401 after a kick — only react once.
+let sessionInterruptHandled = false;
+
+function resetSessionInterrupt() {
+  sessionInterruptHandled = false;
+}
+
 export const useUserStore = defineStore('user', {
   state: (): UserState => ({
     userInfo: { ...emptyUser },
@@ -21,6 +37,7 @@ export const useUserStore = defineStore('user', {
   }),
   actions: {
     setToken(token: string) {
+      resetSessionInterrupt();
       this.token = token;
       localStorage.setItem('token', token);
     },
@@ -40,6 +57,18 @@ export const useUserStore = defineStore('user', {
     delToken() {
       this.token = '';
       localStorage.removeItem('token');
+    },
+    sessionInterrupted(kind: SessionInterrupt) {
+      if (sessionInterruptHandled) return;
+      sessionInterruptHandled = true;
+      this.delToken();
+      this.delGuid();
+      localStorage.removeItem('role');
+      if (localStorage.getItem('popup')) {
+        localStorage.removeItem('popup');
+      }
+      ElMessage({ message: SESSION_MESSAGES[kind], type: 'warning', duration: 3000 });
+      void router.replace({ path: '/login', query: { reason: kind } });
     },
     delGuid() {
       this.guid = '';

@@ -9,6 +9,10 @@ const apiMocks = vi.hoisted(() => ({
   updateForbid: vi.fn()
 }));
 
+const storeMocks = vi.hoisted(() => ({
+  sessionInterrupted: vi.fn()
+}));
+
 vi.mock('@/api', () => ({
   default: {
     sendMessage: (id: string, params: unknown) => apiMocks.sendMessage(id, params),
@@ -17,6 +21,10 @@ vi.mock('@/api', () => ({
   config: {
     messageWs: 'ws://test.local/socket'
   }
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: () => ({ sessionInterrupted: storeMocks.sessionInterrupted })
 }));
 
 class MockWebSocket {
@@ -54,17 +62,23 @@ function vmOf(wrapper: ReturnType<typeof mount>) {
   return wrapper.vm as unknown as {
     createTutorSocket: () => void;
     setSocketSend: (data: string) => void;
-    liveSocketClose: () => void;
+    liveSocketClose: (e?: Event) => void;
     over: (msg: string) => void;
     sendContent: string;
   };
+}
+
+function closeEventWith(code: number): Event {
+  return new CloseEvent('close', { code });
 }
 
 describe('ClassRoom Chat.vue', () => {
   beforeEach(() => {
     apiMocks.sendMessage.mockReset();
     apiMocks.updateForbid.mockReset();
+    storeMocks.sessionInterrupted.mockReset();
     MockWebSocket.instances = [];
+    localStorage.removeItem('token');
     vi.stubGlobal('WebSocket', MockWebSocket);
   });
 
@@ -151,5 +165,53 @@ describe('ClassRoom Chat.vue', () => {
     const ws = MockWebSocket.instances[0]!;
     vmOf(wrapper).over('下课');
     expect(ws.sent.at(-1)).toContain('"type": "over"');
+  });
+
+  it('关闭码 4002 触发被踢处理并停止重连', async () => {
+    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus] } });
+    const vm = vmOf(wrapper);
+    vm.createTutorSocket();
+    expect(MockWebSocket.instances).toHaveLength(1);
+
+    vm.liveSocketClose(closeEventWith(4002));
+    await flushPromises();
+    expect(storeMocks.sessionInterrupted).toHaveBeenCalledWith('kicked');
+
+    vm.createTutorSocket();
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
+
+  it('关闭码 4001 且有 token 时触发过期处理', async () => {
+    localStorage.setItem('token', 'some-token');
+    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus] } });
+    const vm = vmOf(wrapper);
+    vm.createTutorSocket();
+
+    vm.liveSocketClose(closeEventWith(4001));
+    await flushPromises();
+    expect(storeMocks.sessionInterrupted).toHaveBeenCalledWith('expired');
+    localStorage.removeItem('token');
+  });
+
+  it('普通关闭码不触发会话中断', async () => {
+    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus] } });
+    const vm = vmOf(wrapper);
+    vm.createTutorSocket();
+
+    vm.liveSocketClose(closeEventWith(1006));
+    await flushPromises();
+    expect(storeMocks.sessionInterrupted).not.toHaveBeenCalled();
+  });
+
+  it('卸载时清理 WebSocket 与定时器', async () => {
+    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus] } });
+    const vm = vmOf(wrapper);
+    vm.createTutorSocket();
+    const ws = MockWebSocket.instances[0]!;
+    ws.onopen?.();
+
+    wrapper.unmount();
+    expect(ws.sent.filter((s) => s.includes('ping'))).toHaveLength(0);
+    expect(MockWebSocket.instances).toHaveLength(1);
   });
 });
