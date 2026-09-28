@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Konva mock — class constructors with actual methods ──────────────────
 const konvaMocks = vi.hoisted(() => {
@@ -35,6 +35,7 @@ const konvaMocks = vi.hoisted(() => {
       return 0;
     }
     container() { return { getBoundingClientRect: () => ({ left: 0, top: 0 }) }; }
+    destroy() {}
   }
 
   class MockLayer {
@@ -48,6 +49,7 @@ const konvaMocks = vi.hoisted(() => {
     draw() {}
     batchDraw() {}
     destroy() {}
+    moveToTop() {}
     destroyChildren() { this.children = []; }
     add(_child: unknown) { this.children.push(_child); }
     x(_val?: unknown) { if (_val !== undefined) this._x = _val as number; return this._x; }
@@ -167,6 +169,24 @@ vi.mock('@/api', () => ({
   }
 }));
 
+// WhiteBoard setup 读取 route.query.userId；测试环境无 router，注入会让全部用例在 mount 时崩溃
+vi.mock('vue-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('vue-router')>();
+  return {
+    ...actual,
+    useRoute: () => ({
+      query: {},
+      params: {},
+      path: '/',
+      fullPath: '/',
+      hash: '',
+      matched: [],
+      meta: {},
+      name: null,
+    }),
+  };
+});
+
 // ── Helpers ─────────────────────────────────────────────────────────────
 import WhiteBoard from './WhiteBoard.vue';
 import { mount } from '@vue/test-utils';
@@ -184,6 +204,7 @@ function mountWB(props: Record<string, unknown> = {}) {
   const wrapper = mount(WhiteBoard, {
     props: {
       isTeacher: true,
+      isDisplay: true,
       roomId: '1001',
       opaqueId: 'op1',
       userName: 'teacher',
@@ -201,21 +222,11 @@ function mountWB(props: Record<string, unknown> = {}) {
 type WBVM = {
   mode: string;
   tool: (type: string, event?: MouseEvent) => void;
-  selectShape: () => void;
-  addBrush: () => void;
-  addEraser: () => void;
-  addText: () => void;
-  addCircle: () => void;
-  addRectangle: () => void;
-  addArrows: () => void;
-  move: () => void;
   layerZoomChange: (type: string) => void;
-  layerZoom: (zoom: number) => void;
   layerClear: () => void;
-  paintLog: () => void;
-  recordFun: () => void;
   editZoom: () => void;
-  showEditZoom: boolean;
+  showZoomInput: boolean;
+  emitPaintLog: () => void;
 };
 
 // ── Tests ───────────────────────────────────────────────────────────────
@@ -223,7 +234,7 @@ describe('WhiteBoard.vue', () => {
   it('renders the whiteboard container', () => {
     const wrapper = mountWB();
     expect(wrapper.find('.classroom-white-board').exists()).toBe(true);
-    expect(wrapper.find('#container').exists()).toBe(true);
+    expect(wrapper.find('.container').exists()).toBe(true);
     wrapper.unmount();
   });
 
@@ -252,52 +263,45 @@ describe('WhiteBoard.vue', () => {
     wrapper.unmount();
   });
 
-  it('selectShape is callable', () => {
+  it('tool() returns to selector after text', () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as WBVM;
-    expect(() => vm.selectShape()).not.toThrow();
+    vm.tool('text');
+    expect(vm.mode).toBe('text');
+    vm.tool('cur');
+    expect(vm.mode).toBe('cur');
     wrapper.unmount();
   });
 
-  it('addBrush is callable', () => {
+  it('tool() selects brush', () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as WBVM;
-    expect(() => vm.addBrush()).not.toThrow();
+    vm.tool('brush');
+    expect(vm.mode).toBe('brush');
     wrapper.unmount();
   });
 
-  it('addEraser is callable', () => {
+  it('tool() selects text', () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as WBVM;
-    expect(() => vm.addEraser()).not.toThrow();
+    vm.tool('text');
+    expect(vm.mode).toBe('text');
     wrapper.unmount();
   });
 
-  it('addText is callable', () => {
+  it('tool() selects circle', () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as WBVM;
-    expect(() => vm.addText()).not.toThrow();
+    vm.tool('circle');
+    expect(vm.mode).toBe('circle');
     wrapper.unmount();
   });
 
-  it('addCircle is callable', () => {
+  it('tool() selects rectangle', () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as WBVM;
-    expect(() => vm.addCircle()).not.toThrow();
-    wrapper.unmount();
-  });
-
-  it('addRectangle is callable', () => {
-    const wrapper = mountWB();
-    const vm = wrapper.vm as unknown as WBVM;
-    expect(() => vm.addRectangle()).not.toThrow();
-    wrapper.unmount();
-  });
-
-  it('move is callable', () => {
-    const wrapper = mountWB();
-    const vm = wrapper.vm as unknown as WBVM;
-    expect(() => vm.move()).not.toThrow();
+    vm.tool('rectangle');
+    expect(vm.mode).toBe('rectangle');
     wrapper.unmount();
   });
 
@@ -324,26 +328,141 @@ describe('WhiteBoard.vue', () => {
     wrapper.unmount();
   });
 
-  it('editZoom sets showEditZoom to true', () => {
+  it('editZoom opens the zoom input', () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as WBVM;
     vm.editZoom();
-    expect(vm.showEditZoom).toBe(true);
+    expect(vm.showZoomInput).toBe(true);
     wrapper.unmount();
   });
 
-  it('recordFun does not throw', () => {
+  it('emitPaintLog emits paint-log event', () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as WBVM;
-    expect(() => vm.recordFun()).not.toThrow();
+    vm.emitPaintLog();
+    expect(wrapper.emitted('paint-log')).toBeTruthy();
+    wrapper.unmount();
+  });
+});
+
+// ── PPT 课件导入 / 定位 / 删除 ────────────────────────────────────────────
+type PPTVM = WBVM & {
+  fileList: Array<{ filename: string; filext: string; fileid: string }> | { value: Array<{ filename: string; filext: string; fileid: string }> };
+  curLayerIndex: number | { value: number };
+  toastMsg: string | { value: string };
+  showFile: (ids: string) => void;
+  delFile: (i: number) => void;
+  rendererPageCount: () => number;
+};
+
+function unwrapVal<T>(v: T | { value: T }): T {
+  return v !== null && typeof v === 'object' && 'value' in (v as object)
+    ? ((v as { value: T }).value)
+    : (v as T);
+}
+
+describe('WhiteBoard.vue PPT 课件', () => {
+  // uploadPptApi 在 setup()（mount 时）求值，env 必须在 mount 之前 stub
+  beforeEach(() => {
+    vi.stubEnv('VITE_UPLOAD_PPT_URL', 'http://mock.test/ppt');
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  async function uploadTwoPagePpt(wrapper: ReturnType<typeof mountWB>, failSecondPage = false) {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          code: 1000,
+          data: { totalNumber: 2, fileUrl: 'http://mock.test/ppt/' },
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    class StubImage {
+      static failSecond = failSecondPage;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      width = 1000;
+      height = 500;
+      private _src = '';
+      set src(v: string) {
+        this._src = v;
+        const shouldFail = StubImage.failSecond && /2\.png$/.test(v);
+        setTimeout(() => (shouldFail ? this.onerror : this.onload)?.(), 0);
+      }
+      get src() {
+        return this._src;
+      }
+    }
+    vi.stubGlobal('Image', StubImage);
+
+    const input = wrapper.find('input[accept=".ppt,.pptx"]');
+    expect(input.exists()).toBe(true);
+    const file = new File(['x'], '测试课件.pptx', {
+      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    });
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+    await input.trigger('change');
+    return { fetchMock };
+  }
+
+  it('导入两页 PPT 后页数为 N（不重复建页），并定位到首张幻灯片', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    expect(unwrapVal(vm.fileList)[0]!.filename).toBe('测试课件');
+    // 修复前重复 addPage 会得到 4 页（2 真实 + 2 重复层）
+    expect(vm.rendererPageCount()).toBe(2);
+    // showFile(layerIds) 定位到第一张幻灯片页
+    expect(unwrapVal(vm.curLayerIndex)).toBe(1);
     wrapper.unmount();
   });
 
-  it('paintLog emits paintLog event', () => {
+  it('delFile 删除课件条目并回收其页面', async () => {
     const wrapper = mountWB();
-    const vm = wrapper.vm as unknown as WBVM;
-    vm.paintLog();
-    expect(wrapper.emitted('paintLog')).toBeTruthy();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+
+    vm.delFile(0);
+
+    expect(unwrapVal(vm.fileList).length).toBe(0);
+    // 无默认页的测试环境下 removePage 保底留 1 页；修复前页面完全不会被删除（保持 2）
+    expect(vm.rendererPageCount()).toBe(1);
+    wrapper.unmount();
+  });
+
+  it('第二页加载失败时回滚已创建的页面', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper, true);
+
+    await vi.waitFor(
+      () => {
+        expect(String(unwrapVal(vm.toastMsg))).toContain('图片失败');
+      },
+      { timeout: 3000 },
+    );
+    expect(unwrapVal(vm.fileList).length).toBe(0);
+    // 第 2 页已回滚；第 1 页受 removePage“至少保留一页”保护（真实环境有默认页可全部回滚）
+    expect(vm.rendererPageCount()).toBe(1);
     wrapper.unmount();
   });
 });

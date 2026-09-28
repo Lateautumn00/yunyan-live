@@ -1321,31 +1321,36 @@ async function uploadPPT(file: File) {
       const { totalNumber, fileUrl } = data.data;
       const layerIds: string[] = [];
       for (let i = 1; i <= totalNumber; i++) {
-        const pageIdx = renderer!.getCurrentPageIndex() + 1;
+        // pages.observe 会同步创建并切换对应的 Konva 层，此处不得重复 addPage/showPage，
+        // 否则会生成重复层并打乱 pageIds 与页索引。
         const pageId = provider?.addPage() || `local_${Date.now()}`;
-        renderer!.addPage(pageIdx, pageId);
-        renderer!.showPage(pageIdx);
         const el = document.getElementById(containerId.value);
         const maxW = (el?.clientWidth || 800) * 0.9;
-        await new Promise<void>((resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error(`加载第${i}页图片超时`)), 30000);
-          const img = new Image();
-          img.onload = () => {
-            clearTimeout(timer);
-            let w = img.width, h = img.height;
-            if (w > maxW) { h = h * maxW / w; w = maxW; }
-            provider?.addShape({
-              id: `pptimg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-              type: 'ppt-image',
-              url: `${fileUrl}${i}.png`,
-              x: 0, y: 0,
-              width: w, height: h,
-            });
-            resolve();
-          };
-          img.onerror = () => { clearTimeout(timer); reject(new Error(`加载第${i}页图片失败`)); };
-          img.src = `${fileUrl}${i}.png`;
-        });
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error(`加载第${i}页图片超时`)), 30000);
+            const img = new Image();
+            img.onload = () => {
+              clearTimeout(timer);
+              let w = img.width, h = img.height;
+              if (w > maxW) { h = h * maxW / w; w = maxW; }
+              provider?.addShape({
+                id: `pptimg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                type: 'ppt-image',
+                url: `${fileUrl}${i}.png`,
+                x: 0, y: 0,
+                width: w, height: h,
+              });
+              resolve();
+            };
+            img.onerror = () => { clearTimeout(timer); reject(new Error(`加载第${i}页图片失败`)); };
+            img.src = `${fileUrl}${i}.png`;
+          });
+        } catch (err) {
+          // 回滚本次导入已创建的页面，避免残留没有课件条目的幽灵页
+          removePagesByIds([...layerIds, pageId]);
+          throw err;
+        }
         layerIds.push(pageId);
       }
       const ext = file.name.split('.').pop() || 'ppt';
@@ -1357,7 +1362,8 @@ async function uploadPPT(file: File) {
           filename: baseName, filext: ext, filesize: file.size, fileid: layerIds.join(','),
         });
         fileList.value = provider!.getFileList();
-        showLayer(1);
+        // 导入后定位到第一张幻灯片页，而非默认空白页
+        showFile(layerIds.join(','));
         toast(`PPT已导入，共${totalNumber}页`);
       }
     } else {
@@ -1368,6 +1374,21 @@ async function uploadPPT(file: File) {
 }
 
 // --- File list ---
+function removePagesByIds(ids: string[]) {
+  if (!provider || ids.length === 0) return;
+  const pages = provider.getPages();
+  const targets: number[] = [];
+  for (let i = pages.length - 1; i >= 0; i--) {
+    const pid = String(pages.get(i).get('id'));
+    if (ids.includes(pid)) targets.push(i);
+  }
+  targets.sort((a, b) => b - a);
+  for (const idx of targets) {
+    // removePage 自带保底（至少保留一页），Konva 层由 pages.observe 同步移除
+    provider.removePage(idx);
+  }
+}
+
 function showFile(ids: string) {
   try {
     if (!ids) return;
@@ -1402,18 +1423,29 @@ function alterFName(i: number, e: Event) {
 function delFile(i: number) {
   const item = fileList.value[i];
   if (!item || !item.fileid) return;
-  const ids = item.fileid.split(',');
-  ids.forEach((id: string) => {
-    const node = renderer?.layer.getChildren().find((n: any) => String(n._id) === id);
-    if (node) node.destroy();
-  });
-  provider?.removeFileItem(i);
+  const ids = item.fileid.split(',').filter(Boolean);
+  // 删除课件对应的页面，Konva 层由 pages.observe 同步删除
+  removePagesByIds(ids);
+  // fileList.value 来自 getFileList()（过滤后），删除需按 fileid 定位原始 Y.Array 索引
+  const rawIdx =
+    provider?.fileList.toArray().findIndex((m: any) => m.get('fileid') === item.fileid) ?? -1;
+  if (rawIdx >= 0) provider?.removeFileItem(rawIdx);
   fileList.value = provider!.getFileList();
-  renderer?.layer.batchDraw();
   showLayer(1);
 }
 
-defineExpose({ layerClear, tool, showLayer });
+defineExpose({
+  layerClear,
+  tool,
+  showLayer,
+  showFile,
+  delFile,
+  fileList,
+  layerIndex,
+  curLayerIndex,
+  toastMsg,
+  rendererPageCount: () => renderer?.getPageCount() ?? 0,
+});
 </script>
 
 <style scoped lang="less">

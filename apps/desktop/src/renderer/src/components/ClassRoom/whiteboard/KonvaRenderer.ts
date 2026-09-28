@@ -191,14 +191,18 @@ export class KonvaRenderer {
         });
       case 'ppt-image': {
         const img = new Image();
-        img.src = data.get('url') as string;
-        return new Konva.Image({
+        const node = new Konva.Image({
           x: data.get('x') || 0,
           y: data.get('y') || 0,
           width: data.get('width') || 0,
           height: data.get('height') || 0,
           image: img,
         });
+        img.onload = () => {
+          node.getLayer?.()?.batchDraw();
+        };
+        img.src = data.get('url') as string;
+        return node;
       }
       default:
         return null;
