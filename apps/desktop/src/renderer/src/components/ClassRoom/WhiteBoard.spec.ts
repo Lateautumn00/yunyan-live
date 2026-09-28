@@ -352,7 +352,9 @@ type PPTVM = WBVM & {
   toastMsg: string | { value: string };
   showFile: (ids: string) => void;
   delFile: (i: number) => void;
+  addLayer: () => void;
   rendererPageCount: () => number;
+  getCurrentPageShapes: () => Array<Record<string, unknown>>;
 };
 
 function unwrapVal<T>(v: T | { value: T }): T {
@@ -411,7 +413,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     return { fetchMock };
   }
 
-  it('导入两页 PPT 后页数为 N（不重复建页），并定位到首张幻灯片', async () => {
+  it('导入两页 PPT 后页数为 N（无空白页可复用时不重复建页），并定位到首张幻灯片', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
     await uploadTwoPagePpt(wrapper);
@@ -423,14 +425,83 @@ describe('WhiteBoard.vue PPT 课件', () => {
       { timeout: 3000 },
     );
     expect(unwrapVal(vm.fileList)[0]!.filename).toBe('测试课件');
-    // 修复前重复 addPage 会得到 4 页（2 真实 + 2 重复层）
+    // 0 页起步：首页非空白不可复用 → 恰好 2 页
     expect(vm.rendererPageCount()).toBe(2);
     // showFile(layerIds) 定位到第一张幻灯片页
     expect(unwrapVal(vm.curLayerIndex)).toBe(1);
     wrapper.unmount();
   });
 
-  it('delFile 删除课件条目并回收其页面', async () => {
+  it('当前页为首页空白画布时复用该页（不新建），层索引指向首张幻灯片', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    // seed 一页空白画布（不复用则会变成 3 页）
+    vm.addLayer();
+    expect(vm.rendererPageCount()).toBe(1);
+
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    // 复用 seed 页承载第 1 张幻灯片，仅新增第 2 张 → 共 2 页
+    expect(vm.rendererPageCount()).toBe(2);
+    expect(unwrapVal(vm.curLayerIndex)).toBe(1);
+    // fileid 含被复用页的 id（两页）
+    expect(unwrapVal(vm.fileList)[0]!.fileid.split(',').length).toBe(2);
+    wrapper.unmount();
+  });
+
+  it('二次导入追加到已有课件之后（非首页复用路径全量 addPage）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    // 当前页已被第 1 次导入占用 → 非空白，不可复用
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(2);
+      },
+      { timeout: 3000 },
+    );
+    expect(vm.rendererPageCount()).toBe(4);
+    expect(unwrapVal(vm.curLayerIndex)).toBe(3);
+    wrapper.unmount();
+  });
+
+  it('课件页双维限幅居中放置（1000×500 源图 → 720×360，偏移 40/120）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    // showFile 后当前页 = 首张幻灯片页
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(1);
+    const s = shapes[0]!;
+    expect(s.type).toBe('ppt-image');
+    // container clientWidth/clientHeight 在 happy-dom 为 0 → 回退 800×600
+    // k = min(1, 800*0.9/1000, 600*0.9/500) = 0.72 → 720×360，居中偏移 (40,120)
+    expect(s.width).toBeCloseTo(720, 5);
+    expect(s.height).toBeCloseTo(360, 5);
+    expect(s.x).toBeCloseTo(40, 5);
+    expect(s.y).toBeCloseTo(120, 5);
+    wrapper.unmount();
+  });
+
+  it('delFile 删除课件条目并回收其页面（含残留图清空）', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
     await uploadTwoPagePpt(wrapper);
@@ -444,25 +515,28 @@ describe('WhiteBoard.vue PPT 课件', () => {
     vm.delFile(0);
 
     expect(unwrapVal(vm.fileList).length).toBe(0);
-    // 无默认页的测试环境下 removePage 保底留 1 页；修复前页面完全不会被删除（保持 2）
+    // removePage 保底留 1 页，该页 elements 必须被清空（课件图不得残留）
     expect(vm.rendererPageCount()).toBe(1);
+    expect(vm.getCurrentPageShapes().length).toBe(0);
     wrapper.unmount();
   });
 
-  it('第二页加载失败时回滚已创建的页面', async () => {
+  it('第二页预载失败时不改动画布（零建页、零条目，仅 toast 提示）', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
+    const before = vm.rendererPageCount();
+
     await uploadTwoPagePpt(wrapper, true);
 
     await vi.waitFor(
       () => {
+        expect(String(unwrapVal(vm.toastMsg))).toContain('课件预载失败');
         expect(String(unwrapVal(vm.toastMsg))).toContain('图片失败');
       },
       { timeout: 3000 },
     );
     expect(unwrapVal(vm.fileList).length).toBe(0);
-    // 第 2 页已回滚；第 1 页受 removePage“至少保留一页”保护（真实环境有默认页可全部回滚）
-    expect(vm.rendererPageCount()).toBe(1);
+    expect(vm.rendererPageCount()).toBe(before);
     wrapper.unmount();
   });
 });

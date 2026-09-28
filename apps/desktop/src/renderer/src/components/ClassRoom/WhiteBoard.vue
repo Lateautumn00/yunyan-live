@@ -1304,6 +1304,23 @@ async function uploadImage(file: File) {
   loading.value = false;
 }
 
+// 预载单页课件图，返回其像素尺寸（供居中计算）；失败/超时抛错由调用方统一处理
+function preloadPptPageImage(url: string, i: number): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`加载第${i}页图片超时`)), 30000);
+    const img = new Image();
+    img.onload = () => {
+      clearTimeout(timer);
+      resolve({ w: img.width, h: img.height });
+    };
+    img.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error(`加载第${i}页图片失败`));
+    };
+    img.src = url;
+  });
+}
+
 async function uploadPPT(file: File) {
   if (!uploadPptApi) { toast('未配置PPT上传接口'); return; }
   loading.value = true;
@@ -1313,64 +1330,77 @@ async function uploadPPT(file: File) {
     const res = await fetch(uploadPptApi, { method: 'POST', body: fd });
     if (!res.ok) {
       toast(`PPT上传失败: ${res.status} ${res.statusText}`);
-      loading.value = false;
       return;
     }
     const data = await res.json();
-    if (data.code === 1000 && data.data) {
-      const { totalNumber, fileUrl } = data.data;
-      const layerIds: string[] = [];
+    if (data.code !== 1000 || !data.data) {
+      toast('PPT上传失败');
+      return;
+    }
+    const { totalNumber, fileUrl } = data.data;
+    if (!totalNumber || !fileUrl) {
+      toast('PPT上传失败');
+      return;
+    }
+
+    // 阶段1：预载全部页图；任一失败仅提示，画布零改动（不产生幽灵页）
+    const dims: Array<{ w: number; h: number }> = [];
+    try {
       for (let i = 1; i <= totalNumber; i++) {
-        // pages.observe 会同步创建并切换对应的 Konva 层，此处不得重复 addPage/showPage，
-        // 否则会生成重复层并打乱 pageIds 与页索引。
-        const pageId = provider?.addPage() || `local_${Date.now()}`;
-        const el = document.getElementById(containerId.value);
-        const maxW = (el?.clientWidth || 800) * 0.9;
-        try {
-          await new Promise<void>((resolve, reject) => {
-            const timer = setTimeout(() => reject(new Error(`加载第${i}页图片超时`)), 30000);
-            const img = new Image();
-            img.onload = () => {
-              clearTimeout(timer);
-              let w = img.width, h = img.height;
-              if (w > maxW) { h = h * maxW / w; w = maxW; }
-              provider?.addShape({
-                id: `pptimg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                type: 'ppt-image',
-                url: `${fileUrl}${i}.png`,
-                x: 0, y: 0,
-                width: w, height: h,
-              });
-              resolve();
-            };
-            img.onerror = () => { clearTimeout(timer); reject(new Error(`加载第${i}页图片失败`)); };
-            img.src = `${fileUrl}${i}.png`;
-          });
-        } catch (err) {
-          // 回滚本次导入已创建的页面，避免残留没有课件条目的幽灵页
-          removePagesByIds([...layerIds, pageId]);
-          throw err;
-        }
-        layerIds.push(pageId);
+        dims.push(await preloadPptPageImage(`${fileUrl}${i}.png`, i));
       }
+    } catch (err) {
+      toast(`课件预载失败: ${(err as Error).message}`);
+      return;
+    }
+
+    // 阶段2：建页/复用空白当前页 + 双维限幅居中
+    const box = document.getElementById(containerId.value);
+    const cw = box?.clientWidth || 800;
+    const ch = box?.clientHeight || 600;
+    const active = provider?.getActiveElements();
+    const canReuse =
+      !!provider && provider.getCurrentPageIndex() === 0 && !!provider.getCurrentPageId() && !!active && active.length === 0;
+    const layerIds: string[] = [];
+    for (let i = 0; i < totalNumber; i++) {
+      // pages.observe 会同步创建并切换对应的 Konva 层，此处不得重复 showPage
+      const pageId =
+        i === 0 && canReuse
+          ? provider!.getCurrentPageId()
+          : (provider?.addPage() || `local_${Date.now()}`);
+      const { w, h } = dims[i]!;
+      const k = Math.min(1, (cw * 0.9) / w, (ch * 0.9) / h);
+      const width = w * k;
+      const height = h * k;
+      provider?.addShape({
+        id: `pptimg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        type: 'ppt-image',
+        url: `${fileUrl}${i + 1}.png`,
+        x: (cw - width) / 2,
+        y: (ch - height) / 2,
+        width,
+        height,
+      });
+      layerIds.push(pageId);
+    }
+    if (layerIds.length === 0) {
+      toast('PPT页面创建失败');
+    } else {
       const ext = file.name.split('.').pop() || 'ppt';
       const baseName = file.name.replace(/\.[^.]+$/, '');
-      if (layerIds.length === 0) {
-        toast('PPT页面创建失败');
-      } else {
-        provider?.addFileItem({
-          filename: baseName, filext: ext, filesize: file.size, fileid: layerIds.join(','),
-        });
-        fileList.value = provider!.getFileList();
-        // 导入后定位到第一张幻灯片页，而非默认空白页
-        showFile(layerIds.join(','));
-        toast(`PPT已导入，共${totalNumber}页`);
-      }
-    } else {
-      toast('PPT上传失败');
+      provider?.addFileItem({
+        filename: baseName, filext: ext, filesize: file.size, fileid: layerIds.join(','),
+      });
+      fileList.value = provider!.getFileList();
+      // 导入后定位到第一张幻灯片页，而非默认空白页
+      showFile(layerIds.join(','));
+      toast(`PPT已导入，共${totalNumber}页`);
     }
-  } catch (e) { toast(`PPT上传出错: ${(e as Error).message}`); }
-  loading.value = false;
+  } catch (e) {
+    toast(`PPT上传出错: ${(e as Error).message}`);
+  } finally {
+    loading.value = false;
+  }
 }
 
 // --- File list ---
@@ -1382,11 +1412,31 @@ function removePagesByIds(ids: string[]) {
     const pid = String(pages.get(i).get('id'));
     if (ids.includes(pid)) targets.push(i);
   }
+  if (targets.length === 0) return;
+  const removeAll = targets.length === pages.length;
   targets.sort((a, b) => b - a);
   for (const idx of targets) {
     // removePage 自带保底（至少保留一页），Konva 层由 pages.observe 同步移除
     provider.removePage(idx);
   }
+  if (removeAll) {
+    // 全删场景：保底留下的页（最小索引）可能带课件图，清空其 elements 避免残留
+    const els = provider.getElementsAtPage(0);
+    if (els && els.length > 0) els.delete(0, els.length);
+    refreshLayer();
+  }
+}
+
+// 当前页 shape 的纯对象快照（Y.Map.toJSON），供测试/调用方断言
+function getCurrentPageShapes(): Record<string, unknown>[] {
+  const els = provider?.getActiveElements();
+  if (!els) return [];
+  return els
+    .toArray()
+    .map((el: any) => (el && typeof el.toJSON === 'function' ? el.toJSON() : el)) as Record<
+    string,
+    unknown
+  >[];
 }
 
 function showFile(ids: string) {
@@ -1437,6 +1487,7 @@ function delFile(i: number) {
 defineExpose({
   layerClear,
   tool,
+  addLayer,
   showLayer,
   showFile,
   delFile,
@@ -1445,6 +1496,7 @@ defineExpose({
   curLayerIndex,
   toastMsg,
   rendererPageCount: () => renderer?.getPageCount() ?? 0,
+  getCurrentPageShapes,
 });
 </script>
 
