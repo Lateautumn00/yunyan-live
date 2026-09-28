@@ -82,11 +82,11 @@ yunyan-live/
 - **pnpm** >= 10.28.2
 - **Docker** >= 20.10 + Docker Compose >= 2.0（运行 Janus + PostgreSQL + Redis）
 - **Windows** 10/11（桌面端开发）
-- **LibreOffice + poppler-utils + 中文字体**（PPT 课件转图片功能依赖）
+- **LibreOffice + 中文字体**（PPT 课件转 PDF 功能依赖）
 
-### PPT 转图片依赖（LibreOffice + poppler + 字体）
+### PPT 转 PDF 依赖（LibreOffice + 字体）
 
-PPT 上传转换管线：LibreOffice 转 PDF → `pdftoppm` 逐页转 PNG → 按页码重命名为 `1.png..N.png`。
+PPT 上传转换管线：LibreOffice 直接转 PDF，前端用 pdf.js 按页渲染（无需 poppler/pdftoppm）。
 
 **Windows：**
 
@@ -101,17 +101,15 @@ PPT 上传转换管线：LibreOffice 转 PDF → `pdftoppm` 逐页转 PNG → �
 
 ```bash
 sudo apt update
-sudo apt install libreoffice-core poppler-utils fonts-noto-cjk
+sudo apt install libreoffice-core fonts-noto-cjk
 ```
 
-- `poppler-utils` 提供 `pdftoppm`（PDF → PNG）
-- `fonts-noto-cjk` **必需**：服务器缺少中文字体时，转换出的页图中文会全部变成豆腐块（乱码）
+- `fonts-noto-cjk` **必需**：服务器缺少中文字体时，转换出的 PDF 中文会全部变成豆腐块（乱码）
 
 验证安装：
 
 ```bash
 soffice --version
-pdftoppm -v
 fc-list :lang=zh | head -3 # 应能看到 Noto Sans CJK 等中文字体
 ```
 
@@ -356,8 +354,6 @@ REDIS_PORT=6379
 
 # LibreOffice (PPT to PDF conversion)
 SOFFICE_PATH=/usr/bin/libreoffice
-# pdftoppm (PDF to PNG, needs poppler-utils) — usually found on PATH
-# PDFTOPPM_PATH=pdftoppm
 
 # SMTP
 SMTP_HOST=smtp.qq.com

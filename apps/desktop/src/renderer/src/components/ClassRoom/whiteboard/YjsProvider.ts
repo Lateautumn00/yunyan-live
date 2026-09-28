@@ -39,6 +39,9 @@ export class YjsProvider {
     const token = localStorage.getItem('token') || '';
     this.provider = new WebsocketProvider(wsUrl, roomId, this.doc, {
       connect: true,
+      // 关闭 lib0 BroadcastChannel 跨端同步：服务端 WS 已是唯一同步源，
+      // bc 会在同进程内让同 roomId 的 provider 互相灌数据（测试互相污染）
+      disableBc: true,
       params: { roomId, token },
     });
 
@@ -59,7 +62,7 @@ export class YjsProvider {
     if (this.pages.length === 0) {
       this.doc.transact(() => {
         const page = new Y.Map();
-        page.set('id', `page_${Date.now()}`);
+        page.set('id', `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
         page.set('name', 'Page 1');
         page.set('visible', true);
         page.set('elements', new Y.Array());
@@ -101,7 +104,8 @@ onSynced(cb: () => void) {
   addPage(): string {
     const newIndex = this.pages.length;
     const page = new Y.Map();
-    const pageId = `page_${Date.now()}`;
+    // 同一毫秒内的多次调用必须产生不同 id（pages.observe 按 id 去重，重复会导致丢层）
+    const pageId = `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     page.set('id', pageId);
     page.set('name', `Page ${newIndex + 1}`);
     page.set('visible', true);

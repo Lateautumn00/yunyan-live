@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount } from '@vue/test-utils';
+
+// 失败用例也必须卸载组件（onUnmounted 会 destroy Yjs provider），避免跨测试状态泄漏
+enableAutoUnmount(afterEach);
 
 // ── Konva mock — class constructors with actual methods ──────────────────
 const konvaMocks = vi.hoisted(() => {
@@ -190,6 +194,15 @@ vi.mock('vue-router', async (importOriginal) => {
 // ── Helpers ─────────────────────────────────────────────────────────────
 import WhiteBoard from './WhiteBoard.vue';
 import { mount } from '@vue/test-utils';
+import { getPdfPageCount, getPdfPageDims } from './whiteboard/pdfAsset';
+
+// pdf.js 管线在单测中不可用（worker/网络），mock 模块级 API
+vi.mock('./whiteboard/pdfAsset', () => ({
+  loadPdfDoc: vi.fn(),
+  getPdfPageCount: vi.fn(),
+  getPdfPageDims: vi.fn(),
+  renderPdfPage: vi.fn(() => Promise.reject(new Error('test: pdf render unavailable'))),
+}));
 
 function mountWB(props: Record<string, unknown> = {}) {
   // WhiteBoard mounted() queries #container for width/height
@@ -375,33 +388,23 @@ describe('WhiteBoard.vue PPT 课件', () => {
   });
 
   async function uploadTwoPagePpt(wrapper: ReturnType<typeof mountWB>, failSecondPage = false) {
+    // 阶段1：客户端 numPages = 2；failSecondPage 时第 2 页尺寸加载失败
+    vi.mocked(getPdfPageCount).mockResolvedValue(2);
+    vi.mocked(getPdfPageDims).mockImplementation((_url, pageNum) =>
+      failSecondPage && pageNum === 2
+        ? Promise.reject(new Error('mock boom'))
+        : Promise.resolve({ w: 1000, h: 500 }),
+    );
+
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve({
           code: 1000,
-          data: { totalNumber: 2, fileUrl: 'http://mock.test/ppt/' },
+          data: { fileUrl: 'http://mock.test/ppt/deck.pdf' },
         }),
     });
     vi.stubGlobal('fetch', fetchMock);
-
-    class StubImage {
-      static failSecond = failSecondPage;
-      onload: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      width = 1000;
-      height = 500;
-      private _src = '';
-      set src(v: string) {
-        this._src = v;
-        const shouldFail = StubImage.failSecond && /2\.png$/.test(v);
-        setTimeout(() => (shouldFail ? this.onerror : this.onload)?.(), 0);
-      }
-      get src() {
-        return this._src;
-      }
-    }
-    vi.stubGlobal('Image', StubImage);
 
     const input = wrapper.find('input[accept=".ppt,.pptx"]');
     expect(input.exists()).toBe(true);
@@ -492,6 +495,8 @@ describe('WhiteBoard.vue PPT 课件', () => {
     expect(shapes.length).toBe(1);
     const s = shapes[0]!;
     expect(s.type).toBe('ppt-image');
+    expect(s.pdfUrl).toBe('http://mock.test/ppt/deck.pdf');
+    expect(s.page).toBe(1);
     // container clientWidth/clientHeight 在 happy-dom 为 0 → 回退 800×600
     // k = min(1, 800*0.9/1000, 600*0.9/500) = 0.72 → 720×360，居中偏移 (40,120)
     expect(s.width).toBeCloseTo(720, 5);
@@ -531,7 +536,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     await vi.waitFor(
       () => {
         expect(String(unwrapVal(vm.toastMsg))).toContain('课件预载失败');
-        expect(String(unwrapVal(vm.toastMsg))).toContain('图片失败');
+        expect(String(unwrapVal(vm.toastMsg))).toContain('加载第2页尺寸失败');
       },
       { timeout: 3000 },
     );

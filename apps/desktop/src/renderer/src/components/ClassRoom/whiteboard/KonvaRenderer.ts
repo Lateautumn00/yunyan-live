@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Konva from 'konva';
 import * as Y from 'yjs';
+import { renderPdfPage } from './pdfAsset';
 
 export class KonvaRenderer {
   stage: Konva.Stage;
@@ -29,7 +30,7 @@ export class KonvaRenderer {
   addPage(index: number, pageId?: string): Konva.Layer {
     if (index < this.layers.length && index >= this.pageIds.length) {
       const existingLayer = this.layers[index]!;
-      this.pageIds.splice(index, 0, pageId || `local_${Date.now()}`);
+      this.pageIds.splice(index, 0, pageId || `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
       this.rebuildLayerMap();
       return existingLayer;
     }
@@ -37,7 +38,7 @@ export class KonvaRenderer {
     this.stage.add(newLayer);
     newLayer.hide();
     this.layers.splice(index, 0, newLayer);
-    this.pageIds.splice(index, 0, pageId || `local_${Date.now()}`);
+    this.pageIds.splice(index, 0, pageId || `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
     this.layerMap.set(index, newLayer);
     this.rebuildLayerMap();
     return newLayer;
@@ -190,14 +191,26 @@ export class KonvaRenderer {
           opacity,
         });
       case 'ppt-image': {
-        const img = new Image();
-        const node = new Konva.Image({
+        const pdfUrl = data.get('pdfUrl') as string | undefined;
+        const base = {
           x: data.get('x') || 0,
           y: data.get('y') || 0,
           width: data.get('width') || 0,
           height: data.get('height') || 0,
-          image: img,
-        });
+        };
+        if (pdfUrl) {
+          const node = new Konva.Image({ ...base, image: null as unknown as HTMLImageElement });
+          const page = (data.get('page') as number) || 1;
+          renderPdfPage(pdfUrl, page)
+            .then(canvas => {
+              node.image(canvas);
+              node.getLayer?.()?.batchDraw();
+            })
+            .catch(err => console.error('[whiteboard] PDF页渲染失败', pdfUrl, page, err));
+          return node;
+        }
+        const img = new Image();
+        const node = new Konva.Image({ ...base, image: img });
         img.onload = () => {
           node.getLayer?.()?.batchDraw();
         };

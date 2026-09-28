@@ -1,17 +1,10 @@
 import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException, Logger } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { extname, join } from 'path';
-import { existsSync, mkdirSync, writeFileSync, readdirSync, renameSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import {
-  buildPdfToPngArgs,
-  buildPptToPdfArgs,
-  PDF_TO_PNG_TIMEOUT_MS,
-  PDFTOPPM_PREFIX,
-  PPT_TO_PDF_TIMEOUT_MS,
-  sortPageFiles,
-} from './ppt-convert';
+import { buildPptToPdfArgs, PPT_TO_PDF_TIMEOUT_MS } from './ppt-convert';
 
 const execFileAsync = promisify(execFile);
 const UPLOAD_DIR = join(process.cwd(), 'uploads');
@@ -84,12 +77,10 @@ export class UploadController {
     writeFileSync(pptPath, file.buffer);
     this.logger.log(`PPT上传成功: ${pptFilename}`);
 
-    const imagesDir = join(pptDir, baseName);
-    ensureDir(imagesDir);
-
     const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-    const fileUrl = `${baseUrl}/uploads/ppt/${baseName}/`;
-    let step = 'LibreOffice 转 PDF';
+    // LO 以输入文件名（baseName.pptx）命名输出，直出 pptDir/baseName.pdf
+    const pdfUrl = `${baseUrl}/uploads/ppt/${baseName}.pdf`;
+    const pdfPath = join(pptDir, `${baseName}.pdf`);
 
     try {
       const sofficePath =
@@ -99,54 +90,22 @@ export class UploadController {
           : 'soffice');
       this.logger.log(`使用soffice路径: ${sofficePath}`);
 
-      const pdfArgs = buildPptToPdfArgs(imagesDir, pptPath);
+      const pdfArgs = buildPptToPdfArgs(pptDir, pptPath);
       this.logger.log(`执行: ${sofficePath} ${pdfArgs.join(' ')}`);
       await execFileAsync(sofficePath, pdfArgs, { timeout: PPT_TO_PDF_TIMEOUT_MS });
-      this.logger.log(`LibreOffice转换完成`);
 
-      const pdfFiles = readdirSync(imagesDir).filter(f => f.endsWith('.pdf'));
-      if (pdfFiles.length === 0) {
+      if (!existsSync(pdfPath)) {
         throw new Error('LibreOffice 未生成 PDF 文件');
       }
-      const pdfPath = join(imagesDir, pdfFiles[0]!);
-
-      step = 'pdftoppm 转 PNG';
-      const pdftoppmPath = process.env.PDFTOPPM_PATH || 'pdftoppm';
-      const outputPrefix = join(imagesDir, PDFTOPPM_PREFIX);
-      const pngArgs = buildPdfToPngArgs(pdfPath, outputPrefix);
-      this.logger.log(`执行: ${pdftoppmPath} ${pngArgs.join(' ')}`);
-      await execFileAsync(pdftoppmPath, pngArgs, { timeout: PDF_TO_PNG_TIMEOUT_MS });
-
-      const rawFiles = readdirSync(imagesDir).filter(f => f.endsWith('.png'));
-      if (rawFiles.length === 0) {
-        throw new Error('pdftoppm 未生成 PNG 文件');
-      }
-      this.logger.log(`原始文件: ${sortPageFiles(rawFiles).join(', ')}`);
-
-      const ordered = sortPageFiles(rawFiles);
-      for (let i = 0; i < ordered.length; i++) {
-        const src = join(imagesDir, ordered[i]!);
-        const dst = join(imagesDir, `${i + 1}.png`);
-        if (src !== dst) {
-          renameSync(src, dst);
-        }
-      }
-
-      const files = readdirSync(imagesDir).filter(f => f.endsWith('.png'));
-      const totalNumber = files.length;
-      this.logger.log(`PPT转图片完成，共${totalNumber}页`);
-      return { totalNumber, fileUrl };
+      this.logger.log(`PPT转PDF完成: ${baseName}.pdf`);
+      return { fileUrl: pdfUrl };
     } catch (err) {
       const msg = (err as Error).message;
-      this.logger.error(`PPT转图片失败(${step}): ${msg}`, (err as Error).stack);
+      this.logger.error(`PPT转PDF失败: ${msg}`, (err as Error).stack);
       if (msg.includes('ENOENT')) {
-        if (step.startsWith('pdftoppm')) {
-          this.logger.error('未找到 pdftoppm，请安装 poppler-utils: sudo apt install poppler-utils');
-        } else {
-          this.logger.error('未找到 LibreOffice，请安装或配置 SOFFICE_PATH');
-        }
+        this.logger.error('未找到 LibreOffice，请安装或配置 SOFFICE_PATH');
       }
-      return { totalNumber: 0, fileUrl };
+      return { fileUrl: '' };
     }
   }
 }

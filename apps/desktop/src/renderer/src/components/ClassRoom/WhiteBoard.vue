@@ -485,6 +485,7 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
+import { getPdfPageCount, getPdfPageDims } from './whiteboard/pdfAsset';
 import { PRESET_COLORS } from './whiteboard/types';
 import { useUserStore } from '@/store/user';
 
@@ -1119,7 +1120,7 @@ function importZoom() {
 
 // --- Pages ---
 function addLayer() {
-  const pageId = provider?.addPage() || `local_${Date.now()}`;
+  const pageId = provider?.addPage() || `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   redoStack.value = [];
   undoStack.value.push({ type: 'addPage', pageId, pageIndex: provider!.getCurrentPageIndex() });
   emitPaintLog();
@@ -1304,21 +1305,20 @@ async function uploadImage(file: File) {
   loading.value = false;
 }
 
-// 预载单页课件图，返回其像素尺寸（供居中计算）；失败/超时抛错由调用方统一处理
-function preloadPptPageImage(url: string, i: number): Promise<{ w: number; h: number }> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`加载第${i}页图片超时`)), 30000);
-    const img = new Image();
-    img.onload = () => {
-      clearTimeout(timer);
-      resolve({ w: img.width, h: img.height });
-    };
-    img.onerror = () => {
-      clearTimeout(timer);
-      reject(new Error(`加载第${i}页图片失败`));
-    };
-    img.src = url;
-  });
+// 预载全部页尺寸，返回其像素尺寸（供居中计算）；任一失败抛错由调用方统一处理（画布零改动）
+async function preloadPptDims(
+  fileUrl: string,
+  numPages: number,
+): Promise<Array<{ w: number; h: number }>> {
+  const dims: Array<{ w: number; h: number }> = [];
+  for (let i = 1; i <= numPages; i++) {
+    try {
+      dims.push(await getPdfPageDims(fileUrl, i));
+    } catch {
+      throw new Error(`加载第${i}页尺寸失败`);
+    }
+  }
+  return dims;
 }
 
 async function uploadPPT(file: File) {
@@ -1337,18 +1337,18 @@ async function uploadPPT(file: File) {
       toast('PPT上传失败');
       return;
     }
-    const { totalNumber, fileUrl } = data.data;
-    if (!totalNumber || !fileUrl) {
+    const { fileUrl } = data.data;
+    if (!fileUrl) {
       toast('PPT上传失败');
       return;
     }
 
-    // 阶段1：预载全部页图；任一失败仅提示，画布零改动（不产生幽灵页）
-    const dims: Array<{ w: number; h: number }> = [];
+    // 阶段1：numPages/尺寸以 pdf.js 为准；任一失败仅提示，画布零改动（不产生幽灵页）
+    let numPages: number;
+    let dims: Array<{ w: number; h: number }>;
     try {
-      for (let i = 1; i <= totalNumber; i++) {
-        dims.push(await preloadPptPageImage(`${fileUrl}${i}.png`, i));
-      }
+      numPages = await getPdfPageCount(fileUrl);
+      dims = await preloadPptDims(fileUrl, numPages);
     } catch (err) {
       toast(`课件预载失败: ${(err as Error).message}`);
       return;
@@ -1362,12 +1362,12 @@ async function uploadPPT(file: File) {
     const canReuse =
       !!provider && provider.getCurrentPageIndex() === 0 && !!provider.getCurrentPageId() && !!active && active.length === 0;
     const layerIds: string[] = [];
-    for (let i = 0; i < totalNumber; i++) {
+    for (let i = 0; i < numPages; i++) {
       // pages.observe 会同步创建并切换对应的 Konva 层，此处不得重复 showPage
       const pageId =
         i === 0 && canReuse
           ? provider!.getCurrentPageId()
-          : (provider?.addPage() || `local_${Date.now()}`);
+          : (provider?.addPage() || `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
       const { w, h } = dims[i]!;
       const k = Math.min(1, (cw * 0.9) / w, (ch * 0.9) / h);
       const width = w * k;
@@ -1375,7 +1375,8 @@ async function uploadPPT(file: File) {
       provider?.addShape({
         id: `pptimg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         type: 'ppt-image',
-        url: `${fileUrl}${i + 1}.png`,
+        pdfUrl: fileUrl,
+        page: i + 1,
         x: (cw - width) / 2,
         y: (ch - height) / 2,
         width,
@@ -1394,7 +1395,7 @@ async function uploadPPT(file: File) {
       fileList.value = provider!.getFileList();
       // 导入后定位到第一张幻灯片页，而非默认空白页
       showFile(layerIds.join(','));
-      toast(`PPT已导入，共${totalNumber}页`);
+      toast(`PPT已导入，共${numPages}页`);
     }
   } catch (e) {
     toast(`PPT上传出错: ${(e as Error).message}`);
