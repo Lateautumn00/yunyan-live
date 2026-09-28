@@ -410,6 +410,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Setting } from '@element-plus/icons-vue';
 import api from '@/api';
+import { copyText } from '@/utils/webBridge';
 
 interface RoomInfo {
   title?: string;
@@ -533,7 +534,7 @@ function sendTime(time: number) {
 }
 
 function copy(content: string) {
-  window.electronAPI.clipboardWriteText(content);
+  void copyText(content);
   ElMessage.success('复制成功');
 }
 

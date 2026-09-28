@@ -70,6 +70,7 @@ import { formatDate } from '@yunyan-live/utils';
 import HistoryVideo from '@/components/ClassRoom/HistoryVideo.vue';
 import { useUserStore } from '@/store/user';
 import Live from '@/api/backstage';
+import { saveBinaryFile } from '@/utils/webBridge';
 
 const route = useRoute();
 const router = useRouter();
@@ -158,8 +159,8 @@ async function doDownload() {
     const blob = new Blob([res.data], { type: 'video/mp4' });
     const buffer = await blob.arrayBuffer();
     const defaultName = `${title.value}.mp4`;
-    const saveResult = await window.electronAPI.recordingSaveBlob({ buffer, defaultName });
-    if (saveResult.success) {
+    const saved = await saveBinaryFile(buffer, defaultName);
+    if (saved) {
       ElMessage.success('下载成功');
     } else {
       ElMessage.info('已取消下载');

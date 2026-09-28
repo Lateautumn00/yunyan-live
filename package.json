@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "turbo run dev",
     "dev:desktop": "pnpm --filter @yunyan-live/desktop dev",
+    "dev:web": "pnpm --filter @yunyan-live/desktop dev:web",
     "dev:all": "concurrently -n all,desktop -c green,red --delay 2 \"pnpm dev:server\" \"pnpm dev:desktop\"",
     "dev:mail": "pnpm --filter @yunyan-live/mail-service dev",
     "dev:auth": "pnpm --filter @yunyan-live/auth-service dev",

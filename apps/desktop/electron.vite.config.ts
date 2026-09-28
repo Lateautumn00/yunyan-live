@@ -14,6 +14,34 @@ const workspacePackages = [
   '@yunyan-live/validation'
 ];
 
+export const rendererConfig = {
+  resolve: {
+    alias: {
+      '@': resolve('src/renderer/src'),
+      '~@': resolve('src/renderer/src')
+    }
+  },
+  plugins: [
+    vue(),
+    AutoImport({
+      imports: ['vue', 'vue-router'],
+      resolvers: [ElementPlusResolver({ importStyle: false })],
+      dts: 'src/types/auto-imports.d.ts'
+    }),
+    Components({
+      resolvers: [ElementPlusResolver({ importStyle: false })],
+      dts: 'src/types/components.d.ts'
+    })
+  ],
+  css: {
+    preprocessorOptions: {
+      less: {
+        javascriptEnabled: true
+      }
+    }
+  }
+};
+
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin({ exclude: workspacePackages })],
@@ -31,31 +59,5 @@ export default defineConfig({
       }
     }
   },
-  renderer: {
-    resolve: {
-      alias: {
-        '@': resolve('src/renderer/src'),
-        '~@': resolve('src/renderer/src')
-      }
-    },
-    plugins: [
-      vue(),
-      AutoImport({
-        imports: ['vue', 'vue-router'],
-        resolvers: [ElementPlusResolver({ importStyle: false })],
-        dts: 'src/types/auto-imports.d.ts'
-      }),
-      Components({
-        resolvers: [ElementPlusResolver({ importStyle: false })],
-        dts: 'src/types/components.d.ts'
-      })
-    ],
-    css: {
-      preprocessorOptions: {
-        less: {
-          javascriptEnabled: true
-        }
-      }
-    }
-  }
+  renderer: rendererConfig
 });

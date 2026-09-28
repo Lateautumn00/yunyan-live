@@ -385,6 +385,7 @@ import SidebarMenu from '@/layouts/sidebar.vue';
 import type { LiveRoom } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
 import { useUserStore } from '@/store/user';
+import { copyText } from '@/utils/webBridge';
 import dayjs from 'dayjs';
 
 interface LiveListResult {
@@ -604,9 +605,7 @@ async function updateCode() {
 }
 
 function copyLink(content: string | undefined) {
-  if (content) {
-    window.electronAPI.clipboardWriteText(content);
-  }
+  if (content) void copyText(content);
   ElMessage.success('复制成功');
 }
 

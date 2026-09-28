@@ -142,6 +142,7 @@ import { formatDate } from '@yunyan-live/utils';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import type { VideoItem } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
+import { saveBinaryFile } from '@/utils/webBridge';
 
 interface VideoDetailResult {
   list: VideoItem[];
@@ -263,8 +264,8 @@ async function doDownload(videoId: string, createTime?: string | number) {
     const blob = new Blob([res.data], { type: 'video/mp4' });
     const buffer = await blob.arrayBuffer();
     const defaultName = `录制_${getTextTime(Number(createTime))}.mp4`;
-    const saveResult = await window.electronAPI.recordingSaveBlob({ buffer, defaultName });
-    if (saveResult.success) {
+    const saved = await saveBinaryFile(buffer, defaultName);
+    if (saved) {
       ElMessage.success('下载成功');
     } else {
       ElMessage.info('已取消下载');

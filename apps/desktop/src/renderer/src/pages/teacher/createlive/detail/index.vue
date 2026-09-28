@@ -72,6 +72,7 @@ import { formatDate } from '@yunyan-live/utils';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import type { LiveRoom } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
+import { copyText } from '@/utils/webBridge';
 
 const route = useRoute();
 
@@ -118,9 +119,7 @@ function dateFormatter(startTime: string): string {
 }
 
 function copyLink(content: string | undefined) {
-  if (content) {
-    window.electronAPI.clipboardWriteText(content);
-  }
+  if (content) void copyText(content);
   ElMessage.success('复制成功');
 }
 </script>

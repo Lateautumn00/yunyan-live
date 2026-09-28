@@ -51,6 +51,7 @@ import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import Live from '@/api/backstage';
+import { copyText } from '@/utils/webBridge';
 
 const activeKey = '4';
 const roomId = ref('');
@@ -73,7 +74,7 @@ async function generateCode() {
 
 function copyCode() {
   if (transferCode.value) {
-    window.electronAPI.clipboardWriteText(transferCode.value);
+    void copyText(transferCode.value);
     ElMessage.success('复制成功');
   }
 }

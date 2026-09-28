@@ -654,6 +654,10 @@ function endLive() {
 }
 
 async function getSources() {
+  if (!window.electronAPI) {
+    ElMessage.warning('屏幕共享需在桌面客户端中使用');
+    return;
+  }
   const sourceList = await window.electronAPI.getSources();
   const list = sourceList.filter((item) => !item.name.includes('云砚直播'));
   sources.value = list;
