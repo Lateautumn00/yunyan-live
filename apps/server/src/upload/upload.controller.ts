@@ -4,6 +4,14 @@ import { extname, join } from 'path';
 import { existsSync, mkdirSync, writeFileSync, readdirSync, renameSync } from 'fs';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import {
+  buildPdfToPngArgs,
+  buildPptToPdfArgs,
+  PDF_TO_PNG_TIMEOUT_MS,
+  PDFTOPPM_PREFIX,
+  PPT_TO_PDF_TIMEOUT_MS,
+  sortPageFiles,
+} from './ppt-convert';
 
 const execFileAsync = promisify(execFile);
 const UPLOAD_DIR = join(process.cwd(), 'uploads');
@@ -79,6 +87,10 @@ export class UploadController {
     const imagesDir = join(pptDir, baseName);
     ensureDir(imagesDir);
 
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+    const fileUrl = `${baseUrl}/uploads/ppt/${baseName}/`;
+    let step = 'LibreOffice 转 PDF';
+
     try {
       const sofficePath =
         process.env.SOFFICE_PATH ||
@@ -87,41 +99,53 @@ export class UploadController {
           : 'soffice');
       this.logger.log(`使用soffice路径: ${sofficePath}`);
 
-      const args = [
-        '--headless',
-        '--convert-to', 'png',
-        '--outdir', imagesDir,
-        pptPath,
-      ];
-
-      this.logger.log(`执行: ${sofficePath} ${args.join(' ')}`);
-      await execFileAsync(sofficePath, args, { timeout: 60000 });
+      const pdfArgs = buildPptToPdfArgs(imagesDir, pptPath);
+      this.logger.log(`执行: ${sofficePath} ${pdfArgs.join(' ')}`);
+      await execFileAsync(sofficePath, pdfArgs, { timeout: PPT_TO_PDF_TIMEOUT_MS });
       this.logger.log(`LibreOffice转换完成`);
 
-      const rawFiles = readdirSync(imagesDir).filter(f => f.endsWith('.png'));
-      this.logger.log(`原始文件: ${rawFiles.join(', ')}`);
+      const pdfFiles = readdirSync(imagesDir).filter(f => f.endsWith('.pdf'));
+      if (pdfFiles.length === 0) {
+        throw new Error('LibreOffice 未生成 PDF 文件');
+      }
+      const pdfPath = join(imagesDir, pdfFiles[0]!);
 
-      let index = 1;
-      for (const file of rawFiles) {
-        const src = join(imagesDir, file);
-        const dst = join(imagesDir, `${index}.png`);
+      step = 'pdftoppm 转 PNG';
+      const pdftoppmPath = process.env.PDFTOPPM_PATH || 'pdftoppm';
+      const outputPrefix = join(imagesDir, PDFTOPPM_PREFIX);
+      const pngArgs = buildPdfToPngArgs(pdfPath, outputPrefix);
+      this.logger.log(`执行: ${pdftoppmPath} ${pngArgs.join(' ')}`);
+      await execFileAsync(pdftoppmPath, pngArgs, { timeout: PDF_TO_PNG_TIMEOUT_MS });
+
+      const rawFiles = readdirSync(imagesDir).filter(f => f.endsWith('.png'));
+      if (rawFiles.length === 0) {
+        throw new Error('pdftoppm 未生成 PNG 文件');
+      }
+      this.logger.log(`原始文件: ${sortPageFiles(rawFiles).join(', ')}`);
+
+      const ordered = sortPageFiles(rawFiles);
+      for (let i = 0; i < ordered.length; i++) {
+        const src = join(imagesDir, ordered[i]!);
+        const dst = join(imagesDir, `${i + 1}.png`);
         if (src !== dst) {
           renameSync(src, dst);
         }
-        index++;
       }
 
       const files = readdirSync(imagesDir).filter(f => f.endsWith('.png'));
       const totalNumber = files.length;
-
-      const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-      const fileUrl = `${baseUrl}/uploads/ppt/${baseName}/`;
       this.logger.log(`PPT转图片完成，共${totalNumber}页`);
       return { totalNumber, fileUrl };
     } catch (err) {
-      this.logger.error(`PPT转图片失败: ${(err as Error).message}`, (err as Error).stack);
-      const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-      const fileUrl = `${baseUrl}/uploads/ppt/${baseName}/`;
+      const msg = (err as Error).message;
+      this.logger.error(`PPT转图片失败(${step}): ${msg}`, (err as Error).stack);
+      if (msg.includes('ENOENT')) {
+        if (step.startsWith('pdftoppm')) {
+          this.logger.error('未找到 pdftoppm，请安装 poppler-utils: sudo apt install poppler-utils');
+        } else {
+          this.logger.error('未找到 LibreOffice，请安装或配置 SOFFICE_PATH');
+        }
+      }
       return { totalNumber: 0, fileUrl };
     }
   }

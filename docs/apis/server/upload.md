@@ -47,11 +47,21 @@
 **处理流程：**
 
 1. 保存原始 PPT 到 `uploads/ppt/`
-2. 用 LibreOffice（`soffice`，超时 60s）转成 PNG 图片到 `uploads/ppt/<baseName>/`
-3. 图片按页码重命名为 `1.png, 2.png, ...`
+2. LibreOffice（`soffice --headless --convert-to pdf`，超时 120s）转 PDF 到 `uploads/ppt/<baseName>/`
+3. `pdftoppm -png -r 150` 将 PDF 逐页转 PNG（超时 120s）——`soffice --convert-to png` 只输出第 1 页，故必须经 PDF 中转
+4. PNG 按页码排序并重命名为 `1.png, 2.png, ...`
 
-**环境变量：** `SOFFICE_PATH`（soffice 可执行文件路径，默认 Windows 为
-`C:\Program Files\LibreOffice\program\soffice.exe`，其他平台从 `PATH` 查找 `soffice`）。
+**服务端依赖（Linux）：** `sudo apt install libreoffice-core poppler-utils fonts-noto-cjk`。中文字体（如 `fonts-noto-cjk`）**必需**——缺失时页图中文会渲染成豆腐块（乱码）。
+
+**环境变量：**
+
+- `SOFFICE_PATH`：soffice 可执行文件路径（默认 Windows 为
+  `C:\Program Files\LibreOffice\program\soffice.exe`，其他平台从 `PATH` 查找 `soffice`；
+  Ubuntu 常见为 `/usr/bin/libreoffice`）
+- `PDFTOPPM_PATH`：pdftoppm 可执行文件路径（默认从 `PATH` 查找）
+
+**失败行为：** 任一阶段失败（工具缺失/超时/无输出）时响应结构不变，`totalNumber` 为 `0`；
+日志按阶段（`LibreOffice 转 PDF` / `pdftoppm 转 PNG`）记录错误，`ENOENT` 时附安装提示。
 
 **响应 data：**
 
