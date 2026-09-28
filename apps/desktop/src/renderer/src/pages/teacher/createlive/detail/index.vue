@@ -2,7 +2,17 @@
   <div>
     <sidebar-menu :active-key="activeKey" />
     <div class="backstage-center live-detail">
-      <h3>直播概况</h3>
+      <div class="page-header">
+        <h3>直播概况</h3>
+        <RoomActions
+          variant="buttons"
+          :room="roomDetail"
+          @updated="getRoomDetail"
+          @deleted="goBackList"
+          @transferred="goBackList"
+          @share="highlightLinks"
+        />
+      </div>
       <div class="grid-container">
         <div class="title">
           <div>直播名称:</div>
@@ -23,40 +33,21 @@
           <div>直播类型:</div>
           <div>{{ roomDetail.type == 0 ? '小班教学' : '大班教学' }}</div>
         </div>
-        <div class="links">
+        <div
+          ref="linksSection"
+          class="links"
+          :class="{ 'is-highlight': linksHighlight }"
+        >
           <div>
             <p>登录方式：</p>
             <p>下面为登录链接，您可以将其分享给各角色</p>
           </div>
           <section>
-            <div>
-              <div>
-                <div class="code">
-                  <span>直播码</span>
-                  <span>{{ roomDetail.joinCode }}</span>
-                  <el-icon
-                    class="copy"
-                    aria-label="复制"
-                    @click="copyLink(roomDetail.joinCode)"
-                  >
-                    <CopyDocument />
-                  </el-icon>
-                </div>
-                <el-button @click="updateCode">
-                  更新参加码
-                </el-button>
-              </div>
-              <div>
-                <div class="copy-line">
-                  <label for="">客户端进入</label>
-                  <el-input value="http://abc" />
-                </div>
-                <span
-                  class="copy"
-                  @click="copyLink('http://abc')"
-                >复制</span>
-              </div>
-            </div>
+            <ShareLinks
+              :room-id="roomId"
+              :join-code="roomDetail.joinCode"
+              @updated="onCodeUpdated"
+            />
           </section>
         </div>
       </div>
@@ -66,15 +57,16 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { useRoute, useRouter } from 'vue-router';
 import { formatDate } from '@yunyan-live/utils';
 import SidebarMenu from '@/layouts/sidebar.vue';
+import RoomActions from '@/components/teacher/RoomActions.vue';
+import ShareLinks from '@/components/teacher/ShareLinks.vue';
 import type { LiveRoom } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
-import { copyText } from '@/utils/webBridge';
 
 const route = useRoute();
+const router = useRouter();
 
 const activeKey = '1';
 const roomDetail = ref<LiveRoom>({
@@ -85,6 +77,8 @@ const roomDetail = ref<LiveRoom>({
   duration: 0
 });
 const roomId = ref('');
+const linksSection = ref<HTMLElement | null>(null);
+const linksHighlight = ref(false);
 
 onMounted(() => {
   roomId.value = (route.query.roomId as string) ?? '';
@@ -101,40 +95,34 @@ async function getRoomDetail() {
   }
 }
 
-async function updateCode() {
-  try {
-    const res = await Live.update_code({
-      roomId: roomId.value
-    });
-    const data = res.data.data as string;
-    roomDetail.value.joinCode = data;
-    ElMessage.success(res.data.msg ?? '更新成功');
-  } catch (e) {
-    console.error(e);
-  }
+function onCodeUpdated(code: string) {
+  roomDetail.value.joinCode = code;
+}
+
+function goBackList() {
+  void router.replace('/teacher/mylive');
+}
+
+function highlightLinks() {
+  linksSection.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  linksHighlight.value = true;
+  setTimeout(() => {
+    linksHighlight.value = false;
+  }, 1500);
 }
 
 function dateFormatter(startTime: string): string {
   return formatDate(Number(startTime));
-}
-
-function copyLink(content: string | undefined) {
-  if (content) void copyText(content);
-  ElMessage.success('复制成功');
 }
 </script>
 
 <style lang="less" scoped>
 @import '~@/assets/styles/common/mixin.less';
 
-.code {
+.page-header {
   display: flex;
   align-items: center;
-  .copy {
-    font-size: 14px;
-    margin-left: 4px;
-    cursor: pointer;
-  }
+  justify-content: space-between;
 }
 
 .live-detail {
@@ -224,8 +212,15 @@ function copyLink(content: string | undefined) {
   background: #ffffff;
   box-shadow: 0px 2px 12px 0px rgba(0, 0, 0, 0.06);
   border-radius: 8px;
+  transition: box-shadow 0.3s;
 
-  > div {
+  &.is-highlight {
+    box-shadow:
+      0 0 0 2px @color-1989fa,
+      0 2px 12px 0 rgba(0, 0, 0, 0.06);
+  }
+
+  > div:first-of-type {
     display: flex;
     margin: 20px;
     p {
@@ -242,36 +237,10 @@ function copyLink(content: string | undefined) {
   }
   section {
     padding: 27px 20px 54px 20px;
-    display: flex;
-    justify-content: space-between;
     color: @color-666666;
-    > div {
-      width: 45%;
-      > div {
-        margin-bottom: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        > div span:last-of-type {
-          color: @color-286bff;
-          margin-left: 20px;
-        }
-        .copy-line {
-          display: flex;
-          label {
-            width: 104px;
-          }
-          .el-input {
-            width: 218px;
-          }
-        }
-        .copy {
-          cursor: pointer;
-        }
-        > span {
-          color: @color-286bff;
-        }
-      }
+
+    :deep(.share-links) {
+      width: 100%;
     }
   }
 }

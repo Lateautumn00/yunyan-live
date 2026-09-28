@@ -1,24 +1,22 @@
 ﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { createPinia } from 'pinia';
 import ElementPlus from 'element-plus';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
-import type { ElectronApi } from '@yunyan-live/ipc';
 import { formatDate } from '@yunyan-live/utils';
 import Detail from '@/pages/teacher/createlive/detail/index.vue';
+import RoomActions from '@/components/teacher/RoomActions.vue';
+import ShareLinks from '@/components/teacher/ShareLinks.vue';
 import type { LiveRoom } from '@/types/pages/teacher/live';
 
 const mocks = vi.hoisted(() => ({
-  roomDetail: vi.fn(),
-  updateCode: vi.fn(),
-  clipboardWriteText: vi.fn()
+  roomDetail: vi.fn()
 }));
 
 vi.mock('@/api/backstage', () => ({
   default: {
-    room_detail: (params: unknown) => mocks.roomDetail(params),
-    update_code: (params: unknown) => mocks.updateCode(params)
+    room_detail: (params: unknown) => mocks.roomDetail(params)
   }
 }));
 
@@ -41,17 +39,6 @@ const room: LiveRoom = {
   duration: 60,
   joinCode: 'CODE001'
 };
-
-interface DetailVm {
-  roomId: string;
-  roomDetail: LiveRoom;
-  updateCode: () => Promise<void>;
-  copyLink: (content?: string) => void;
-}
-
-function vm(wrapper: VueWrapper): DetailVm {
-  return wrapper.vm as unknown as DetailVm;
-}
 
 async function mountPage() {
   const pinia = createPinia();
@@ -77,13 +64,7 @@ async function mountPage() {
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
-  Object.assign(window, {
-    electronAPI: {
-      clipboardWriteText: mocks.clipboardWriteText
-    } as unknown as ElectronApi
-  });
   mocks.roomDetail.mockResolvedValue(ok(room));
-  mocks.updateCode.mockResolvedValue(ok('TEA002'));
 });
 
 describe('创建直播详情 createlive/detail/index.vue', () => {
@@ -99,20 +80,10 @@ describe('创建直播详情 createlive/detail/index.vue', () => {
     expect(mocks.roomDetail).toHaveBeenCalledWith('R1');
   });
 
-  it('更新教师参加码', async () => {
+  it('头部接入 RoomActions 按钮组与 ShareLinks', async () => {
     const { wrapper } = await mountPage();
-    await vm(wrapper).updateCode();
-    expect(mocks.updateCode).toHaveBeenCalledWith({
-      roomId: 'R1'
-    });
-    expect(vm(wrapper).roomDetail.joinCode).toBe('CODE002');
-    expect(document.body.textContent).toContain('更新成功');
-  });
-
-  it('复制参加码调用剪贴板', async () => {
-    const { wrapper } = await mountPage();
-    vm(wrapper).copyLink('CODE001');
-    expect(mocks.clipboardWriteText).toHaveBeenCalledWith('CODE001');
-    expect(document.body.textContent).toContain('复制成功');
+    expect(wrapper.findComponent(RoomActions).exists()).toBe(true);
+    expect(wrapper.findComponent(ShareLinks).exists()).toBe(true);
+    expect(wrapper.text()).toContain('进入房间');
   });
 });
