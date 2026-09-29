@@ -708,14 +708,20 @@ onMounted(() => {
     currentOpacity.value = state.opacity ?? 1;
   });
 
-  // Sync viewport offset (move tool) — register once
+  // Sync viewport (move pan / zoom / fit stage) — register once.
+  // 本地写入与远端更新走同一观察器，幂等应用；zoomLevel 同步仅供教师端显示（学生端 UI 隐藏）
   provider!.viewportOffset.observe(() => {
+    if (!renderer) return;
     const o = provider!.getViewportOffset();
-    if (renderer) {
-      renderer.layer.x(o.x);
-      renderer.layer.y(o.y);
-      renderer.layer.batchDraw();
-    }
+    renderer.setViewport(o.x, o.y);
+    const zoom = provider!.getViewportZoom();
+    renderer.setZoom(zoom);
+    zoomLevel.value = zoom;
+    const s = provider!.getViewportStage();
+    const stage = renderer.getStage();
+    stage.x(s.x);
+    stage.y(s.y);
+    stage.batchDraw();
   });
 
   // Sync page count when teacher adds/removes pages — register once
@@ -1020,12 +1026,9 @@ function onPointerMove(e: any) {
   } else if (m === 'move' && startPos) {
     const dx = pos.x - startPos.x;
     const dy = pos.y - startPos.y;
-    const layer = renderer!.layer;
-    const newX = layer.x() + dx;
-    const newY = layer.y() + dy;
-    layer.x(newX);
-    layer.y(newY);
-    layer.batchDraw();
+    const newX = renderer!.layer.x() + dx;
+    const newY = renderer!.layer.y() + dy;
+    renderer!.setViewport(newX, newY);
     provider?.setViewportOffset(newX, newY);
     startPos = pos;
   }
@@ -1235,11 +1238,20 @@ function layerClear() {
 }
 
 // --- Zoom ---
+// 把教师端当前视口（缩放 + 全览 stage 位移）写入 Yjs，学生端观察器跟随应用
+function syncViewportToYjs() {
+  if (!renderer || !provider) return;
+  provider.setViewportZoom(renderer.getZoom());
+  const st = renderer.getStage();
+  provider.setViewportStage(st.x(), st.y());
+}
+
 function layerZoomChange(type: string) {
   if (!renderer) return;
   if (type === 'sub') zoomLevel.value = renderer.zoomOut();
   else if (type === 'add') zoomLevel.value = renderer.zoomIn();
   else if (type === 'all') { renderer.zoomFitAll(); zoomLevel.value = renderer.getZoom(); }
+  syncViewportToYjs();
   emitPaintLog();
 }
 
@@ -1255,6 +1267,7 @@ function importZoom() {
   if (isNaN(val)) return;
   zoomLevel.value = Math.max(1, Math.min(200, val));
   renderer?.setZoom(zoomLevel.value);
+  syncViewportToYjs();
   emitPaintLog();
 }
 

@@ -11,6 +11,8 @@ export class KonvaRenderer {
   private layerMap = new Map<number, Konva.Layer>();
   private nodeMap = new Map<string, Konva.Node>();
   private zoomLevel = 100;
+  private viewX = 0;
+  private viewY = 0;
   private selectEnabled = false;
   private selectedId: string | null = null;
   private transformer: Konva.Transformer | null = null;
@@ -55,10 +57,25 @@ export class KonvaRenderer {
       if (i === index) l.show(); else l.hide();
     });
     this.layer = this.layers[index]!;
+    // 每页是独立 Layer（scale/x/y 各自独立）——切层后重应用全局视图，
+    // 跨页缩放/平移保持一致（zoomLevel 显示本来就不随翻页重置）
+    this.layer.scaleX(this.zoomLevel / 100);
+    this.layer.scaleY(this.zoomLevel / 100);
+    this.layer.x(this.viewX);
+    this.layer.y(this.viewY);
     this.clearSelection();
     this.tempLayer.moveToTop();
     this.rebuildLayerMap();
     this.stage.batchDraw();
+  }
+
+  // 全局平移视图（记录值供 showPage 重应用；学生端由 viewportOffset 观察器调用）
+  setViewport(x: number, y: number) {
+    this.viewX = x;
+    this.viewY = y;
+    this.layer.x(x);
+    this.layer.y(y);
+    this.layer.batchDraw();
   }
 
   removePage(index: number) {

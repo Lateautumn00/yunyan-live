@@ -105,6 +105,25 @@ onSynced(cb: () => void) {
     this.viewportOffset.set('y', y);
   }
 
+  getViewportZoom(): number {
+    return (this.viewportOffset.get('zoom') as number) || 100;
+  }
+
+  setViewportZoom(zoom: number) {
+    if (this.readOnly) return;
+    this.viewportOffset.set('zoom', zoom);
+  }
+
+  getViewportStage(): { x: number; y: number } {
+    return { x: (this.viewportOffset.get('sx') as number) || 0, y: (this.viewportOffset.get('sy') as number) || 0 };
+  }
+
+  setViewportStage(x: number, y: number) {
+    if (this.readOnly) return;
+    this.viewportOffset.set('sx', x);
+    this.viewportOffset.set('sy', y);
+  }
+
   getPages(): Y.Array<Y.Map<any>> {
     return this.pages;
   }

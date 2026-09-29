@@ -103,6 +103,22 @@ describe('YjsProvider readOnly', () => {
     expect(p.getViewportOffset()).toEqual({ x: 0, y: 0 });
   });
 
+  it('readOnly setViewportZoom/setViewportStage 不写入', () => {
+    const p = create(true);
+    p.setViewportZoom(150);
+    p.setViewportStage(10, 20);
+    expect(p.getViewportZoom()).toBe(100);
+    expect(p.getViewportStage()).toEqual({ x: 0, y: 0 });
+  });
+
+  it('可写 setViewportZoom/setViewportStage 正常写入（对照）', () => {
+    const p = create(false);
+    p.setViewportZoom(150);
+    p.setViewportStage(10, 20);
+    expect(p.getViewportZoom()).toBe(150);
+    expect(p.getViewportStage()).toEqual({ x: 10, y: 20 });
+  });
+
   it('readOnly 课件条目增改删均不生效', () => {
     const p = create(true);
     p.addFileItem({ filename: 'a', filext: 'pptx', filesize: 1, fileid: 'f1' });

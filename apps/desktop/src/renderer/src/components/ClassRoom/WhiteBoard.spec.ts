@@ -74,8 +74,11 @@ const konvaMocks = vi.hoisted(() => {
     y(_val?: unknown) { if (_val !== undefined) this._y = _val as number; return this._y; }
     width() { return 800; }
     height() { return 600; }
-    scaleX(_val?: unknown) { return 1; }
-    scaleY(_val?: unknown) { return 1; }
+    // 有状态：showPage/setZoom 会写入层缩放，视口同步用例据此断言重应用
+    _sx = 1;
+    _sy = 1;
+    scaleX(_val?: unknown) { if (_val !== undefined) this._sx = _val as number; return this._sx; }
+    scaleY(_val?: unknown) { if (_val !== undefined) this._sy = _val as number; return this._sy; }
     getClientRect() { return { x: 0, y: 0, width: 100, height: 100 }; }
     toArray() { return this.children; }
     getChildren() { return this.children; }
@@ -984,6 +987,65 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 1000 },
     );
+    wrapper.unmount();
+  });
+
+  it('教师缩放/全览写入 Yjs 视口', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    vm.layerZoomChange('add');
+    expect(provider.viewportOffset.get('zoom')).toBe(101);
+    // 空画布全览 → 回 100%、stage 归零，三项均写入 Yjs
+    vm.layerZoomChange('all');
+    expect(provider.viewportOffset.get('zoom')).toBe(100);
+    expect(provider.viewportOffset.get('sx')).toBe(0);
+    expect(provider.viewportOffset.get('sy')).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('远端视口变化（缩放/平移/全览位移）本地跟随应用', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    provider.setViewportZoom(150);
+    provider.setViewportStage(10, -20);
+    provider.setViewportOffset(5, 6);
+    await vi.waitFor(
+      () => {
+        const vs = vm.viewState();
+        expect(vs.zoom).toBe(150);
+        expect(vs.layerScale).toBeCloseTo(1.5, 5);
+        expect(vs.x).toBe(5);
+        expect(vs.y).toBe(6);
+        expect(vs.stageX).toBe(10);
+        expect(vs.stageY).toBe(-20);
+      },
+      { timeout: 1000 },
+    );
+    wrapper.unmount();
+  });
+
+  it('缩放后新增页保持视图（showPage 重应用全局视图）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    provider.setViewportZoom(150);
+    await vi.waitFor(
+      () => {
+        expect(vm.viewState().zoom).toBe(150);
+      },
+      { timeout: 1000 },
+    );
+    vm.addLayer();
+    // 新页是独立 Layer，showPage 必须把缩放/平移重应用上去，否则层 scale 掉回 1
+    await vi.waitFor(
+      () => {
+        expect(vm.viewState().layerScale).toBeCloseTo(1.5, 5);
+      },
+      { timeout: 1000 },
+    );
+    expect(vm.viewState().zoom).toBe(150);
     wrapper.unmount();
   });
 });
