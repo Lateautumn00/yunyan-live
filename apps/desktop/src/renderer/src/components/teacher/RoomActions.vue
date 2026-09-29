@@ -229,6 +229,11 @@
         </span>
       </template>
     </el-dialog>
+
+    <CoursewareUpload
+      v-model="coursewareDialogVisible"
+      :room-id="room.roomId ?? ''"
+    />
   </div>
 </template>
 
@@ -238,6 +243,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import dayjs from 'dayjs';
 import Live from '@/api/backstage';
 import ShareLinks from '@/components/teacher/ShareLinks.vue';
+import CoursewareUpload from '@/components/teacher/CoursewareUpload.vue';
 import { useRoomNavigation } from '@/composables/useRoomNavigation';
 import type { LiveRoom } from '@/types/pages/teacher/live';
 
@@ -266,6 +272,10 @@ const menuItems = computed(() => {
     { command: 'share', label: '分享' },
     { command: 'watchlist', label: '时长列表' }
   ];
+  // 上传课件仅 dropdown 变体（直播列表）提供；直播概况页用独立按钮入口
+  if (isDropdown.value) {
+    items.push({ command: 'upload', label: '上传课件' });
+  }
   if (props.room.status === 1) {
     items.push({ command: 'transfer', label: '转移' }, { command: 'edit', label: '编辑' });
   }
@@ -278,6 +288,7 @@ const deleteDialogVisible = ref(false);
 const shareDialogVisible = ref(false);
 const transferDialogVisible = ref(false);
 const editDialogVisible = ref(false);
+const coursewareDialogVisible = ref(false);
 const transferCode = ref('');
 const isHostRoom = ref(false);
 const editForm = ref<{
@@ -312,6 +323,8 @@ function onCommand(command: string) {
     }
   } else if (command === 'watchlist') {
     nav.gowatchlist(props.room);
+  } else if (command === 'upload') {
+    coursewareDialogVisible.value = true;
   } else if (command === 'transfer') {
     transferCode.value = '';
     transferDialogVisible.value = true;

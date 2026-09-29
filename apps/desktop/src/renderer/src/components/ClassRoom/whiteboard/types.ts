@@ -19,6 +19,8 @@ export interface FileItem {
   filext: string;
   filesize: number;
   fileid: string;
+  /** 课件源 PDF 地址（服务端课件表的关联键，用于进房导入去重） */
+  fileurl?: string;
 }
 
 export const DEFAULT_TOOL: ToolState = {

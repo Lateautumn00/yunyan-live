@@ -62,6 +62,15 @@ export default {
   search_teachers(params: object) {
     return http.get(`${config.liveApi}/liveInfo/searchTeachers`, { params });
   },
+  save_courseware(params: { roomId: string; filename: string; filext?: string; filesize?: number; fileUrl: string }) {
+    return http.post(`${config.liveApi}/liveInfo/saveCourseware`, params);
+  },
+  courseware_list(roomId: string) {
+    return http.get(`${config.liveApi}/liveInfo/coursewareList`, { params: { roomId } });
+  },
+  delete_courseware(id: string) {
+    return http.delete(`${config.liveApi}/liveInfo/deleteCourseware`, { data: { id } });
+  },
   download_recording(id: string) {
     const token = localStorage.getItem('token');
     return axios.get(`${config.liveApi}/liveInfo/downloadRecording/${id}`, {

@@ -203,6 +203,7 @@ onSynced(cb: () => void) {
     map.set('filext', item.filext);
     map.set('filesize', item.filesize);
     map.set('fileid', item.fileid);
+    if (item.fileurl) map.set('fileurl', item.fileurl);
     this.doc.transact(() => { this.fileList.push([map]); });
   }
 
@@ -223,6 +224,7 @@ onSynced(cb: () => void) {
       filext: m.get('filext'),
       filesize: m.get('filesize'),
       fileid: m.get('fileid') || '',
+      fileurl: m.get('fileurl') || '',
     })).filter(item => !!item.fileid);
   }
 

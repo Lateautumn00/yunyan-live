@@ -4,14 +4,23 @@
     <div class="backstage-center live-detail">
       <div class="page-header">
         <h3>直播概况</h3>
-        <RoomActions
-          variant="buttons"
-          :room="roomDetail"
-          @updated="getRoomDetail"
-          @deleted="goBackList"
-          @transferred="goBackList"
-          @share="highlightLinks"
-        />
+        <div class="header-actions">
+          <el-button
+            type="primary"
+            plain
+            @click="coursewareVisible = true"
+          >
+            上传课件
+          </el-button>
+          <RoomActions
+            variant="buttons"
+            :room="roomDetail"
+            @updated="getRoomDetail"
+            @deleted="goBackList"
+            @transferred="goBackList"
+            @share="highlightLinks"
+          />
+        </div>
       </div>
       <div class="grid-container">
         <div class="title">
@@ -52,6 +61,11 @@
         </div>
       </div>
     </div>
+
+    <CoursewareUpload
+      v-model="coursewareVisible"
+      :room-id="roomId"
+    />
   </div>
 </template>
 
@@ -61,6 +75,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { formatDate } from '@yunyan-live/utils';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import RoomActions from '@/components/teacher/RoomActions.vue';
+import CoursewareUpload from '@/components/teacher/CoursewareUpload.vue';
 import ShareLinks from '@/components/teacher/ShareLinks.vue';
 import type { LiveRoom } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
@@ -77,6 +92,7 @@ const roomDetail = ref<LiveRoom>({
   duration: 0
 });
 const roomId = ref('');
+const coursewareVisible = ref(false);
 const linksSection = ref<HTMLElement | null>(null);
 const linksHighlight = ref(false);
 
@@ -123,6 +139,12 @@ function dateFormatter(startTime: string): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
 }
 
 .live-detail {

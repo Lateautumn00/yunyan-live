@@ -173,6 +173,21 @@ vi.mock('@/api', () => ({
   }
 }));
 
+// 房内上传后登记课件表 + 进房自动导入课件的 API；测试中不得打真实网络
+const liveMocks = vi.hoisted(() => ({
+  saveCourseware: vi.fn(),
+  coursewareList: vi.fn(),
+  deleteCourseware: vi.fn(),
+}));
+
+vi.mock('@/api/backstage', () => ({
+  default: {
+    save_courseware: (params: unknown) => liveMocks.saveCourseware(params),
+    courseware_list: (params: unknown) => liveMocks.coursewareList(params),
+    delete_courseware: (params: unknown) => liveMocks.deleteCourseware(params),
+  },
+}));
+
 // WhiteBoard setup 读取 route.query.userId；测试环境无 router，注入会让全部用例在 mount 时崩溃
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-router')>();
@@ -360,7 +375,7 @@ describe('WhiteBoard.vue', () => {
 
 // ── PPT 课件导入 / 定位 / 删除 ────────────────────────────────────────────
 type PPTVM = WBVM & {
-  fileList: Array<{ filename: string; filext: string; fileid: string }> | { value: Array<{ filename: string; filext: string; fileid: string }> };
+  fileList: Array<{ filename: string; filext: string; fileid: string; fileurl?: string }> | { value: Array<{ filename: string; filext: string; fileid: string; fileurl?: string }> };
   curLayerIndex: number | { value: number };
   toastMsg: string | { value: string };
   showFile: (ids: string) => void;
@@ -368,6 +383,7 @@ type PPTVM = WBVM & {
   addLayer: () => void;
   rendererPageCount: () => number;
   getCurrentPageShapes: () => Array<Record<string, unknown>>;
+  importServerCoursewares: () => Promise<void>;
 };
 
 function unwrapVal<T>(v: T | { value: T }): T {
@@ -379,7 +395,11 @@ function unwrapVal<T>(v: T | { value: T }): T {
 describe('WhiteBoard.vue PPT 课件', () => {
   // uploadPptApi 在 setup()（mount 时）求值，env 必须在 mount 之前 stub
   beforeEach(() => {
+    // restoreAllMocks 不重置 vi.fn 调用历史，跨用例计数必须显式清理
+    vi.clearAllMocks();
     vi.stubEnv('VITE_UPLOAD_PPT_URL', 'http://mock.test/ppt');
+    liveMocks.saveCourseware.mockResolvedValue({ data: { code: 1000, data: null } });
+    liveMocks.coursewareList.mockResolvedValue({ data: { code: 1000, data: { list: [], pageInfo: { totalElements: 0 } } } });
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -497,7 +517,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     expect(s.type).toBe('ppt-image');
     expect(s.pdfUrl).toBe('http://mock.test/ppt/deck.pdf');
     expect(s.page).toBe(1);
-    // container clientWidth/clientHeight 在 happy-dom 为 0 → 回退 800×600
+    // container clientWidth/clientHeight 在 jsdom 无布局恒为 0 → 回退 800×600
     // k = min(1, 800*0.9/1000, 600*0.9/500) = 0.72 → 720×360，居中偏移 (40,120)
     expect(s.width).toBeCloseTo(720, 5);
     expect(s.height).toBeCloseTo(360, 5);
@@ -526,6 +546,27 @@ describe('WhiteBoard.vue PPT 课件', () => {
     wrapper.unmount();
   });
 
+  it('房内上传成功后登记服务端课件表（fileUrl 关联键）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    expect(liveMocks.saveCourseware).toHaveBeenCalledTimes(1);
+    expect(liveMocks.saveCourseware).toHaveBeenCalledWith({
+      roomId: '1001',
+      filename: '测试课件',
+      filext: 'pptx',
+      filesize: 1,
+      fileUrl: 'http://mock.test/ppt/deck.pdf',
+    });
+    wrapper.unmount();
+  });
+
   it('第二页预载失败时不改动画布（零建页、零条目，仅 toast 提示）', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
@@ -542,6 +583,86 @@ describe('WhiteBoard.vue PPT 课件', () => {
     );
     expect(unwrapVal(vm.fileList).length).toBe(0);
     expect(vm.rendererPageCount()).toBe(before);
+    wrapper.unmount();
+  });
+});
+
+// ── 进房自动导入服务端课件 ────────────────────────────────────────────────
+describe('WhiteBoard.vue 进房导入服务端课件', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv('VITE_UPLOAD_PPT_URL', 'http://mock.test/ppt');
+    liveMocks.saveCourseware.mockResolvedValue({ data: { code: 1000, data: null } });
+    liveMocks.coursewareList.mockResolvedValue({
+      data: {
+        code: 1000,
+        data: {
+          list: [
+            {
+              id: 'cw1',
+              filename: '课前预习',
+              filext: 'pptx',
+              filesize: 2048,
+              fileUrl: 'http://mock.test/ppt/deck.pdf',
+            },
+          ],
+          pageInfo: { totalElements: 1 },
+        },
+      },
+    });
+    vi.mocked(getPdfPageCount).mockResolvedValue(2);
+    vi.mocked(getPdfPageDims).mockResolvedValue({ w: 1000, h: 500 });
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('教师调用后按 fileurl 建页并登记 fileurl，二次调用去重', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+
+    await vm.importServerCoursewares();
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    expect(liveMocks.coursewareList).toHaveBeenCalledWith('1001');
+    expect(unwrapVal(vm.fileList)[0]!.filename).toBe('课前预习');
+    expect(unwrapVal(vm.fileList)[0]!.fileurl).toBe('http://mock.test/ppt/deck.pdf');
+    expect(vm.rendererPageCount()).toBe(2);
+    // 全新房间导入后定位到首份课件首张幻灯片
+    expect(unwrapVal(vm.curLayerIndex)).toBe(1);
+    // 进房导入只读服务端列表，不重复登记
+    expect(liveMocks.saveCourseware).not.toHaveBeenCalled();
+
+    // 二次调用：fileurl 命中已有条目 → 不再建页
+    await vm.importServerCoursewares();
+    expect(vm.rendererPageCount()).toBe(2);
+    expect(unwrapVal(vm.fileList).length).toBe(1);
+    wrapper.unmount();
+  });
+
+  it('列表拉取失败仅记录日志，不建页', async () => {
+    liveMocks.coursewareList.mockRejectedValue(new Error('network down'));
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    const before = vm.rendererPageCount();
+
+    await vm.importServerCoursewares();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(vm.rendererPageCount()).toBe(before);
+    expect(unwrapVal(vm.fileList).length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('学生端调用不请求课件列表', async () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as PPTVM;
+    await vm.importServerCoursewares();
+    expect(liveMocks.coursewareList).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });

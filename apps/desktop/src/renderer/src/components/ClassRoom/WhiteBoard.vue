@@ -491,9 +491,10 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
-import { getPdfPageCount, getPdfPageDims } from './whiteboard/pdfAsset';
+import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
 import { PRESET_COLORS } from './whiteboard/types';
 import { useUserStore } from '@/store/user';
+import Live from '@/api/backstage';
 
 const props = defineProps<{
   roomId: string;
@@ -773,6 +774,7 @@ onMounted(() => {
   // Wait for Yjs sync to complete before binding elements and observer.
   // On reconnect, re-bind elements and re-render.
   let hasSyncedOnce = false;
+  let coursewareImportTriggered = false;
   provider.onSynced(() => {
     const elements = provider?.getActiveElements();
     if (elements && renderer) {
@@ -783,6 +785,11 @@ onMounted(() => {
       refreshLayer();
     }
     hasSyncedOnce = true;
+    // 首次同步后导入服务端课件（仅教师触发一次；重连不重复导入）
+    if (props.isTeacher && !coursewareImportTriggered) {
+      coursewareImportTriggered = true;
+      void importServerCoursewares();
+    }
   });
 });
 
@@ -1318,50 +1325,24 @@ async function uploadImage(file: File) {
   loading.value = false;
 }
 
-// 预载全部页尺寸，返回其像素尺寸（供居中计算）；任一失败抛错由调用方统一处理（画布零改动）
-async function preloadPptDims(
-  fileUrl: string,
-  numPages: number,
-): Promise<Array<{ w: number; h: number }>> {
-  const dims: Array<{ w: number; h: number }> = [];
-  for (let i = 1; i <= numPages; i++) {
-    try {
-      dims.push(await getPdfPageDims(fileUrl, i));
-    } catch {
-      throw new Error(`加载第${i}页尺寸失败`);
-    }
-  }
-  return dims;
-}
+// 预载全部页尺寸（阶段1）已抽至 whiteboard/pptImport.ts:loadPptMeta
 
 async function uploadPPT(file: File) {
   if (!uploadPptApi) { toast('未配置PPT上传接口'); return; }
   loading.value = true;
   try {
-    const fd = new FormData();
-    fd.append('file', file);
-    const res = await fetch(uploadPptApi, { method: 'POST', body: fd });
-    if (!res.ok) {
-      toast(`PPT上传失败: ${res.status} ${res.statusText}`);
-      return;
-    }
-    const data = await res.json();
-    if (data.code !== 1000 || !data.data) {
-      toast('PPT上传失败');
-      return;
-    }
-    const { fileUrl } = data.data;
-    if (!fileUrl) {
-      toast('PPT上传失败');
+    let fileUrl: string;
+    try {
+      fileUrl = await uploadPptFile(uploadPptApi, file);
+    } catch (err) {
+      toast((err as Error).message);
       return;
     }
 
     // 阶段1：numPages/尺寸以 pdf.js 为准；任一失败仅提示，画布零改动（不产生幽灵页）
-    let numPages: number;
-    let dims: Array<{ w: number; h: number }>;
+    let meta: PptMeta;
     try {
-      numPages = await getPdfPageCount(fileUrl);
-      dims = await preloadPptDims(fileUrl, numPages);
+      meta = await loadPptMeta(fileUrl);
     } catch (err) {
       toast(`课件预载失败: ${(err as Error).message}`);
       return;
@@ -1371,32 +1352,7 @@ async function uploadPPT(file: File) {
     const box = document.getElementById(containerId.value);
     const cw = box?.clientWidth || 800;
     const ch = box?.clientHeight || 600;
-    const active = provider?.getActiveElements();
-    const canReuse =
-      !!provider && provider.getCurrentPageIndex() === 0 && !!provider.getCurrentPageId() && !!active && active.length === 0;
-    const layerIds: string[] = [];
-    for (let i = 0; i < numPages; i++) {
-      // pages.observe 会同步创建并切换对应的 Konva 层，此处不得重复 showPage
-      const pageId =
-        i === 0 && canReuse
-          ? provider!.getCurrentPageId()
-          : (provider?.addPage() || `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
-      const { w, h } = dims[i]!;
-      const k = Math.min(1, (cw * 0.9) / w, (ch * 0.9) / h);
-      const width = w * k;
-      const height = h * k;
-      provider?.addShape({
-        id: `pptimg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        type: 'ppt-image',
-        pdfUrl: fileUrl,
-        page: i + 1,
-        x: (cw - width) / 2,
-        y: (ch - height) / 2,
-        width,
-        height,
-      });
-      layerIds.push(pageId);
-    }
+    const layerIds = importPptPages(provider, cw, ch, fileUrl, meta);
     if (layerIds.length === 0) {
       toast('PPT页面创建失败');
     } else {
@@ -1404,14 +1360,80 @@ async function uploadPPT(file: File) {
       const baseName = file.name.replace(/\.[^.]+$/, '');
       provider?.addFileItem({
         filename: baseName, filext: ext, filesize: file.size, fileid: layerIds.join(','),
+        fileurl: fileUrl,
       });
       fileList.value = provider!.getFileList();
       // 导入后定位到第一张幻灯片页，而非默认空白页
       showFile(layerIds.join(','));
-      toast(`PPT已导入，共${numPages}页`);
+      toast(`PPT已导入，共${meta.numPages}页`);
+      // 登记服务端课件表：房空后重进直播间可自动恢复（失败不影响已导入的白板）
+      void saveCoursewareRecord({ filename: baseName, filext: ext, filesize: file.size, fileUrl });
     }
   } catch (e) {
     toast(`PPT上传出错: ${(e as Error).message}`);
+  } finally {
+    loading.value = false;
+  }
+}
+
+// 登记到服务端课件表（房内上传与进房前上传共用同一张表）
+async function saveCoursewareRecord(item: {
+  filename: string;
+  filext: string;
+  filesize: number;
+  fileUrl: string;
+}) {
+  try {
+    await Live.save_courseware({ roomId: props.roomId, ...item });
+  } catch (e) {
+    console.error('课件登记失败', e);
+  }
+}
+
+// 进房自动导入服务端课件（仅教师，首次 synced 后触发）：
+// 按 fileurl 去重 —— doc 仍存活时重进房不重复建页，房空销毁后全量恢复
+async function importServerCoursewares() {
+  if (!provider || !props.isTeacher) return;
+  const res = await Live.courseware_list(props.roomId).catch((e: unknown) => {
+    console.error('课件列表拉取失败', e);
+    return null;
+  });
+  if (!res) return;
+  const items: Array<{ id: string; filename: string; filext: string; filesize: number; fileUrl: string }> =
+    res.data.data?.list ?? [];
+  const existing = new Set(provider.getFileList().map(i => i.fileurl).filter(Boolean));
+  const pending = items.filter(it => it.fileUrl && !existing.has(it.fileUrl));
+  if (pending.length === 0) return;
+
+  // 房内已有课件（教师中途重进）时不抢占当前页，仅全新房间自动定位首份课件
+  const jumpToFirst = provider.getFileList().length === 0;
+  loading.value = true;
+  let firstId: string | null = null;
+  try {
+    for (const item of pending) {
+      try {
+        const meta = await loadPptMeta(item.fileUrl);
+        const box = document.getElementById(containerId.value);
+        const cw = box?.clientWidth || 800;
+        const ch = box?.clientHeight || 600;
+        const layerIds = importPptPages(provider, cw, ch, item.fileUrl, meta);
+        if (layerIds.length === 0) continue;
+        provider.addFileItem({
+          filename: item.filename,
+          filext: item.filext || 'ppt',
+          filesize: Number(item.filesize) || 0,
+          fileid: layerIds.join(','),
+          fileurl: item.fileUrl,
+        });
+        if (!firstId) firstId = layerIds.join(',');
+      } catch (err) {
+        toast(`课件「${item.filename}」导入失败: ${(err as Error).message}`);
+      }
+    }
+    if (firstId) {
+      fileList.value = provider.getFileList();
+      if (jumpToFirst) showFile(firstId);
+    }
   } finally {
     loading.value = false;
   }
@@ -1513,6 +1535,7 @@ defineExpose({
   toastMsg,
   rendererPageCount: () => renderer?.getPageCount() ?? 0,
   getCurrentPageShapes,
+  importServerCoursewares,
 });
 </script>
 

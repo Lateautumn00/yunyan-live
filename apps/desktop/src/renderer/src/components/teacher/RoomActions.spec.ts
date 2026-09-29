@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
   liveDelete: vi.fn(),
   updateLive: vi.fn(),
   executeTransfer: vi.fn(),
-  updateCode: vi.fn()
+  updateCode: vi.fn(),
+  coursewareList: vi.fn(),
+  saveCourseware: vi.fn(),
+  deleteCourseware: vi.fn()
 }));
 
 vi.mock('@/api/backstage', () => ({
@@ -20,7 +23,10 @@ vi.mock('@/api/backstage', () => ({
     live_delete: (params: unknown) => mocks.liveDelete(params),
     update_live: (params: unknown) => mocks.updateLive(params),
     execute_transfer: (params: unknown) => mocks.executeTransfer(params),
-    update_code: (params: unknown) => mocks.updateCode(params)
+    update_code: (params: unknown) => mocks.updateCode(params),
+    courseware_list: (params: unknown) => mocks.coursewareList(params),
+    save_courseware: (params: unknown) => mocks.saveCourseware(params),
+    delete_courseware: (params: unknown) => mocks.deleteCourseware(params)
   }
 }));
 
@@ -46,6 +52,7 @@ interface RoomActionsVm {
   shareDialogVisible: boolean;
   transferDialogVisible: boolean;
   editDialogVisible: boolean;
+  coursewareDialogVisible: boolean;
   transferCode: string;
   editForm: { roomId: string; title: string; type: number; duration: number };
   onCommand: (command: string) => void;
@@ -107,6 +114,9 @@ beforeEach(() => {
   mocks.updateLive.mockResolvedValue(ok(null));
   mocks.executeTransfer.mockResolvedValue(ok(null));
   mocks.updateCode.mockResolvedValue(ok('NEW123'));
+  mocks.coursewareList.mockResolvedValue(ok({ list: [], pageInfo: { totalElements: 0 } }));
+  mocks.saveCourseware.mockResolvedValue(ok(null));
+  mocks.deleteCourseware.mockResolvedValue(ok(null));
 });
 
 describe('components/teacher/RoomActions.vue', () => {
@@ -116,6 +126,7 @@ describe('components/teacher/RoomActions.vue', () => {
       'gotoroom',
       'share',
       'watchlist',
+      'upload',
       'transfer',
       'edit',
       'delete'
@@ -126,8 +137,20 @@ describe('components/teacher/RoomActions.vue', () => {
       'gotoroom',
       'share',
       'watchlist',
+      'upload',
       'delete'
     ]);
+  });
+
+  it('上传课件仅 dropdown 变体提供，命令打开课件弹窗', async () => {
+    const { wrapper } = await mountActions();
+    expect(vm(wrapper).menuItems.map(i => i.command)).toContain('upload');
+    expect(vm(wrapper).menuItems.find(i => i.command === 'upload')?.label).toBe('上传课件');
+    vm(wrapper).onCommand('upload');
+    expect(vm(wrapper).coursewareDialogVisible).toBe(true);
+
+    const { wrapper: buttons } = await mountActions(room, 'buttons');
+    expect(vm(buttons).menuItems.map(i => i.command)).not.toContain('upload');
   });
 
   it('buttons 变体渲染进入房间，回放按 status 显隐', async () => {
