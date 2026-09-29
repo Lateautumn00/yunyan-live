@@ -116,8 +116,11 @@
         </el-tooltip>
       </div>
 
-      <!-- 底部控制栏 -->
-      <div class="ctrl-tools">
+      <!-- 底部控制栏（仅教师：撤销/清空/缩放均写入或影响共享白板） -->
+      <div
+        v-if="isTeacher"
+        class="ctrl-tools"
+      >
         <el-tooltip
           content="撤回上一步"
           placement="top"
@@ -201,8 +204,11 @@
         </el-tooltip>
       </div>
 
-      <!-- 底部页面栏 -->
-      <div class="page-tools">
+      <!-- 底部页面栏（仅教师：增删页/翻页写入共享文档并强制其他端跟随） -->
+      <div
+        v-if="isTeacher"
+        class="page-tools"
+      >
         <el-tooltip
           content="删除画布"
           placement="top"
@@ -672,7 +678,7 @@ function hexToRgb(hex: string): [number, number, number] {
 onMounted(() => {
   provider = new YjsProvider(props.roomId, userId, displayName, userColor, (kind) => {
     useUserStore().sessionInterrupted(kind);
-  });
+  }, !props.isTeacher);
   renderer = new KonvaRenderer(document.getElementById(containerId.value)!);
   renderer.showPage(0);
 
@@ -833,6 +839,8 @@ let startPos: { x: number; y: number } | null = null;
 let currentPath: number[] = [];
 
 function onPointerDown(e: any) {
+  // 学生端白板只读：不响应任何绘制/交互
+  if (!props.isTeacher) return;
   const pos = getPointerPos(e);
   if (!pos) return;
   const m = mode.value;
@@ -1024,6 +1032,8 @@ function drawTempShape(pos: { x: number; y: number }) {
 }
 
 function onWheel(e: WheelEvent) {
+  // 学生端白板只读：视图固定 100%，禁止滚轮缩放
+  if (!props.isTeacher) return;
   e.preventDefault();
   const delta = e.deltaY > 0 ? -10 : 10;
   layerZoomChange(delta > 0 ? 'add' : 'sub');
@@ -1056,6 +1066,7 @@ function ensurePageIndex(targetIndex: number) {
 }
 
 function revocation(type: string) {
+  if (!props.isTeacher) return;
   if (!renderer) return;
   if (type === 'pre') {
     const action = undoStack.value.pop();
@@ -1087,6 +1098,8 @@ function revocation(type: string) {
   emitPaintLog();
 }
 function layerClear() {
+  // 学生端守卫：直接操作 Yjs elements，绕过 provider，必须在此拦截
+  if (!props.isTeacher) return;
   renderer?.clearCurrentPage();
   provider?.getActiveElements()?.delete(0, provider.getActiveElements().length);
   undoStack.value = [];
@@ -1406,6 +1419,8 @@ async function uploadPPT(file: File) {
 
 // --- File list ---
 function removePagesByIds(ids: string[]) {
+  // 学生端守卫：直接操作 Yjs pages/elements，绕过 provider，必须在此拦截
+  if (!props.isTeacher) return;
   if (!provider || ids.length === 0) return;
   const pages = provider.getPages();
   const targets: number[] = [];

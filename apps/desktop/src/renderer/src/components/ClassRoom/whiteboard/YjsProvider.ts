@@ -14,14 +14,17 @@ export class YjsProvider {
   currentPageIndex: Y.Map<number>;
   fileList: Y.Array<Y.Map<any>>;
   viewportOffset: Y.Map<any>;
+  readOnly: boolean;
 
   constructor(
     roomId: string,
     userId: string,
     userName: string,
     userColor: string,
-    onSessionClosed?: (kind: 'kicked' | 'expired') => void
+    onSessionClosed?: (kind: 'kicked' | 'expired') => void,
+    readOnly = false
   ) {
+    this.readOnly = readOnly;
     this.doc = new Y.Doc();
     this.toolState = this.doc.getMap('toolState');
     this.pages = this.doc.getArray('pages');
@@ -29,11 +32,14 @@ export class YjsProvider {
     this.fileList = this.doc.getArray('fileList');
     this.viewportOffset = this.doc.getMap('viewportOffset');
 
-    this.toolState.set('type', DEFAULT_TOOL.type);
-    this.toolState.set('color', DEFAULT_TOOL.color);
-    this.toolState.set('lineWidth', DEFAULT_TOOL.lineWidth);
-    this.toolState.set('fontSize', DEFAULT_TOOL.fontSize);
-    this.toolState.set('opacity', DEFAULT_TOOL.opacity);
+    // 只读端不写初始工具状态：否则学生入会会用默认值覆盖教师正在使用的颜色/粗细
+    if (!this.readOnly) {
+      this.toolState.set('type', DEFAULT_TOOL.type);
+      this.toolState.set('color', DEFAULT_TOOL.color);
+      this.toolState.set('lineWidth', DEFAULT_TOOL.lineWidth);
+      this.toolState.set('fontSize', DEFAULT_TOOL.fontSize);
+      this.toolState.set('opacity', DEFAULT_TOOL.opacity);
+    }
 
     const wsUrl = import.meta.env.VITE_YJS_WS || 'ws://localhost:8188/yjs';
     const token = localStorage.getItem('token') || '';
@@ -59,7 +65,7 @@ export class YjsProvider {
   // create a default page. This avoids creating a local page that conflicts with
   // the teacher's synced page (different Y.Map IDs cause duplicate pages).
   this.provider.once('synced', () => {
-    if (this.pages.length === 0) {
+    if (!this.readOnly && this.pages.length === 0) {
       this.doc.transact(() => {
         const page = new Y.Map();
         page.set('id', `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
@@ -85,6 +91,7 @@ onSynced(cb: () => void) {
   }
 
   setCurrentPageIndex(index: number) {
+    if (this.readOnly) return;
     this.currentPageIndex.set('index', index);
   }
 
@@ -93,6 +100,7 @@ onSynced(cb: () => void) {
   }
 
   setViewportOffset(x: number, y: number) {
+    if (this.readOnly) return;
     this.viewportOffset.set('x', x);
     this.viewportOffset.set('y', y);
   }
@@ -102,6 +110,7 @@ onSynced(cb: () => void) {
   }
 
   addPage(): string {
+    if (this.readOnly) return '';
     const newIndex = this.pages.length;
     const page = new Y.Map();
     // 同一毫秒内的多次调用必须产生不同 id（pages.observe 按 id 去重，重复会导致丢层）
@@ -118,6 +127,7 @@ onSynced(cb: () => void) {
   }
 
   removePage(index: number): number {
+    if (this.readOnly) return this.getCurrentPageIndex();
     if (this.pages.length <= 1) return this.getCurrentPageIndex();
     let newIndex = 0;
     this.doc.transact(() => {
@@ -148,6 +158,7 @@ onSynced(cb: () => void) {
   }
 
   setToolState(state: Partial<ToolState>) {
+    if (this.readOnly) return;
     this.doc.transact(() => {
       if (state.type !== undefined) this.toolState.set('type', state.type);
       if (state.color !== undefined) this.toolState.set('color', state.color);
@@ -168,6 +179,7 @@ onSynced(cb: () => void) {
   }
 
   addShape(shapeData: any) {
+    if (this.readOnly) return;
     const elements = this.getActiveElements();
     if (elements) {
       const map = new Y.Map();
@@ -177,6 +189,7 @@ onSynced(cb: () => void) {
   }
 
   removeLastElement(): boolean {
+    if (this.readOnly) return false;
     const elements = this.getActiveElements();
     if (!elements || elements.length === 0) return false;
     this.doc.transact(() => { elements.delete(elements.length - 1, 1); });
@@ -184,6 +197,7 @@ onSynced(cb: () => void) {
   }
 
   addFileItem(item: FileItem) {
+    if (this.readOnly) return;
     const map = new Y.Map();
     map.set('filename', item.filename);
     map.set('filext', item.filext);
@@ -193,10 +207,12 @@ onSynced(cb: () => void) {
   }
 
   removeFileItem(index: number) {
+    if (this.readOnly) return;
     this.fileList.delete(index, 1);
   }
 
   renameFileItem(index: number, name: string) {
+    if (this.readOnly) return;
     const item = this.fileList.get(index);
     if (item) item.set('filename', name);
   }

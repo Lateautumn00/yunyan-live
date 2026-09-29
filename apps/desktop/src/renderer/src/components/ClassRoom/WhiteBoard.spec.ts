@@ -545,3 +545,34 @@ describe('WhiteBoard.vue PPT 课件', () => {
     wrapper.unmount();
   });
 });
+
+// ── 学生端只读 ────────────────────────────────────────────────────────────
+describe('WhiteBoard.vue 学生端只读', () => {
+  it('isTeacher=false 时不渲染工具/控制/页面三栏', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    expect(wrapper.find('.classroom-white-board').exists()).toBe(true);
+    expect(wrapper.find('.tools').exists()).toBe(false);
+    expect(wrapper.find('.ctrl-tools').exists()).toBe(false);
+    expect(wrapper.find('.page-tools').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('教师端三栏正常渲染（对照）', () => {
+    const wrapper = mountWB();
+    expect(wrapper.find('.tools').exists()).toBe(true);
+    expect(wrapper.find('.ctrl-tools').exists()).toBe(true);
+    expect(wrapper.find('.page-tools').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('学生端 addLayer/layerClear 不改动共享白板', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as PPTVM;
+    const before = vm.rendererPageCount();
+    expect(() => vm.layerClear()).not.toThrow();
+    vm.addLayer();
+    // readOnly 下 provider.addPage 返回空串、pages 不变 → observe 不触发 → 层数不动
+    expect(vm.rendererPageCount()).toBe(before);
+    wrapper.unmount();
+  });
+});
