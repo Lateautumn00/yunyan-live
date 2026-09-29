@@ -38,8 +38,8 @@ export async function loadPptMeta(fileUrl: string): Promise<PptMeta> {
   return { numPages, dims };
 }
 
-// 阶段2：建页/复用空白当前页 + 双维限幅居中，返回各幻灯片页 id（含被复用页）。
-// 纯逻辑，不触碰 DOM 尺寸与 toast，调用方负责容器尺寸与提示。
+// 阶段2：始终新建各幻灯片页（不复用当前页，当前页原样保留供停留）+ 双维限幅居中，
+// 返回各幻灯片页 id。纯逻辑，不触碰 DOM 尺寸与 toast，调用方负责容器尺寸与提示。
 export function importPptPages(
   provider: YjsProvider | null,
   cw: number,
@@ -47,20 +47,11 @@ export function importPptPages(
   fileUrl: string,
   meta: PptMeta,
 ): string[] {
-  const active = provider?.getActiveElements();
-  const canReuse =
-    !!provider &&
-    provider.getCurrentPageIndex() === 0 &&
-    !!provider.getCurrentPageId() &&
-    !!active &&
-    active.length === 0;
   const layerIds: string[] = [];
   for (let i = 0; i < meta.numPages; i++) {
     // pages.observe 会同步创建并切换对应的 Konva 层，此处不得重复 showPage
     const pageId =
-      i === 0 && canReuse
-        ? provider!.getCurrentPageId()
-        : (provider?.addPage() || `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+      provider?.addPage() || `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const { w, h } = meta.dims[i]!;
     const k = Math.min(1, (cw * 0.9) / w, (ch * 0.9) / h);
     const width = w * k;

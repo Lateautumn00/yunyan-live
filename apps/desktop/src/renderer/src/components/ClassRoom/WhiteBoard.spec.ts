@@ -540,7 +540,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     return { fetchMock };
   }
 
-  it('导入两页 PPT 后页数为 N（无空白页可复用时不重复建页），并定位到首张幻灯片', async () => {
+  it('导入两页 PPT 后新建课件页并停留着陆空白页（不自动定位）', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
     await uploadTwoPagePpt(wrapper);
@@ -552,17 +552,35 @@ describe('WhiteBoard.vue PPT 课件', () => {
       { timeout: 3000 },
     );
     expect(unwrapVal(vm.fileList)[0]!.filename).toBe('测试课件');
-    // 0 页起步：首页非空白不可复用 → 恰好 2 页
-    expect(vm.rendererPageCount()).toBe(2);
-    // showFile(layerIds) 定位到第一张幻灯片页
+    // 0 页起步：先建着陆页，再新建 2 张幻灯片页 → 共 3 页
+    expect(vm.rendererPageCount()).toBe(3);
+    // 停留着陆页，不自动跳到课件页
     expect(unwrapVal(vm.curLayerIndex)).toBe(1);
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+    // fileid 只含幻灯片页（不含着陆页）
+    expect(unwrapVal(vm.fileList)[0]!.fileid.split(',').length).toBe(2);
     wrapper.unmount();
   });
 
-  it('当前页为首页空白画布时复用该页（不新建），层索引指向首张幻灯片', async () => {
+  it('上传成功后课件面板保持打开并提示点击列表打开', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
-    // seed 一页空白画布（不复用则会变成 3 页）
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    expect(String(unwrapVal(vm.toastMsg))).toContain('请点击列表打开');
+    expect(wrapper.find('.fileList').isVisible()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('当前空白页原样保留（不复用），课件页始终新建并停留该空白页', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    // seed 一页空白画布
     vm.addLayer();
     expect(vm.rendererPageCount()).toBe(1);
 
@@ -573,15 +591,17 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 3000 },
     );
-    // 复用 seed 页承载第 1 张幻灯片，仅新增第 2 张 → 共 2 页
-    expect(vm.rendererPageCount()).toBe(2);
+    // 不复用：seed 空白页保留 + 新增 2 张幻灯片页 → 共 3 页
+    expect(vm.rendererPageCount()).toBe(3);
+    // 停留 seed 空白页，原样直接展示
     expect(unwrapVal(vm.curLayerIndex)).toBe(1);
-    // fileid 含被复用页的 id（两页）
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+    // fileid 只含幻灯片页（两页，不含 seed 页）
     expect(unwrapVal(vm.fileList)[0]!.fileid.split(',').length).toBe(2);
     wrapper.unmount();
   });
 
-  it('二次导入追加到已有课件之后（非首页复用路径全量 addPage）', async () => {
+  it('二次导入追加到已有课件之后，仍停留原有着陆页', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
     await uploadTwoPagePpt(wrapper);
@@ -591,7 +611,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 3000 },
     );
-    // 当前页已被第 1 次导入占用 → 非空白，不可复用
+    // 第 1 次导入后停在着陆页（index 0），第 2 次继续全量新建
     await uploadTwoPagePpt(wrapper);
     await vi.waitFor(
       () => {
@@ -599,8 +619,8 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 3000 },
     );
-    expect(vm.rendererPageCount()).toBe(4);
-    expect(unwrapVal(vm.curLayerIndex)).toBe(3);
+    expect(vm.rendererPageCount()).toBe(5);
+    expect(unwrapVal(vm.curLayerIndex)).toBe(1);
     wrapper.unmount();
   });
 
@@ -614,7 +634,8 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 3000 },
     );
-    // showFile 后当前页 = 首张幻灯片页
+    // 上传不自动跳转；点击课件列表（showFile）后当前页 = 首张幻灯片页
+    vm.showFile(unwrapVal(vm.fileList)[0]!.fileid);
     const shapes = vm.getCurrentPageShapes();
     expect(shapes.length).toBe(1);
     const s = shapes[0]!;
@@ -736,15 +757,15 @@ describe('WhiteBoard.vue 进房导入服务端课件', () => {
     expect(liveMocks.coursewareList).toHaveBeenCalledWith('1001');
     expect(unwrapVal(vm.fileList)[0]!.filename).toBe('课前预习');
     expect(unwrapVal(vm.fileList)[0]!.fileurl).toBe('http://mock.test/ppt/deck.pdf');
-    expect(vm.rendererPageCount()).toBe(2);
-    // 全新房间导入后定位到首份课件首张幻灯片
+    expect(vm.rendererPageCount()).toBe(3);
+    // 0 页起步：停在着陆页，不自动定位首份课件（点击列表才加载）
     expect(unwrapVal(vm.curLayerIndex)).toBe(1);
     // 进房导入只读服务端列表，不重复登记
     expect(liveMocks.saveCourseware).not.toHaveBeenCalled();
 
     // 二次调用：fileurl 命中已有条目 → 不再建页
     await vm.importServerCoursewares();
-    expect(vm.rendererPageCount()).toBe(2);
+    expect(vm.rendererPageCount()).toBe(3);
     expect(unwrapVal(vm.fileList).length).toBe(1);
     wrapper.unmount();
   });
