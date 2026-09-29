@@ -158,4 +158,32 @@ describe('components/teacher/CoursewareUpload.vue', () => {
       confirmSpy.mockRestore();
     }
   });
+
+  it('条目缺少ID时不调用删除接口，直接提示', async () => {
+    // 不能用 id:''（会让删除按钮进入 loading 被禁用），直接省略 id 字段模拟脏数据
+    mocks.coursewareList.mockResolvedValue(
+      ok({
+        list: [
+          {
+            filename: '无ID课件',
+            filext: 'pptx',
+            filesize: 1,
+            fileUrl: 'http://mock.test/ppt/x.pdf'
+          }
+        ],
+        pageInfo: { totalElements: 1 }
+      })
+    );
+    const wrapper = await mountUpload();
+    await openDialog(wrapper);
+    const delBtn = Array.from(document.body.querySelectorAll('button')).find(b =>
+      (b.textContent ?? '').includes('删除')
+    );
+    expect(delBtn).toBeTruthy();
+    delBtn!.click();
+    await flushPromises();
+    expect(mocks.deleteCourseware).not.toHaveBeenCalled();
+    expect(bodyText()).toContain('缺少ID');
+    wrapper.unmount();
+  });
 });

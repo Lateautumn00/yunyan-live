@@ -574,8 +574,10 @@ export class LiveService {
   }
 
   async deleteCourseware(id: string) {
-    if (!id) return { success: true };
-    await this.coursewareRepo.delete(id);
+    if (!id) throw new Error('courseware id is required');
+    const result = await this.coursewareRepo.delete(id);
+    // affected=0 视为「没删到」，抛错让调用方看到失败，避免静默成功
+    if (!result?.affected) throw new Error('courseware not found or already deleted');
     return { success: true };
   }
 

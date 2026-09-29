@@ -439,7 +439,7 @@ type PPTVM = WBVM & {
   showFile: (ids: string) => boolean;
   showLayer: (index: number) => void;
   openCourseware: (item: { filename: string; fileid: string; fileurl?: string }, index: number) => Promise<void>;
-  delFile: (i: number) => void;
+  delFile: (i: number) => Promise<void>;
   delLayer: (index: number) => void;
   setFileItemId: (index: number, fileid: string) => void;
   addLayer: () => void;
@@ -509,6 +509,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     vi.stubEnv('VITE_UPLOAD_PPT_URL', 'http://mock.test/ppt');
     liveMocks.saveCourseware.mockResolvedValue({ data: { code: 1000, data: null } });
     liveMocks.coursewareList.mockResolvedValue({ data: { code: 1000, data: { list: [], pageInfo: { totalElements: 0 } } } });
+    liveMocks.deleteCourseware.mockResolvedValue({ data: { code: 1000, data: null } });
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -703,7 +704,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     );
 
     // 未建页条目（pending）：仅移除条目，画布零改动
-    vm.delFile(0);
+    await vm.delFile(0);
     expect(unwrapVal(vm.fileList).length).toBe(0);
     expect(vm.rendererPageCount()).toBe(1);
 
@@ -718,12 +719,127 @@ describe('WhiteBoard.vue PPT 课件', () => {
     await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
     expect(vm.rendererPageCount()).toBe(2);
 
-    vm.delFile(0);
+    await vm.delFile(0);
 
     expect(unwrapVal(vm.fileList).length).toBe(0);
     // removePage 保底留 1 页，该页 elements 必须被清空（课件图不得残留）
     expect(vm.rendererPageCount()).toBe(1);
     expect(vm.getCurrentPageShapes().length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('delFile 同步删除服务端记录（按 fileurl 定位 id）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    // delFile 按 fileurl 回查服务端列表定位记录 id
+    liveMocks.coursewareList.mockResolvedValue({
+      data: {
+        code: 1000,
+        data: { list: [{ id: 'cw9', fileUrl: 'http://mock.test/ppt/deck.pdf' }], pageInfo: { totalElements: 1 } },
+      },
+    });
+
+    await vm.delFile(0);
+
+    expect(liveMocks.deleteCourseware).toHaveBeenCalledWith('cw9');
+    expect(unwrapVal(vm.fileList).length).toBe(0);
+    expect(vm.rendererPageCount()).toBe(1);
+    wrapper.unmount();
+  });
+
+  it('delFile 服务端删除失败：中止本地删除，条目保留可重试', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    liveMocks.coursewareList.mockResolvedValue({
+      data: {
+        code: 1000,
+        data: { list: [{ id: 'cw9', fileUrl: 'http://mock.test/ppt/deck.pdf' }], pageInfo: { totalElements: 1 } },
+      },
+    });
+    liveMocks.deleteCourseware.mockRejectedValue(new Error('network down'));
+
+    await vm.delFile(0);
+
+    expect(unwrapVal(vm.fileList).length).toBe(1);
+    expect(String(unwrapVal(vm.toastMsg))).toContain('服务端课件记录删除失败');
+    wrapper.unmount();
+  });
+
+  it('服务端登记失败时不入列表（零条目，仅 toast 提示）', async () => {
+    liveMocks.saveCourseware.mockRejectedValue(new Error('db down'));
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(String(unwrapVal(vm.toastMsg))).toContain('登记服务端失败');
+      },
+      { timeout: 3000 },
+    );
+    expect(liveMocks.saveCourseware).toHaveBeenCalledTimes(1);
+    expect(unwrapVal(vm.fileList).length).toBe(0);
+    expect(vm.rendererPageCount()).toBe(1);
+    wrapper.unmount();
+  });
+
+  it('进房对账：服务端已删的条目连同课件页一并移除', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
+    expect(vm.rendererPageCount()).toBe(2);
+
+    // 服务端记录已在「我的直播」对话框中被删除 → 列表为空
+    liveMocks.coursewareList.mockResolvedValue({
+      data: { code: 1000, data: { list: [], pageInfo: { totalElements: 0 } } },
+    });
+
+    await vm.importServerCoursewares();
+
+    // 条目 + 课件页一起清：保底留 1 页且课件图无残留
+    expect(unwrapVal(vm.fileList).length).toBe(0);
+    expect(vm.rendererPageCount()).toBe(1);
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('进房对账：列表拉取失败时不清幽灵条目', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    liveMocks.coursewareList.mockRejectedValue(new Error('network down'));
+
+    await vm.importServerCoursewares();
+
+    expect(unwrapVal(vm.fileList).length).toBe(1);
+    expect(vm.rendererPageCount()).toBe(1);
     wrapper.unmount();
   });
 
@@ -829,6 +945,7 @@ describe('WhiteBoard.vue 进房导入服务端课件', () => {
     vi.clearAllMocks();
     vi.stubEnv('VITE_UPLOAD_PPT_URL', 'http://mock.test/ppt');
     liveMocks.saveCourseware.mockResolvedValue({ data: { code: 1000, data: null } });
+    liveMocks.deleteCourseware.mockResolvedValue({ data: { code: 1000, data: null } });
     liveMocks.coursewareList.mockResolvedValue({
       data: {
         code: 1000,

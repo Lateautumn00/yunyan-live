@@ -1532,18 +1532,27 @@ async function uploadPPT(file: File): Promise<boolean> {
       return false;
     }
 
-    // 阶段2：零建页 —— 仅登记列表条目（fileid 留空），点击列表时才创建课件页
-    // 并展示（见 openCourseware）；上传前后画布与当前页保持原样
+    // 阶段2：零建页 —— 先登记服务端（保持「doc 条目 ⟺ 服务端记录」不变量，进房对账才安全），
+    // 成功才入列表（fileid 留空），点击列表时才创建课件页（见 openCourseware）；
+    // 上传前后画布与当前页保持原样
     const ext = file.name.split('.').pop() || 'ppt';
     const baseName = file.name.replace(/\.[^.]+$/, '');
+    const registered = await saveCoursewareRecord({
+      filename: baseName,
+      filext: ext,
+      filesize: file.size,
+      fileUrl,
+    });
+    if (!registered) {
+      toast('课件登记服务端失败，请重试');
+      return false;
+    }
     provider?.addFileItem({
       filename: baseName, filext: ext, filesize: file.size, fileid: '',
       fileurl: fileUrl,
     });
     fileList.value = provider!.getFileList();
     toast(`PPT已导入，共${meta.numPages}页，请点击列表打开`);
-    // 登记服务端课件表：房空后重进直播间可自动恢复（失败不影响已导入的白板）
-    void saveCoursewareRecord({ filename: baseName, filext: ext, filesize: file.size, fileUrl });
     return true;
   } catch (e) {
     toast(`PPT上传出错: ${(e as Error).message}`);
@@ -1553,22 +1562,27 @@ async function uploadPPT(file: File): Promise<boolean> {
   }
 }
 
-// 登记到服务端课件表（房内上传与进房前上传共用同一张表）
+// 登记到服务端课件表（房内上传与进房前上传共用同一张表）；
+// 返回是否成功 —— 调用方据此决定是否入列表，维持「doc 条目 ⟺ 服务端记录」不变量
 async function saveCoursewareRecord(item: {
   filename: string;
   filext: string;
   filesize: number;
   fileUrl: string;
-}) {
+}): Promise<boolean> {
   try {
     await Live.save_courseware({ roomId: props.roomId, ...item });
+    return true;
   } catch (e) {
     console.error('课件登记失败', e);
+    return false;
   }
 }
 
 // 进房自动登记服务端课件（仅教师，首次 synced 后触发）：
-// 按 fileurl 去重（含已登记未建页的条目）—— 仅入列表零建页，点击列表才创建课件页
+// 先对账 —— 服务端已删的 doc 条目（如在「我的直播」对话框中删除）连同其课件页一并移除，
+// 仅在拉取成功时执行（失败上方已 return），避免网络错误误删；
+// 再按 fileurl 去重登记（含已登记未建页的条目）—— 仅入列表零建页，点击列表才创建课件页
 async function importServerCoursewares() {
   if (!provider || !props.isTeacher) return;
   const res = await Live.courseware_list(props.roomId).catch((e: unknown) => {
@@ -1578,9 +1592,26 @@ async function importServerCoursewares() {
   if (!res) return;
   const items: Array<{ id: string; filename: string; filext: string; filesize: number; fileUrl: string }> =
     res.data.data?.list ?? [];
+
+  // 对账清幽灵：doc 里 fileurl 不在服务端集合的条目 = 已在服务端被删除
+  const serverUrls = new Set(items.map(it => it.fileUrl).filter(Boolean));
+  const ghosts = provider
+    .getFileList()
+    .map((f, idx) => ({ f, idx }))
+    .filter(({ f }) => !!f.fileurl && !serverUrls.has(f.fileurl));
+  let prunedPages = false;
+  for (const { f, idx } of ghosts.reverse()) {
+    if (f.fileid) {
+      removePagesByIds(f.fileid.split(',').filter(Boolean));
+      prunedPages = true;
+    }
+    provider.removeFileItem(idx);
+  }
+  if (prunedPages) showLayer(1);
+
   const existing = new Set(provider.getFileList().map(i => i.fileurl).filter(Boolean));
   const pending = items.filter(it => it.fileUrl && !existing.has(it.fileUrl));
-  if (pending.length === 0) return;
+  if (ghosts.length === 0 && pending.length === 0) return;
 
   for (const item of pending) {
     provider.addFileItem({
@@ -1708,9 +1739,23 @@ function alterFName(i: number, e: Event) {
   editFileIndex.value = -1;
 }
 
-function delFile(i: number) {
+async function delFile(i: number) {
   const item = fileList.value[i];
   if (!item) return;
+  // 服务端同步：按 fileurl 定位记录后删除（Yjs 条目不存服务端 id），避免重进房被 courseware_list 复活。
+  // 服务端失败则中止本地删除（两侧一致、可重试）；查无记录视为已删，直接走本地删除
+  if (item.fileurl) {
+    try {
+      const res = await Live.courseware_list(props.roomId);
+      const list: Array<{ id: string; fileUrl: string }> = res.data.data?.list ?? [];
+      const hit = list.find(r => r.fileUrl === item.fileurl);
+      if (hit?.id) await Live.delete_courseware(hit.id);
+    } catch (e) {
+      console.error('服务端课件记录删除失败', e);
+      toast('服务端课件记录删除失败，请重试');
+      return;
+    }
+  }
   const hadPages = !!item.fileid;
   if (hadPages) removePagesByIds(item.fileid.split(',').filter(Boolean));
   // getFileList 不再过滤，fileList 索引与原始 Y.Array 一一对应

@@ -146,6 +146,11 @@ async function takeFile(e: Event) {
 }
 
 async function removeItem(item: CoursewareItem) {
+  // 空 id 会让服务端静默返回成功但一条没删，直接拦截并提示
+  if (!item.id) {
+    ElMessage.error('课件数据异常（缺少ID），请刷新后重试');
+    return;
+  }
   try {
     await ElMessageBox.confirm(
       `确定删除课件「${item.filename}」？删除后直播间将不再自动导入它。`,
