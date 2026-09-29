@@ -437,6 +437,8 @@ type PPTVM = WBVM & {
   curLayerIndex: number | { value: number };
   toastMsg: string | { value: string };
   showFile: (ids: string) => void;
+  showLayer: (index: number) => void;
+  openCourseware: (item: { filename: string; fileid: string; fileurl?: string }) => Promise<void>;
   delFile: (i: number) => void;
   addLayer: () => void;
   rendererPageCount: () => number;
@@ -541,7 +543,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     return { fetchMock };
   }
 
-  it('导入两页 PPT 后新建课件页并停留着陆空白页（不自动定位）', async () => {
+  it('导入两页 PPT 仅登记列表（零建页），点击后才创建课件页并展示', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
     await uploadTwoPagePpt(wrapper);
@@ -553,12 +555,16 @@ describe('WhiteBoard.vue PPT 课件', () => {
       { timeout: 3000 },
     );
     expect(unwrapVal(vm.fileList)[0]!.filename).toBe('测试课件');
-    // 0 页起步：先建着陆页，再新建 2 张幻灯片页 → 共 3 页
-    expect(vm.rendererPageCount()).toBe(3);
-    // 停留着陆页，不自动跳到课件页
+    // 上传零建页：fileid 留空，画布保持挂载时状态
+    expect(vm.rendererPageCount()).toBe(1);
+    expect(unwrapVal(vm.fileList)[0]!.fileid).toBe('');
     expect(unwrapVal(vm.curLayerIndex)).toBe(1);
-    expect(vm.getCurrentPageShapes().length).toBe(0);
-    // fileid 只含幻灯片页（不含着陆页）
+    // 点击列表 → 创建 2 张幻灯片页并落在首张
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    expect(vm.rendererPageCount()).toBe(2);
+    expect(unwrapVal(vm.curLayerIndex)).toBe(1);
+    expect(vm.getCurrentPageShapes().length).toBe(1);
+    // fileid 回填为两张幻灯片页 id
     expect(unwrapVal(vm.fileList)[0]!.fileid.split(',').length).toBe(2);
     wrapper.unmount();
   });
@@ -578,7 +584,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     wrapper.unmount();
   });
 
-  it('当前空白页原样保留（不复用），课件页始终新建并停留该空白页', async () => {
+  it('当前空白页原样保留，点击列表后在其后追加课件页', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
     // seed 一页空白画布
@@ -592,17 +598,22 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 3000 },
     );
-    // 不复用：seed 空白页保留 + 新增 2 张幻灯片页 → 共 3 页
-    expect(vm.rendererPageCount()).toBe(3);
-    // 停留 seed 空白页，原样直接展示
+    // 上传零建页：seed 页保留，fileid 待点击创建
+    expect(vm.rendererPageCount()).toBe(1);
+    expect(unwrapVal(vm.fileList)[0]!.fileid).toBe('');
     expect(unwrapVal(vm.curLayerIndex)).toBe(1);
-    expect(vm.getCurrentPageShapes().length).toBe(0);
-    // fileid 只含幻灯片页（两页，不含 seed 页）
+    // 点击 → seed 页保留 + 追加 2 张幻灯片页 → 共 3 页，落在首张幻灯片
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    expect(vm.rendererPageCount()).toBe(3);
+    expect(unwrapVal(vm.curLayerIndex)).toBe(2);
     expect(unwrapVal(vm.fileList)[0]!.fileid.split(',').length).toBe(2);
+    // 跳回 seed 页：原样空白
+    vm.showLayer(1);
+    expect(vm.getCurrentPageShapes().length).toBe(0);
     wrapper.unmount();
   });
 
-  it('点击课件后按 Yjs 重建目标页渲染图层', async () => {
+  it('点击课件后创建页面并重建渲染图层', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
     await uploadTwoPagePpt(wrapper);
@@ -612,18 +623,18 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 3000 },
     );
-    // 导入用单事务停在着陆空白页：着陆层无节点，幻灯片层未被填充
-    expect(vm.rendererPageCount()).toBe(3);
-    expect(unwrapVal(vm.curLayerIndex)).toBe(1);
+    // 上传零建页零节点
+    expect(vm.rendererPageCount()).toBe(1);
     expect(vm.renderedShapeCount()).toBe(0);
-    // 点击课件列表 → showFile 切页并重建目标层（修复前幻灯片层为空白）
-    vm.showFile(unwrapVal(vm.fileList)[0]!.fileid);
-    expect(unwrapVal(vm.curLayerIndex)).toBe(2);
+    // 点击课件列表 → 创建 2 页，首张幻灯片图层重建出 ppt-image 节点
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    expect(vm.rendererPageCount()).toBe(2);
+    expect(unwrapVal(vm.curLayerIndex)).toBe(1);
     expect(vm.renderedShapeCount()).toBe(1);
     wrapper.unmount();
   });
 
-  it('二次导入追加到已有课件之后，仍停留原有着陆页', async () => {
+  it('二次上传仍零建页，依次点击两份课件共追加 4 页', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
     await uploadTwoPagePpt(wrapper);
@@ -633,7 +644,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 3000 },
     );
-    // 第 1 次导入后停在着陆页（index 0），第 2 次继续全量新建
+    // 第 2 次上传同样仅登记
     await uploadTwoPagePpt(wrapper);
     await vi.waitFor(
       () => {
@@ -641,8 +652,13 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 3000 },
     );
-    expect(vm.rendererPageCount()).toBe(5);
-    expect(unwrapVal(vm.curLayerIndex)).toBe(1);
+    expect(vm.rendererPageCount()).toBe(1);
+    // 逐份点击创建：挂载层被首张幻灯片复用 → 2 页、4 页，最终停在第二份首张
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    expect(vm.rendererPageCount()).toBe(2);
+    await vm.openCourseware(unwrapVal(vm.fileList)[1]!);
+    expect(vm.rendererPageCount()).toBe(4);
+    expect(unwrapVal(vm.curLayerIndex)).toBe(3);
     wrapper.unmount();
   });
 
@@ -656,8 +672,8 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 3000 },
     );
-    // 上传不自动跳转；点击课件列表（showFile）后当前页 = 首张幻灯片页
-    vm.showFile(unwrapVal(vm.fileList)[0]!.fileid);
+    // 上传零建页；点击列表（openCourseware）创建后当前页 = 首张幻灯片页
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
     const shapes = vm.getCurrentPageShapes();
     expect(shapes.length).toBe(1);
     const s = shapes[0]!;
@@ -673,7 +689,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     wrapper.unmount();
   });
 
-  it('delFile 删除课件条目并回收其页面（含残留图清空）', async () => {
+  it('delFile 删除课件条目：未建页仅移除条目，已建页回收页面', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
     await uploadTwoPagePpt(wrapper);
@@ -683,6 +699,22 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 3000 },
     );
+
+    // 未建页条目（pending）：仅移除条目，画布零改动
+    vm.delFile(0);
+    expect(unwrapVal(vm.fileList).length).toBe(0);
+    expect(vm.rendererPageCount()).toBe(1);
+
+    // 已创建页的条目：连页回收，保底留 1 页且无残留图
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    expect(vm.rendererPageCount()).toBe(2);
 
     vm.delFile(0);
 
@@ -765,7 +797,7 @@ describe('WhiteBoard.vue 进房导入服务端课件', () => {
     vi.restoreAllMocks();
   });
 
-  it('教师调用后按 fileurl 建页并登记 fileurl，二次调用去重', async () => {
+  it('教师调用仅按 fileurl 登记列表（零建页），点击才创建；二次调用去重', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
 
@@ -779,16 +811,22 @@ describe('WhiteBoard.vue 进房导入服务端课件', () => {
     expect(liveMocks.coursewareList).toHaveBeenCalledWith('1001');
     expect(unwrapVal(vm.fileList)[0]!.filename).toBe('课前预习');
     expect(unwrapVal(vm.fileList)[0]!.fileurl).toBe('http://mock.test/ppt/deck.pdf');
-    expect(vm.rendererPageCount()).toBe(3);
-    // 0 页起步：停在着陆页，不自动定位首份课件（点击列表才加载）
+    // 仅登记零建页，fileid 待点击创建
+    expect(vm.rendererPageCount()).toBe(1);
+    expect(unwrapVal(vm.fileList)[0]!.fileid).toBe('');
     expect(unwrapVal(vm.curLayerIndex)).toBe(1);
-    // 进房导入只读服务端列表，不重复登记
+    // 进房登记只读服务端列表，不重复登记
     expect(liveMocks.saveCourseware).not.toHaveBeenCalled();
 
-    // 二次调用：fileurl 命中已有条目 → 不再建页
+    // 二次调用：fileurl 命中已有条目（含未建页状态）→ 不再登记
     await vm.importServerCoursewares();
-    expect(vm.rendererPageCount()).toBe(3);
+    expect(vm.rendererPageCount()).toBe(1);
     expect(unwrapVal(vm.fileList).length).toBe(1);
+
+    // 点击列表 → 创建 2 页（mocked 页数）并落在首张
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    expect(vm.rendererPageCount()).toBe(2);
+    expect(unwrapVal(vm.curLayerIndex)).toBe(1);
     wrapper.unmount();
   });
 

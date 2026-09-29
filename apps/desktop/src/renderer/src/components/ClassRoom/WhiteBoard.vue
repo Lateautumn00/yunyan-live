@@ -423,7 +423,7 @@
         >
           <div
             class="file-name"
-            @click="item.fileid && showFile(item.fileid)"
+            @click="openCourseware(item)"
           >
             <span v-if="editFileIndex !== i">{{ item.filename }}.{{ item.filext }}</span>
             <input
@@ -446,7 +446,7 @@
           </el-icon>
         </div>
         <div class="file-hint">
-          图片贴到当前页；PPT 导入为课件页，重进直播间自动恢复
+          图片贴到当前页；点击课件列表创建并打开课件页，重进直播间自动恢复
         </div>
       </div>
 
@@ -483,7 +483,7 @@ import { useRoute } from 'vue-router';
 import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
-import { PRESET_COLORS } from './whiteboard/types';
+import { PRESET_COLORS, type FileItem } from './whiteboard/types';
 import { useUserStore } from '@/store/user';
 import Live from '@/api/backstage';
 
@@ -1505,7 +1505,7 @@ async function uploadPPT(file: File): Promise<boolean> {
       return false;
     }
 
-    // 阶段1：numPages/尺寸以 pdf.js 为准；任一失败仅提示，画布零改动（不产生幽灵页）
+    // 阶段1：解析 PDF 校验可读并取页数（供 toast 提示）；任一失败仅提示，零登记
     let meta: PptMeta;
     try {
       meta = await loadPptMeta(fileUrl);
@@ -1514,36 +1514,15 @@ async function uploadPPT(file: File): Promise<boolean> {
       return false;
     }
 
-    // 阶段2：始终新建幻灯片页 + 双维限幅居中；0 页起步先建着陆页。
-    // 上传后停留在上传前所在页，点击课件列表才加载展示。
-    // 单事务建页并回写原页索引：观察者仅在提交时触发一次，本端与学生端
-    // 全程不切页（否则逐页 addPage 会逐次换页，导入过程白板闪现课件页）
-    if (provider && provider.getPages().length === 0) provider.addPage();
-    const preIdx = provider?.getCurrentPageIndex() ?? 0;
-    const box = document.getElementById(containerId.value);
-    const cw = box?.clientWidth || 800;
-    const ch = box?.clientHeight || 600;
-    let layerIds: string[] = [];
-    if (provider) {
-      provider.doc.transact(() => {
-        layerIds = importPptPages(provider, cw, ch, fileUrl, meta);
-        provider.setCurrentPageIndex(preIdx);
-      });
-    } else {
-      layerIds = importPptPages(provider, cw, ch, fileUrl, meta);
-    }
-    if (layerIds.length === 0) {
-      toast('PPT页面创建失败');
-      return false;
-    }
+    // 阶段2：零建页 —— 仅登记列表条目（fileid 留空），点击列表时才创建课件页
+    // 并展示（见 openCourseware）；上传前后画布与当前页保持原样
     const ext = file.name.split('.').pop() || 'ppt';
     const baseName = file.name.replace(/\.[^.]+$/, '');
     provider?.addFileItem({
-      filename: baseName, filext: ext, filesize: file.size, fileid: layerIds.join(','),
+      filename: baseName, filext: ext, filesize: file.size, fileid: '',
       fileurl: fileUrl,
     });
     fileList.value = provider!.getFileList();
-    showLayer(preIdx + 1);
     toast(`PPT已导入，共${meta.numPages}页，请点击列表打开`);
     // 登记服务端课件表：房空后重进直播间可自动恢复（失败不影响已导入的白板）
     void saveCoursewareRecord({ filename: baseName, filext: ext, filesize: file.size, fileUrl });
@@ -1570,8 +1549,8 @@ async function saveCoursewareRecord(item: {
   }
 }
 
-// 进房自动导入服务端课件（仅教师，首次 synced 后触发）：
-// 按 fileurl 去重 —— doc 仍存活时重进房不重复建页，房空销毁后全量恢复
+// 进房自动登记服务端课件（仅教师，首次 synced 后触发）：
+// 按 fileurl 去重（含已登记未建页的条目）—— 仅入列表零建页，点击列表才创建课件页
 async function importServerCoursewares() {
   if (!provider || !props.isTeacher) return;
   const res = await Live.courseware_list(props.roomId).catch((e: unknown) => {
@@ -1585,49 +1564,16 @@ async function importServerCoursewares() {
   const pending = items.filter(it => it.fileUrl && !existing.has(it.fileUrl));
   if (pending.length === 0) return;
 
-  // 建页后停留在进房时所在页：0 页起步先建着陆页，恢复完成回退该页，
-  // 点击课件列表才加载展示
-  loading.value = true;
-  let preIdx: number | null = null;
-  let imported = false;
-  try {
-    for (const item of pending) {
-      try {
-        const meta = await loadPptMeta(item.fileUrl);
-        if (preIdx === null) {
-          if (provider.getPages().length === 0) provider.addPage();
-          preIdx = provider.getCurrentPageIndex();
-        }
-        const box = document.getElementById(containerId.value);
-        const cw = box?.clientWidth || 800;
-        const ch = box?.clientHeight || 600;
-        const pIdx = preIdx;
-        let layerIds: string[] = [];
-        // 与 uploadPPT 同款单事务：观察者只在提交时触发，导入过程不换页
-        provider.doc.transact(() => {
-          layerIds = importPptPages(provider, cw, ch, item.fileUrl, meta);
-          provider.setCurrentPageIndex(pIdx);
-        });
-        if (layerIds.length === 0) continue;
-        provider.addFileItem({
-          filename: item.filename,
-          filext: item.filext || 'ppt',
-          filesize: Number(item.filesize) || 0,
-          fileid: layerIds.join(','),
-          fileurl: item.fileUrl,
-        });
-        imported = true;
-      } catch (err) {
-        toast(`课件「${item.filename}」导入失败: ${(err as Error).message}`);
-      }
-    }
-    if (imported && preIdx !== null) {
-      fileList.value = provider.getFileList();
-      showLayer(preIdx + 1);
-    }
-  } finally {
-    loading.value = false;
+  for (const item of pending) {
+    provider.addFileItem({
+      filename: item.filename,
+      filext: item.filext || 'ppt',
+      filesize: Number(item.filesize) || 0,
+      fileid: '',
+      fileurl: item.fileUrl,
+    });
   }
+  fileList.value = provider.getFileList();
 }
 
 // --- File list ---
@@ -1668,6 +1614,56 @@ function getCurrentPageShapes(): Record<string, unknown>[] {
   >[];
 }
 
+// 点击课件列表：已有页（历史/已创建）直接导航；未建页则创建课件页并展示
+async function openCourseware(item: FileItem) {
+  if (!provider || !renderer) return;
+  if (item.fileid) {
+    showFile(item.fileid);
+    return;
+  }
+  if (!props.isTeacher) {
+    toast('仅教师可加载课件');
+    return;
+  }
+  if (loading.value) return; // 防双击重复建页
+  const fileUrl = item.fileurl;
+  if (!fileUrl) {
+    toast('课件地址缺失');
+    return;
+  }
+  loading.value = true;
+  try {
+    const meta = await loadPptMeta(fileUrl);
+    const box = document.getElementById(containerId.value);
+    const cw = box?.clientWidth || 800;
+    const ch = box?.clientHeight || 600;
+    const startIdx = provider.getPages().length;
+    let layerIds: string[] = [];
+    // 单事务建页并落到首张幻灯片：观察者提交时触发一次，直接切到目标页不闪页
+    provider.doc.transact(() => {
+      layerIds = importPptPages(provider, cw, ch, fileUrl, meta);
+      provider.setCurrentPageIndex(startIdx);
+    });
+    if (layerIds.length === 0) {
+      toast('PPT页面创建失败');
+      return;
+    }
+    // 回填 fileid（定位仍未建页的该条目），后续点击走 showFile 直接导航
+    const rawIdx = provider.fileList
+      .toArray()
+      .findIndex((m: any) => m.get('fileurl') === fileUrl && !m.get('fileid'));
+    if (rawIdx >= 0) provider.setFileItemId(rawIdx, layerIds.join(','));
+    fileList.value = provider.getFileList();
+    showLayer(startIdx + 1);
+    showFileList.value = false;
+    toast(`已打开「${item.filename}」，共${meta.numPages}页`);
+  } catch (err) {
+    toast(`课件打开失败: ${(err as Error).message}`);
+  } finally {
+    loading.value = false;
+  }
+}
+
 function showFile(ids: string) {
   try {
     if (!ids) return;
@@ -1701,16 +1697,13 @@ function alterFName(i: number, e: Event) {
 
 function delFile(i: number) {
   const item = fileList.value[i];
-  if (!item || !item.fileid) return;
-  const ids = item.fileid.split(',').filter(Boolean);
-  // 删除课件对应的页面，Konva 层由 pages.observe 同步删除
-  removePagesByIds(ids);
-  // fileList.value 来自 getFileList()（过滤后），删除需按 fileid 定位原始 Y.Array 索引
-  const rawIdx =
-    provider?.fileList.toArray().findIndex((m: any) => m.get('fileid') === item.fileid) ?? -1;
-  if (rawIdx >= 0) provider?.removeFileItem(rawIdx);
+  if (!item) return;
+  const hadPages = !!item.fileid;
+  if (hadPages) removePagesByIds(item.fileid.split(',').filter(Boolean));
+  // getFileList 不再过滤，fileList 索引与原始 Y.Array 一一对应
+  provider?.removeFileItem(i);
   fileList.value = provider!.getFileList();
-  showLayer(1);
+  if (hadPages) showLayer(1);
 }
 
 defineExpose({
@@ -1719,6 +1712,7 @@ defineExpose({
   addLayer,
   showLayer,
   showFile,
+  openCourseware,
   delFile,
   fileList,
   layerIndex,

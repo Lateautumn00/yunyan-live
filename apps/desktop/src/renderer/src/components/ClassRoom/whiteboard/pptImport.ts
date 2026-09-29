@@ -38,8 +38,9 @@ export async function loadPptMeta(fileUrl: string): Promise<PptMeta> {
   return { numPages, dims };
 }
 
-// 阶段2：始终新建各幻灯片页（不复用当前页，当前页原样保留供停留）+ 双维限幅居中，
-// 返回各幻灯片页 id。纯逻辑，不触碰 DOM 尺寸与 toast，调用方负责容器尺寸与提示。
+// 阶段2：新建各幻灯片页 + 双维限幅居中，返回各幻灯片页 id。
+// 点击课件列表时由 openCourseware 调用（零建页上传的延迟创建）；
+// 纯逻辑，不触碰 DOM 尺寸与 toast，调用方负责容器尺寸、单事务包裹与提示。
 export function importPptPages(
   provider: YjsProvider | null,
   cw: number,

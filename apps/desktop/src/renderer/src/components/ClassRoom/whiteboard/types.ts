@@ -18,6 +18,7 @@ export interface FileItem {
   filename: string;
   filext: string;
   filesize: number;
+  /** 点击列表创建课件页后回填为各页 id（空串 = 仅登记，尚未建页） */
   fileid: string;
   /** 课件源 PDF 地址（服务端课件表的关联键，用于进房导入去重） */
   fileurl?: string;

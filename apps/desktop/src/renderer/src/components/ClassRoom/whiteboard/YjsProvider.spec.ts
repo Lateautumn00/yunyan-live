@@ -117,4 +117,16 @@ describe('YjsProvider readOnly', () => {
     w.removeFileItem(0);
     expect(w.getFileList().length).toBe(1);
   });
+
+  it('fileid 为空的已登记条目也返回（待创建态），可回填 fileid', () => {
+    const w = create(false);
+    w.addFileItem({ filename: 'a', filext: 'pptx', filesize: 1, fileid: '' });
+    expect(w.getFileList().length).toBe(1);
+    expect(w.getFileList()[0]!.fileid).toBe('');
+    w.setFileItemId(0, 'p1,p2');
+    expect(w.getFileList()[0]!.fileid).toBe('p1,p2');
+    w.readOnly = true;
+    w.setFileItemId(0, 'x');
+    expect(w.getFileList()[0]!.fileid).toBe('p1,p2');
+  });
 });

@@ -255,6 +255,12 @@ onSynced(cb: () => void) {
     if (item) item.set('filename', name);
   }
 
+  setFileItemId(index: number, fileid: string) {
+    if (this.readOnly) return;
+    const item = this.fileList.get(index);
+    if (item) item.set('fileid', fileid);
+  }
+
   getFileList(): FileItem[] {
     return this.fileList.toArray().map((m: any) => ({
       filename: m.get('filename'),
@@ -262,7 +268,7 @@ onSynced(cb: () => void) {
       filesize: m.get('filesize'),
       fileid: m.get('fileid') || '',
       fileurl: m.get('fileurl') || '',
-    })).filter(item => !!item.fileid);
+    }));
   }
 
   updateCursor(cursor: CursorData) {
