@@ -423,7 +423,7 @@
         >
           <div
             class="file-name"
-            @click="openCourseware(item)"
+            @click="openCourseware(item, i)"
           >
             <span v-if="editFileIndex !== i">{{ item.filename }}.{{ item.filext }}</span>
             <input
@@ -1280,6 +1280,24 @@ function showLayer(index: number) {
 
 function delLayer(index: number) {
   if (!renderer) return;
+  // 删除目标若是课件页 → 该课件全部页一起移除，条目回到「未打开」态（课件是整体）；
+  // 判断须先于 pageCount<=1 的 layerClear 兜底，单页课件是唯一画布时也能整套重置
+  const pages = provider?.getPages();
+  const pid =
+    pages && index - 1 >= 0 && index - 1 < pages.length
+      ? String(pages.get(index - 1).get('id'))
+      : '';
+  const deckIdx = pid
+    ? fileList.value.findIndex(f => f.fileid.split(',').filter(Boolean).includes(pid))
+    : -1;
+  if (deckIdx >= 0) {
+    removePagesByIds(fileList.value[deckIdx]!.fileid.split(',').filter(Boolean));
+    provider?.setFileItemId(deckIdx, '');
+    fileList.value = provider!.getFileList();
+    toast('已删除课件页');
+    emitPaintLog();
+    return;
+  }
   if (renderer.getPageCount() <= 1) { layerClear(); return; }
   provider?.removePage(index - 1);
   toast('已删除画布');
@@ -1614,13 +1632,12 @@ function getCurrentPageShapes(): Record<string, unknown>[] {
   >[];
 }
 
-// 点击课件列表：已有页（历史/已创建）直接导航；未建页则创建课件页并展示
-async function openCourseware(item: FileItem) {
+// 点击课件列表：已有页（历史/已创建）直接导航；页不存在（僵尸 fileid/历史页被删）
+// 或未建页则创建课件页并展示
+async function openCourseware(item: FileItem, index: number) {
   if (!provider || !renderer) return;
-  if (item.fileid) {
-    showFile(item.fileid);
-    return;
-  }
+  // 页存在 → 导航结束；不存在 → 落入创建路径自愈重建
+  if (item.fileid && showFile(item.fileid)) return;
   if (!props.isTeacher) {
     toast('仅教师可加载课件');
     return;
@@ -1628,7 +1645,7 @@ async function openCourseware(item: FileItem) {
   if (loading.value) return; // 防双击重复建页
   const fileUrl = item.fileurl;
   if (!fileUrl) {
-    toast('课件地址缺失');
+    toast(item.fileid ? '课件页面已不存在' : '课件地址缺失');
     return;
   }
   loading.value = true;
@@ -1648,11 +1665,8 @@ async function openCourseware(item: FileItem) {
       toast('PPT页面创建失败');
       return;
     }
-    // 回填 fileid（定位仍未建页的该条目），后续点击走 showFile 直接导航
-    const rawIdx = provider.fileList
-      .toArray()
-      .findIndex((m: any) => m.get('fileurl') === fileUrl && !m.get('fileid'));
-    if (rawIdx >= 0) provider.setFileItemId(rawIdx, layerIds.join(','));
+    // 回填 fileid：index 即原始 Y.Array 索引（列表未过滤），顺带覆盖僵尸 id
+    provider.setFileItemId(index, layerIds.join(','));
     fileList.value = provider.getFileList();
     showLayer(startIdx + 1);
     showFileList.value = false;
@@ -1664,11 +1678,12 @@ async function openCourseware(item: FileItem) {
   }
 }
 
-function showFile(ids: string) {
+// 按 fileid 导航到课件首页：页存在返回 true；已不存在返回 false（由调用方自愈重建）
+function showFile(ids: string): boolean {
   try {
-    if (!ids) return;
+    if (!ids) return false;
     const arr = ids.split(',').filter(Boolean);
-    if (arr.length === 0 || !provider || !renderer) return;
+    if (arr.length === 0 || !provider || !renderer) return false;
     const firstId = arr[0];
     const pages = provider.getPages();
     for (let i = 0; i < pages.length; i++) {
@@ -1676,14 +1691,12 @@ function showFile(ids: string) {
       if (pid === firstId) {
         showLayer(i + 1);
         showFileList.value = false;
-        return;
+        return true;
       }
     }
-    toast('未找到对应页面，已切换到第1页');
-    showLayer(1);
-    showFileList.value = false;
-  } catch (e) {
-    toast('打开文件失败');
+    return false;
+  } catch {
+    return false;
   }
 }
 
@@ -1714,6 +1727,11 @@ defineExpose({
   showFile,
   openCourseware,
   delFile,
+  delLayer,
+  setFileItemId: (index: number, fileid: string) => {
+    provider?.setFileItemId(index, fileid);
+    fileList.value = provider!.getFileList();
+  },
   fileList,
   layerIndex,
   curLayerIndex,

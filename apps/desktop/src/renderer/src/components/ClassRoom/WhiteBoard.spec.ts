@@ -436,10 +436,12 @@ type PPTVM = WBVM & {
   fileList: Array<{ filename: string; filext: string; fileid: string; fileurl?: string }> | { value: Array<{ filename: string; filext: string; fileid: string; fileurl?: string }> };
   curLayerIndex: number | { value: number };
   toastMsg: string | { value: string };
-  showFile: (ids: string) => void;
+  showFile: (ids: string) => boolean;
   showLayer: (index: number) => void;
-  openCourseware: (item: { filename: string; fileid: string; fileurl?: string }) => Promise<void>;
+  openCourseware: (item: { filename: string; fileid: string; fileurl?: string }, index: number) => Promise<void>;
   delFile: (i: number) => void;
+  delLayer: (index: number) => void;
+  setFileItemId: (index: number, fileid: string) => void;
   addLayer: () => void;
   rendererPageCount: () => number;
   renderedShapeCount: () => number;
@@ -560,7 +562,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     expect(unwrapVal(vm.fileList)[0]!.fileid).toBe('');
     expect(unwrapVal(vm.curLayerIndex)).toBe(1);
     // 点击列表 → 创建 2 张幻灯片页并落在首张
-    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
     expect(vm.rendererPageCount()).toBe(2);
     expect(unwrapVal(vm.curLayerIndex)).toBe(1);
     expect(vm.getCurrentPageShapes().length).toBe(1);
@@ -603,7 +605,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     expect(unwrapVal(vm.fileList)[0]!.fileid).toBe('');
     expect(unwrapVal(vm.curLayerIndex)).toBe(1);
     // 点击 → seed 页保留 + 追加 2 张幻灯片页 → 共 3 页，落在首张幻灯片
-    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
     expect(vm.rendererPageCount()).toBe(3);
     expect(unwrapVal(vm.curLayerIndex)).toBe(2);
     expect(unwrapVal(vm.fileList)[0]!.fileid.split(',').length).toBe(2);
@@ -627,7 +629,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     expect(vm.rendererPageCount()).toBe(1);
     expect(vm.renderedShapeCount()).toBe(0);
     // 点击课件列表 → 创建 2 页，首张幻灯片图层重建出 ppt-image 节点
-    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
     expect(vm.rendererPageCount()).toBe(2);
     expect(unwrapVal(vm.curLayerIndex)).toBe(1);
     expect(vm.renderedShapeCount()).toBe(1);
@@ -654,9 +656,9 @@ describe('WhiteBoard.vue PPT 课件', () => {
     );
     expect(vm.rendererPageCount()).toBe(1);
     // 逐份点击创建：挂载层被首张幻灯片复用 → 2 页、4 页，最终停在第二份首张
-    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
     expect(vm.rendererPageCount()).toBe(2);
-    await vm.openCourseware(unwrapVal(vm.fileList)[1]!);
+    await vm.openCourseware(unwrapVal(vm.fileList)[1]!, 1);
     expect(vm.rendererPageCount()).toBe(4);
     expect(unwrapVal(vm.curLayerIndex)).toBe(3);
     wrapper.unmount();
@@ -673,7 +675,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       { timeout: 3000 },
     );
     // 上传零建页；点击列表（openCourseware）创建后当前页 = 首张幻灯片页
-    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
     const shapes = vm.getCurrentPageShapes();
     expect(shapes.length).toBe(1);
     const s = shapes[0]!;
@@ -713,7 +715,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 3000 },
     );
-    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
     expect(vm.rendererPageCount()).toBe(2);
 
     vm.delFile(0);
@@ -722,6 +724,61 @@ describe('WhiteBoard.vue PPT 课件', () => {
     // removePage 保底留 1 页，该页 elements 必须被清空（课件图不得残留）
     expect(vm.rendererPageCount()).toBe(1);
     expect(vm.getCurrentPageShapes().length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('delLayer 删课件页：整套回收且回未打开，再点击重建', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
+    expect(vm.rendererPageCount()).toBe(2);
+    expect(unwrapVal(vm.fileList)[0]!.fileid).not.toBe('');
+
+    // 删课件页（当前在首张幻灯片）→ 课件整套回收，条目回未打开态
+    vm.delLayer(unwrapVal(vm.curLayerIndex));
+    expect(vm.rendererPageCount()).toBe(1);
+    expect(unwrapVal(vm.fileList)[0]!.fileid).toBe('');
+    expect(String(unwrapVal(vm.toastMsg))).toContain('已删除课件页');
+
+    // 再点击 → 干净重建（removePage 保底留 1 页空白 + 新建 2 页），无「未找到对应页面」
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
+    expect(vm.rendererPageCount()).toBe(3);
+    expect(String(unwrapVal(vm.toastMsg))).toContain('已打开');
+    expect(String(unwrapVal(vm.toastMsg))).not.toContain('未找到');
+    expect(unwrapVal(vm.fileList)[0]!.fileid.split(',').length).toBe(2);
+    wrapper.unmount();
+  });
+
+  it('僵尸 fileid（页已被外部删除）点击自愈重建', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    // 模拟页被删后残留的僵尸 fileid
+    vm.setFileItemId(0, 'ghost_a,ghost_b');
+    expect(unwrapVal(vm.fileList)[0]!.fileid).toBe('ghost_a,ghost_b');
+
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
+
+    // 自愈：重建 2 页并覆盖僵尸 id，不报「未找到」
+    expect(vm.rendererPageCount()).toBe(2);
+    expect(String(unwrapVal(vm.toastMsg))).toContain('已打开');
+    expect(String(unwrapVal(vm.toastMsg))).not.toContain('未找到');
+    const ids = unwrapVal(vm.fileList)[0]!.fileid.split(',');
+    expect(ids.length).toBe(2);
+    expect(ids).not.toContain('ghost_a');
     wrapper.unmount();
   });
 
@@ -824,7 +881,7 @@ describe('WhiteBoard.vue 进房导入服务端课件', () => {
     expect(unwrapVal(vm.fileList).length).toBe(1);
 
     // 点击列表 → 创建 2 页（mocked 页数）并落在首张
-    await vm.openCourseware(unwrapVal(vm.fileList)[0]!);
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
     expect(vm.rendererPageCount()).toBe(2);
     expect(unwrapVal(vm.curLayerIndex)).toBe(1);
     wrapper.unmount();
