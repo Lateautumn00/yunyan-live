@@ -11,7 +11,13 @@ export class KonvaRenderer {
   private layerMap = new Map<number, Konva.Layer>();
   private nodeMap = new Map<string, Konva.Node>();
   private zoomLevel = 100;
+  private selectEnabled = false;
+  private selectedId: string | null = null;
+  private transformer: Konva.Transformer | null = null;
   pageIds: string[] = [];
+  onShapeClick?: (id: string) => void;
+  onShapeDragEnd?: (id: string, x: number, y: number) => void;
+  onShapeTransformEnd?: (id: string, attrs: Record<string, any>) => void;
 
   constructor(container: HTMLElement) {
     this.stage = new Konva.Stage({
@@ -49,6 +55,7 @@ export class KonvaRenderer {
       if (i === index) l.show(); else l.hide();
     });
     this.layer = this.layers[index]!;
+    this.clearSelection();
     this.tempLayer.moveToTop();
     this.rebuildLayerMap();
     this.stage.batchDraw();
@@ -139,10 +146,83 @@ export class KonvaRenderer {
       const node = this.createNode(el);
       if (node) {
         this.layer.add(node as any);
-        this.nodeMap.set(el.get('id') as string, node);
+        const id = el.get('id') as string;
+        this.nodeMap.set(id, node);
+        this.wireNode(node, id);
       }
     });
     this.layer.batchDraw();
+    if (this.selectedId) {
+      if (this.selectEnabled && this.nodeMap.has(this.selectedId)) this.selectNode(this.selectedId);
+      else this.clearSelection();
+    }
+  }
+
+  // --- 选择器：cur 模式下节点可点选/拖动/缩放 ---
+  setSelectMode(on: boolean) {
+    this.selectEnabled = on;
+    this.nodeMap.forEach((node, id) => this.wireNode(node, id));
+    if (!on) this.clearSelection();
+  }
+
+  private wireNode(node: Konva.Node, id: string) {
+    node.off('click dragend transformend');
+    if (!this.selectEnabled) return;
+    node.draggable(true);
+    node.on('click', () => this.onShapeClick?.(id));
+    node.on('dragend', () => this.onShapeDragEnd?.(id, node.x(), node.y()));
+    node.on('transformend', () => {
+      const attrs = this.bakeTransform(node);
+      node.scaleX(1);
+      node.scaleY(1);
+      this.onShapeTransformEnd?.(id, attrs);
+    });
+  }
+
+  selectNode(id: string): boolean {
+    if (!this.selectEnabled) return false;
+    const node = this.nodeMap.get(id);
+    if (!node) return false;
+    this.selectedId = id;
+    if (!this.transformer) {
+      this.transformer = new Konva.Transformer({ rotateEnabled: false, padding: 4 });
+      this.tempLayer.add(this.transformer);
+    }
+    this.transformer.keepRatio(node.getClassName() === 'Circle');
+    this.transformer.nodes([node]);
+    this.tempLayer.batchDraw();
+    return true;
+  }
+
+  clearSelection() {
+    if (this.transformer) this.transformer.nodes([]);
+    this.selectedId = null;
+    this.tempLayer.batchDraw();
+  }
+
+  getSelectedId(): string | null {
+    return this.selectedId;
+  }
+
+  // 把 transformer 施加的 scale 烘焙进节点属性（Yjs 只存绝对属性）
+  private bakeTransform(node: any): Record<string, any> {
+    const sx = Number(node.scaleX()) || 1;
+    const sy = Number(node.scaleY()) || 1;
+    const attrs: Record<string, any> = { x: Number(node.x()) || 0, y: Number(node.y()) || 0 };
+    if (sx === 1 && sy === 1) return attrs;
+    const cls = node.getClassName ? node.getClassName() : '';
+    if (cls === 'Circle') {
+      attrs.radius = (Number(node.radius()) || 0) * sx;
+    } else if (cls === 'Text') {
+      attrs.fontSize = Math.max(1, Math.round((Number(node.fontSize()) || 14) * sy));
+    } else if (cls === 'Line' || cls === 'Arrow') {
+      const pts: number[] = (node.points?.() as number[]) || [];
+      attrs.points = pts.map((p, i) => (i % 2 === 0 ? p * sx : p * sy));
+    } else {
+      attrs.width = (Number(node.width()) || 0) * sx;
+      attrs.height = (Number(node.height()) || 0) * sy;
+    }
+    return attrs;
   }
 
   private createNode(data: any): Konva.Node | null {
@@ -152,6 +232,7 @@ export class KonvaRenderer {
       case 'brush':
       case 'eraser':
         return new Konva.Line({
+          x: data.get('x') || 0, y: data.get('y') || 0,
           points: (data.get('points') as number[]) || [],
           stroke: type === 'eraser' ? '#ffffff' : (data.get('color') as string),
           strokeWidth: (data.get('lineWidth') as number) || 1,
@@ -176,6 +257,7 @@ export class KonvaRenderer {
         });
       case 'arrow':
         return new Konva.Arrow({
+          x: data.get('x') || 0, y: data.get('y') || 0,
           points: (data.get('points') as number[]) || [],
           stroke: data.get('color') || '#000',
           strokeWidth: (data.get('lineWidth') as number) || 1,
@@ -242,6 +324,7 @@ export class KonvaRenderer {
   }
 
   clearCurrentPage() {
+    this.clearSelection();
     this.layer.destroyChildren();
     this.nodeMap.clear();
     this.layer.batchDraw();

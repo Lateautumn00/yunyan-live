@@ -681,6 +681,10 @@ onMounted(() => {
     useUserStore().sessionInterrupted(kind);
   }, !props.isTeacher);
   renderer = new KonvaRenderer(document.getElementById(containerId.value)!);
+  renderer.onShapeClick = selectShape;
+  renderer.onShapeDragEnd = commitShapeMove;
+  renderer.onShapeTransformEnd = commitShapeTransform;
+  renderer.setSelectMode(mode.value === 'cur' && props.isTeacher);
   renderer.showPage(0);
 
   lcolor.value = gradientColor('#000', '#fff', 23);
@@ -692,6 +696,7 @@ onMounted(() => {
   stage.on('wheel', onWheel);
 
   window.addEventListener('resize', onResize);
+  document.addEventListener('keydown', onSelectionKeydown);
 
   // 计算颜色面板初始位置（选择工具右侧）
   nextTick(() => {
@@ -796,6 +801,7 @@ onMounted(() => {
 onUnmounted(() => {
   currentElementsObserver?.();
   window.removeEventListener('resize', onResize);
+  document.removeEventListener('keydown', onSelectionKeydown);
   renderer?.destroy();
   provider?.destroy();
 });
@@ -819,8 +825,13 @@ function toLayerCoords(pos: { x: number; y: number }): { x: number; y: number } 
 }
 
 // --- Tool selection ---
-function tool(type: string) {
+function setMode(type: string) {
   mode.value = type;
+  renderer?.setSelectMode(type === 'cur' && props.isTeacher);
+}
+
+function tool(type: string) {
+  setMode(type);
   showEditer.value = ['brush', 'eraser', 'text', 'circle', 'rectangle', 'arrows'].includes(type);
   showUpload.value = type === 'upload';
   showFileList.value = type === 'file';
@@ -830,14 +841,110 @@ function tool(type: string) {
 function toggleUpload() {
   showUpload.value = !showUpload.value;
   showFileList.value = false;
-  mode.value = showUpload.value ? 'upload' : 'cur';
+  setMode(showUpload.value ? 'upload' : 'cur');
 }
 
 function toggleFileList() {
   showFileList.value = !showFileList.value;
   showUpload.value = false;
   showEditer.value = false;
-  mode.value = showFileList.value ? 'file' : 'cur';
+  setMode(showFileList.value ? 'file' : 'cur');
+}
+
+// --- 选择器：单选图形，拖动/缩放/删除写回 Yjs ---
+function snapshotShape(id: string, keys: string[]): Record<string, any> | null {
+  const els = provider?.getActiveElements();
+  if (!els) return null;
+  const m = els.toArray().find((x: any) => x.get('id') === id);
+  if (!m) return null;
+  const out: Record<string, any> = {};
+  keys.forEach(k => { out[k] = m.get(k); });
+  return out;
+}
+
+function selectShape(id: string) {
+  if (!props.isTeacher || mode.value !== 'cur' || !renderer) return;
+  renderer.selectNode(id);
+}
+
+function clearSelection() {
+  renderer?.clearSelection();
+}
+
+function getSelectedShapeId(): string | null {
+  return renderer?.getSelectedId() ?? null;
+}
+
+function commitShapeMove(id: string, x: number, y: number) {
+  if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  const before = snapshotShape(id, ['x', 'y']);
+  if (!before) return;
+  before.x = before.x ?? 0;
+  before.y = before.y ?? 0;
+  if (before.x === x && before.y === y) return;
+  if (!provider.updateElement(id, { x, y })) return;
+  refreshLayer();
+  redoStack.value = [];
+  undoStack.value.push({
+    type: 'updateShape',
+    pageId: provider.getCurrentPageId(),
+    pageIndex: renderer.getCurrentPageIndex(),
+    shapeId: id,
+    before,
+    after: { x, y },
+  });
+  emitPaintLog();
+}
+
+function commitShapeTransform(id: string, attrs: Record<string, any>) {
+  if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  const before = snapshotShape(id, Object.keys(attrs));
+  if (!before) return;
+  if (!provider.updateElement(id, attrs)) return;
+  refreshLayer();
+  redoStack.value = [];
+  undoStack.value.push({
+    type: 'updateShape',
+    pageId: provider.getCurrentPageId(),
+    pageIndex: renderer.getCurrentPageIndex(),
+    shapeId: id,
+    before,
+    after: { ...attrs },
+  });
+  emitPaintLog();
+}
+
+function deleteSelected() {
+  if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  const id = renderer.getSelectedId();
+  if (!id) return;
+  const els = provider.getActiveElements();
+  const m = els?.toArray().find((x: any) => x.get('id') === id);
+  if (!m) return;
+  const shapeData: Record<string, any> = {};
+  m.forEach((v: any, k: string) => { shapeData[k] = v; });
+  const index = provider.removeElement(id);
+  if (index < 0) return;
+  renderer.clearSelection();
+  refreshLayer();
+  redoStack.value = [];
+  undoStack.value.push({
+    type: 'removeShape',
+    pageId: provider.getCurrentPageId(),
+    pageIndex: renderer.getCurrentPageIndex(),
+    shapeData,
+    index,
+  });
+  emitPaintLog();
+}
+
+function onSelectionKeydown(e: KeyboardEvent) {
+  if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || (ae as HTMLElement).isContentEditable)) return;
+  if (!renderer?.getSelectedId()) return;
+  e.preventDefault();
+  deleteSelected();
 }
 
 // --- Drawing state ---
@@ -892,6 +999,12 @@ function onPointerDown(e: any) {
   } else if (m === 'move') {
     isDrawing = true;
     startPos = pos;
+  } else if (m === 'cur') {
+    // 点击空白处取消选中（点中图形由节点 click 处理器选中）
+    const target = e.target;
+    if (!target || target === renderer?.getStage() || target === renderer?.layer || target === renderer?.tempLayer) {
+      renderer?.clearSelection();
+    }
   }
 }
 
@@ -1053,10 +1166,14 @@ function refreshLayer() {
 
 // --- Undo/Redo ---
 interface UndoAction {
-  type: 'addShape' | 'addPage';
+  type: 'addShape' | 'addPage' | 'updateShape' | 'removeShape';
   pageId: string;
   pageIndex: number;
   shapeData?: Record<string, any>;
+  shapeId?: string;
+  before?: Record<string, any>;
+  after?: Record<string, any>;
+  index?: number;
 }
 const undoStack = ref<UndoAction[]>([]);
 const redoStack = ref<UndoAction[]>([]);
@@ -1088,6 +1205,14 @@ function revocation(type: string) {
       ensurePageIndex(newIdx);
       layerIndex.value = renderer.getPageCount();
       refreshLayer();
+    } else if (action.type === 'updateShape') {
+      ensurePageIndex(action.pageIndex);
+      provider?.updateElement(action.shapeId!, action.before!);
+      refreshLayer();
+    } else if (action.type === 'removeShape') {
+      ensurePageIndex(action.pageIndex);
+      provider?.insertElement(action.index!, action.shapeData!);
+      refreshLayer();
     }
     redoStack.value.push(action);
   } else {
@@ -1099,6 +1224,15 @@ function revocation(type: string) {
       refreshLayer();
     } else if (action.type === 'addPage') {
       provider?.addPage();
+    } else if (action.type === 'updateShape') {
+      ensurePageIndex(action.pageIndex);
+      provider?.updateElement(action.shapeId!, action.after!);
+      refreshLayer();
+    } else if (action.type === 'removeShape') {
+      ensurePageIndex(action.pageIndex);
+      const idx = provider?.removeElement(action.shapeData!.id) ?? -1;
+      if (idx >= 0) action.index = idx;
+      refreshLayer();
     }
     undoStack.value.push(action);
   }
@@ -1579,6 +1713,12 @@ defineExpose({
   getCurrentPageShapes,
   importServerCoursewares,
   revocation,
+  selectShape,
+  clearSelection,
+  getSelectedShapeId,
+  commitShapeMove,
+  commitShapeTransform,
+  deleteSelected,
 });
 </script>
 

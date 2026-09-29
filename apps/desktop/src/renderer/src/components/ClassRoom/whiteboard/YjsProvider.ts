@@ -196,6 +196,43 @@ onSynced(cb: () => void) {
     return true;
   }
 
+  findElementIndex(id: string): number {
+    const elements = this.getActiveElements();
+    if (!elements) return -1;
+    return elements.toArray().findIndex((m: any) => m.get('id') === id);
+  }
+
+  updateElement(id: string, attrs: Record<string, any>): boolean {
+    if (this.readOnly) return false;
+    const idx = this.findElementIndex(id);
+    if (idx < 0) return false;
+    const map = this.getActiveElements()!.get(idx);
+    this.doc.transact(() => {
+      Object.entries(attrs).forEach(([k, v]) => map.set(k, v));
+    });
+    return true;
+  }
+
+  removeElement(id: string): number {
+    if (this.readOnly) return -1;
+    const idx = this.findElementIndex(id);
+    if (idx < 0) return -1;
+    this.doc.transact(() => { this.getActiveElements()!.delete(idx, 1); });
+    return idx;
+  }
+
+  insertElement(index: number, shapeData: Record<string, any>): boolean {
+    if (this.readOnly) return false;
+    const elements = this.getActiveElements();
+    if (!elements) return false;
+    const map = new Y.Map();
+    Object.entries(shapeData).forEach(([k, v]) => map.set(k, v));
+    this.doc.transact(() => {
+      elements.insert(Math.max(0, Math.min(index, elements.length)), [map]);
+    });
+    return true;
+  }
+
   addFileItem(item: FileItem) {
     if (this.readOnly) return;
     const map = new Y.Map();

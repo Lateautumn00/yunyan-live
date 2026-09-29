@@ -12,7 +12,7 @@ const konvaMocks = vi.hoisted(() => {
     _width = 800;
     _height = 600;
     children: unknown[] = [];
-    constructor(_opts?: unknown) {}
+    constructor(_opts?: unknown) { MockStage.instances.push(this); }
     add(_child: unknown) { this.children.push(_child); }
     draggable(_val?: unknown) { return this; }
     x(_val?: unknown) { if (_val !== undefined) this._x = _val as number; return this._x; }
@@ -24,8 +24,10 @@ const konvaMocks = vi.hoisted(() => {
     scale(_val?: unknown) { return this; }
     batchDraw() {}
     draw() {}
-    off() {}
-    on() {}
+    off() { this._handlers = {}; }
+    on(evt: string, cb: (e?: unknown) => void) {
+      evt.split(' ').forEach(k => { this._handlers[k] = cb; });
+    }
     getPointerPosition() { return { x: 100, y: 100 }; }
     getChildren() { return this.children; }
     find(_sel?: string) { return []; }
@@ -40,6 +42,17 @@ const konvaMocks = vi.hoisted(() => {
     }
     container() { return { getBoundingClientRect: () => ({ left: 0, top: 0 }) }; }
     destroy() {}
+    getAbsoluteTransform() {
+      return { copy: () => ({ invert: () => ({ point: (p: { x: number; y: number }) => p }) }) };
+    }
+    static instances: MockStage[] = [];
+    static last(): MockStage | undefined {
+      return MockStage.instances[MockStage.instances.length - 1];
+    }
+    _handlers: Record<string, (e?: unknown) => void> = {};
+    fire(evt: string, e?: unknown) {
+      this._handlers[evt]?.(e);
+    }
   }
 
   class MockLayer {
@@ -82,6 +95,14 @@ const konvaMocks = vi.hoisted(() => {
 
   class MockNode {
     _id = Math.floor(Math.random() * 10000);
+    _x = 0;
+    _y = 0;
+    _width = 100;
+    _height = 100;
+    _scaleX = 1;
+    _scaleY = 1;
+    _draggable = false;
+    _handlers: Record<string, (e?: unknown) => void> = {};
     constructor() {}
     show() {}
     hide() {}
@@ -90,16 +111,16 @@ const konvaMocks = vi.hoisted(() => {
     destroy() {}
     getAttrs() {
       return {
-        x: 0, y: 0, width: 100, height: 100,
-        scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0,
+        x: this._x, y: this._y, width: this._width, height: this._height,
+        scaleX: this._scaleX, scaleY: this._scaleY, offsetX: 0, offsetY: 0,
         visible: true, image: { currentSrc: '' }
       };
     }
     setAttrs(_a: unknown) {}
     zIndex(_val?: unknown) { return 0; }
     getClientRect() { return { x: 0, y: 0, width: 100, height: 100 }; }
-    scaleX(_val?: unknown) { return 1; }
-    scaleY(_val?: unknown) { return 1; }
+    scaleX(_val?: unknown) { if (_val !== undefined) this._scaleX = _val as number; return this._scaleX; }
+    scaleY(_val?: unknown) { if (_val !== undefined) this._scaleY = _val as number; return this._scaleY; }
     visible() { return true; }
     getAttr(_key: string) {
       if (_key === 'visible') return true;
@@ -108,21 +129,27 @@ const konvaMocks = vi.hoisted(() => {
     }
     getClassName() { return 'Node'; }
     add(_child: unknown) {}
-    draggable(_val?: unknown) {}
+    draggable(_val?: unknown) { if (_val !== undefined) this._draggable = _val as boolean; return this._draggable; }
     getPointerPosition() { return { x: 100, y: 100 }; }
-    off() {}
-    on() {}
-    x(_val?: unknown) { return 0; }
-    y(_val?: unknown) { return 0; }
-    width(_val?: unknown) { return 100; }
-    height(_val?: unknown) { return 100; }
+    off(_evt?: string) { this._handlers = {}; return this; }
+    on(evt: string, cb: (e?: unknown) => void) {
+      evt.split(' ').forEach(k => { this._handlers[k] = cb; });
+      return this;
+    }
+    fire(evt: string, e?: unknown) { this._handlers[evt]?.(e); }
+    x(_val?: unknown) { if (_val !== undefined) this._x = _val as number; return this._x; }
+    y(_val?: unknown) { if (_val !== undefined) this._y = _val as number; return this._y; }
+    width(_val?: unknown) { if (_val !== undefined) this._width = _val as number; return this._width; }
+    height(_val?: unknown) { if (_val !== undefined) this._height = _val as number; return this._height; }
   }
 
   class MockLine extends MockNode {
-    points(_val?: unknown) { return []; }
+    _points: number[] = [];
+    points(_val?: number[]) { if (_val !== undefined) this._points = _val; return this._points; }
   }
   class MockArrow extends MockNode {
-    points(_val?: unknown) { return []; }
+    _points: number[] = [];
+    points(_val?: number[]) { if (_val !== undefined) this._points = _val; return this._points; }
   }
   class MockText extends MockNode {
     text(_val?: unknown) { return ''; }
@@ -132,10 +159,18 @@ const konvaMocks = vi.hoisted(() => {
     align(_val?: unknown) { return 'left'; }
     lineHeight(_val?: unknown) { return 1.1; }
   }
-  class MockCircle extends MockNode {}
+  class MockCircle extends MockNode {
+    _radius = 0;
+    radius(_val?: unknown) { if (_val !== undefined) this._radius = _val as number; return this._radius; }
+  }
   class MockRect extends MockNode {}
   class MockImage extends MockNode {}
-  class MockTransformer extends MockNode {}
+  class MockTransformer extends MockNode {
+    _nodes: unknown[] = [];
+    _keepRatio = false;
+    nodes(v?: unknown[]) { if (v !== undefined) this._nodes = v; return this._nodes; }
+    keepRatio(v?: boolean) { if (v !== undefined) this._keepRatio = v; return this._keepRatio; }
+  }
   class MockGroup extends MockNode {}
 
   return {
@@ -391,6 +426,51 @@ function unwrapVal<T>(v: T | { value: T }): T {
   return v !== null && typeof v === 'object' && 'value' in (v as object)
     ? ((v as { value: T }).value)
     : (v as T);
+}
+
+// ── 图片上传/图片形状共享工具（图片持久化、选择器两组用例共用） ──────────
+const IMAGE_INPUT = 'input[accept="image/x-png,image/gif,image/jpeg,image/jpg,image/bmp"]';
+
+function stubFakeImage(opts: { fail?: boolean; w?: number; h?: number } = {}) {
+  const { fail = false, w = 1600, h = 900 } = opts;
+  // jsdom 不做图片解码、不触发 onload；src 赋值后于微任务内回调，并提供自然尺寸
+  class FakeImage {
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    naturalWidth = w;
+    naturalHeight = h;
+    width = w;
+    height = h;
+    complete = false;
+    private _src = '';
+    get src() {
+      return this._src;
+    }
+    set src(val: string) {
+      this._src = val;
+      queueMicrotask(() => {
+        if (fail) {
+          this.onerror?.();
+        } else {
+          this.complete = true;
+          this.onload?.();
+        }
+      });
+    }
+  }
+  vi.stubGlobal('Image', FakeImage);
+}
+
+async function uploadImageFile(wrapper: ReturnType<typeof mountWB>, name = '插图.png') {
+  const input = wrapper.find(IMAGE_INPUT);
+  expect(input.exists()).toBe(true);
+  const file = new File(['x'], name, { type: 'image/png' });
+  Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+  await input.trigger('change');
+}
+
+function imageShapes(vm: PPTVM) {
+  return vm.getCurrentPageShapes().filter(s => s.type === 'image');
 }
 
 describe('WhiteBoard.vue PPT 课件', () => {
@@ -670,50 +750,7 @@ describe('WhiteBoard.vue 进房导入服务端课件', () => {
 
 // ── 上传图片持久化（写入 Yjs，不被 refreshLayer 抹掉） ────────────────────
 describe('WhiteBoard.vue 上传图片持久化', () => {
-  const IMAGE_INPUT = 'input[accept="image/x-png,image/gif,image/jpeg,image/jpg,image/bmp"]';
   let uploadCount = 0;
-
-  function stubFakeImage(opts: { fail?: boolean; w?: number; h?: number } = {}) {
-    const { fail = false, w = 1600, h = 900 } = opts;
-    // jsdom 不做图片解码、不触发 onload；src 赋值后于微任务内回调，并提供自然尺寸
-    class FakeImage {
-      onload: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      naturalWidth = w;
-      naturalHeight = h;
-      width = w;
-      height = h;
-      complete = false;
-      private _src = '';
-      get src() {
-        return this._src;
-      }
-      set src(val: string) {
-        this._src = val;
-        queueMicrotask(() => {
-          if (fail) {
-            this.onerror?.();
-          } else {
-            this.complete = true;
-            this.onload?.();
-          }
-        });
-      }
-    }
-    vi.stubGlobal('Image', FakeImage);
-  }
-
-  async function uploadImageFile(wrapper: ReturnType<typeof mountWB>, name = '插图.png') {
-    const input = wrapper.find(IMAGE_INPUT);
-    expect(input.exists()).toBe(true);
-    const file = new File(['x'], name, { type: 'image/png' });
-    Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
-    await input.trigger('change');
-  }
-
-  function imageShapes(vm: PPTVM) {
-    return vm.getCurrentPageShapes().filter(s => s.type === 'image');
-  }
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -868,6 +905,187 @@ describe('WhiteBoard.vue 学生端只读', () => {
     vm.addLayer();
     // readOnly 下 provider.addPage 返回空串、pages 不变 → observe 不触发 → 层数不动
     expect(vm.rendererPageCount()).toBe(before);
+    wrapper.unmount();
+  });
+});
+
+// ── 选择器：选中/拖动/缩放/删除/撤销 ──────────────────────────────────────
+type SelVM = PPTVM & {
+  selectShape: (id: string) => void;
+  clearSelection: () => void;
+  getSelectedShapeId: () => string | null;
+  commitShapeMove: (id: string, x: number, y: number) => void;
+  commitShapeTransform: (id: string, attrs: Record<string, unknown>) => void;
+  deleteSelected: () => void;
+};
+
+describe('WhiteBoard.vue 选择器', () => {
+  let uploadCount = 0;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    uploadCount = 0;
+    vi.stubEnv('VITE_UPLOAD_IMAGE_URL', 'http://mock.test/img');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() => {
+        uploadCount += 1;
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              code: 1000,
+              data: { fileUrl: `http://mock.test/img/pic${uploadCount}.png` },
+            }),
+        });
+      })
+    );
+    stubFakeImage();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  async function seedImage(wrapper: ReturnType<typeof mountWB>, name: string): Promise<string> {
+    const before = imageShapes(wrapper.vm as unknown as PPTVM).length;
+    await uploadImageFile(wrapper, name);
+    let id = '';
+    await vi.waitFor(
+      () => {
+        const shapes = imageShapes(wrapper.vm as unknown as PPTVM);
+        expect(shapes.length).toBe(before + 1);
+        id = String(shapes[shapes.length - 1]!.id);
+      },
+      { timeout: 3000 }
+    );
+    return id;
+  }
+
+  it('选中图形后其它白板活动触发重建仍保持选中', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const idA = await seedImage(wrapper, 'a.png');
+
+    vm.selectShape(idA);
+    expect(vm.getSelectedShapeId()).toBe(idA);
+
+    // 第二张图片 addShape → refreshLayer → destroyChildren 全量重建
+    await seedImage(wrapper, 'b.png');
+    expect(vm.getSelectedShapeId()).toBe(idA);
+    wrapper.unmount();
+  });
+
+  it('拖动写回 Yjs，撤销恢复原坐标、重做再次生效', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const id = await seedImage(wrapper, 'a.png');
+    const before = imageShapes(vm).find(s => s.id === id)!;
+    expect(before.x).toBe(50);
+    expect(before.y).toBe(50);
+
+    vm.commitShapeMove(id, 200, 150);
+    let shape = imageShapes(vm).find(s => s.id === id)!;
+    expect(shape.x).toBe(200);
+    expect(shape.y).toBe(150);
+
+    vm.revocation('pre');
+    shape = imageShapes(vm).find(s => s.id === id)!;
+    expect(shape.x).toBe(50);
+    expect(shape.y).toBe(50);
+
+    vm.revocation('next');
+    shape = imageShapes(vm).find(s => s.id === id)!;
+    expect(shape.x).toBe(200);
+    expect(shape.y).toBe(150);
+    wrapper.unmount();
+  });
+
+  it('缩放烘焙后的 width/height 写回 Yjs', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const id = await seedImage(wrapper, 'a.png');
+
+    vm.commitShapeTransform(id, { x: 60, y: 70, width: 240, height: 135 });
+    const shape = imageShapes(vm).find(s => s.id === id)!;
+    expect(shape.x).toBe(60);
+    expect(shape.y).toBe(70);
+    expect(shape.width).toBe(240);
+    expect(shape.height).toBe(135);
+    wrapper.unmount();
+  });
+
+  it('删除选中图形，撤销恢复到原索引位置', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const idA = await seedImage(wrapper, 'a.png');
+    const idB = await seedImage(wrapper, 'b.png');
+    expect(vm.getCurrentPageShapes().map(s => s.id)).toEqual([idA, idB]);
+
+    vm.selectShape(idA);
+    vm.deleteSelected();
+    expect(vm.getSelectedShapeId()).toBeNull();
+    expect(vm.getCurrentPageShapes().map(s => s.id)).toEqual([idB]);
+
+    vm.revocation('pre');
+    expect(vm.getCurrentPageShapes().map(s => s.id)).toEqual([idA, idB]);
+    wrapper.unmount();
+  });
+
+  it('切换工具与切换页后选中清空', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const id = await seedImage(wrapper, 'a.png');
+
+    vm.selectShape(id);
+    expect(vm.getSelectedShapeId()).toBe(id);
+    vm.tool('brush');
+    expect(vm.getSelectedShapeId()).toBeNull();
+
+    vm.tool('cur');
+    vm.selectShape(id);
+    expect(vm.getSelectedShapeId()).toBe(id);
+    vm.addLayer();
+    expect(vm.getSelectedShapeId()).toBeNull();
+    wrapper.unmount();
+  });
+
+  it('Delete 键删除选中图形', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const id = await seedImage(wrapper, 'a.png');
+    vm.selectShape(id);
+    expect(vm.getSelectedShapeId()).toBe(id);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }));
+    expect(imageShapes(vm).length).toBe(0);
+    expect(vm.getSelectedShapeId()).toBeNull();
+    wrapper.unmount();
+  });
+
+  it('点击空白处取消选中', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const id = await seedImage(wrapper, 'a.png');
+    vm.selectShape(id);
+    expect(vm.getSelectedShapeId()).toBe(id);
+
+    const stage = konvaMocks.MockStage.last()!;
+    stage.fire('mousedown', { target: stage, evt: {} });
+    expect(vm.getSelectedShapeId()).toBeNull();
+    wrapper.unmount();
+  });
+
+  it('学生端 selectShape/拖动/删除均无效', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as SelVM;
+    vm.selectShape('any-id');
+    expect(vm.getSelectedShapeId()).toBeNull();
+    expect(() => vm.commitShapeMove('any-id', 1, 1)).not.toThrow();
+    expect(() => vm.commitShapeTransform('any-id', { x: 1, y: 1 })).not.toThrow();
+    expect(() => vm.deleteSelected()).not.toThrow();
+    expect(vm.getSelectedShapeId()).toBeNull();
     wrapper.unmount();
   });
 });
