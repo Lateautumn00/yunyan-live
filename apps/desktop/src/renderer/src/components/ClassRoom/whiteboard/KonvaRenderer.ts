@@ -209,40 +209,42 @@ export class KonvaRenderer {
             .catch(err => console.error('[whiteboard] PDF页渲染失败', pdfUrl, page, err));
           return node;
         }
-        const img = new Image();
-        const node = new Konva.Image({ ...base, image: img });
-        img.onload = () => {
-          node.getLayer?.()?.batchDraw();
-        };
-        img.src = data.get('url') as string;
-        return node;
+        return this.createImageNode(base, data.get('url') as string, opacity);
       }
+      case 'image':
+        return this.createImageNode(
+          {
+            x: data.get('x') || 0,
+            y: data.get('y') || 0,
+            width: data.get('width') || 0,
+            height: data.get('height') || 0,
+          },
+          data.get('url') as string,
+          opacity,
+        );
       default:
         return null;
     }
+  }
+
+  private createImageNode(
+    base: { x: number; y: number; width: number; height: number },
+    url: string,
+    opacity: number
+  ): Konva.Image {
+    const img = new Image();
+    const node = new Konva.Image({ ...base, image: img, opacity });
+    img.onload = () => {
+      node.getLayer?.()?.batchDraw();
+    };
+    img.src = url;
+    return node;
   }
 
   clearCurrentPage() {
     this.layer.destroyChildren();
     this.nodeMap.clear();
     this.layer.batchDraw();
-  }
-
-  addImageToLayer(imgUrl: string, x: number, y: number, maxWidth: number) {
-    const img = new Image();
-    img.onload = () => {
-      let w = img.width;
-      let h = img.height;
-      if (w > maxWidth) {
-        const ratio = maxWidth / w;
-        w = maxWidth;
-        h = h * ratio;
-      }
-      const kImg = new Konva.Image({ x, y, width: w, height: h, image: img });
-      this.layer.add(kImg);
-      this.layer.batchDraw();
-    };
-    img.src = imgUrl;
   }
 
   resize(width: number, height: number) {

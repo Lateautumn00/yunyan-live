@@ -384,6 +384,7 @@ type PPTVM = WBVM & {
   rendererPageCount: () => number;
   getCurrentPageShapes: () => Array<Record<string, unknown>>;
   importServerCoursewares: () => Promise<void>;
+  revocation: (type: string) => void;
 };
 
 function unwrapVal<T>(v: T | { value: T }): T {
@@ -663,6 +664,179 @@ describe('WhiteBoard.vue 进房导入服务端课件', () => {
     const vm = wrapper.vm as unknown as PPTVM;
     await vm.importServerCoursewares();
     expect(liveMocks.coursewareList).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+});
+
+// ── 上传图片持久化（写入 Yjs，不被 refreshLayer 抹掉） ────────────────────
+describe('WhiteBoard.vue 上传图片持久化', () => {
+  const IMAGE_INPUT = 'input[accept="image/x-png,image/gif,image/jpeg,image/jpg,image/bmp"]';
+  let uploadCount = 0;
+
+  function stubFakeImage(opts: { fail?: boolean; w?: number; h?: number } = {}) {
+    const { fail = false, w = 1600, h = 900 } = opts;
+    // jsdom 不做图片解码、不触发 onload；src 赋值后于微任务内回调，并提供自然尺寸
+    class FakeImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      naturalWidth = w;
+      naturalHeight = h;
+      width = w;
+      height = h;
+      complete = false;
+      private _src = '';
+      get src() {
+        return this._src;
+      }
+      set src(val: string) {
+        this._src = val;
+        queueMicrotask(() => {
+          if (fail) {
+            this.onerror?.();
+          } else {
+            this.complete = true;
+            this.onload?.();
+          }
+        });
+      }
+    }
+    vi.stubGlobal('Image', FakeImage);
+  }
+
+  async function uploadImageFile(wrapper: ReturnType<typeof mountWB>, name = '插图.png') {
+    const input = wrapper.find(IMAGE_INPUT);
+    expect(input.exists()).toBe(true);
+    const file = new File(['x'], name, { type: 'image/png' });
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+    await input.trigger('change');
+  }
+
+  function imageShapes(vm: PPTVM) {
+    return vm.getCurrentPageShapes().filter(s => s.type === 'image');
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    uploadCount = 0;
+    vi.stubEnv('VITE_UPLOAD_IMAGE_URL', 'http://mock.test/img');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() => {
+        uploadCount += 1;
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              code: 1000,
+              data: { fileUrl: `http://mock.test/img/pic${uploadCount}.png` }
+            })
+        });
+      })
+    );
+    stubFakeImage();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('上传图片写入 Yjs，尺寸按容器 60% 限幅', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadImageFile(wrapper);
+
+    await vi.waitFor(
+      () => {
+        expect(imageShapes(vm).length).toBe(1);
+      },
+      { timeout: 3000 }
+    );
+    const s = imageShapes(vm)[0]!;
+    expect(s.type).toBe('image');
+    expect(s.url).toBe('http://mock.test/img/pic1.png');
+    expect(s.x).toBe(50);
+    expect(s.y).toBe(50);
+    // jsdom clientWidth 0 → 回退 800；maxW = 800*0.6 = 480；1600×900 → 480×270
+    expect(s.width).toBe(480);
+    expect(s.height).toBeCloseTo(270, 5);
+    wrapper.unmount();
+  });
+
+  it('后续白板活动触发 refreshLayer（destroyChildren 全量重建）后图片仍在', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadImageFile(wrapper, '一.png');
+    await vi.waitFor(
+      () => {
+        expect(imageShapes(vm).length).toBe(1);
+      },
+      { timeout: 3000 }
+    );
+
+    // 第二次上传：addShape → elements.observe → refreshLayer → destroyChildren 全量重建
+    await uploadImageFile(wrapper, '二.png');
+    await vi.waitFor(
+      () => {
+        expect(imageShapes(vm).length).toBe(2);
+      },
+      { timeout: 3000 }
+    );
+    const urls = imageShapes(vm).map(s => s.url);
+    expect(urls).toContain('http://mock.test/img/pic1.png');
+    expect(urls).toContain('http://mock.test/img/pic2.png');
+    wrapper.unmount();
+  });
+
+  it('撤销走标准 addShape 路径，可移除图片', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadImageFile(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(imageShapes(vm).length).toBe(1);
+      },
+      { timeout: 3000 }
+    );
+
+    vm.revocation('pre');
+
+    expect(imageShapes(vm).length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('图片加载失败仅 toast，不写入 Yjs', async () => {
+    stubFakeImage({ fail: true });
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadImageFile(wrapper);
+
+    await vi.waitFor(
+      () => {
+        expect(String(unwrapVal(vm.toastMsg))).toContain('图片加载失败');
+      },
+      { timeout: 3000 }
+    );
+    expect(imageShapes(vm).length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('上传接口失败 toast 且不写入', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 500, statusText: 'Internal' })
+    );
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadImageFile(wrapper);
+
+    await vi.waitFor(
+      () => {
+        expect(String(unwrapVal(vm.toastMsg))).toContain('上传失败: 500');
+      },
+      { timeout: 3000 }
+    );
+    expect(imageShapes(vm).length).toBe(0);
     wrapper.unmount();
   });
 });

@@ -1298,6 +1298,16 @@ async function takeFile(e: Event) {
   tool('cur');
 }
 
+// 加载图片取自然尺寸（供限幅计算）；失败抛错由调用方 toast
+function loadImageEl(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('图片加载失败'));
+    img.src = url;
+  });
+}
+
 async function uploadImage(file: File) {
   if (!uploadImageApi) { toast('未配置图片上传接口'); return; }
   loading.value = true;
@@ -1312,10 +1322,42 @@ async function uploadImage(file: File) {
     }
     const data = await res.json();
     if (data.code === 1000 && data.data?.fileUrl) {
+      const fileUrl = data.data.fileUrl as string;
+      // 先取自然尺寸再限幅：图片必须写入 Yjs（与其他图形一致），
+      // 否则任何 refreshLayer 的 destroyChildren 全量重建都会把本地节点抹掉
+      let img: HTMLImageElement;
+      try {
+        img = await loadImageEl(fileUrl);
+      } catch (err) {
+        toast(`图片加载失败: ${(err as Error).message}`);
+        return;
+      }
       const el = document.getElementById(containerId.value);
       const maxW = (el?.clientWidth || 800) * 0.6;
-      renderer?.addImageToLayer(data.data.fileUrl, 50, 50, maxW);
+      let w = img.naturalWidth || img.width;
+      let h = img.naturalHeight || img.height;
+      if (w > maxW) {
+        h = h * (maxW / w);
+        w = maxW;
+      }
+      const shapeData: Record<string, any> = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type: 'image',
+        url: fileUrl,
+        x: 50,
+        y: 50,
+        width: w,
+        height: h,
+        opacity: currentOpacity.value,
+      };
+      // 同步尚未完成时 pages 可能未播种，getActiveElements() 为 null 会让 addShape 静默丢弃；先兜底建页
+      if (!provider?.getActiveElements()) {
+        provider?.addPage();
+      }
+      provider?.addShape(shapeData);
       refreshLayer();
+      redoStack.value = [];
+      undoStack.value.push({ type: 'addShape', pageId: provider!.getCurrentPageId(), pageIndex: renderer!.getCurrentPageIndex(), shapeData });
       emitPaintLog();
       toast('图片已添加');
     } else {
@@ -1536,6 +1578,7 @@ defineExpose({
   rendererPageCount: () => renderer?.getPageCount() ?? 0,
   getCurrentPageShapes,
   importServerCoursewares,
+  revocation,
 });
 </script>
 
