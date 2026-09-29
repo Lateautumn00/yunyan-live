@@ -111,18 +111,20 @@ function vmOf(wrapper: ReturnType<typeof mount>) {
 }
 
 function makeFakeStream() {
-  const stream = new MediaStream();
   const videoTrack = {
     enabled: true,
     readyState: 'live',
     stop: vi.fn()
   };
-  stream.getVideoTracks = () => [videoTrack] as unknown as MediaStreamTrack[];
-  stream.getAudioTracks = () => [];
-  stream.getTracks = () => [videoTrack] as unknown as MediaStreamTrack[];
-  stream.removeTrack = vi.fn() as unknown as (track: MediaStreamTrack) => void;
+  // jsdom 无全局 MediaStream；此对象只喂给组件的 attach/清理逻辑，形状齐全即可
+  const stream = {
+    getVideoTracks: () => [videoTrack] as unknown as MediaStreamTrack[],
+    getAudioTracks: () => [] as MediaStreamTrack[],
+    getTracks: () => [videoTrack] as unknown as MediaStreamTrack[],
+    removeTrack: vi.fn()
+  };
   return {
-    stream: stream as MediaStream & { removeTrack: ReturnType<typeof vi.fn> },
+    stream: stream as unknown as MediaStream & { removeTrack: ReturnType<typeof vi.fn> },
     videoTrack
   };
 }
