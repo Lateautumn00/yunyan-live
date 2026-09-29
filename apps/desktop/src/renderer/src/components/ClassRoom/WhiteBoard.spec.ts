@@ -440,6 +440,7 @@ type PPTVM = WBVM & {
   delFile: (i: number) => void;
   addLayer: () => void;
   rendererPageCount: () => number;
+  renderedShapeCount: () => number;
   getCurrentPageShapes: () => Array<Record<string, unknown>>;
   importServerCoursewares: () => Promise<void>;
   revocation: (type: string) => void;
@@ -598,6 +599,27 @@ describe('WhiteBoard.vue PPT 课件', () => {
     expect(vm.getCurrentPageShapes().length).toBe(0);
     // fileid 只含幻灯片页（两页，不含 seed 页）
     expect(unwrapVal(vm.fileList)[0]!.fileid.split(',').length).toBe(2);
+    wrapper.unmount();
+  });
+
+  it('点击课件后按 Yjs 重建目标页渲染图层', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    // 导入用单事务停在着陆空白页：着陆层无节点，幻灯片层未被填充
+    expect(vm.rendererPageCount()).toBe(3);
+    expect(unwrapVal(vm.curLayerIndex)).toBe(1);
+    expect(vm.renderedShapeCount()).toBe(0);
+    // 点击课件列表 → showFile 切页并重建目标层（修复前幻灯片层为空白）
+    vm.showFile(unwrapVal(vm.fileList)[0]!.fileid);
+    expect(unwrapVal(vm.curLayerIndex)).toBe(2);
+    expect(vm.renderedShapeCount()).toBe(1);
     wrapper.unmount();
   });
 

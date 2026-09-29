@@ -139,6 +139,10 @@ export class KonvaRenderer {
     return this.zoomLevel;
   }
 
+  getNodeCount(): number {
+    return this.nodeMap.size;
+  }
+
   bindElements(elements: Y.Array<any>) {
     this.nodeMap.clear();
     this.layer.destroyChildren();

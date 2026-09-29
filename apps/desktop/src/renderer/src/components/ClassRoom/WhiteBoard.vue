@@ -1166,6 +1166,7 @@ function ensurePageIndex(targetIndex: number) {
     renderer.showPage(targetIndex);
     curLayerIndex.value = targetIndex + 1;
     provider?.setCurrentPageIndex(targetIndex);
+    refreshLayer();
     const els = provider?.getActiveElements();
     if (els) bindElementsObserver(els);
   }
@@ -1269,6 +1270,7 @@ function showLayer(index: number) {
   renderer.showPage(index - 1);
   curLayerIndex.value = index;
   provider?.setCurrentPageIndex(index - 1);
+  refreshLayer();
   redoStack.value = [];
   const newElements = provider?.getActiveElements();
   if (newElements) bindElementsObserver(newElements);
@@ -1723,6 +1725,7 @@ defineExpose({
   curLayerIndex,
   toastMsg,
   rendererPageCount: () => renderer?.getPageCount() ?? 0,
+  renderedShapeCount: () => renderer?.getNodeCount() ?? 0,
   getCurrentPageShapes,
   importServerCoursewares,
   revocation,
