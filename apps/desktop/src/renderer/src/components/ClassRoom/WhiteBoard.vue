@@ -624,13 +624,15 @@ function onElementsChanged() {
 
 function bindElementsObserver(elements: any) {
   if (currentElementsObserved) {
-    currentElementsObserved.unobserve(onElementsChanged);
+    currentElementsObserved.unobserveDeep(onElementsChanged);
     currentElementsObserved = null;
     currentElementsObserver = null;
   }
-  elements.observe(onElementsChanged);
+  // observeDeep：elements 是 Y.Array<Y.Map>，updateElement 改的是嵌套 Map 字段，
+  // 直接 observe 只收结构增删（画笔/删除能同步、选择器拖动/缩放不同步），必须用深观察
+  elements.observeDeep(onElementsChanged);
   currentElementsObserved = elements;
-  currentElementsObserver = () => { elements.unobserve(onElementsChanged); };
+  currentElementsObserver = () => { elements.unobserveDeep(onElementsChanged); };
 }
 let sizeDragging = false;
 let toastTimer: any = null;
@@ -761,8 +763,9 @@ onMounted(() => {
     }
   });
 
-  // Sync file list when teacher adds/renames/deletes files
-  provider!.fileList.observe(() => {
+  // Sync file list when teacher adds/renames/deletes files.
+  // observeDeep：renameFileItem/setFileItemId 是嵌套 Map 字段更新，直接 observe 收不到
+  provider!.fileList.observeDeep(() => {
     fileList.value = provider!.getFileList();
   });
 
@@ -1792,6 +1795,18 @@ defineExpose({
   commitShapeMove,
   commitShapeTransform,
   deleteSelected,
+  // 测试钩子：直接访问底层 Yjs provider / 当前视口快照（供同步类用例断言）
+  get provider() {
+    return provider;
+  },
+  viewState: () => ({
+    zoom: renderer?.getZoom() ?? 100,
+    layerScale: renderer?.layer.scaleX() ?? 1,
+    x: renderer?.layer.x() ?? 0,
+    y: renderer?.layer.y() ?? 0,
+    stageX: renderer?.getStage().x() ?? 0,
+    stageY: renderer?.getStage().y() ?? 0,
+  }),
 });
 </script>
 

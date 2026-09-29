@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { enableAutoUnmount } from '@vue/test-utils';
+import type { YjsProvider } from './whiteboard/YjsProvider';
 
 // 失败用例也必须卸载组件（onUnmounted 会 destroy Yjs provider），避免跨测试状态泄漏
 enableAutoUnmount(afterEach);
@@ -447,6 +448,8 @@ type PPTVM = WBVM & {
   renderedShapeCount: () => number;
   getCurrentPageShapes: () => Array<Record<string, unknown>>;
   importServerCoursewares: () => Promise<void>;
+  provider: YjsProvider | null;
+  viewState: () => { zoom: number; layerScale: number; x: number; y: number; stageX: number; stageY: number };
   revocation: (type: string) => void;
 };
 
@@ -935,6 +938,52 @@ describe('WhiteBoard.vue PPT 课件', () => {
     );
     expect(unwrapVal(vm.fileList).length).toBe(0);
     expect(vm.rendererPageCount()).toBe(before);
+    wrapper.unmount();
+  });
+
+  it('嵌套 Y.Map 字段更新（远端语义）触发重渲染（observeDeep）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
+    const els = vm.provider!.getActiveElements()!;
+    expect(els.length).toBeGreaterThan(0);
+    const spy = vi.spyOn(vm.provider!, 'getActiveElements');
+    // 模拟远端 updateElement：直接改嵌套字段，绕过 commit 里的显式 refreshLayer ——
+    // 只有 observeDeep 能触发观察器 → refreshLayer（getActiveElements 是其第一步）
+    els.get(0).set('x', 999);
+    await vi.waitFor(
+      () => {
+        expect(spy).toHaveBeenCalled();
+      },
+      { timeout: 1000 },
+    );
+    wrapper.unmount();
+  });
+
+  it('fileList 嵌套字段更新（远端重命名）同步到视图（observeDeep）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    await uploadTwoPagePpt(wrapper);
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList).length).toBe(1);
+      },
+      { timeout: 3000 },
+    );
+    vm.provider!.fileList.get(0).set('filename', '远端改名');
+    await vi.waitFor(
+      () => {
+        expect(unwrapVal(vm.fileList)[0]!.filename).toBe('远端改名');
+      },
+      { timeout: 1000 },
+    );
     wrapper.unmount();
   });
 });
