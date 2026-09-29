@@ -365,6 +365,57 @@ export class LiveController {
     return { code: '0', msg: 'success' };
   }
 
+  @GrpcMethod('LiveService', 'SaveCourseware')
+  async saveCourseware(data: {
+    room_id: string;
+    filename: string;
+    filext: string;
+    filesize: number;
+    fileurl: string;
+    create_user_id?: string;
+  }) {
+    this.logger.log(`gRPC SaveCourseware: room=${data.room_id} name=${data.filename}`);
+    await this.liveService.saveCourseware({
+      roomId: data.room_id,
+      filename: data.filename,
+      filext: data.filext,
+      filesize: Number(data.filesize) || 0,
+      fileurl: data.fileurl,
+      createUserId: data.create_user_id,
+    });
+    return { code: '0', msg: 'success' };
+  }
+
+  @GrpcMethod('LiveService', 'ListCourseware')
+  async listCourseware(data: { room_id: string }) {
+    this.logger.log(`gRPC ListCourseware: room=${data.room_id}`);
+    const result = await this.liveService.listCoursewares(data.room_id);
+    return {
+      code: '0',
+      msg: 'success',
+      data: {
+        items: result.items.map(item => ({
+          id: item.id,
+          room_id: item.roomId,
+          filename: item.filename,
+          filext: item.filext,
+          filesize: item.filesize,
+          fileurl: item.fileurl,
+          created_at: item.createdAt,
+        })),
+        total: result.total,
+      },
+    };
+  }
+
+  @GrpcMethod('LiveService', 'DeleteCourseware')
+  async deleteCourseware(data: { id: string }) {
+    this.logger.log(`gRPC DeleteCourseware: ${data.id}`);
+    await this.liveService.deleteCourseware(data.id);
+    return { code: '0', msg: 'success' };
+  }
+
+
   @GrpcMethod('LiveService', 'GetUserWatchTimeList')
   async getUserWatchTimeList(data: {
     page?: number;

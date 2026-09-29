@@ -8,6 +8,7 @@ import { LiveParticipant } from './live/live-participant.entity';
 import { LiveTransferCode } from './live/live-transfer-code.entity';
 import { UserWatchTime } from './live/user-watch-time.entity';
 import { VideoRecording } from './live/video-recording.entity';
+import { Courseware } from './live/courseware.entity';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { VideoRecording } from './live/video-recording.entity';
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
         url: config.get('DATABASE_URL'),
-        entities: [LiveRoom, LiveParticipant, LiveTransferCode, VideoRecording, UserWatchTime],
+        entities: [LiveRoom, LiveParticipant, LiveTransferCode, VideoRecording, UserWatchTime, Courseware],
         synchronize: true,
         timezone: '+08:00',
       }),

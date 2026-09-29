@@ -7,10 +7,18 @@ import { LiveParticipant } from './live-participant.entity';
 import { LiveTransferCode } from './live-transfer-code.entity';
 import { VideoRecording } from './video-recording.entity';
 import { UserWatchTime } from './user-watch-time.entity';
+import { Courseware } from './courseware.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([LiveRoom, LiveParticipant, LiveTransferCode, VideoRecording, UserWatchTime]),
+    TypeOrmModule.forFeature([
+      LiveRoom,
+      LiveParticipant,
+      LiveTransferCode,
+      VideoRecording,
+      UserWatchTime,
+      Courseware,
+    ]),
   ],
   controllers: [LiveController],
   providers: [LiveService],

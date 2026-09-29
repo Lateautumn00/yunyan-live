@@ -43,6 +43,20 @@
 | code | string | `"0"` 成功 |
 | msg  | string | 提示信息   |
 
+### CoursewareItem / CoursewareListResponse
+
+| 字段       | 类型   | 说明                          |
+| ---------- | ------ | ----------------------------- |
+| id         | string | 课件 ID                       |
+| room_id    | string | 房间 ID                       |
+| filename   | string | 文件名（不含扩展名）          |
+| filext     | string | 扩展名，如 `pptx`             |
+| filesize   | int64  | 文件字节数                    |
+| fileurl    | string | 转换后 PDF 地址（去重关联键） |
+| created_at | string | 创建时间（ISO8601）           |
+
+`CoursewareListResponse`：`code` / `msg` / `data.items`（repeated CoursewareItem，按 created_at 升序）/ `data.total`（int32）。
+
 ### CmsListResponse
 
 | 字段       | 类型              | 说明     |
@@ -306,3 +320,21 @@
 **请求：** `page, page_size, room_id, search_name`。
 
 **响应**：`data.items/watch_time` 为服务端按 `left_at - joined_at` 计算的秒数；`total_time_by_room` 为房间总时长。
+
+### 22. SaveCourseware
+
+`rpc SaveCourseware (SaveCoursewareRequest) returns (CommonResponse)`
+
+**请求：** `room_id, filename, filext, filesize, fileurl, create_user_id`（create_user_id 由 Gateway 从 JWT 注入 gRPC metadata `user-id`）。
+
+### 23. ListCourseware
+
+`rpc ListCourseware (ListCoursewareRequest) returns (CoursewareListResponse)`
+
+**请求：** `room_id`。**响应**：`data.items` 按 `created_at` 升序，供教师端进房自动导入课件。
+
+### 24. DeleteCourseware
+
+`rpc DeleteCourseware (DeleteCoursewareRequest) returns (CommonResponse)`
+
+**请求：** `id`（课件 ID）。

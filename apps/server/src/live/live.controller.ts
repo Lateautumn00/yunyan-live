@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { grpcCall } from '../common/helpers/grpc.helper';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CreateLiveDto, JoinLiveDto, ChangeStatusDto, UpdateLiveDto } from './dto/live.dto';
+import { CreateLiveDto, JoinLiveDto, ChangeStatusDto, UpdateLiveDto, CreateCoursewareDto } from './dto/live.dto';
 
 interface LiveResponse {
   code: string;
@@ -109,6 +109,9 @@ interface LiveServiceClient {
   deleteVideoByRoomIds(data: { room_ids: string[] }): Observable<{ code: string; msg: string }>;
   deleteVideoByVideoIds(data: { video_ids: string[] }): Observable<{ code: string; msg: string }>;
   getUserWatchTimeList(data: { page?: number; page_size?: number; room_id?: string; search_name?: string }): Observable<{ code: string; msg: string; data: { items: Array<{ user_id: string; username: string; watch_time: number; joined_at: string; left_at: string; is_online: boolean }>; total: number; total_time_by_room: number } }>;
+  saveCourseware(data: { room_id: string; filename: string; filext: string; filesize: number; fileurl: string; create_user_id?: string }, metadata?: Metadata): Observable<{ code: string; msg: string }>;
+  listCourseware(data: { room_id: string }): Observable<{ code: string; msg: string; data: { items: Array<{ id: string; room_id: string; filename: string; filext: string; filesize: number; fileurl: string; created_at: string }>; total: number } }>;
+  deleteCourseware(data: { id: string }): Observable<{ code: string; msg: string }>;
 }
 
 interface UserData {
@@ -462,6 +465,46 @@ export class LiveController implements OnModuleInit {
   @UseGuards(JwtAuthGuard)
   deleteVideoByVideoIds(@Body('videoIds') videoIds: string[]) {
     return grpcCall(this.liveService.deleteVideoByVideoIds({ video_ids: videoIds }));
+  }
+
+  @Post('saveCourseware')
+  @UseGuards(JwtAuthGuard)
+  saveCourseware(@Body() dto: CreateCoursewareDto, @Request() req: { user: { userId: string } }) {
+    const metadata = new Metadata();
+    metadata.add('user-id', req.user.userId);
+    return grpcCall(this.liveService.saveCourseware({
+      room_id: dto.roomId,
+      filename: dto.filename,
+      filext: dto.filext || '',
+      filesize: dto.filesize ?? 0,
+      fileurl: dto.fileUrl,
+      create_user_id: req.user.userId,
+    }, metadata));
+  }
+
+  @Get('coursewareList')
+  @UseGuards(JwtAuthGuard)
+  async coursewareList(@Query('roomId') roomId: string) {
+    const result = await grpcCall(this.liveService.listCourseware({ room_id: roomId }));
+    const items = (result?.data?.items || []).map((item: Record<string, unknown>) => ({
+      id: item.id,
+      roomId: item.room_id,
+      filename: item.filename,
+      filext: item.filext,
+      filesize: item.filesize,
+      fileUrl: item.fileurl,
+      createdAt: item.created_at,
+    }));
+    return {
+      list: items,
+      pageInfo: { totalElements: result?.data?.total || 0 },
+    };
+  }
+
+  @Delete('deleteCourseware')
+  @UseGuards(JwtAuthGuard)
+  deleteCourseware(@Body('id') id: string) {
+    return grpcCall(this.liveService.deleteCourseware({ id }));
   }
 
   @Post('savePlayBackUrl')

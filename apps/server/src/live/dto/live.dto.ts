@@ -90,3 +90,27 @@ export class UpdateLiveDto {
   @IsOptional()
   duration?: number;
 }
+
+export class CreateCoursewareDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  filename: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(20)
+  filext?: string;
+
+  @IsNumber()
+  @IsOptional()
+  filesize?: number;
+
+  @IsString()
+  @IsNotEmpty()
+  fileUrl: string;
+}

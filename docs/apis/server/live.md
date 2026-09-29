@@ -367,6 +367,43 @@
 - 视频源文件不存在 → HTTP 404 `{ code: 404, msg: "录制文件不存在" }`。
 - 依赖环境变量：`RECORDINGS_DIR`（默认 `/home/janus/recordings`）、`JANUS_CONTAINER`（默认 `janus-gateway`）、`JANUS_PP_REC`（默认 `/opt/janus/bin/janus-pp-rec`）。
 
+## 26. 保存课件（进房前上传登记）
+
+`POST /live/liveInfo/saveCourseware`
+
+需要 JWT。教师在进房前（直播列表「上传课件」/ 直播概况页）上传 PPT 后登记到服务端课件表；教室内上传白板课件成功后也会调用同一接口。进房时按 `fileUrl` 去重后自动导入白板。
+
+**请求体：**
+
+| 字段     | 类型   | 必填 | 说明                                             |
+| -------- | ------ | ---- | ------------------------------------------------ |
+| roomId   | string | 是   | 房间 ID                                          |
+| filename | string | 是   | 文件名（不含扩展名）                             |
+| filext   | string | 否   | 扩展名，如 `pptx`                                |
+| filesize | number | 否   | 文件字节数                                       |
+| fileUrl  | string | 是   | LibreOffice 转换后的 PDF 地址（导入/去重关联键） |
+
+**响应 data：** `null`（`{ code: 1000 }` 即成功）
+
+## 27. 课件列表
+
+`GET /live/liveInfo/coursewareList?roomId=xxx`
+
+需要 JWT。按创建时间升序返回该房间的课件，供教师端进房自动导入。
+
+**响应 data：**
+
+| 字段     | 类型 | 说明                                                              |
+| -------- | ---- | ----------------------------------------------------------------- |
+| list     | 数组 | 每项 `id, roomId, filename, filext, filesize, fileUrl, createdAt` |
+| pageInfo | 对象 | `{ totalElements }`                                               |
+
+## 28. 删除课件
+
+`DELETE /live/liveInfo/deleteCourseware`
+
+需要 JWT。请求体 `{ "id": "课件ID" }`。**响应 data：** `null`（`{ code: 1000 }` 即成功）
+
 ## 附：房间数据结构
 
 ```json

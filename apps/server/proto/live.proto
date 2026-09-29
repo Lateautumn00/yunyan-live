@@ -23,6 +23,9 @@ service LiveService {
   rpc DeleteVideoByRoomIds (DeleteVideoByRoomIdsRequest) returns (CommonResponse) {}
   rpc DeleteVideoByVideoIds (DeleteVideoByVideoIdsRequest) returns (CommonResponse) {}
   rpc GetUserWatchTimeList (GetUserWatchTimeListRequest) returns (GetUserWatchTimeListResponse) {}
+  rpc SaveCourseware (SaveCoursewareRequest) returns (CommonResponse) {}
+  rpc ListCourseware (ListCoursewareRequest) returns (CoursewareListResponse) {}
+  rpc DeleteCourseware (DeleteCoursewareRequest) returns (CommonResponse) {}
 }
 
 message CreateLiveRequest {
@@ -305,4 +308,42 @@ message WatchTimeItem {
   string joined_at = 4;
   string left_at = 5;
   bool is_online = 6;
+}
+
+message SaveCoursewareRequest {
+  string room_id = 1;
+  string filename = 2;
+  string filext = 3;
+  int64 filesize = 4;
+  string fileurl = 5;
+  string create_user_id = 6;
+}
+
+message ListCoursewareRequest {
+  string room_id = 1;
+}
+
+message CoursewareListResponse {
+  string code = 1;
+  string msg = 2;
+  CoursewareListData data = 3;
+}
+
+message CoursewareListData {
+  repeated CoursewareItem items = 1;
+  int32 total = 2;
+}
+
+message CoursewareItem {
+  string id = 1;
+  string room_id = 2;
+  string filename = 3;
+  string filext = 4;
+  int64 filesize = 5;
+  string fileurl = 6;
+  string created_at = 7;
+}
+
+message DeleteCoursewareRequest {
+  string id = 1;
 }

@@ -8,6 +8,7 @@ import { LiveParticipant } from './live-participant.entity';
 import { LiveTransferCode } from './live-transfer-code.entity';
 import { VideoRecording } from './video-recording.entity';
 import { UserWatchTime } from './user-watch-time.entity';
+import { Courseware } from './courseware.entity';
 import { JanusService } from '../janus/janus.service';
 
 @Injectable()
@@ -25,6 +26,8 @@ export class LiveService {
     private videoRepo: Repository<VideoRecording>,
     @InjectRepository(UserWatchTime)
     private watchTimeRepo: Repository<UserWatchTime>,
+    @InjectRepository(Courseware)
+    private coursewareRepo: Repository<Courseware>,
     private dataSource: DataSource,
     private janusService: JanusService,
   ) {}
@@ -528,6 +531,51 @@ export class LiveService {
   async deleteVideoByVideoIds(videoIds: string[]) {
     if (videoIds.length === 0) return { success: true };
     await this.videoRepo.delete(videoIds);
+    return { success: true };
+  }
+
+  async saveCourseware(dto: {
+    roomId: string;
+    filename: string;
+    filext: string;
+    filesize: number;
+    fileurl: string;
+    createUserId?: string;
+  }) {
+    const courseware = this.coursewareRepo.create({
+      roomId: dto.roomId,
+      filename: dto.filename,
+      filext: dto.filext,
+      filesize: dto.filesize,
+      fileurl: dto.fileurl,
+      createUserId: dto.createUserId || '',
+    });
+    await this.coursewareRepo.save(courseware);
+    return { id: courseware.id };
+  }
+
+  async listCoursewares(roomId: string) {
+    const items = await this.coursewareRepo.find({
+      where: { roomId },
+      order: { createdAt: 'ASC' },
+    });
+    return {
+      items: items.map(c => ({
+        id: c.id,
+        roomId: c.roomId,
+        filename: c.filename,
+        filext: c.filext,
+        filesize: c.filesize,
+        fileurl: c.fileurl,
+        createdAt: c.createdAt instanceof Date ? c.createdAt.getTime().toString() : String(c.createdAt || ''),
+      })),
+      total: items.length,
+    };
+  }
+
+  async deleteCourseware(id: string) {
+    if (!id) return { success: true };
+    await this.coursewareRepo.delete(id);
     return { success: true };
   }
 
