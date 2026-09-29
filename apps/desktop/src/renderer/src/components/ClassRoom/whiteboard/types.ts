@@ -1,5 +1,5 @@
 export interface ToolState {
-  type: 'cur' | 'brush' | 'eraser' | 'rect' | 'circle' | 'arrow' | 'text' | 'move' | 'upload' | 'file';
+  type: 'cur' | 'brush' | 'eraser' | 'rect' | 'circle' | 'arrow' | 'text' | 'move' | 'file';
   color: string;
   lineWidth: number;
   fontSize: number;

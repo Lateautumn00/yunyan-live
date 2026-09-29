@@ -307,6 +307,29 @@ describe('WhiteBoard.vue', () => {
     wrapper.unmount();
   });
 
+  it('工具栏提供图片上传按钮，旧上传面板已移除', () => {
+    const wrapper = mountWB();
+    const picture = wrapper.find('.tools .picture');
+    expect(picture.exists()).toBe(true);
+    expect(
+      picture.find('input[accept="image/x-png,image/gif,image/jpeg,image/jpg,image/bmp"]').exists()
+    ).toBe(true);
+    expect(wrapper.find('.uploadFile').exists()).toBe(false);
+    expect(wrapper.find('.tools .upload').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('我的课件面板含 PPT 上传入口与图片/PPT 区分说明', () => {
+    const wrapper = mountWB();
+    const panel = wrapper.find('.fileList');
+    expect(panel.exists()).toBe(true);
+    expect(panel.find('input[accept=".ppt,.pptx"]').exists()).toBe(true);
+    expect(panel.find('.file-upload').text()).toContain('上传PPT课件');
+    expect(panel.find('.file-hint').text()).toContain('图片贴到当前页');
+    expect(panel.find('.file-hint').text()).toContain('重进直播间自动恢复');
+    wrapper.unmount();
+  });
+
   it('tool() sets mode to eraser', () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as WBVM;

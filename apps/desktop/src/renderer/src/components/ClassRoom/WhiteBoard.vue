@@ -93,14 +93,16 @@
           />
         </el-tooltip>
         <el-tooltip
-          content="上传文件"
+          content="上传图片 · 贴到当前页"
           placement="right"
         >
-          <div
-            :class="['upload', { on: mode === 'upload' }]"
-            @click="toggleUpload"
-          >
-            <el-icon><Upload /></el-icon>
+          <div class="picture">
+            <el-icon><Picture /></el-icon>
+            <input
+              type="file"
+              accept="image/x-png,image/gif,image/jpeg,image/jpg,image/bmp"
+              @change="takeFile"
+            >
           </div>
         </el-tooltip>
         <el-tooltip
@@ -400,34 +402,20 @@
         />
       </div>
 
-      <!-- 上传面板 -->
+      <!-- 课件列表 -->
       <div
-        v-show="showUpload"
-        class="uploadFile"
+        v-show="showFileList"
+        class="fileList"
       >
-        <div class="upload-item">
-          <span>图片</span>
-          <input
-            type="file"
-            accept="image/x-png,image/gif,image/jpeg,image/jpg,image/bmp"
-            @change="takeFile"
-          >
-        </div>
-        <div class="upload-item">
-          <span>PPT</span>
+        <div class="file-upload">
+          <el-icon><Upload /></el-icon>
+          <span>上传PPT课件</span>
           <input
             type="file"
             accept=".ppt,.pptx"
             @change="takeFile"
           >
         </div>
-      </div>
-
-      <!-- 课件列表 -->
-      <div
-        v-show="showFileList"
-        class="fileList"
-      >
         <div
           v-for="(item, i) in fileList"
           :key="i"
@@ -456,6 +444,9 @@
           >
             <Delete />
           </el-icon>
+        </div>
+        <div class="file-hint">
+          图片贴到当前页；PPT 导入为课件页，重进直播间自动恢复
         </div>
       </div>
 
@@ -585,7 +576,6 @@ const textSize = ref(14);
 const zoomLevel = ref(100);
 const showEditer = ref(false);
 const showPallet = ref(false);
-const showUpload = ref(false);
 const showFileList = ref(false);
 const showZoomInput = ref(false);
 const zoomInputValue = ref(100);
@@ -833,20 +823,12 @@ function setMode(type: string) {
 function tool(type: string) {
   setMode(type);
   showEditer.value = ['brush', 'eraser', 'text', 'circle', 'rectangle', 'arrows'].includes(type);
-  showUpload.value = type === 'upload';
   showFileList.value = type === 'file';
   provider?.setToolState({ type: type as any });
 }
 
-function toggleUpload() {
-  showUpload.value = !showUpload.value;
-  showFileList.value = false;
-  setMode(showUpload.value ? 'upload' : 'cur');
-}
-
 function toggleFileList() {
   showFileList.value = !showFileList.value;
-  showUpload.value = false;
   showEditer.value = false;
   setMode(showFileList.value ? 'file' : 'cur');
 }
@@ -1754,6 +1736,7 @@ defineExpose({
   .move { background-position: -34px -68px; }
   .eraser { background-position: 0 -102px; }
   .circle { background-position: -68px -34px; }
+  input[type='file'] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 }
 
 .ctrl-tools {
@@ -1823,30 +1806,18 @@ defineExpose({
 
 
 
-.uploadFile {
-  position: absolute; left: 54px; top: 50%; transform: translateY(-50%);
-  display: flex; flex-direction: column; gap: 8px; z-index: 10;
-  background: #f3f3f4; border-radius: 8px; padding: 8px;
-
-  .upload-item {
-    position: relative;
-    width: 80px; height: 50px; border-radius: 6px; background: #fff; cursor: pointer;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-    border: 1px solid #e0e0e0; transition: background-color 0.2s;
-
-    &:hover { background-color: #e8e8ec; }
-
-    span { font-size: 11px; color: #666; pointer-events: none; }
-    input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-  }
-}
-
 .fileList {
   position: absolute; left: 60px; top: 50%; transform: translateY(-50%);
   width: 180px; max-height: 356px; background: #f3f3f4; border-radius: 8px; overflow-y: auto;
   padding: 8px; z-index: 10; pointer-events: auto;
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
+  .file-upload { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 6px 4px; margin-bottom: 4px; border: 1px dashed #c0c4cc; border-radius: 6px;
+    cursor: pointer; color: #409eff; font-size: 12px;
+    &:hover { background-color: #e8e8ec; }
+    input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  }
   .file-item { display: flex; align-items: center; padding: 6px 4px; border-bottom: 1px solid #e0e0e0; gap: 4px; }
   .file-name { flex: 1; font-size: 12px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     .file-name-input { width: 100%; font-size: 12px; border: 1px solid #ccc; border-radius: 2px; padding: 1px 4px; }
@@ -1856,6 +1827,7 @@ defineExpose({
     &:hover { color: #e0383e; }
     .el-icon { font-size: 16px; }
   }
+  .file-hint { margin-top: 6px; font-size: 10px; line-height: 1.5; color: #999; }
 }
 
 .loading-div {
