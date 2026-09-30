@@ -766,12 +766,7 @@ onMounted(() => {
   // 本地写入与远端更新走同一观察器，幂等应用；zoomLevel 同步仅供教师端显示（学生端 UI 隐藏）。
   // 平移（移动工具 + 全览）统一走 x/y 通道，stage 保持恒等——否则选择器缩放坐标系错位
   provider!.viewportOffset.observe(() => {
-    if (!renderer) return;
-    const o = provider!.getViewportOffset();
-    renderer.setViewport(o.x, o.y);
-    const zoom = provider!.getViewportZoom();
-    renderer.setZoom(zoom);
-    zoomLevel.value = zoom;
+    applyRemoteViewport();
   });
 
   // Sync page count when teacher adds/removes pages — register once
@@ -835,6 +830,10 @@ onMounted(() => {
       renderer.bindElements(elements);
       bindElementsObserver(elements);
     }
+    // 教师端：同步完成即广播取景框（含 stage 尺寸），学生进房即可适配；
+    // 学生端：观察器可能晚于初始同步注册，兜底应用一次
+    if (props.isTeacher) syncViewportToYjs();
+    else applyRemoteViewport();
     if (hasSyncedOnce) {
       refreshLayer();
     }
@@ -861,6 +860,10 @@ onUnmounted(() => {
 function onResize() {
   const el = document.getElementById(containerId.value);
   if (el && renderer) renderer.resize(el.clientWidth, el.clientHeight);
+  if (!renderer || !provider) return;
+  // 教师端：广播新 stage 尺寸（学生端按新比例重适配）；学生端：按最新远端视口重适配
+  if (props.isTeacher) syncViewportToYjs();
+  else applyRemoteViewport();
 }
 
 function getPointerPos(_e: any): { x: number; y: number } | null {
@@ -1311,7 +1314,7 @@ function onPointerMove(e: any) {
     const newX = renderer!.layer.x() + dx;
     const newY = renderer!.layer.y() + dy;
     renderer!.setViewport(newX, newY);
-    provider?.setViewportOffset(newX, newY);
+    syncViewportToYjs();
     startPos = pos;
   }
 
@@ -1581,12 +1584,33 @@ function layerClear() {
 }
 
 // --- Zoom ---
-// 把教师端当前视口（缩放 + 平移，移动工具与全览共用 x/y 通道）写入 Yjs，学生端观察器跟随应用
+// 按视口数据应用本地视图：远端带 stage 尺寸时按 contain 比例适配（教师取景框等比套入本地屏幕，
+// 宽高比不同处留白），否则原样应用。教师端自身 stage 即远端尺寸 → k=1，与直写等价（幂等）
+function applyRemoteViewport() {
+  if (!renderer || !provider) return;
+  const o = provider.getViewportOffset();
+  const zoom = provider.getViewportZoom();
+  const remote = provider.getViewportStageSize();
+  const stage = renderer.getStage();
+  const sw = stage.width();
+  const sh = stage.height();
+  let k = 1;
+  if (remote && remote.w > 0 && remote.h > 0 && sw > 0 && sh > 0) {
+    k = Math.min(sw / remote.w, sh / remote.h);
+  }
+  renderer.setViewport(o.x * k, o.y * k);
+  renderer.setZoom(zoom * k);
+  zoomLevel.value = zoom * k;
+}
+
+// 把教师端当前视口（缩放 + 平移，移动工具与全览共用 x/y 通道 + stage 尺寸）写入 Yjs，学生端观察器跟随适配
 function syncViewportToYjs() {
   if (!renderer || !provider) return;
   provider.setViewportZoom(renderer.getZoom());
   const view = renderer.getView();
   provider.setViewportOffset(view.x, view.y);
+  const stage = renderer.getStage();
+  provider.setViewportStageSize(stage.width(), stage.height());
 }
 
 function layerZoomChange(type: string) {
@@ -2289,6 +2313,7 @@ defineExpose({
   commitShapeTransform,
   deleteSelected,
   toLayerCoords,
+  applyRemoteViewport,
   // 测试钩子：直接访问底层 Yjs provider / Konva renderer / 当前视口快照（供同步类用例断言）
   get provider() {
     return provider;

@@ -114,6 +114,21 @@ onSynced(cb: () => void) {
     this.viewportOffset.set('zoom', zoom);
   }
 
+  // 教师端 stage 尺寸：学生端据此把取景框按 contain 比例适配到本地屏幕
+  setViewportStageSize(w: number, h: number) {
+    if (this.readOnly) return;
+    // 值未变不重写：平移拖动每次都经 syncViewportToYjs 带入，避免无谓更新
+    if (this.viewportOffset.get('sw') !== w) this.viewportOffset.set('sw', w);
+    if (this.viewportOffset.get('sh') !== h) this.viewportOffset.set('sh', h);
+  }
+
+  getViewportStageSize(): { w: number; h: number } | null {
+    const w = this.viewportOffset.get('sw') as number | undefined;
+    const h = this.viewportOffset.get('sh') as number | undefined;
+    if (!w || !h) return null;
+    return { w, h };
+  }
+
   getPages(): Y.Array<Y.Map<any>> {
     return this.pages;
   }

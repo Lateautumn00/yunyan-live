@@ -478,8 +478,10 @@ type PPTVM = WBVM & {
   getCurrentPageShapes: () => Array<Record<string, unknown>>;
   importServerCoursewares: () => Promise<void>;
   provider: YjsProvider | null;
+  renderer: { getStage: () => { width: (v?: number) => number; height: (v?: number) => number } } | null;
   viewState: () => { zoom: number; layerScale: number; x: number; y: number; stageX: number; stageY: number };
   toLayerCoords: (pos: { x: number; y: number }) => { x: number; y: number };
+  applyRemoteViewport: () => void;
   revocation: (type: string) => void;
 };
 
@@ -1048,6 +1050,88 @@ describe('WhiteBoard.vue PPT 课件', () => {
         expect(vs.y).toBe(-20);
         expect(vs.stageX).toBe(0);
         expect(vs.stageY).toBe(0);
+      },
+      { timeout: 1000 },
+    );
+    wrapper.unmount();
+  });
+
+  it('教师缩放/全览写入 Yjs 视口附带 stage 尺寸（供学生端适配）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    vm.layerZoomChange('add');
+    // MockStage 默认 800×600 —— 视口写入必须带上教师端 stage 尺寸
+    expect(provider.viewportOffset.get('sw')).toBe(800);
+    expect(provider.viewportOffset.get('sh')).toBe(600);
+    vm.layerZoomChange('all');
+    expect(provider.viewportOffset.get('sw')).toBe(800);
+    expect(provider.viewportOffset.get('sh')).toBe(600);
+    wrapper.unmount();
+  });
+
+  it('远端视口附带 stage 尺寸时按 contain 比例适配应用（大屏→小屏）', async () => {
+    const wrapper = mountWB(); // 本地 stage 800×600，远端教师 stage 1600×800 → k = min(0.5, 0.75) = 0.5
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    provider.viewportOffset.set('sw', 1600);
+    provider.viewportOffset.set('sh', 800);
+    provider.setViewportZoom(100);
+    provider.setViewportOffset(40, -20);
+    await vi.waitFor(
+      () => {
+        const vs = vm.viewState();
+        expect(vs.zoom).toBe(50);
+        expect(vs.layerScale).toBeCloseTo(0.5, 5);
+        expect(vs.x).toBeCloseTo(20, 5);
+        expect(vs.y).toBeCloseTo(-10, 5);
+        expect(vs.stageX).toBe(0);
+        expect(vs.stageY).toBe(0);
+      },
+      { timeout: 1000 },
+    );
+    wrapper.unmount();
+  });
+
+  it('本地 stage 尺寸变化后重新适配远端视口', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    provider.viewportOffset.set('sw', 1600);
+    provider.viewportOffset.set('sh', 1200);
+    provider.setViewportZoom(100);
+    provider.setViewportOffset(40, -20);
+    await vi.waitFor(
+      () => {
+        expect(vm.viewState().zoom).toBe(50);
+      },
+      { timeout: 1000 },
+    );
+    // 本地窗口/布局变化 → stage 改为 1200×900，重调 applyRemoteViewport → k = 0.75
+    vm.renderer!.getStage().width(1200);
+    vm.renderer!.getStage().height(900);
+    vm.applyRemoteViewport();
+    const vs = vm.viewState();
+    expect(vs.zoom).toBe(75);
+    expect(vs.layerScale).toBeCloseTo(0.75, 5);
+    expect(vs.x).toBeCloseTo(30, 5);
+    expect(vs.y).toBeCloseTo(-15, 5);
+    wrapper.unmount();
+  });
+
+  it('远端视口无 stage 尺寸（旧数据）按原样应用，不做比例缩放', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    expect(provider.viewportOffset.get('sw')).toBeUndefined();
+    provider.setViewportZoom(80);
+    provider.setViewportOffset(16, 8);
+    await vi.waitFor(
+      () => {
+        const vs = vm.viewState();
+        expect(vs.zoom).toBe(80);
+        expect(vs.x).toBe(16);
+        expect(vs.y).toBe(8);
       },
       { timeout: 1000 },
     );
