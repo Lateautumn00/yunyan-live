@@ -122,6 +122,19 @@ onSynced(cb: () => void) {
     if (this.viewportOffset.get('sh') !== h) this.viewportOffset.set('sh', h);
   }
 
+  // 视口原子写：observe 在事务结束只触发一次，拿到完整快照。分开写会先触发一次半更新——
+  // 观察器拿旧 x/y 回写本地视口，随后 getView 就把旧值存回地图（拖动被拽回原位）
+  setViewportAll(v: { x: number; y: number; zoom: number; sw: number; sh: number }) {
+    if (this.readOnly) return;
+    this.doc.transact(() => {
+      this.viewportOffset.set('x', v.x);
+      this.viewportOffset.set('y', v.y);
+      this.viewportOffset.set('zoom', v.zoom);
+      if (this.viewportOffset.get('sw') !== v.sw) this.viewportOffset.set('sw', v.sw);
+      if (this.viewportOffset.get('sh') !== v.sh) this.viewportOffset.set('sh', v.sh);
+    });
+  }
+
   getViewportStageSize(): { w: number; h: number } | null {
     const w = this.viewportOffset.get('sw') as number | undefined;
     const h = this.viewportOffset.get('sh') as number | undefined;

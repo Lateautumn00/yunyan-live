@@ -1604,13 +1604,13 @@ function applyRemoteViewport() {
 }
 
 // 把教师端当前视口（缩放 + 平移，移动工具与全览共用 x/y 通道 + stage 尺寸）写入 Yjs，学生端观察器跟随适配
+// 必须先本地捕获再一次性原子写：若先写 zoom，观察器会用地图旧 x/y 回写本地视口，之后 getView 读到的已是旧值
 function syncViewportToYjs() {
   if (!renderer || !provider) return;
-  provider.setViewportZoom(renderer.getZoom());
   const view = renderer.getView();
-  provider.setViewportOffset(view.x, view.y);
+  const zoom = renderer.getZoom();
   const stage = renderer.getStage();
-  provider.setViewportStageSize(stage.width(), stage.height());
+  provider.setViewportAll({ x: view.x, y: view.y, zoom, sw: stage.width(), sh: stage.height() });
 }
 
 function layerZoomChange(type: string) {
@@ -2314,6 +2314,7 @@ defineExpose({
   deleteSelected,
   toLayerCoords,
   applyRemoteViewport,
+  syncViewportToYjs,
   // 测试钩子：直接访问底层 Yjs provider / Konva renderer / 当前视口快照（供同步类用例断言）
   get provider() {
     return provider;

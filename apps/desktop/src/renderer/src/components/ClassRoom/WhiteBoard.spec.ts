@@ -478,10 +478,19 @@ type PPTVM = WBVM & {
   getCurrentPageShapes: () => Array<Record<string, unknown>>;
   importServerCoursewares: () => Promise<void>;
   provider: YjsProvider | null;
-  renderer: { getStage: () => { width: (v?: number) => number; height: (v?: number) => number } } | null;
+  renderer: {
+    getStage: () => {
+      width: (v?: number) => number;
+      height: (v?: number) => number;
+      _pointer: { x: number; y: number };
+      fire: (evt: string, e?: unknown) => void;
+    };
+    setViewport: (x: number, y: number) => void;
+  } | null;
   viewState: () => { zoom: number; layerScale: number; x: number; y: number; stageX: number; stageY: number };
   toLayerCoords: (pos: { x: number; y: number }) => { x: number; y: number };
   applyRemoteViewport: () => void;
+  syncViewportToYjs: () => void;
   revocation: (type: string) => void;
 };
 
@@ -1135,6 +1144,37 @@ describe('WhiteBoard.vue PPT 课件', () => {
       },
       { timeout: 1000 },
     );
+    wrapper.unmount();
+  });
+
+  it('本地视口变化后 syncViewportToYjs 写入最新 x/y（不被观察器回写旧值覆盖）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    // 本地平移（不经 sync）：viewX/viewY 已是新值，地图里还是旧值 0
+    vm.renderer!.setViewport(40, -20);
+    vm.syncViewportToYjs();
+    expect(provider.viewportOffset.get('x')).toBe(40);
+    expect(provider.viewportOffset.get('y')).toBe(-20);
+    wrapper.unmount();
+  });
+
+  it('移动工具拖动平移视图并同步（观察器不回拽）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    vm.tool('move');
+    const stage = vm.renderer!.getStage();
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown');
+    stage._pointer = { x: 150, y: 120 };
+    stage.fire('mousemove');
+    // 拖动 (50, 20)：视图必须真的平移，不能被观察器用地图旧值拽回原位
+    expect(vm.viewState().x).toBe(50);
+    expect(vm.viewState().y).toBe(20);
+    stage.fire('mouseup');
+    expect(provider.viewportOffset.get('x')).toBe(50);
+    expect(provider.viewportOffset.get('y')).toBe(20);
     wrapper.unmount();
   });
 
