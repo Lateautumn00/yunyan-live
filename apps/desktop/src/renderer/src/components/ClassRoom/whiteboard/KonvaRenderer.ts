@@ -16,10 +16,14 @@ export class KonvaRenderer {
   private selectEnabled = false;
   private selectedId: string | null = null;
   private transformer: Konva.Transformer | null = null;
+  private gesturing = false;
+  private pendingBind: Y.Array<any> | null = null;
   pageIds: string[] = [];
   onShapeClick?: (id: string) => void;
   onShapeDragEnd?: (id: string, x: number, y: number) => void;
   onShapeTransformEnd?: (id: string, attrs: Record<string, any>) => void;
+  // 手势（拖动/缩放）期间收到的刷新延后到手势结束，避免销毁正在操作的节点
+  onRefreshRequest?: () => void;
 
   constructor(container: HTMLElement) {
     this.stage = new Konva.Stage({
@@ -78,6 +82,10 @@ export class KonvaRenderer {
     this.layer.batchDraw();
   }
 
+  getView(): { x: number; y: number } {
+    return { x: this.viewX, y: this.viewY };
+  }
+
   removePage(index: number) {
     if (this.layers.length <= 1) return;
     const removed = this.layers[index];
@@ -130,8 +138,7 @@ export class KonvaRenderer {
     const children = this.layer.getChildren();
     if (children.length === 0) {
       this.setZoom(100);
-      this.stage.x(0);
-      this.stage.y(0);
+      this.setViewport(0, 0);
       return;
     }
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -148,8 +155,12 @@ export class KonvaRenderer {
     const scaleY = this.stage.height() / contentH;
     const scale = Math.min(scaleX, scaleY, 2) * 0.9;
     this.setZoom(Math.round(scale * 100));
-    this.stage.x((this.stage.width() - contentW * scale) / 2 - minX * scale);
-    this.stage.y((this.stage.height() - contentH * scale) / 2 - minY * scale);
+    // 全览平移写 layer 而非 stage：stage 必须保持恒等变换，否则 Konva Transformer 的
+    // 全链绝对坐标与局部坐标两套约定错位，缩放手柄提交的 x/y 会偏移一个 stage 位移量
+    this.setViewport(
+      (this.stage.width() - contentW * scale) / 2 - minX * scale,
+      (this.stage.height() - contentH * scale) / 2 - minY * scale
+    );
   }
 
   getZoom(): number {
@@ -161,6 +172,12 @@ export class KonvaRenderer {
   }
 
   bindElements(elements: Y.Array<any>) {
+    // 手势进行中不销毁重建（会中断拖动/缩放并触发 Konva null getStage 崩溃），先挂起
+    if (this.gesturing) {
+      this.pendingBind = elements;
+      return;
+    }
+    this.pendingBind = null;
     this.nodeMap.clear();
     this.layer.destroyChildren();
     elements.forEach((el: any) => {
@@ -187,17 +204,35 @@ export class KonvaRenderer {
   }
 
   private wireNode(node: Konva.Node, id: string) {
-    node.off('click dragend transformend');
+    node.off('click dragstart dragend transformstart transformend');
     if (!this.selectEnabled) return;
     node.draggable(true);
     node.on('click', () => this.onShapeClick?.(id));
-    node.on('dragend', () => this.onShapeDragEnd?.(id, node.x(), node.y()));
+    node.on('dragstart', () => {
+      this.gesturing = true;
+    });
+    node.on('dragend', () => {
+      this.gesturing = false;
+      this.onShapeDragEnd?.(id, node.x(), node.y());
+      this.flushPendingBind();
+    });
+    node.on('transformstart', () => {
+      this.gesturing = true;
+    });
     node.on('transformend', () => {
       const attrs = this.bakeTransform(node);
       node.scaleX(1);
       node.scaleY(1);
+      this.gesturing = false;
       this.onShapeTransformEnd?.(id, attrs);
+      this.flushPendingBind();
     });
+  }
+
+  private flushPendingBind() {
+    if (!this.pendingBind) return;
+    this.pendingBind = null;
+    this.onRefreshRequest?.();
   }
 
   selectNode(id: string): boolean {
@@ -205,6 +240,9 @@ export class KonvaRenderer {
     const node = this.nodeMap.get(id);
     if (!node) return false;
     this.selectedId = id;
+    // tempLayer 的预览清理（destroyChildren）会连带销毁 transformer 但引用残留，
+    // 失效判定后重建，否则选中框/手柄永久消失
+    if (this.transformer && !this.transformer.getLayer()) this.transformer = null;
     if (!this.transformer) {
       this.transformer = new Konva.Transformer({ rotateEnabled: false, padding: 4 });
       this.tempLayer.add(this.transformer);
@@ -216,7 +254,7 @@ export class KonvaRenderer {
   }
 
   clearSelection() {
-    if (this.transformer) this.transformer.nodes([]);
+    if (this.transformer && this.transformer.getLayer()) this.transformer.nodes([]);
     this.selectedId = null;
     this.tempLayer.batchDraw();
   }

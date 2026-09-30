@@ -6,6 +6,8 @@ const konvaMocks = vi.hoisted(() => {
     children: unknown[] = [];
     private _w: number;
     private _h: number;
+    private _x = 0;
+    private _y = 0;
     constructor(opts?: { width?: number; height?: number }) {
       this._w = opts?.width ?? 0;
       this._h = opts?.height ?? 0;
@@ -20,11 +22,13 @@ const konvaMocks = vi.hoisted(() => {
       return this._h;
     }
     batchDraw() {}
-    x(_v?: number) {
-      return 0;
+    x(v?: number) {
+      if (v !== undefined) this._x = v;
+      return this._x;
     }
-    y(_v?: number) {
-      return 0;
+    y(v?: number) {
+      if (v !== undefined) this._y = v;
+      return this._y;
     }
     destroy() {}
   }
@@ -33,6 +37,10 @@ const konvaMocks = vi.hoisted(() => {
     children: unknown[] = [];
     batchDrawCalls = 0;
     visible = true;
+    _x = 0;
+    _y = 0;
+    _sx = 1;
+    _sy = 1;
     add(child: unknown) {
       this.children.push(child);
       (child as { _layer?: MockLayer | null })._layer = this;
@@ -47,20 +55,27 @@ const konvaMocks = vi.hoisted(() => {
       this.batchDrawCalls += 1;
     }
     destroyChildren() {
+      this.children.forEach(c => {
+        (c as { _layer?: MockLayer | null })._layer = null;
+      });
       this.children = [];
     }
     destroy() {}
-    x(_v?: number) {
-      return 0;
+    x(v?: number) {
+      if (v !== undefined) this._x = v;
+      return this._x;
     }
-    y(_v?: number) {
-      return 0;
+    y(v?: number) {
+      if (v !== undefined) this._y = v;
+      return this._y;
     }
-    scaleX(_v?: number) {
-      return 1;
+    scaleX(v?: number) {
+      if (v !== undefined) this._sx = v;
+      return this._sx;
     }
-    scaleY(_v?: number) {
-      return 1;
+    scaleY(v?: number) {
+      if (v !== undefined) this._sy = v;
+      return this._sy;
     }
     getChildren() {
       return this.children;
@@ -127,6 +142,9 @@ const konvaMocks = vi.hoisted(() => {
     scaleY(v?: number) {
       if (v !== undefined) this._sy = v;
       return this._sy;
+    }
+    getClientRect(_opts?: unknown) {
+      return { x: this._x, y: this._y, width: this._w, height: this._h };
     }
     getClassName() {
       return 'Image';
@@ -213,6 +231,7 @@ const konvaMocks = vi.hoisted(() => {
   class MockTransformer {
     _nodes: unknown[] = [];
     _keepRatio = false;
+    _layer: MockLayer | null = null;
     nodes(v?: unknown[]) {
       if (v !== undefined) this._nodes = v;
       return this._nodes;
@@ -220,6 +239,9 @@ const konvaMocks = vi.hoisted(() => {
     keepRatio(v?: boolean) {
       if (v !== undefined) this._keepRatio = v;
       return this._keepRatio;
+    }
+    getLayer() {
+      return this._layer;
     }
     on() {
       return this;
@@ -401,6 +423,78 @@ describe('KonvaRenderer selection', () => {
     const elements = [pptElement()] as unknown as Parameters<typeof renderer.bindElements>[0];
     renderer.bindElements(elements);
     expect(renderer.getSelectedId()).toBe('p1');
+    renderer.destroy();
+  });
+
+  it('fit-all pans via layer while keeping stage identity', () => {
+    vi.stubGlobal('Image', StubImage);
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800, configurable: true });
+    Object.defineProperty(container, 'clientHeight', { value: 600, configurable: true });
+    const renderer = new KonvaRenderer(container);
+    const elements = [pptElement()] as unknown as Parameters<typeof renderer.bindElements>[0];
+    renderer.bindElements(elements);
+
+    renderer.zoomFitAll();
+
+    // 内容 100x50 → scale=min(800/100,600/50,2)*0.9=1.8，居中平移写入 layer
+    expect(renderer.getZoom()).toBe(180);
+    expect(renderer.layer.x()).toBe(310);
+    expect(renderer.layer.y()).toBe(255);
+    expect(renderer.getView()).toEqual({ x: 310, y: 255 });
+    // stage 必须保持恒等变换，否则 Transformer 两套坐标约定错位（选择器缩放偏移）
+    expect(renderer.stage.x()).toBe(0);
+    expect(renderer.stage.y()).toBe(0);
+    renderer.destroy();
+  });
+
+  it('recreates transformer after tempLayer cleanup destroyed it', () => {
+    const renderer = makeRenderer();
+    renderer.setSelectMode(true);
+    expect(renderer.selectNode('p1')).toBe(true);
+    const temp = renderer.tempLayer as unknown as InstanceType<typeof konvaMocks.MockLayer>;
+    expect(temp.children.length).toBe(1);
+
+    // 模拟画笔预览清理（destroyChildren）连带销毁 transformer 但引用残留
+    temp.destroyChildren();
+    expect(temp.children.length).toBe(0);
+
+    expect(renderer.selectNode('p1')).toBe(true);
+    expect(renderer.getSelectedId()).toBe('p1');
+    expect(temp.children.length).toBe(1);
+    renderer.destroy();
+  });
+
+  it('defers bindElements during gesture and flushes via onRefreshRequest on dragend', () => {
+    const renderer = makeRenderer();
+    renderer.setSelectMode(true);
+    let refreshes = 0;
+    renderer.onRefreshRequest = () => {
+      refreshes += 1;
+    };
+    const node = renderer.layer.getChildren()[0] as unknown as InstanceType<
+      typeof konvaMocks.MockImage
+    >;
+
+    node.fire('dragstart');
+    const rebuilt = [pptElement({ x: 77 })] as unknown as Parameters<
+      typeof renderer.bindElements
+    >[0];
+    renderer.bindElements(rebuilt);
+    // 手势中不销毁重建（会中断拖动并触发 Konva null getStage 崩溃）
+    expect(renderer.layer.getChildren()[0]).toBe(node);
+    expect(refreshes).toBe(0);
+
+    node.fire('dragend');
+    expect(refreshes).toBe(1);
+
+    // 手势结束后恢复正常重建
+    renderer.bindElements(rebuilt);
+    expect(renderer.layer.getChildren()[0]).not.toBe(node);
+    expect(
+      (renderer.layer.getChildren()[0] as unknown as InstanceType<typeof konvaMocks.MockImage>)
+        .attrs.x,
+    ).toBe(77);
     renderer.destroy();
   });
 

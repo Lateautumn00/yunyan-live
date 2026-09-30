@@ -676,6 +676,7 @@ onMounted(() => {
   renderer.onShapeClick = selectShape;
   renderer.onShapeDragEnd = commitShapeMove;
   renderer.onShapeTransformEnd = commitShapeTransform;
+  renderer.onRefreshRequest = refreshLayer;
   renderer.setSelectMode(mode.value === 'cur' && props.isTeacher);
   renderer.showPage(0);
 
@@ -708,8 +709,9 @@ onMounted(() => {
     currentOpacity.value = state.opacity ?? 1;
   });
 
-  // Sync viewport (move pan / zoom / fit stage) — register once.
-  // 本地写入与远端更新走同一观察器，幂等应用；zoomLevel 同步仅供教师端显示（学生端 UI 隐藏）
+  // Sync viewport (move pan / zoom / fit-all pan) — register once.
+  // 本地写入与远端更新走同一观察器，幂等应用；zoomLevel 同步仅供教师端显示（学生端 UI 隐藏）。
+  // 平移（移动工具 + 全览）统一走 x/y 通道，stage 保持恒等——否则选择器缩放坐标系错位
   provider!.viewportOffset.observe(() => {
     if (!renderer) return;
     const o = provider!.getViewportOffset();
@@ -717,11 +719,6 @@ onMounted(() => {
     const zoom = provider!.getViewportZoom();
     renderer.setZoom(zoom);
     zoomLevel.value = zoom;
-    const s = provider!.getViewportStage();
-    const stage = renderer.getStage();
-    stage.x(s.x);
-    stage.y(s.y);
-    stage.batchDraw();
   });
 
   // Sync page count when teacher adds/removes pages — register once
@@ -820,7 +817,9 @@ function getPointerPos(_e: any): { x: number; y: number } | null {
 
 function toLayerCoords(pos: { x: number; y: number }): { x: number; y: number } {
   const layer = renderer!.layer;
-  return { x: pos.x - layer.x(), y: pos.y - layer.y() };
+  // 除以层缩放：pos 是舞台坐标，节点属性是层局部坐标（含 zoom 时否则落点偏移一个缩放因子）
+  const s = layer.scaleX() || 1;
+  return { x: (pos.x - layer.x()) / s, y: (pos.y - layer.y()) / s };
 }
 
 // --- Tool selection ---
@@ -873,7 +872,11 @@ function commitShapeMove(id: string, x: number, y: number) {
   before.x = before.x ?? 0;
   before.y = before.y ?? 0;
   if (before.x === x && before.y === y) return;
-  if (!provider.updateElement(id, { x, y })) return;
+  if (!provider.updateElement(id, { x, y })) {
+    // 提交失败（元素已被远端删除等）：立即回滚视觉到 Yjs 实况，且不入 undo 栈
+    refreshLayer();
+    return;
+  }
   refreshLayer();
   redoStack.value = [];
   undoStack.value.push({
@@ -891,7 +894,11 @@ function commitShapeTransform(id: string, attrs: Record<string, any>) {
   if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
   const before = snapshotShape(id, Object.keys(attrs));
   if (!before) return;
-  if (!provider.updateElement(id, attrs)) return;
+  if (!provider.updateElement(id, attrs)) {
+    // 提交失败：立即回滚视觉（transformer 已烘焙 scale，必须重绑 Yjs 实况），不入 undo 栈
+    refreshLayer();
+    return;
+  }
   refreshLayer();
   redoStack.value = [];
   undoStack.value.push({
@@ -1238,12 +1245,12 @@ function layerClear() {
 }
 
 // --- Zoom ---
-// 把教师端当前视口（缩放 + 全览 stage 位移）写入 Yjs，学生端观察器跟随应用
+// 把教师端当前视口（缩放 + 平移，移动工具与全览共用 x/y 通道）写入 Yjs，学生端观察器跟随应用
 function syncViewportToYjs() {
   if (!renderer || !provider) return;
   provider.setViewportZoom(renderer.getZoom());
-  const st = renderer.getStage();
-  provider.setViewportStage(st.x(), st.y());
+  const view = renderer.getView();
+  provider.setViewportOffset(view.x, view.y);
 }
 
 function layerZoomChange(type: string) {
@@ -1808,9 +1815,13 @@ defineExpose({
   commitShapeMove,
   commitShapeTransform,
   deleteSelected,
-  // 测试钩子：直接访问底层 Yjs provider / 当前视口快照（供同步类用例断言）
+  toLayerCoords,
+  // 测试钩子：直接访问底层 Yjs provider / Konva renderer / 当前视口快照（供同步类用例断言）
   get provider() {
     return provider;
+  },
+  get renderer() {
+    return renderer;
   },
   viewState: () => ({
     zoom: renderer?.getZoom() ?? 100,

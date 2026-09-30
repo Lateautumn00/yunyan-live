@@ -103,20 +103,18 @@ describe('YjsProvider readOnly', () => {
     expect(p.getViewportOffset()).toEqual({ x: 0, y: 0 });
   });
 
-  it('readOnly setViewportZoom/setViewportStage 不写入', () => {
+  it('readOnly setViewportZoom 不写入', () => {
     const p = create(true);
     p.setViewportZoom(150);
-    p.setViewportStage(10, 20);
     expect(p.getViewportZoom()).toBe(100);
-    expect(p.getViewportStage()).toEqual({ x: 0, y: 0 });
   });
 
-  it('可写 setViewportZoom/setViewportStage 正常写入（对照）', () => {
+  it('可写 setViewportZoom/setViewportOffset 正常写入（对照）', () => {
     const p = create(false);
     p.setViewportZoom(150);
-    p.setViewportStage(10, 20);
+    p.setViewportOffset(10, 20);
     expect(p.getViewportZoom()).toBe(150);
-    expect(p.getViewportStage()).toEqual({ x: 10, y: 20 });
+    expect(p.getViewportOffset()).toEqual({ x: 10, y: 20 });
   });
 
   it('readOnly 课件条目增改删均不生效', () => {

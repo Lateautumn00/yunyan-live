@@ -68,8 +68,14 @@ const konvaMocks = vi.hoisted(() => {
     batchDraw() {}
     destroy() {}
     moveToTop() {}
-    destroyChildren() { this.children = []; }
-    add(_child: unknown) { this.children.push(_child); }
+    destroyChildren() {
+      this.children.forEach(c => { (c as { _layer?: MockLayer | null })._layer = null; });
+      this.children = [];
+    }
+    add(_child: unknown) {
+      (_child as { _layer?: MockLayer | null })._layer = this;
+      this.children.push(_child);
+    }
     x(_val?: unknown) { if (_val !== undefined) this._x = _val as number; return this._x; }
     y(_val?: unknown) { if (_val !== undefined) this._y = _val as number; return this._y; }
     width() { return 800; }
@@ -82,8 +88,7 @@ const konvaMocks = vi.hoisted(() => {
     getClientRect() { return { x: 0, y: 0, width: 100, height: 100 }; }
     toArray() { return this.children; }
     getChildren() { return this.children; }
-    find(_sel?: string) { return []; }
-    getAttr(key: string) {
+    find(_sel?: string) { return []; }    getAttr(key: string) {
       if (key === 'width') return 800;
       if (key === 'height') return 600;
       if (key === 'x') return this._x;
@@ -106,8 +111,15 @@ const konvaMocks = vi.hoisted(() => {
     _scaleX = 1;
     _scaleY = 1;
     _draggable = false;
+    _layer: MockLayer | null = null;
     _handlers: Record<string, (e?: unknown) => void> = {};
-    constructor() {}
+    constructor(attrs?: Record<string, unknown>) {
+      if (attrs?.x !== undefined) this._x = attrs.x as number;
+      if (attrs?.y !== undefined) this._y = attrs.y as number;
+      if (attrs?.width !== undefined) this._width = attrs.width as number;
+      if (attrs?.height !== undefined) this._height = attrs.height as number;
+    }
+    getLayer() { return this._layer; }
     show() {}
     hide() {}
     draw() {}
@@ -453,6 +465,7 @@ type PPTVM = WBVM & {
   importServerCoursewares: () => Promise<void>;
   provider: YjsProvider | null;
   viewState: () => { zoom: number; layerScale: number; x: number; y: number; stageX: number; stageY: number };
+  toLayerCoords: (pos: { x: number; y: number }) => { x: number; y: number };
   revocation: (type: string) => void;
 };
 
@@ -996,33 +1009,52 @@ describe('WhiteBoard.vue PPT 课件', () => {
     const provider = vm.provider!;
     vm.layerZoomChange('add');
     expect(provider.viewportOffset.get('zoom')).toBe(101);
-    // 空画布全览 → 回 100%、stage 归零，三项均写入 Yjs
+    // 空画布全览 → 回 100%、平移归零写入 x/y；stage 通道已废弃（否则选择器缩放坐标系错位）
     vm.layerZoomChange('all');
     expect(provider.viewportOffset.get('zoom')).toBe(100);
-    expect(provider.viewportOffset.get('sx')).toBe(0);
-    expect(provider.viewportOffset.get('sy')).toBe(0);
+    expect(provider.viewportOffset.get('x')).toBe(0);
+    expect(provider.viewportOffset.get('y')).toBe(0);
+    expect(provider.viewportOffset.has('sx')).toBe(false);
+    expect(provider.viewportOffset.has('sy')).toBe(false);
     wrapper.unmount();
   });
 
-  it('远端视口变化（缩放/平移/全览位移）本地跟随应用', async () => {
+  it('远端视口变化（缩放/平移）本地跟随应用，stage 保持恒等', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as PPTVM;
     const provider = vm.provider!;
     provider.setViewportZoom(150);
-    provider.setViewportStage(10, -20);
-    provider.setViewportOffset(5, 6);
+    provider.setViewportOffset(10, -20);
     await vi.waitFor(
       () => {
         const vs = vm.viewState();
         expect(vs.zoom).toBe(150);
         expect(vs.layerScale).toBeCloseTo(1.5, 5);
-        expect(vs.x).toBe(5);
-        expect(vs.y).toBe(6);
-        expect(vs.stageX).toBe(10);
-        expect(vs.stageY).toBe(-20);
+        expect(vs.x).toBe(10);
+        expect(vs.y).toBe(-20);
+        expect(vs.stageX).toBe(0);
+        expect(vs.stageY).toBe(0);
       },
       { timeout: 1000 },
     );
+    wrapper.unmount();
+  });
+
+  it('toLayerCoords 按层缩放把舞台坐标换算到层局部坐标', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    provider.setViewportZoom(200);
+    provider.setViewportOffset(30, 40);
+    await vi.waitFor(
+      () => {
+        expect(vm.viewState().layerScale).toBeCloseTo(2, 5);
+      },
+      { timeout: 1000 },
+    );
+    const p = vm.toLayerCoords({ x: 230, y: 140 });
+    expect(p.x).toBeCloseTo(100, 5);
+    expect(p.y).toBeCloseTo(50, 5);
     wrapper.unmount();
   });
 
@@ -1306,6 +1338,7 @@ type SelVM = PPTVM & {
   commitShapeMove: (id: string, x: number, y: number) => void;
   commitShapeTransform: (id: string, attrs: Record<string, unknown>) => void;
   deleteSelected: () => void;
+  renderer: { layer: { getChildren: () => Array<{ x: (v?: number) => number }> } };
 };
 
 describe('WhiteBoard.vue 选择器', () => {
@@ -1388,6 +1421,23 @@ describe('WhiteBoard.vue 选择器', () => {
     shape = imageShapes(vm).find(s => s.id === id)!;
     expect(shape.x).toBe(200);
     expect(shape.y).toBe(150);
+    wrapper.unmount();
+  });
+
+  it('updateElement 提交失败时立即回滚视觉到 Yjs 实况', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const id = await seedImage(wrapper, 'a.png');
+    const node = vm.renderer.layer.getChildren()[0]!;
+    // Yjs 实况 x=50；模拟拖拽后停在 99 的视觉（尚未提交）
+    node.x(99);
+    const spy = vi.spyOn(vm.provider!, 'updateElement').mockReturnValue(false);
+
+    vm.commitShapeMove(id, 99, 50);
+
+    expect(spy).toHaveBeenCalledWith(id, { x: 99, y: 50 });
+    // 提交失败必须重绑 Yjs 实况，否则节点停在拖拽处与数据不一致
+    expect(vm.renderer.layer.getChildren()[0]!.x()).toBe(50);
     wrapper.unmount();
   });
 
