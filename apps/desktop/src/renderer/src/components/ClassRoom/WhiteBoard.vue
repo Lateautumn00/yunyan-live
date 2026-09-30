@@ -2381,7 +2381,7 @@ defineExpose({
 .color-panel {
   position: absolute; top: 0; left: 0; z-index: 10; will-change: transform, opacity;
   width: 180px; background: #f3f3f4; border-radius: 8px; padding: 12px;
-  .color-panel-drag { width: 100%; height: 14px; cursor: move; border-radius: 4px 4px 0 0; margin: -12px -12px 8px -12px; background: #e2e2e7; }
+  .color-panel-drag { width: auto; height: 14px; cursor: move; border-radius: 4px 4px 0 0; margin: -12px -12px 8px -12px; background: #e2e2e7; }
   .edit-size { margin-bottom: 12px; }
   .size-title { display: flex; justify-content: space-between; font-size: 12px; color: #666; margin-bottom: 6px; }
   .strip { width: 130px; height: 10px; background: linear-gradient(to right, #ccc, #333); border-radius: 5px;
@@ -2396,11 +2396,11 @@ defineExpose({
     }
   }
   .opacity-bar { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; color: #666;
-    .opacity-label { white-space: nowrap; }
-    .opacity-slider { flex: 1; height: 4px; -webkit-appearance: none; appearance: none; background: #ccc; border-radius: 2px; outline: none;
+    .opacity-label { white-space: nowrap; flex-shrink: 0; }
+    .opacity-slider { flex: 1; min-width: 0; height: 4px; -webkit-appearance: none; appearance: none; background: #ccc; border-radius: 2px; outline: none;
       &::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #409eff; cursor: pointer; border: 2px solid #fff; box-shadow: 0 0 2px #000; }
     }
-    .opacity-val { min-width: 28px; text-align: right; }
+    .opacity-val { min-width: 28px; text-align: right; flex-shrink: 0; }
   }
   .fill-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: #666;
     .fill-label { white-space: nowrap; }
