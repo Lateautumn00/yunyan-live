@@ -354,9 +354,32 @@
           <span class="fill-label">填充</span>
           <div
             :class="['fill-toggle', { on: fillEnabled }]"
-            @click="toggleFill"
+            @click="toggleFillPalette"
           >
+            <span
+              v-if="fillEnabled"
+              class="fill-swatch"
+              :style="{ background: fillColor }"
+            />
             {{ fillEnabled ? '已填充' : '无填充' }}
+          </div>
+          <div
+            v-if="showFillPalette"
+            class="fill-palette"
+          >
+            <div
+              v-for="c in presetColors"
+              :key="c"
+              :class="['fp-item', { on: fillColor === c }]"
+              :style="{ background: c }"
+              @click="pickFillColor(c)"
+            />
+            <div
+              class="fp-none"
+              @click="clearFillColor"
+            >
+              无颜色
+            </div>
           </div>
         </div>
         <div
@@ -611,6 +634,8 @@ const zoomLevel = ref(100);
 const showEditer = ref(false);
 const showFillToggle = ref(false);
 const fillEnabled = ref(false);
+const fillColor = ref('');
+const showFillPalette = ref(false);
 const showPallet = ref(false);
 const showFileList = ref(false);
 const showZoomInput = ref(false);
@@ -906,6 +931,7 @@ function tool(type: string) {
   setMode(type);
   showEditer.value = ['brush', 'eraser', 'text', 'circle', 'rectangle', 'arrows', 'line'].includes(type);
   showFillToggle.value = false;
+  showFillPalette.value = false;
   showFileList.value = type === 'file';
   provider?.setToolState({ type: type as any });
 }
@@ -957,6 +983,8 @@ function selectShape(id: string) {
   }
   showFillToggle.value = type === 'rect' || type === 'circle';
   fillEnabled.value = showFillToggle.value && m.get('fill') !== undefined;
+  if (m.get('fill') !== undefined) fillColor.value = String(m.get('fill'));
+  showFillPalette.value = false;
   showEditer.value = true;
 }
 
@@ -965,6 +993,7 @@ function clearSelection() {
   if (mode.value === 'cur') {
     showEditer.value = false;
     showFillToggle.value = false;
+    showFillPalette.value = false;
   }
 }
 
@@ -1344,7 +1373,7 @@ function onPointerUp(e: any) {
         type: 'circle', x: layerStart.x, y: layerStart.y,
         color: currentColor.value, lineWidth: currentSize.value,
         opacity: currentOpacity.value,
-        ...(fillEnabled.value ? { fill: currentColor.value } : {}),
+        ...(fillEnabled.value ? { fill: fillColor.value || currentColor.value } : {}),
         ...(shift ? { radius } : { radiusX: rx, radiusY: ry }),
       };
       provider?.addShape(shapeData);
@@ -1385,7 +1414,7 @@ function onPointerUp(e: any) {
         type: 'rect', x: Math.min(layerStart.x, layerEnd.x), y: Math.min(layerStart.y, layerEnd.y),
         width: w, height: h, color: currentColor.value, lineWidth: currentSize.value,
         opacity: currentOpacity.value,
-        ...(fillEnabled.value ? { fill: currentColor.value } : {}),
+        ...(fillEnabled.value ? { fill: fillColor.value || currentColor.value } : {}),
       };
       provider?.addShape(shapeData);
       refreshLayer();
@@ -1423,12 +1452,12 @@ function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
       x: Math.min(ls.x, le.x), y: Math.min(ls.y, le.y),
       width: Math.abs(le.x - ls.x), height: Math.abs(le.y - ls.y),
       stroke: currentColor.value, strokeWidth: currentSize.value,
-      fill: fillEnabled.value ? currentColor.value : undefined,
+      fill: fillEnabled.value ? fillColor.value || currentColor.value : undefined,
     }));
   } else if (m === 'circle') {
     const dx = le.x - ls.x;
     const dy = le.y - ls.y;
-    const fill = fillEnabled.value ? currentColor.value : undefined;
+    const fill = fillEnabled.value ? fillColor.value || currentColor.value : undefined;
     if (shift) {
       // Shift 约束为正圆（取较大值），与 Konva Transformer 的 Shift 行为一致
       renderer.previewLayer.add(new Konva.Circle({
@@ -1712,12 +1741,24 @@ function commitSizeStyle() {
   else commitSelectedStyle({ lineWidth: currentSize.value });
 }
 
-// --- Fill (仅矩形/圆形)：二态切换——填充(取当前描边色) / 无填充(删 fill 字段) ---
-function toggleFill() {
+// --- Fill (仅矩形/圆形)：点「填充」弹出色板——选色写入 fill / 无颜色删除字段；
+// 填充色与描边色完全独立（换描边不动 fill，改填充不动 color）---
+function toggleFillPalette() {
   if (!props.isTeacher || mode.value !== 'cur') return;
-  fillEnabled.value = !fillEnabled.value;
-  if (fillEnabled.value) commitSelectedStyle({ fill: currentColor.value });
-  else commitSelectedStyle({}, ['fill']);
+  showFillPalette.value = !showFillPalette.value;
+}
+function pickFillColor(color: string) {
+  if (!props.isTeacher || mode.value !== 'cur') return;
+  fillEnabled.value = true;
+  fillColor.value = color;
+  showFillPalette.value = false;
+  commitSelectedStyle({ fill: color });
+}
+function clearFillColor() {
+  if (!props.isTeacher || mode.value !== 'cur') return;
+  fillEnabled.value = false;
+  showFillPalette.value = false;
+  commitSelectedStyle({}, ['fill']);
 }
 
 // Color panel drag
@@ -2266,10 +2307,19 @@ defineExpose({
     }
     .opacity-val { min-width: 28px; text-align: right; }
   }
-  .fill-bar { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; color: #666;
+  .fill-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: #666;
     .fill-label { white-space: nowrap; }
-    .fill-toggle { padding: 2px 10px; border-radius: 10px; background: #eee; color: #666; cursor: pointer; border: 1px solid #ddd; user-select: none;
+    .fill-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 10px; background: #eee; color: #666; cursor: pointer; border: 1px solid #ddd; user-select: none;
       &.on { background: #409eff; color: #fff; border-color: #409eff; }
+      .fill-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 1px rgba(0, 0, 0, 0.4); }
+    }
+    .fill-palette { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 2px 2px; flex-wrap: wrap;
+      .fp-item { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(0, 0, 0, 0.12);
+        &.on { border-color: #409eff; }
+      }
+      .fp-none { padding: 2px 10px; border-radius: 10px; background: #f5f5f5; border: 1px dashed #bbb; color: #666; cursor: pointer; user-select: none;
+        &:hover { background: #ececec; }
+      }
     }
   }
 }

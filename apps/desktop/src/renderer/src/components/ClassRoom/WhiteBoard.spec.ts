@@ -1933,7 +1933,7 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
     wrapper.unmount();
   });
 
-  it('矩形填充二态：启用写入 fill、禁用删除字段，可撤销/重做', async () => {
+  it('填充弹出色板：选色写入 fill、无颜色删除字段，可撤销/重做', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
     seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
@@ -1942,20 +1942,33 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
 
     const toggle = wrapper.find('.fill-toggle');
     expect(toggle.exists()).toBe(true);
-    expect(toggle.text()).toBe('无填充');
+    expect(toggle.text()).toContain('无填充');
+    expect(wrapper.find('.fill-palette').exists()).toBe(false);
 
+    // 点填充 → 弹出色板（预设色 + 无颜色）
     await toggle.trigger('click');
-    expect(vm.getCurrentPageShapes()[0]!.fill).toBeTruthy();
-    expect(wrapper.find('.fill-toggle').text()).toBe('已填充');
+    expect(wrapper.find('.fill-palette').exists()).toBe(true);
+    expect(wrapper.findAll('.fill-palette .fp-item').length).toBe(PRESET_COLORS.length);
+    expect(wrapper.find('.fill-palette .fp-none').exists()).toBe(true);
+
+    // 选第一个预设色 → 写入 fill、收起弹层、描边不动
+    await wrapper.findAll('.fill-palette .fp-item')[0]!.trigger('click');
+    expect(wrapper.find('.fill-palette').exists()).toBe(false);
+    expect(vm.getCurrentPageShapes()[0]!.fill).toBe(PRESET_COLORS[0]);
+    expect(vm.getCurrentPageShapes()[0]!.color).toBe('#123456');
+    expect(wrapper.find('.fill-toggle').text()).toContain('已填充');
 
     vm.revocation('pre');
     expect('fill' in vm.getCurrentPageShapes()[0]!).toBe(false);
     vm.revocation('next');
-    expect(vm.getCurrentPageShapes()[0]!.fill).toBeTruthy();
+    expect(vm.getCurrentPageShapes()[0]!.fill).toBe(PRESET_COLORS[0]);
 
-    await wrapper.find('.fill-toggle').trigger('click');
+    // 无颜色 → 删除 fill 字段
+    const reopen = wrapper.find('.fill-toggle');
+    await reopen.trigger('click');
+    await wrapper.find('.fill-palette .fp-none').trigger('click');
     expect('fill' in vm.getCurrentPageShapes()[0]!).toBe(false);
-    expect(wrapper.find('.fill-toggle').text()).toBe('无填充');
+    expect(wrapper.find('.fill-toggle').text()).toContain('无填充');
     wrapper.unmount();
   });
 
@@ -1966,6 +1979,7 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
     vm.selectShape('r1');
     await nextTick();
     await wrapper.find('.fill-toggle').trigger('click');
+    await wrapper.findAll('.fill-palette .fp-item')[0]!.trigger('click');
     vm.tool('circle');
     const stage = konvaMocks.MockStage.last()!;
     stage._pointer = { x: 100, y: 100 };
@@ -1990,6 +2004,7 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
     vm.selectShape('c1');
     await nextTick();
     await wrapper.find('.fill-toggle').trigger('click');
+    await wrapper.findAll('.fill-palette .fp-item')[0]!.trigger('click');
     vm.tool('rectangle');
     const stage = konvaMocks.MockStage.last()!;
     stage._pointer = { x: 100, y: 100 };
@@ -2002,6 +2017,48 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
     const rect = vm.getCurrentPageShapes().find(s => s.type === 'rect');
     expect(rect).toBeTruthy();
     expect(rect!.fill).toBeTruthy();
+    wrapper.unmount();
+  });
+
+  it('填充色与描边色独立：改填充不动描边，换描边不动填充', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    vm.selectShape('r1');
+    await nextTick();
+    // 选绿填充色（PRESET_COLORS[7]）→ 描边不动
+    await wrapper.find('.fill-toggle').trigger('click');
+    await wrapper.findAll('.fill-palette .fp-item')[7]!.trigger('click');
+    expect(vm.getCurrentPageShapes()[0]!.fill).toBe(PRESET_COLORS[7]);
+    expect(vm.getCurrentPageShapes()[0]!.color).toBe('#123456');
+    // 换描边色 → 填充不动
+    await wrapper.findAll('.edit-color .item')[0]!.trigger('click');
+    expect(vm.getCurrentPageShapes()[0]!.color).toBe(PRESET_COLORS[0]);
+    expect(vm.getCurrentPageShapes()[0]!.fill).toBe(PRESET_COLORS[7]);
+    wrapper.unmount();
+  });
+
+  it('画图填充取独立填充色：选绿填充、换蓝描边后画圆 fill=绿 color=蓝', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    vm.selectShape('r1');
+    await nextTick();
+    await wrapper.find('.fill-toggle').trigger('click');
+    await wrapper.findAll('.fill-palette .fp-item')[7]!.trigger('click');
+    // 换描边为蓝（PRESET_COLORS[9] = '#017aff'）
+    await wrapper.findAll('.edit-color .item')[9]!.trigger('click');
+    vm.tool('circle');
+    const stage = konvaMocks.MockStage.last()!;
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 300, y: 160 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
+    const ellipse = vm.getCurrentPageShapes().find(s => s.type === 'circle');
+    expect(ellipse).toBeTruthy();
+    expect(ellipse!.fill).toBe(PRESET_COLORS[7]);
+    expect(ellipse!.color).toBe(PRESET_COLORS[9]);
     wrapper.unmount();
   });
 
