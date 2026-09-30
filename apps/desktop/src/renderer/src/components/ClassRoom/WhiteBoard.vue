@@ -13,7 +13,7 @@
         class="tools"
       >
         <el-tooltip
-          content="选择器"
+          content="选择器 · 拖动移动，拉手柄缩放（Shift 等比，Delete 删除）"
           placement="right"
         >
           <div
@@ -46,7 +46,7 @@
           </div>
         </el-tooltip>
         <el-tooltip
-          content="圆形工具"
+          content="圆形工具 · 拖拽画椭圆，按住 Shift 画正圆"
           placement="right"
         >
           <div
