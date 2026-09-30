@@ -363,65 +363,69 @@
             />
             {{ fillEnabled ? '已填充' : '无填充' }}
           </div>
-          <div
-            v-if="showFillPalette"
-            class="fill-palette"
-          >
-            <div class="fp-row">
-              <div
-                v-for="c in presetColors"
-                :key="c"
-                :class="['fp-item', { on: fillColor === c }]"
-                :style="{ background: c }"
-                @click="pickFillColor(c)"
-              />
-              <div
-                class="fp-none"
-                @click="clearFillColor"
-              >
-                无颜色
+          <Transition name="wb-pop">
+            <div
+              v-if="showFillPalette"
+              class="fill-palette pallet-box"
+            >
+              <div class="fp-row">
+                <div
+                  v-for="c in presetColors"
+                  :key="c"
+                  :class="['fp-item', { on: fillColor === c }]"
+                  :style="{ background: c }"
+                  @click="pickFillColor(c)"
+                />
+                <div
+                  class="fp-none"
+                  @click="clearFillColor"
+                >
+                  无颜色
+                </div>
+              </div>
+              <div class="pal-color fpal-color">
+                <canvas
+                  ref="fillWheelRef"
+                  width="150"
+                  height="150"
+                  @mousedown="startWheelPick($event, 'fill')"
+                />
+                <div
+                  class="pal-btn"
+                  :style="{ left: fpalBtnLeft + 'px', top: fpalBtnTop + 'px' }"
+                />
               </div>
             </div>
-            <div class="fpal-color">
+          </Transition>
+        </div>
+        <Transition name="wb-pop">
+          <div
+            v-show="showPallet"
+            class="pallet-box"
+          >
+            <div class="pal-color">
               <canvas
-                ref="fillWheelRef"
+                ref="strokeWheelRef"
                 width="150"
                 height="150"
-                @click="clickFillColor"
+                @mousedown="startWheelPick($event, 'stroke')"
               />
               <div
                 class="pal-btn"
-                :style="{ left: fpalBtnLeft + 'px', top: fpalBtnTop + 'px' }"
+                :style="{ left: palBtnLeft + 'px', top: palBtnTop + 'px' }"
+              />
+            </div>
+            <div class="endSelectColor">
+              <div
+                v-for="(c, i) in endSelectColor"
+                :key="i"
+                class="end-color-item"
+                :style="{ background: c }"
+                @click="selectColor(c)"
               />
             </div>
           </div>
-        </div>
-        <div
-          v-show="showPallet"
-          class="pallet-box"
-        >
-          <div class="pal-color">
-            <canvas
-              ref="strokeWheelRef"
-              width="150"
-              height="150"
-              @click="clickColor"
-            />
-            <div
-              class="pal-btn"
-              :style="{ left: palBtnLeft + 'px', top: palBtnTop + 'px' }"
-            />
-          </div>
-          <div class="endSelectColor">
-            <div
-              v-for="(c, i) in endSelectColor"
-              :key="i"
-              class="end-color-item"
-              :style="{ background: c }"
-              @click="selectColor(c)"
-            />
-          </div>
-        </div>
+        </Transition>
         <div class="opacity-bar">
           <span class="opacity-label">画笔</span>
           <input
@@ -541,7 +545,7 @@
 <script setup lang="ts">
 // @ts-nocheck
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ref, watch, onMounted, onUnmounted, nextTick, type Ref } from 'vue';
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import Konva from 'konva';
 import { YjsProvider } from './whiteboard/YjsProvider';
@@ -847,6 +851,8 @@ onUnmounted(() => {
   currentElementsObserver?.();
   window.removeEventListener('resize', onResize);
   document.removeEventListener('keydown', onSelectionKeydown);
+  document.removeEventListener('mousemove', onWheelMove);
+  document.removeEventListener('mouseup', onWheelUp);
   provider?.awareness.off('change', onAwarenessLaser);
   renderer?.destroy();
   provider?.destroy();
@@ -1669,30 +1675,61 @@ function selectColor(color: string) {
   commitSelectedStyle({ color });
 }
 
-// --- 颜色轮盘：绘制与取色读同一块画布，所见即所得（与浏览器 conic 角度基准无关）---
-const WHEEL_STOPS = [
-  '#7cff00', '#2bff0c', '#01ff62', '#00ffc3', '#00fffb',
-  '#00aeff', '#007cff', '#1f1cff', '#6800ff', '#ad00ff',
-  '#e800c7', '#ff006d', '#ff0000', '#ff8700', '#edbb00', '#cffb00', '#7cff00'
-];
+// --- 颜色轮盘：HSV 逐像素绘制（色相绕环 / 饱和度径向 / 中心泛白），绘制与取色读同一块画布，所见即所得 ---
+function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
+  const c = v * s;
+  const hp = h / 60;
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (hp < 1) { r = c; g = x; }
+  else if (hp < 2) { r = x; g = c; }
+  else if (hp < 3) { g = c; b = x; }
+  else if (hp < 4) { g = x; b = c; }
+  else if (hp < 5) { r = x; b = c; }
+  else { r = c; b = x; }
+  const m = v - c;
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
 
 function drawWheel(canvas?: HTMLCanvasElement | null) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const gradient = ctx.createConicGradient(-Math.PI / 2, canvas.width / 2, canvas.height / 2);
-  WHEEL_STOPS.forEach((c, i) => gradient.addColorStop(i / (WHEEL_STOPS.length - 1), c));
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const size = canvas.width;
+  const half = size / 2;
+  const maxR2 = half * half;
+  const img = ctx.createImageData(size, size);
+  const data = img.data;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x - half + 0.5;
+      const dy = y - half + 0.5;
+      const dist2 = dx * dx + dy * dy;
+      const idx = (y * size + x) * 4;
+      if (dist2 > maxR2) {
+        data[idx + 3] = 0;
+        continue;
+      }
+      const hue = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
+      const sat = Math.min(1, Math.sqrt(dist2) / half);
+      const [r, g, b] = hsvToRgb(hue, sat, 1);
+      data[idx] = r;
+      data[idx + 1] = g;
+      data[idx + 2] = b;
+      data[idx + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
 }
 
-function sampleWheel(e: MouseEvent): string | null {
-  const canvas = e.currentTarget as HTMLCanvasElement;
+function sampleWheelAt(canvas: HTMLCanvasElement, clientX: number, clientY: number) {
   const rect = canvas.getBoundingClientRect();
   const cssW = rect.width || canvas.width;
   const cssH = rect.height || canvas.height;
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
   const dx = x - cssW / 2;
   const dy = y - cssH / 2;
   if (Math.sqrt(dx * dx + dy * dy) > Math.min(cssW, cssH) / 2) return null;
@@ -1704,30 +1741,66 @@ function sampleWheel(e: MouseEvent): string | null {
     1,
     1
   ).data;
-  return '#' + [pixel[0], pixel[1], pixel[2]]
+  const hex = '#' + [pixel[0], pixel[1], pixel[2]]
     .map(v => v.toString(16).padStart(2, '0')).join('');
+  const size = Math.min(cssW, cssH);
+  return {
+    hex,
+    left: Math.max(0, Math.min(size - 12, x - 6)),
+    top: Math.max(0, Math.min(size - 12, y - 6))
+  };
 }
 
-function moveWheelBtn(e: MouseEvent, left: Ref<number>, top: Ref<number>) {
-  const canvas = e.currentTarget as HTMLCanvasElement;
-  const rect = canvas.getBoundingClientRect();
-  const size = Math.min(rect.width || canvas.width, rect.height || canvas.height);
-  left.value = Math.max(0, Math.min(size - 12, e.clientX - rect.left - 6));
-  top.value = Math.max(0, Math.min(size - 12, e.clientY - rect.top - 6));
+let wheelDragging = false;
+let wheelDragKind: 'stroke' | 'fill' = 'stroke';
+let wheelHex: string | null = null;
+
+function wheelSample(kind: 'stroke' | 'fill', clientX: number, clientY: number): string | null {
+  const canvas = kind === 'stroke' ? strokeWheelRef.value : fillWheelRef.value;
+  if (!canvas) return null;
+  const hit = sampleWheelAt(canvas, clientX, clientY);
+  if (!hit) return null;
+  if (kind === 'stroke') {
+    palBtnLeft.value = hit.left;
+    palBtnTop.value = hit.top;
+    currentColor.value = hit.hex;
+  } else {
+    fpalBtnLeft.value = hit.left;
+    fpalBtnTop.value = hit.top;
+    fillEnabled.value = true;
+    fillColor.value = hit.hex;
+  }
+  return hit.hex;
 }
 
-function clickColor(e: MouseEvent) {
-  moveWheelBtn(e, palBtnLeft, palBtnTop);
-  const hex = sampleWheel(e);
-  if (hex) selectColor(hex);
+function onWheelMove(e: MouseEvent) {
+  if (!wheelDragging) return;
+  const hex = wheelSample(wheelDragKind, e.clientX, e.clientY);
+  if (hex) wheelHex = hex;
 }
 
-function clickFillColor(e: MouseEvent) {
-  if (!props.isTeacher || mode.value !== 'cur') return;
-  moveWheelBtn(e, fpalBtnLeft, fpalBtnTop);
-  const hex = sampleWheel(e);
-  // 轮盘连续取色不收起弹层，便于反复微调（预设点/无颜色仍关闭）
-  if (hex) pickFillColor(hex, true);
+function onWheelUp() {
+  if (!wheelDragging) return;
+  wheelDragging = false;
+  document.removeEventListener('mousemove', onWheelMove);
+  document.removeEventListener('mouseup', onWheelUp);
+  const hex = wheelHex;
+  wheelHex = null;
+  if (!hex) return;
+  if (wheelDragKind === 'stroke') selectColor(hex);
+  else pickFillColor(hex, true);
+}
+
+// 按下即预览、拖动连续采样、松手一次性提交——预览只改本地值，避免拖动过程刷 undo 栈
+function startWheelPick(e: MouseEvent, kind: 'stroke' | 'fill') {
+  if (kind === 'fill' && (!props.isTeacher || mode.value !== 'cur')) return;
+  if (wheelDragging) return;
+  e.preventDefault();
+  wheelDragKind = kind;
+  wheelDragging = true;
+  wheelHex = wheelSample(kind, e.clientX, e.clientY);
+  document.addEventListener('mousemove', onWheelMove);
+  document.addEventListener('mouseup', onWheelUp);
 }
 
 watch(showPallet, open => {
@@ -2249,6 +2322,10 @@ defineExpose({
 .cursor-move { cursor: url('../../assets/imgs/whiteboard/m_move.png') 8 18, grab; }
 .cursor-laser { cursor: crosshair; }
 
+.wb-pop-enter-active { transition: opacity 150ms ease, transform 150ms ease; }
+.wb-pop-leave-active { transition: opacity 100ms ease, transform 100ms ease; }
+.wb-pop-enter-from, .wb-pop-leave-to { opacity: 0; transform: translateY(-4px); }
+
 .tools {
   position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
   width: 44px; background: #efeff4; border-radius: 12px; display: flex;
@@ -2331,16 +2408,13 @@ defineExpose({
       &.on { background: #409eff; color: #fff; border-color: #409eff; }
       .fill-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 1px rgba(0, 0, 0, 0.4); }
     }
-    .fill-palette { width: 100%; padding: 6px 2px 2px;
+    .fill-palette { width: 100%;
       .fp-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
       .fp-item { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(0, 0, 0, 0.12);
         &.on { border-color: #409eff; }
       }
       .fp-none { padding: 2px 10px; border-radius: 10px; background: #f5f5f5; border: 1px dashed #bbb; color: #666; cursor: pointer; user-select: none;
         &:hover { background: #ececec; }
-      }
-      .fpal-color { position: relative; width: 150px; height: 150px; margin: 8px auto 0;
-        canvas { display: block; width: 150px; height: 150px; border-radius: 50%; cursor: crosshair; }
       }
     }
   }

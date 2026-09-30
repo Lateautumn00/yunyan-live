@@ -2062,20 +2062,31 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
     wrapper.unmount();
   });
 
-  it('描边颜色盘：图标展开、轮盘 canvas 取色写 color、死代码色条已移除', async () => {
+  function stubWheelCtx() {
+    const putImageData = vi.fn();
+    const spy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({
+        createImageData: (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+        putImageData,
+        getImageData: (x: number) => ({ data: x < 100 ? [1, 168, 255, 255] : [255, 0, 0, 255] }),
+      } as unknown as RenderingContext);
+    return { spy, putImageData };
+  }
+
+  function mockWheelRect(canvas: { element: Element }) {
+    vi.spyOn(canvas.element, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 150, bottom: 150, width: 150, height: 150, toJSON: () => ({}),
+    } as DOMRect);
+  }
+
+  it('描边颜色盘：HSV 轮盘按下仅预览、松手才提交、死代码色条已移除', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
     seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
     vm.selectShape('r1');
     await nextTick();
-    const ctxSpy = vi
-      .spyOn(HTMLCanvasElement.prototype, 'getContext')
-      .mockReturnValue({
-        createConicGradient: () => ({ addColorStop: () => {} }),
-        fillRect: () => {},
-        getImageData: () => ({ data: [1, 168, 255, 255] }),
-        fillStyle: '',
-      } as unknown as RenderingContext);
+    const { spy, putImageData } = stubWheelCtx();
 
     const box = wrapper.find('.pallet-box');
     expect(box.isVisible()).toBe(false);
@@ -2083,45 +2094,64 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
     expect(box.isVisible()).toBe(true);
     expect(wrapper.find('.strip-color').exists()).toBe(false);
     expect(wrapper.find('.endSelectColor .end-color-item').exists()).toBe(true);
+    await nextTick();
+    expect(putImageData).toHaveBeenCalled();
 
     const canvas = wrapper.find('.pallet-box .pal-color canvas');
     expect(canvas.exists()).toBe(true);
-    vi.spyOn(canvas.element, 'getBoundingClientRect').mockReturnValue({
-      x: 0, y: 0, left: 0, top: 0, right: 150, bottom: 150, width: 150, height: 150, toJSON: () => ({}),
-    } as DOMRect);
-    await canvas.trigger('click', { clientX: 75, clientY: 75 });
+    mockWheelRect(canvas);
+    await canvas.trigger('mousedown', { clientX: 75, clientY: 75 });
+    expect(vm.getCurrentPageShapes()[0]!.color).toBe('#123456');
+    document.dispatchEvent(new MouseEvent('mouseup'));
     expect(vm.getCurrentPageShapes()[0]!.color).toBe('#01a8ff');
     expect('fill' in vm.getCurrentPageShapes()[0]!).toBe(false);
-    ctxSpy.mockRestore();
+    spy.mockRestore();
     wrapper.unmount();
   });
 
-  it('填充颜色盘：轮盘 canvas 取色写 fill、描边不动、弹层保持打开', async () => {
+  it('填充颜色盘：与描边同款卡片、轮盘取色写 fill、描边不动、弹层保持打开', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
     seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
     vm.selectShape('r1');
     await nextTick();
-    const ctxSpy = vi
-      .spyOn(HTMLCanvasElement.prototype, 'getContext')
-      .mockReturnValue({
-        createConicGradient: () => ({ addColorStop: () => {} }),
-        fillRect: () => {},
-        getImageData: () => ({ data: [1, 168, 255, 255] }),
-        fillStyle: '',
-      } as unknown as RenderingContext);
+    const { spy, putImageData } = stubWheelCtx();
 
     await wrapper.find('.fill-toggle').trigger('click');
+    expect(wrapper.find('.fill-palette.pallet-box').exists()).toBe(true);
     const canvas = wrapper.find('.fill-palette .fpal-color canvas');
     expect(canvas.exists()).toBe(true);
-    vi.spyOn(canvas.element, 'getBoundingClientRect').mockReturnValue({
-      x: 0, y: 0, left: 0, top: 0, right: 150, bottom: 150, width: 150, height: 150, toJSON: () => ({}),
-    } as DOMRect);
-    await canvas.trigger('click', { clientX: 75, clientY: 75 });
+    await nextTick();
+    expect(putImageData).toHaveBeenCalled();
+    mockWheelRect(canvas);
+    await canvas.trigger('mousedown', { clientX: 75, clientY: 75 });
+    expect('fill' in vm.getCurrentPageShapes()[0]!).toBe(false);
+    document.dispatchEvent(new MouseEvent('mouseup'));
     expect(vm.getCurrentPageShapes()[0]!.fill).toBe('#01a8ff');
     expect(vm.getCurrentPageShapes()[0]!.color).toBe('#123456');
     expect(wrapper.find('.fill-palette').exists()).toBe(true);
-    ctxSpy.mockRestore();
+    spy.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('颜色盘按住拖动连续取色：拖动中不提交，松手提交最后命中的颜色', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    vm.selectShape('r1');
+    await nextTick();
+    const { spy } = stubWheelCtx();
+
+    await wrapper.find('.edit-color .colours').trigger('click');
+    const canvas = wrapper.find('.pallet-box .pal-color canvas');
+    mockWheelRect(canvas);
+    await canvas.trigger('mousedown', { clientX: 30, clientY: 75 });
+    expect(vm.getCurrentPageShapes()[0]!.color).toBe('#123456');
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 120, clientY: 75 }));
+    expect(vm.getCurrentPageShapes()[0]!.color).toBe('#123456');
+    document.dispatchEvent(new MouseEvent('mouseup'));
+    expect(vm.getCurrentPageShapes()[0]!.color).toBe('#ff0000');
+    spy.mockRestore();
     wrapper.unmount();
   });
 
