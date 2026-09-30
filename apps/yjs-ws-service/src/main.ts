@@ -137,6 +137,36 @@ function getYDoc(docName: string): Y.Doc {
       broadcast(d, encoding.toUint8Array(encoder), origin);
     });
 
+    const awareness = (d as any).awareness;
+    awareness.on(
+      'update',
+      (changes: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {
+        const conns = (d as any).conns as Map<WebSocket, Set<number>> | undefined;
+        if (conns && origin instanceof WebSocket) {
+          const controlled = conns.get(origin);
+          if (controlled) {
+            for (const id of changes.added) controlled.add(id);
+            for (const id of changes.updated) controlled.add(id);
+            for (const id of changes.removed) controlled.delete(id);
+          }
+        }
+        const clients = [...changes.added, ...changes.updated, ...changes.removed];
+        if (clients.length > 0) {
+          const encoder = encoding.createEncoder();
+          encoding.writeVarUint(encoder, messageAwareness);
+          encoding.writeVarUint8Array(
+            encoder,
+            awarenessProtocol.encodeAwarenessUpdate(awareness, clients),
+          );
+          broadcast(
+            d,
+            encoding.toUint8Array(encoder),
+            origin instanceof WebSocket ? origin : null,
+          );
+        }
+      },
+    );
+
     docs.set(docName, doc);
   }
   return doc;
@@ -155,15 +185,13 @@ function send(_doc: Y.Doc, conn: WebSocket, m: Uint8Array) {
 }
 
 function closeConn(doc: Y.Doc, conn: WebSocket) {
-  const meta = connMeta.get(conn);
-  if (meta) {
-    awarenessProtocol.removeAwarenessStates((doc as any).awareness, [conn], null);
-  }
+  const conns = (doc as any).conns as Map<WebSocket, Set<number>> | undefined;
+  const controlledIds = conns?.get(conn);
+  conns?.delete(conn);
   connMeta.delete(conn);
-  (doc as any).conns?.delete(conn);
-  if ((doc as any).conns?.size === 0 && doc !== docs.get((doc as any).name)) {
-    docs.delete((doc as any).name);
-    doc.destroy();
+  const awareness = (doc as any).awareness;
+  if (awareness && controlledIds && controlledIds.size > 0) {
+    awarenessProtocol.removeAwarenessStates(awareness, Array.from(controlledIds), null);
   }
 }
 
@@ -182,11 +210,6 @@ function messageListener(conn: WebSocket, doc: Y.Doc, message: Uint8Array) {
     } else if (messageType === messageAwareness) {
       const data = decoding.readVarUint8Array(dec);
       awarenessProtocol.applyAwarenessUpdate((doc as any).awareness, data, conn);
-
-      const awarenessEncoder = encoding.createEncoder();
-      encoding.writeVarUint(awarenessEncoder, messageAwareness);
-      encoding.writeVarUint8Array(awarenessEncoder, data);
-      broadcast(doc, encoding.toUint8Array(awarenessEncoder), conn);
     }
   } catch (err) {
     console.error('[YjsWS] Message parse error:', err);
@@ -303,3 +326,5 @@ process.on('SIGTERM', () => {
   wss.clients.forEach((client) => client.close(1001, 'Server shutting down'));
   server.close(() => process.exit(0));
 });
+
+export { server, wss };

@@ -6,6 +6,7 @@
     "dev": "ts-node src/main.ts",
     "build": "tsc",
     "start": "node dist/main.js",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -24,7 +25,9 @@
     "@types/node": "^22.0.0",
     "@types/ws": "^8.18.1",
     "ts-node": "^10.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11",
+    "y-websocket": "^3.1.0"
   },
   "license": "MIT"
 }
