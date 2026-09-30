@@ -805,6 +805,20 @@ describe('KonvaRenderer circle/ellipse', () => {
     expect(cn!.attrs.fill).toBeUndefined();
     renderer.destroy();
   });
+
+  it('renders ellipse (radiusX/radiusY) fill through to node attrs', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const data: Record<string, unknown> = {
+      id: 'e1', type: 'circle', x: 10, y: 20, radiusX: 40, radiusY: 25,
+      color: '#000', lineWidth: 1, opacity: 1, fill: '#00ff00',
+    };
+    renderer.bindElements([
+      { get: (k: string) => data[k] },
+    ] as unknown as Parameters<typeof renderer.bindElements>[0]);
+    const node = renderer.layer.getChildren()[0] as unknown as { attrs: Record<string, unknown> };
+    expect(node.attrs.fill).toBe('#00ff00');
+    renderer.destroy();
+  });
 });
 
 describe('KonvaRenderer laser', () => {

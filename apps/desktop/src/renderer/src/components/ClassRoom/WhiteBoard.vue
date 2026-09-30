@@ -1344,6 +1344,7 @@ function onPointerUp(e: any) {
         type: 'circle', x: layerStart.x, y: layerStart.y,
         color: currentColor.value, lineWidth: currentSize.value,
         opacity: currentOpacity.value,
+        ...(fillEnabled.value ? { fill: currentColor.value } : {}),
         ...(shift ? { radius } : { radiusX: rx, radiusY: ry }),
       };
       provider?.addShape(shapeData);
@@ -1384,6 +1385,7 @@ function onPointerUp(e: any) {
         type: 'rect', x: Math.min(layerStart.x, layerEnd.x), y: Math.min(layerStart.y, layerEnd.y),
         width: w, height: h, color: currentColor.value, lineWidth: currentSize.value,
         opacity: currentOpacity.value,
+        ...(fillEnabled.value ? { fill: currentColor.value } : {}),
       };
       provider?.addShape(shapeData);
       refreshLayer();
@@ -1421,20 +1423,22 @@ function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
       x: Math.min(ls.x, le.x), y: Math.min(ls.y, le.y),
       width: Math.abs(le.x - ls.x), height: Math.abs(le.y - ls.y),
       stroke: currentColor.value, strokeWidth: currentSize.value,
+      fill: fillEnabled.value ? currentColor.value : undefined,
     }));
   } else if (m === 'circle') {
     const dx = le.x - ls.x;
     const dy = le.y - ls.y;
+    const fill = fillEnabled.value ? currentColor.value : undefined;
     if (shift) {
       // Shift 约束为正圆（取较大值），与 Konva Transformer 的 Shift 行为一致
       renderer.previewLayer.add(new Konva.Circle({
         x: ls.x, y: ls.y, radius: Math.max(Math.abs(dx), Math.abs(dy)),
-        stroke: currentColor.value, strokeWidth: currentSize.value,
+        stroke: currentColor.value, strokeWidth: currentSize.value, fill,
       }));
     } else {
       renderer.previewLayer.add(new Konva.Ellipse({
         x: ls.x, y: ls.y, radiusX: Math.abs(dx), radiusY: Math.abs(dy),
-        stroke: currentColor.value, strokeWidth: currentSize.value,
+        stroke: currentColor.value, strokeWidth: currentSize.value, fill,
       }));
     }
   } else if (m === 'line') {

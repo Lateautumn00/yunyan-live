@@ -116,7 +116,9 @@ const konvaMocks = vi.hoisted(() => {
     _draggable = false;
     _layer: MockLayer | null = null;
     _handlers: Record<string, (e?: unknown) => void> = {};
+    _attrs: Record<string, unknown> = {};
     constructor(attrs?: Record<string, unknown>) {
+      this._attrs = attrs ?? {};
       if (attrs?.x !== undefined) this._x = attrs.x as number;
       if (attrs?.y !== undefined) this._y = attrs.y as number;
       if (attrs?.width !== undefined) this._width = attrs.width as number;
@@ -1954,6 +1956,52 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
     await wrapper.find('.fill-toggle').trigger('click');
     expect('fill' in vm.getCurrentPageShapes()[0]!).toBe(false);
     expect(wrapper.find('.fill-toggle').text()).toBe('无填充');
+    wrapper.unmount();
+  });
+
+  it('开启填充后绘制椭圆：预览与落库均带 fill', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    vm.selectShape('r1');
+    await nextTick();
+    await wrapper.find('.fill-toggle').trigger('click');
+    vm.tool('circle');
+    const stage = konvaMocks.MockStage.last()!;
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 300, y: 160 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    const preview = vm.renderer.previewLayer.getChildren()[0] as { _attrs?: Record<string, unknown> };
+    expect(preview._attrs?.fill).toBeTruthy();
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(2);
+    const ellipse = shapes.find(s => s.type === 'circle');
+    expect(ellipse).toBeTruthy();
+    expect(ellipse!.fill).toBeTruthy();
+    wrapper.unmount();
+  });
+
+  it('开启填充后绘制矩形：预览与落库均带 fill', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    seedShape(vm, { id: 'c1', type: 'circle', x: 50, y: 50, radius: 30, color: '#123456', lineWidth: 1, opacity: 1 });
+    vm.selectShape('c1');
+    await nextTick();
+    await wrapper.find('.fill-toggle').trigger('click');
+    vm.tool('rectangle');
+    const stage = konvaMocks.MockStage.last()!;
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 200, y: 180 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    const preview = vm.renderer.previewLayer.getChildren()[0] as { _attrs?: Record<string, unknown> };
+    expect(preview._attrs?.fill).toBeTruthy();
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
+    const rect = vm.getCurrentPageShapes().find(s => s.type === 'rect');
+    expect(rect).toBeTruthy();
+    expect(rect!.fill).toBeTruthy();
     wrapper.unmount();
   });
 
