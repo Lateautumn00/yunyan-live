@@ -220,6 +220,17 @@ const konvaMocks = vi.hoisted(() => {
     getClassName() {
       return 'Shape';
     }
+    _visible = true;
+    show() {
+      this._visible = true;
+    }
+    hide() {
+      this._visible = false;
+    }
+    visible(v?: boolean) {
+      if (v !== undefined) this._visible = v;
+      return this._visible;
+    }
   }
 
   class MockLineShape extends MockShape {
@@ -771,6 +782,36 @@ describe('KonvaRenderer circle/ellipse', () => {
     expect(rn!.attrs.fill).toBeUndefined();
     expect(cf!.attrs.fill).toBe('#ff0000');
     expect(cn!.attrs.fill).toBeUndefined();
+    renderer.destroy();
+  });
+});
+
+describe('KonvaRenderer laser', () => {
+  it('mirrors viewport transform on laserLayer and toggles the laser dot', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    renderer.setZoom(150);
+    renderer.setViewport(10, -20);
+
+    const laser = renderer.laserLayer as unknown as InstanceType<typeof konvaMocks.MockLayer>;
+    expect(laser.scaleX()).toBe(1.5);
+    expect(laser.scaleY()).toBe(1.5);
+    expect(laser.x()).toBe(10);
+    expect(laser.y()).toBe(-20);
+
+    renderer.setLaserPoint(50, 60);
+    const dot = laser.getChildren()[0] as unknown as InstanceType<typeof konvaMocks.MockShape>;
+    expect(dot.x()).toBe(50);
+    expect(dot.y()).toBe(60);
+    expect(dot.visible()).toBe(true);
+
+    renderer.setLaserPoint(null);
+    expect(dot.visible()).toBe(false);
+
+    // 翻页重应用视口且红点保持（laserLayer 不随页隐藏）
+    renderer.showPage(0);
+    expect(laser.scaleX()).toBe(1.5);
+    expect(laser.x()).toBe(10);
+    expect(dot.visible()).toBe(false);
     renderer.destroy();
   });
 });

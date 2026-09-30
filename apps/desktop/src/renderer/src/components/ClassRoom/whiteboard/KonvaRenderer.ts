@@ -10,6 +10,10 @@ export class KonvaRenderer {
   // 任意缩放/平移下位置与尺寸和最终图形一致；不进 layers 列表，不参与翻页/绑定）
   previewLayer: Konva.Layer;
   tempLayer: Konva.Layer;
+  // 激光红点专用层：与 previewLayer 同步视口变换（教师跟指/远端广播共用单点，
+  // 层局部坐标；不进 layers 列表，不参与翻页/绑定）
+  laserLayer: Konva.Layer;
+  private laserDot: Konva.Circle | null = null;
   private layers: Konva.Layer[] = [];
   private layerMap = new Map<number, Konva.Layer>();
   private nodeMap = new Map<string, Konva.Node>();
@@ -38,9 +42,11 @@ export class KonvaRenderer {
     this.layer = new Konva.Layer();
     this.previewLayer = new Konva.Layer();
     this.tempLayer = new Konva.Layer();
+    this.laserLayer = new Konva.Layer();
     this.stage.add(this.layer);
     this.stage.add(this.previewLayer);
     this.stage.add(this.tempLayer);
+    this.stage.add(this.laserLayer);
     this.layers = [this.layer];
     this.layerMap.set(0, this.layer);
   }
@@ -77,9 +83,14 @@ export class KonvaRenderer {
     this.previewLayer.scaleY(this.zoomLevel / 100);
     this.previewLayer.x(this.viewX);
     this.previewLayer.y(this.viewY);
+    this.laserLayer.scaleX(this.zoomLevel / 100);
+    this.laserLayer.scaleY(this.zoomLevel / 100);
+    this.laserLayer.x(this.viewX);
+    this.laserLayer.y(this.viewY);
     this.clearSelection();
     this.previewLayer.moveToTop();
     this.tempLayer.moveToTop();
+    this.laserLayer.moveToTop();
     this.rebuildLayerMap();
     this.stage.batchDraw();
   }
@@ -92,8 +103,11 @@ export class KonvaRenderer {
     this.layer.y(y);
     this.previewLayer.x(x);
     this.previewLayer.y(y);
+    this.laserLayer.x(x);
+    this.laserLayer.y(y);
     this.layer.batchDraw();
     this.previewLayer.batchDraw();
+    this.laserLayer.batchDraw();
   }
 
   getView(): { x: number; y: number } {
@@ -137,8 +151,35 @@ export class KonvaRenderer {
     this.layer.scaleY(scale);
     this.previewLayer.scaleX(scale);
     this.previewLayer.scaleY(scale);
+    this.laserLayer.scaleX(scale);
+    this.laserLayer.scaleY(scale);
     this.layer.batchDraw();
     this.previewLayer.batchDraw();
+    this.laserLayer.batchDraw();
+  }
+
+  // 激光红点（层局部坐标）：x=null 熄灭。与 previewLayer 同视口，任意缩放/平移下位置一致
+  setLaserPoint(x: number | null, y = 0) {
+    if (!this.laserDot) {
+      this.laserDot = new Konva.Circle({
+        radius: 9,
+        fill: '#ff3b30',
+        stroke: '#ffffff',
+        strokeWidth: 2,
+        shadowBlur: 8,
+        shadowColor: 'rgba(255, 59, 48, 0.8)',
+        listening: false,
+      });
+      this.laserLayer.add(this.laserDot);
+    }
+    if (x === null) {
+      this.laserDot.hide();
+    } else {
+      this.laserDot.x(x);
+      this.laserDot.y(y);
+      this.laserDot.show();
+    }
+    this.laserLayer.batchDraw();
   }
 
   zoomIn(): number {

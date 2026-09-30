@@ -143,4 +143,18 @@ describe('YjsProvider readOnly', () => {
     w.setFileItemId(0, 'x');
     expect(w.getFileList()[0]!.fileid).toBe('p1,p2');
   });
+
+  it('readOnly setLaser 不广播', () => {
+    const p = create(true);
+    p.setLaser(10, 20);
+    expect((p.awareness.getLocalState() as Record<string, unknown> | null)?.laser ?? null).toBeFalsy();
+  });
+
+  it('可写 setLaser/setLaserOff 写入 awareness 并可清除（对照）', () => {
+    const p = create(false);
+    p.setLaser(30, 40);
+    expect((p.awareness.getLocalState() as Record<string, unknown> | null)?.laser).toEqual({ x: 30, y: 40 });
+    p.setLaserOff();
+    expect((p.awareness.getLocalState() as Record<string, unknown> | null)?.laser ?? null).toBeFalsy();
+  });
 });

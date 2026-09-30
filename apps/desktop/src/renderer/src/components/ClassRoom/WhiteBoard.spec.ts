@@ -123,8 +123,10 @@ const konvaMocks = vi.hoisted(() => {
       if (attrs?.height !== undefined) this._height = attrs.height as number;
     }
     getLayer() { return this._layer; }
-    show() {}
-    hide() {}
+    _visible = true;
+    show() { this._visible = true; }
+    hide() { this._visible = false; }
+    visible(v?: boolean) { if (v !== undefined) this._visible = v; return this._visible; }
     draw() {}
     batchDraw() {}
     destroy() {}
@@ -140,7 +142,6 @@ const konvaMocks = vi.hoisted(() => {
     getClientRect() { return { x: 0, y: 0, width: 100, height: 100 }; }
     scaleX(_val?: unknown) { if (_val !== undefined) this._scaleX = _val as number; return this._scaleX; }
     scaleY(_val?: unknown) { if (_val !== undefined) this._scaleY = _val as number; return this._scaleY; }
-    visible() { return true; }
     getAttr(_key: string) {
       if (_key === 'visible') return true;
       if (_key === 'image') return { currentSrc: '' };
@@ -1952,6 +1953,72 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
     expect(() => vm.selectShape('any')).not.toThrow();
     expect(vm.getSelectedShapeId()).toBeNull();
     expect(wrapper.find('.color-panel').isVisible()).toBe(false);
+    wrapper.unmount();
+  });
+});
+
+// ── 激光笔：教师跟指广播、切走/Esc 熄灭、远端渲染红点 ─────────────────────
+describe('WhiteBoard.vue 激光笔', () => {
+  function localLaser(vm: SelVM): { x: number; y: number } | null | undefined {
+    return (vm.provider!.awareness.getLocalState() as Record<string, unknown> | null)?.laser as
+      | { x: number; y: number }
+      | null
+      | undefined;
+  }
+
+  it('教师点选激光进入模式，移动广播 awareness 并渲染红点，切换工具即熄灭', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    await wrapper.find('.tools .laser').trigger('click');
+    expect(vm.mode).toBe('laser');
+
+    const stage = konvaMocks.MockStage.last()!;
+    stage._pointer = { x: 200, y: 150 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+
+    expect(localLaser(vm)).toEqual({ x: 200, y: 150 });
+    const dot = (vm.renderer as unknown as { laserLayer: { getChildren: () => unknown[] } })
+      .laserLayer.getChildren()[0] as { x: () => number; y: () => number; visible: () => boolean };
+    expect(dot).toBeTruthy();
+    expect(dot.x()).toBe(200);
+    expect(dot.y()).toBe(150);
+    expect(dot.visible()).toBe(true);
+
+    vm.tool('cur');
+    expect(vm.mode).toBe('cur');
+    expect(localLaser(vm) ?? null).toBeFalsy();
+    expect(dot.visible()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('Esc 退出激光模式并熄灭', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    await wrapper.find('.tools .laser').trigger('click');
+    expect(vm.mode).toBe('laser');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(vm.mode).toBe('cur');
+    expect(localLaser(vm) ?? null).toBeFalsy();
+    wrapper.unmount();
+  });
+
+  it('远端 laser 广播渲染红点，清除后熄灭（学生端视角）', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as SelVM;
+    const provider = vm.provider!;
+    // 学生端 readOnly 下 setLaser 不可用——直接写 awareness 触发同一 change 渲染路径
+    provider.awareness.setLocalStateField('laser', { x: 30, y: 40 });
+
+    const dot = (vm.renderer as unknown as { laserLayer: { getChildren: () => unknown[] } })
+      .laserLayer.getChildren()[0] as { x: () => number; y: () => number; visible: () => boolean };
+    expect(dot).toBeTruthy();
+    expect(dot.x()).toBe(30);
+    expect(dot.y()).toBe(40);
+    expect(dot.visible()).toBe(true);
+
+    provider.awareness.setLocalStateField('laser', null);
+    expect(dot.visible()).toBe(false);
     wrapper.unmount();
   });
 });

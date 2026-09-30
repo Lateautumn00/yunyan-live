@@ -296,7 +296,18 @@ onSynced(cb: () => void) {
     this.awareness.setLocalStateField('cursor', cursor);
   }
 
+  // 激光笔：瞬时广播（awareness，不进 Yjs 文档/undo 栈），仅教师可用
+  setLaser(x: number, y: number) {
+    if (this.readOnly) return;
+    this.awareness.setLocalStateField('laser', { x, y });
+  }
+
+  setLaserOff() {
+    this.awareness.setLocalStateField('laser', null);
+  }
+
   destroy() {
+    this.awareness.setLocalStateField('laser', null);
     this.awareness.setLocalStateField('cursor', null);
     this.awareness.setLocalStateField('user', null);
     this.provider.disconnect();

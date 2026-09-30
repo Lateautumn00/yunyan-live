@@ -104,6 +104,17 @@
           />
         </el-tooltip>
         <el-tooltip
+          content="激光笔 · 红点跟指，切换工具或 Esc 熄灭"
+          placement="right"
+        >
+          <div
+            :class="['laser', { on: mode === 'laser' }]"
+            @click="toggleLaser"
+          >
+            <el-icon><Aim /></el-icon>
+          </div>
+        </el-tooltip>
+        <el-tooltip
           content="上传图片 · 贴到当前页"
           placement="right"
         >
@@ -716,6 +727,7 @@ onMounted(() => {
 
   window.addEventListener('resize', onResize);
   document.addEventListener('keydown', onSelectionKeydown);
+  provider.awareness.on('change', onAwarenessLaser);
 
   // 计算颜色面板初始位置（选择工具右侧）
   nextTick(() => {
@@ -824,6 +836,7 @@ onUnmounted(() => {
   currentElementsObserver?.();
   window.removeEventListener('resize', onResize);
   document.removeEventListener('keydown', onSelectionKeydown);
+  provider?.awareness.off('change', onAwarenessLaser);
   renderer?.destroy();
   provider?.destroy();
 });
@@ -850,8 +863,43 @@ function toLayerCoords(pos: { x: number; y: number }): { x: number; y: number } 
 
 // --- Tool selection ---
 function setMode(type: string) {
+  // 激光模式被任何模式切换顶掉时即熄灭（工具栏/课件/激光按钮自关共用此收口）
+  if (mode.value === 'laser' && type !== 'laser') laserOff();
   mode.value = type;
   renderer?.setSelectMode(type === 'cur' && props.isTeacher);
+}
+
+// 激光笔：仅教师。点选进入（红点跟指），切走/Esc 熄灭（awareness 瞬时广播，学生端只见红点）
+function toggleLaser() {
+  if (!props.isTeacher) return;
+  if (mode.value === 'laser') {
+    tool('cur');
+    return;
+  }
+  setMode('laser');
+  showEditer.value = false;
+  showFillToggle.value = false;
+  showFileList.value = false;
+}
+
+function laserOff() {
+  provider?.setLaserOff();
+  renderer?.setLaserPoint(null);
+  lastLaserKey = '';
+}
+
+// awareness 激光状态 → 单点渲染（远端教师红点/本地回显/熄灭）。坐标即层局部坐标；
+// 用坐标键去重：光标等高频 change 不重复触发渲染
+function onAwarenessLaser() {
+  if (!renderer || !provider) return;
+  let laser: { x: number; y: number } | null = null;
+  provider.awareness.getStates().forEach((s: any) => {
+    if (s && s.laser) laser = s.laser;
+  });
+  const key = laser ? `${laser.x},${laser.y}` : '';
+  if (key === lastLaserKey) return;
+  lastLaserKey = key;
+  renderer.setLaserPoint(laser ? laser.x : null, laser ? laser.y : 0);
 }
 
 function tool(type: string) {
@@ -1103,6 +1151,9 @@ function deleteSelected() {
 let isDrawing = false;
 let startPos: { x: number; y: number } | null = null;
 let currentPath: number[] = [];
+// 激光广播节流（50ms）与远端状态去重（同坐标不重复渲染）
+let lastLaserSend = 0;
+let lastLaserKey = '';
 
 function onSelectionKeydown(e: KeyboardEvent) {
   const ae = document.activeElement;
@@ -1121,8 +1172,10 @@ function onSelectionKeydown(e: KeyboardEvent) {
     return;
   }
   if (e.key === 'Escape') {
-    // Esc：取消选中并中止进行中的绘制/拖拽（学生端由 revocation/clearSelection 自身守卫）
+    // Esc：取消选中并中止进行中的绘制/拖拽（学生端由 revocation/clearSelection 自身守卫）；
+    // 激光模式 → 回选择器并熄灭
     clearSelection();
+    if (mode.value === 'laser') setMode('cur');
     isDrawing = false;
     startPos = null;
     currentPath = [];
@@ -1191,6 +1244,20 @@ function onPointerDown(e: any) {
 }
 
 function onPointerMove(e: any) {
+  // 激光笔：不依赖 isDrawing，红点跟指 + 节流广播（学生端仅接收渲染，进不到此分支）
+  if (mode.value === 'laser') {
+    const pos = getPointerPos(e);
+    if (pos) {
+      const lp = toLayerCoords(pos);
+      renderer?.setLaserPoint(lp.x, lp.y);
+      const now = Date.now();
+      if (now - lastLaserSend >= 50) {
+        lastLaserSend = now;
+        provider?.setLaser(lp.x, lp.y);
+      }
+    }
+    return;
+  }
   if (!isDrawing) return;
   const pos = getPointerPos(e);
   if (!pos) return;
@@ -2116,6 +2183,7 @@ defineExpose({
 .cursor-brush { cursor: url('../../assets/imgs/whiteboard/m_brush.png') 2 22, crosshair; }
 .cursor-eraser { cursor: url('../../assets/imgs/whiteboard/m_eraser.png') 8 18, crosshair; }
 .cursor-move { cursor: url('../../assets/imgs/whiteboard/m_move.png') 8 18, grab; }
+.cursor-laser { cursor: crosshair; }
 
 .tools {
   position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
