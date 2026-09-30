@@ -727,4 +727,24 @@ describe('KonvaRenderer circle/ellipse', () => {
     expect(node.points()).toEqual([10, 20, 80, 90]);
     renderer.destroy();
   });
+
+  it('fires onShapeDblClick only while select mode is on', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    bindOne(renderer, circleData());
+    const hits: string[] = [];
+    renderer.onShapeDblClick = id => hits.push(id);
+    const node = renderer.layer.getChildren()[0] as unknown as { fire: (e: string) => void };
+
+    node.fire('dblclick');
+    expect(hits).toEqual([]); // selectEnabled 初始 false → 未接线
+
+    renderer.setSelectMode(true);
+    node.fire('dblclick');
+    expect(hits).toEqual(['c1']);
+
+    renderer.setSelectMode(false);
+    node.fire('dblclick');
+    expect(hits).toEqual(['c1']); // 退出选择模式后不再触发
+    renderer.destroy();
+  });
 });

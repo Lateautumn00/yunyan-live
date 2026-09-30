@@ -23,6 +23,7 @@ export class KonvaRenderer {
   private pendingBind: Y.Array<any> | null = null;
   pageIds: string[] = [];
   onShapeClick?: (id: string) => void;
+  onShapeDblClick?: (id: string) => void;
   onShapeDragEnd?: (id: string, x: number, y: number) => void;
   onShapeTransformEnd?: (id: string, attrs: Record<string, any>) => void;
   // 手势（拖动/缩放）期间收到的刷新延后到手势结束，避免销毁正在操作的节点
@@ -220,10 +221,11 @@ export class KonvaRenderer {
   }
 
   private wireNode(node: Konva.Node, id: string) {
-    node.off('click dragstart dragend transformstart transformend');
+    node.off('click dblclick dragstart dragend transformstart transformend');
     if (!this.selectEnabled) return;
     node.draggable(true);
     node.on('click', () => this.onShapeClick?.(id));
+    node.on('dblclick', () => this.onShapeDblClick?.(id));
     node.on('dragstart', () => {
       this.gesturing = true;
     });

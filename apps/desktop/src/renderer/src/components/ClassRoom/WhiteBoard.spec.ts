@@ -1758,3 +1758,93 @@ describe('WhiteBoard.vue 直线工具', () => {
     wrapper.unmount();
   });
 });
+
+// ── 双击编辑文本：原位编辑框、Enter 提交、Esc 弃改 ────────────────────────
+describe('WhiteBoard.vue 双击编辑文本', () => {
+  function seedText(vm: SelVM, text = 'hello') {
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape({ id: 't1', type: 'text', x: 50, y: 60, text, fontSize: 20, color: '#000', opacity: 1 });
+    vm.tool('cur');
+    // 直接触发重建以挂载节点事件（生产中由 elements 观察器完成）
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(provider.getActiveElements());
+    return (vm.renderer as unknown as { layer: { getChildren: () => unknown[] } }).layer.getChildren()[0] as {
+      fire: (e: string) => void;
+    };
+  }
+
+  it('双击文本弹出编辑框，Enter 提交并可撤销/重做', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const node = seedText(vm);
+
+    node.fire('dblclick');
+    const ta = document.querySelector('textarea') as HTMLTextAreaElement;
+    expect(ta).toBeTruthy();
+    expect(ta.value).toBe('hello');
+
+    ta.value = 'world';
+    ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(ta.isConnected).toBe(false);
+    expect(vm.getCurrentPageShapes()[0]!.text).toBe('world');
+
+    vm.revocation('pre');
+    expect(vm.getCurrentPageShapes()[0]!.text).toBe('hello');
+    vm.revocation('next');
+    expect(vm.getCurrentPageShapes()[0]!.text).toBe('world');
+    wrapper.unmount();
+  });
+
+  it('Esc 弃改不写回', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const node = seedText(vm);
+
+    node.fire('dblclick');
+    const ta = document.querySelector('textarea') as HTMLTextAreaElement;
+    ta.value = 'changed';
+    ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(ta.isConnected).toBe(false);
+    expect(vm.getCurrentPageShapes()[0]!.text).toBe('hello');
+    wrapper.unmount();
+  });
+
+  it('双击非文本图形不弹编辑框', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape({ id: 'c1', type: 'circle', x: 50, y: 50, radius: 30, color: '#000', lineWidth: 1, opacity: 1 });
+    vm.tool('cur');
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(provider.getActiveElements());
+
+    const node = (vm.renderer as unknown as { layer: { getChildren: () => unknown[] } }).layer.getChildren()[0] as {
+      fire: (e: string) => void;
+    };
+    node.fire('dblclick');
+    expect(document.querySelector('textarea')).toBeNull();
+    wrapper.unmount();
+  });
+
+  it('学生端双击不弹编辑框', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as SelVM;
+    vm.tool('cur');
+    const fakeEls = {
+      forEach: (cb: (el: unknown) => void) => {
+        const data: Record<string, unknown> = {
+          id: 't1', type: 'text', x: 50, y: 60, text: 'hi', fontSize: 14, color: '#000', opacity: 1,
+        };
+        cb({ get: (k: string) => data[k] });
+      },
+    };
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(fakeEls);
+
+    const node = (vm.renderer as unknown as { layer: { getChildren: () => unknown[] } }).layer.getChildren()[0] as {
+      fire: (e: string) => void;
+    };
+    node.fire('dblclick');
+    expect(document.querySelector('textarea')).toBeNull();
+    wrapper.unmount();
+  });
+});

@@ -684,6 +684,7 @@ onMounted(() => {
   }, !props.isTeacher);
   renderer = new KonvaRenderer(document.getElementById(containerId.value)!);
   renderer.onShapeClick = selectShape;
+  renderer.onShapeDblClick = editTextShape;
   renderer.onShapeDragEnd = commitShapeMove;
   renderer.onShapeTransformEnd = commitShapeTransform;
   renderer.onRefreshRequest = refreshLayer;
@@ -874,6 +875,66 @@ function selectShape(id: string) {
 
 function clearSelection() {
   renderer?.clearSelection();
+}
+
+// 双击已有文本：原位弹出编辑框；Enter/失焦提交，Esc 弃改；
+// 空内容与未改动视为放弃（避免留下不可见的空文本）
+let editingTextId: string | null = null;
+
+function editTextShape(id: string) {
+  if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  if (editingTextId) return;
+  const m = provider.getActiveElements()?.toArray().find(x => x.get('id') === id);
+  if (!m || m.get('type') !== 'text') return;
+
+  const layer = renderer.layer;
+  const s = layer.scaleX() || 1;
+  const screenX = layer.x() + (Number(m.get('x')) || 0) * s;
+  const screenY = layer.y() + (Number(m.get('y')) || 0) * s;
+  const original = String(m.get('text') ?? '');
+  const fontSize = Number(m.get('fontSize')) || 14;
+  const color = String(m.get('color') || '#000');
+
+  const ta = document.createElement('textarea');
+  ta.value = original;
+  ta.style.cssText = `position:fixed; left:${screenX}px; top:${screenY}px; font-size:${fontSize}px; color:${color}; border:1px dashed #88b8cc; background:rgba(255,255,255,0.9); outline:none; resize:none; padding:2px 4px; margin:0; overflow:hidden; z-index:999; min-width:60px; min-height:${fontSize + 8}px; font-family:sans-serif; line-height:1.2;`;
+  editingTextId = id;
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+
+  let discarded = false;
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    editingTextId = null;
+    const val = ta.value.trim();
+    ta.remove();
+    if (discarded || !val || val === original) return;
+    const before = snapshotShape(id, ['text']);
+    if (!before) return;
+    if (!applyShapeUpdate(id, { text: val }, before)) return;
+    refreshLayer();
+    redoStack.value = [];
+    undoStack.value.push({
+      type: 'updateShape', pageId: provider!.getCurrentPageId(),
+      pageIndex: renderer!.getCurrentPageIndex(), shapeId: id,
+      before, after: { text: val },
+    });
+    emitPaintLog();
+  };
+  ta.addEventListener('blur', finish);
+  ta.addEventListener('keydown', ke => {
+    if (ke.key === 'Enter' && !ke.shiftKey) {
+      ke.preventDefault();
+      finish();
+    } else if (ke.key === 'Escape') {
+      ke.preventDefault();
+      discarded = true;
+      finish();
+    }
+  });
 }
 
 function getSelectedShapeId(): string | null {
