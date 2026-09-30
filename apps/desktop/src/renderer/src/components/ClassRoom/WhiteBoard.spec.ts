@@ -2062,6 +2062,69 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
     wrapper.unmount();
   });
 
+  it('描边颜色盘：图标展开、轮盘 canvas 取色写 color、死代码色条已移除', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    vm.selectShape('r1');
+    await nextTick();
+    const ctxSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({
+        createConicGradient: () => ({ addColorStop: () => {} }),
+        fillRect: () => {},
+        getImageData: () => ({ data: [1, 168, 255, 255] }),
+        fillStyle: '',
+      } as unknown as RenderingContext);
+
+    const box = wrapper.find('.pallet-box');
+    expect(box.isVisible()).toBe(false);
+    await wrapper.find('.edit-color .colours').trigger('click');
+    expect(box.isVisible()).toBe(true);
+    expect(wrapper.find('.strip-color').exists()).toBe(false);
+    expect(wrapper.find('.endSelectColor .end-color-item').exists()).toBe(true);
+
+    const canvas = wrapper.find('.pallet-box .pal-color canvas');
+    expect(canvas.exists()).toBe(true);
+    vi.spyOn(canvas.element, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 150, bottom: 150, width: 150, height: 150, toJSON: () => ({}),
+    } as DOMRect);
+    await canvas.trigger('click', { clientX: 75, clientY: 75 });
+    expect(vm.getCurrentPageShapes()[0]!.color).toBe('#01a8ff');
+    expect('fill' in vm.getCurrentPageShapes()[0]!).toBe(false);
+    ctxSpy.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('填充颜色盘：轮盘 canvas 取色写 fill、描边不动、弹层保持打开', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    vm.selectShape('r1');
+    await nextTick();
+    const ctxSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({
+        createConicGradient: () => ({ addColorStop: () => {} }),
+        fillRect: () => {},
+        getImageData: () => ({ data: [1, 168, 255, 255] }),
+        fillStyle: '',
+      } as unknown as RenderingContext);
+
+    await wrapper.find('.fill-toggle').trigger('click');
+    const canvas = wrapper.find('.fill-palette .fpal-color canvas');
+    expect(canvas.exists()).toBe(true);
+    vi.spyOn(canvas.element, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 150, bottom: 150, width: 150, height: 150, toJSON: () => ({}),
+    } as DOMRect);
+    await canvas.trigger('click', { clientX: 75, clientY: 75 });
+    expect(vm.getCurrentPageShapes()[0]!.fill).toBe('#01a8ff');
+    expect(vm.getCurrentPageShapes()[0]!.color).toBe('#123456');
+    expect(wrapper.find('.fill-palette').exists()).toBe(true);
+    ctxSpy.mockRestore();
+    wrapper.unmount();
+  });
+
   it('选中图片不打开属性面板', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;

@@ -367,18 +367,32 @@
             v-if="showFillPalette"
             class="fill-palette"
           >
-            <div
-              v-for="c in presetColors"
-              :key="c"
-              :class="['fp-item', { on: fillColor === c }]"
-              :style="{ background: c }"
-              @click="pickFillColor(c)"
-            />
-            <div
-              class="fp-none"
-              @click="clearFillColor"
-            >
-              无颜色
+            <div class="fp-row">
+              <div
+                v-for="c in presetColors"
+                :key="c"
+                :class="['fp-item', { on: fillColor === c }]"
+                :style="{ background: c }"
+                @click="pickFillColor(c)"
+              />
+              <div
+                class="fp-none"
+                @click="clearFillColor"
+              >
+                无颜色
+              </div>
+            </div>
+            <div class="fpal-color">
+              <canvas
+                ref="fillWheelRef"
+                width="150"
+                height="150"
+                @click="clickFillColor"
+              />
+              <div
+                class="pal-btn"
+                :style="{ left: fpalBtnLeft + 'px', top: fpalBtnTop + 'px' }"
+              />
             </div>
           </div>
         </div>
@@ -386,25 +400,16 @@
           v-show="showPallet"
           class="pallet-box"
         >
-          <div
-            class="pal-color"
-            @click="clickColor"
-          >
+          <div class="pal-color">
+            <canvas
+              ref="strokeWheelRef"
+              width="150"
+              height="150"
+              @click="clickColor"
+            />
             <div
               class="pal-btn"
               :style="{ left: palBtnLeft + 'px', top: palBtnTop + 'px' }"
-            />
-          </div>
-          <div class="strip-color">
-            <div
-              v-for="(c, i) in lcolor"
-              :key="i"
-              class="color-item"
-              :style="{ background: c }"
-            />
-            <div
-              class="strip-color-btn"
-              :style="{ left: stripMovePointX + 'px' }"
             />
           </div>
           <div class="endSelectColor">
@@ -536,7 +541,7 @@
 <script setup lang="ts">
 // @ts-nocheck
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, watch, onMounted, onUnmounted, nextTick, type Ref } from 'vue';
 import { useRoute } from 'vue-router';
 import Konva from 'konva';
 import { YjsProvider } from './whiteboard/YjsProvider';
@@ -648,10 +653,12 @@ const fileList = ref<any[]>([]);
 const editFileIndex = ref(-1);
 const presetColors = PRESET_COLORS;
 const endSelectColor = ref(['#000', '#818181', '#B3B3B3', '#fff']);
-const lcolor = ref<string[]>([]);
-const palBtnLeft = ref(140);
-const palBtnTop = ref(140);
-const stripMovePointX = ref(266);
+const palBtnLeft = ref(69);
+const palBtnTop = ref(69);
+const fpalBtnLeft = ref(69);
+const fpalBtnTop = ref(69);
+const strokeWheelRef = ref<HTMLCanvasElement>();
+const fillWheelRef = ref<HTMLCanvasElement>();
 const sizeBtnLeft = ref(0);
 const zoomInputRef = ref<HTMLInputElement>();
 const currentOpacity = ref(1);
@@ -710,25 +717,6 @@ function formatFileSize(bytes: number): string {
   return (bytes / 1048576).toFixed(1) + 'MB';
 }
 
-function gradientColor(startColor: string, endColor: string, step: number): string[] {
-  const s = hexToRgb(startColor);
-  const e = hexToRgb(endColor);
-  const result: string[] = [];
-  for (let i = 0; i <= step; i++) {
-    const r = Math.round(s[0] + (e[0] - s[0]) * i / step);
-    const g = Math.round(s[1] + (e[1] - s[1]) * i / step);
-    const b = Math.round(s[2] + (e[2] - s[2]) * i / step);
-    result.push(`#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`);
-  }
-  return result;
-}
-
-function hexToRgb(hex: string): [number, number, number] {
-  hex = hex.replace('#', '');
-  if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-  return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
-}
-
 onMounted(() => {
   provider = new YjsProvider(props.roomId, userId, displayName, userColor, (kind) => {
     useUserStore().sessionInterrupted(kind);
@@ -741,8 +729,6 @@ onMounted(() => {
   renderer.onRefreshRequest = refreshLayer;
   renderer.setSelectMode(mode.value === 'cur' && props.isTeacher);
   renderer.showPage(0);
-
-  lcolor.value = gradientColor('#000', '#fff', 23);
 
   const stage = renderer.getStage();
   stage.on('mousedown touchstart', onPointerDown);
@@ -1683,41 +1669,73 @@ function selectColor(color: string) {
   commitSelectedStyle({ color });
 }
 
-function clickColor(e: MouseEvent) {
-  const target = e.currentTarget as HTMLElement;
-  const rect = target.getBoundingClientRect();
+// --- 颜色轮盘：绘制与取色读同一块画布，所见即所得（与浏览器 conic 角度基准无关）---
+const WHEEL_STOPS = [
+  '#7cff00', '#2bff0c', '#01ff62', '#00ffc3', '#00fffb',
+  '#00aeff', '#007cff', '#1f1cff', '#6800ff', '#ad00ff',
+  '#e800c7', '#ff006d', '#ff0000', '#ff8700', '#edbb00', '#cffb00', '#7cff00'
+];
+
+function drawWheel(canvas?: HTMLCanvasElement | null) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const gradient = ctx.createConicGradient(-Math.PI / 2, canvas.width / 2, canvas.height / 2);
+  WHEEL_STOPS.forEach((c, i) => gradient.addColorStop(i / (WHEEL_STOPS.length - 1), c));
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function sampleWheel(e: MouseEvent): string | null {
+  const canvas = e.currentTarget as HTMLCanvasElement;
+  const rect = canvas.getBoundingClientRect();
+  const cssW = rect.width || canvas.width;
+  const cssH = rect.height || canvas.height;
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  const size = rect.width;
-  const centerX = size / 2;
-  const centerY = size / 2;
-  const radius = size / 2;
-  const dx = x - centerX;
-  const dy = y - centerY;
-
-  palBtnLeft.value = Math.max(0, Math.min(size - 12, x - 6));
-  palBtnTop.value = Math.max(0, Math.min(size - 12, y - 6));
-
-  if (Math.sqrt(dx * dx + dy * dy) > radius) return;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-  const gradient = ctx.createConicGradient(-Math.PI / 2, centerX, centerY);
-  const stops = [
-    '#7cff00', '#2bff0c', '#01ff62', '#00ffc3', '#00fffb',
-    '#00aeff', '#007cff', '#1f1cff', '#6800ff', '#ad00ff',
-    '#e800c7', '#ff006d', '#ff0000', '#ff8700', '#edbb00', '#cffb00', '#7cff00'
-  ];
-  stops.forEach((c, i) => gradient.addColorStop(i / (stops.length - 1), c));
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-
-  const pixel = ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data;
-  const hex = '#' + [pixel[0], pixel[1], pixel[2]]
+  const dx = x - cssW / 2;
+  const dy = y - cssH / 2;
+  if (Math.sqrt(dx * dx + dy * dy) > Math.min(cssW, cssH) / 2) return null;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const pixel = ctx.getImageData(
+    Math.round(x * (canvas.width / cssW)),
+    Math.round(y * (canvas.height / cssH)),
+    1,
+    1
+  ).data;
+  return '#' + [pixel[0], pixel[1], pixel[2]]
     .map(v => v.toString(16).padStart(2, '0')).join('');
-  selectColor(hex);
 }
+
+function moveWheelBtn(e: MouseEvent, left: Ref<number>, top: Ref<number>) {
+  const canvas = e.currentTarget as HTMLCanvasElement;
+  const rect = canvas.getBoundingClientRect();
+  const size = Math.min(rect.width || canvas.width, rect.height || canvas.height);
+  left.value = Math.max(0, Math.min(size - 12, e.clientX - rect.left - 6));
+  top.value = Math.max(0, Math.min(size - 12, e.clientY - rect.top - 6));
+}
+
+function clickColor(e: MouseEvent) {
+  moveWheelBtn(e, palBtnLeft, palBtnTop);
+  const hex = sampleWheel(e);
+  if (hex) selectColor(hex);
+}
+
+function clickFillColor(e: MouseEvent) {
+  if (!props.isTeacher || mode.value !== 'cur') return;
+  moveWheelBtn(e, fpalBtnLeft, fpalBtnTop);
+  const hex = sampleWheel(e);
+  // 轮盘连续取色不收起弹层，便于反复微调（预设点/无颜色仍关闭）
+  if (hex) pickFillColor(hex, true);
+}
+
+watch(showPallet, open => {
+  if (open) nextTick(() => drawWheel(strokeWheelRef.value));
+});
+watch(showFillPalette, open => {
+  if (open) nextTick(() => drawWheel(fillWheelRef.value));
+});
 
 // --- Size slider ---
 function editSizeStart(e: MouseEvent) {
@@ -1747,11 +1765,11 @@ function toggleFillPalette() {
   if (!props.isTeacher || mode.value !== 'cur') return;
   showFillPalette.value = !showFillPalette.value;
 }
-function pickFillColor(color: string) {
+function pickFillColor(color: string, keepOpen = false) {
   if (!props.isTeacher || mode.value !== 'cur') return;
   fillEnabled.value = true;
   fillColor.value = color;
-  showFillPalette.value = false;
+  if (!keepOpen) showFillPalette.value = false;
   commitSelectedStyle({ fill: color });
 }
 function clearFillColor() {
@@ -2313,13 +2331,31 @@ defineExpose({
       &.on { background: #409eff; color: #fff; border-color: #409eff; }
       .fill-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 1px rgba(0, 0, 0, 0.4); }
     }
-    .fill-palette { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 2px 2px; flex-wrap: wrap;
+    .fill-palette { width: 100%; padding: 6px 2px 2px;
+      .fp-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
       .fp-item { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(0, 0, 0, 0.12);
         &.on { border-color: #409eff; }
       }
       .fp-none { padding: 2px 10px; border-radius: 10px; background: #f5f5f5; border: 1px dashed #bbb; color: #666; cursor: pointer; user-select: none;
         &:hover { background: #ececec; }
       }
+      .fpal-color { position: relative; width: 150px; height: 150px; margin: 8px auto 0;
+        canvas { display: block; width: 150px; height: 150px; border-radius: 50%; cursor: crosshair; }
+      }
+    }
+  }
+  .pal-btn { position: absolute; width: 12px; height: 12px; border-radius: 50%;
+    background: #fff; border: 2px solid #444; box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+    pointer-events: none; }
+  .pallet-box { display: flex; flex-direction: column; align-items: center; gap: 8px;
+    margin-top: 10px; padding: 10px; background: #fff; border: 1px solid #e4e7ed;
+    border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    .pal-color { position: relative; width: 150px; height: 150px;
+      canvas { display: block; width: 150px; height: 150px; border-radius: 50%; cursor: crosshair; }
+    }
+    .endSelectColor { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+      .end-color-item { width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
+        border: 1px solid rgba(0, 0, 0, 0.15); }
     }
   }
 }
