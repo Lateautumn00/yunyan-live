@@ -35,6 +35,9 @@ export const DEFAULT_TOOL: ToolState = {
 /** 橡皮白盖显示宽度倍数：拖拽预览与落库渲染同源，lineWidth 存滑杆基值 */
 export const ERASER_WIDTH_MULT = 3;
 
+/** 选择器最小命中描边宽度(px)：Konva 默认 hit 图按 strokeWidth 生成，1px 笔迹选择器点不中 */
+export const HIT_STROKE_MIN = 12;
+
 export const PRESET_COLORS = [
   '#000000', '#818181', '#B3B3B3', '#FFFFFF',
   '#e1383f', '#f8821a', '#fec726', '#61ba47',

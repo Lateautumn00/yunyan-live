@@ -317,7 +317,7 @@ vi.mock('konva', () => ({
 }));
 
 import { KonvaRenderer } from './KonvaRenderer';
-import { ERASER_WIDTH_MULT } from './types';
+import { ERASER_WIDTH_MULT, HIT_STROKE_MIN } from './types';
 
 class StubImage {
   static instances: StubImage[] = [];
@@ -582,6 +582,45 @@ describe('KonvaRenderer selection', () => {
     };
     expect(bindStroke('eraser').attrs.strokeWidth).toBe(2 * ERASER_WIDTH_MULT);
     expect(bindStroke('brush').attrs.strokeWidth).toBe(2);
+    renderer.destroy();
+  });
+
+  it('细笔画命中区抬到 HIT_STROKE_MIN，粗笔画保持原宽', () => {
+    vi.stubGlobal('Image', StubImage);
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const bindStroke = (type: string, lineWidth: number) => {
+      const data: Record<string, unknown> = {
+        id: `${type}_${lineWidth}`, type, x: 0, y: 0, points: [0, 0, 10, 10], color: '#000', lineWidth, opacity: 1,
+      };
+      const elements = [{ get: (k: string) => data[k] }] as unknown as Parameters<
+        typeof renderer.bindElements
+      >[0];
+      renderer.bindElements(elements);
+      return renderer.layer.getChildren()[0] as unknown as InstanceType<
+        typeof konvaMocks.MockLineShape
+      >;
+    };
+    expect(bindStroke('brush', 1).attrs.hitStrokeWidth).toBe(HIT_STROKE_MIN);
+    expect(bindStroke('brush', 20).attrs.hitStrokeWidth).toBe(20);
+    expect(bindStroke('eraser', 2).attrs.hitStrokeWidth).toBe(
+      Math.max(2 * ERASER_WIDTH_MULT, HIT_STROKE_MIN),
+    );
+    renderer.destroy();
+  });
+
+  it('细描边矩形命中区抬到 HIT_STROKE_MIN', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const data: Record<string, unknown> = {
+      id: 'r_hit', type: 'rect', x: 0, y: 0, width: 50, height: 40, color: '#000', lineWidth: 1, opacity: 1,
+    };
+    const elements = [{ get: (k: string) => data[k] }] as unknown as Parameters<
+      typeof renderer.bindElements
+    >[0];
+    renderer.bindElements(elements);
+    const node = renderer.layer.getChildren()[0] as unknown as InstanceType<
+      typeof konvaMocks.MockShape
+    >;
+    expect(node.attrs.hitStrokeWidth).toBe(HIT_STROKE_MIN);
     renderer.destroy();
   });
 
