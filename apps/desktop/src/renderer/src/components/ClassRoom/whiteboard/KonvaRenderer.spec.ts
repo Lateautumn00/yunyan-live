@@ -317,6 +317,7 @@ vi.mock('konva', () => ({
 }));
 
 import { KonvaRenderer } from './KonvaRenderer';
+import { ERASER_WIDTH_MULT } from './types';
 
 class StubImage {
   static instances: StubImage[] = [];
@@ -561,6 +562,26 @@ describe('KonvaRenderer selection', () => {
     >;
     expect(node._x).toBe(5);
     expect(node._y).toBe(6);
+    renderer.destroy();
+  });
+
+  it('renders eraser strokes at lineWidth × ERASER_WIDTH_MULT while brush stays 1×', () => {
+    vi.stubGlobal('Image', StubImage);
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const bindStroke = (type: string) => {
+      const data: Record<string, unknown> = {
+        id: type, type, x: 0, y: 0, points: [0, 0, 10, 10], color: '#000', lineWidth: 2, opacity: 1,
+      };
+      const elements = [{ get: (k: string) => data[k] }] as unknown as Parameters<
+        typeof renderer.bindElements
+      >[0];
+      renderer.bindElements(elements);
+      return renderer.layer.getChildren()[0] as unknown as InstanceType<
+        typeof konvaMocks.MockLineShape
+      >;
+    };
+    expect(bindStroke('eraser').attrs.strokeWidth).toBe(2 * ERASER_WIDTH_MULT);
+    expect(bindStroke('brush').attrs.strokeWidth).toBe(2);
     renderer.destroy();
   });
 

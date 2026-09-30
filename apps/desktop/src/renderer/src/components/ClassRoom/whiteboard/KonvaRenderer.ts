@@ -2,6 +2,7 @@
 import Konva from 'konva';
 import * as Y from 'yjs';
 import { renderPdfPage } from './pdfAsset';
+import { ERASER_WIDTH_MULT } from './types';
 
 export class KonvaRenderer {
   stage: Konva.Stage;
@@ -365,7 +366,8 @@ export class KonvaRenderer {
           x: data.get('x') || 0, y: data.get('y') || 0,
           points: (data.get('points') as number[]) || [],
           stroke: type === 'eraser' ? '#ffffff' : (data.get('color') as string),
-          strokeWidth: (data.get('lineWidth') as number) || 1,
+          strokeWidth: (((data.get('lineWidth') as number) || 1) *
+            (type === 'eraser' ? ERASER_WIDTH_MULT : 1)),
           lineCap: 'round', lineJoin: 'round', tension: 0.5,
           opacity,
         });

@@ -519,7 +519,7 @@ import Konva from 'konva';
 import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
-import { PRESET_COLORS, type FileItem } from './whiteboard/types';
+import { PRESET_COLORS, ERASER_WIDTH_MULT, type FileItem } from './whiteboard/types';
 import { useUserStore } from '@/store/user';
 import Live from '@/api/backstage';
 
@@ -1275,7 +1275,7 @@ function onPointerMove(e: any) {
     const line = new Konva.Line({
       points: layerPath,
       stroke: m === 'eraser' ? '#ffffff' : currentColor.value,
-      strokeWidth: currentSize.value * (m === 'eraser' ? 3 : 1),
+      strokeWidth: currentSize.value * (m === 'eraser' ? ERASER_WIDTH_MULT : 1),
       lineCap: 'round', lineJoin: 'round', tension: 0.5,
     });
     renderer!.previewLayer.add(line);
@@ -1321,7 +1321,8 @@ function onPointerUp(e: any) {
     const shapeData: Record<string, any> = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       type: m, points: layerPath, color: currentColor.value, lineWidth: currentSize.value,
-      opacity: currentOpacity.value,
+      // 橡皮是白盖而非笔迹：强制不透明，否则透明度滑杆会让被擦内容透回来
+      opacity: m === 'eraser' ? 1 : currentOpacity.value,
     };
     provider?.addShape(shapeData);
     currentPath = [];

@@ -1622,6 +1622,27 @@ describe('WhiteBoard.vue 圆形工具绘制', () => {
   });
 });
 
+// ── 橡皮擦：白盖落库与拖拽预览渲染一致（宽度基值×倍数、强制不透明） ────────
+describe('WhiteBoard.vue 橡皮擦', () => {
+  it('抬起落库强制 opacity=1 且 lineWidth 为基值（与拖拽预览一致）', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    vm.tool('eraser');
+    vm.provider!.setToolState({ opacity: 0.5 });
+    const stage = konvaMocks.MockStage.last()!;
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 160, y: 140 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    stage.fire('mouseup', { target: stage, evt: {} });
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(1);
+    expect(shapes[0]).toMatchObject({ type: 'eraser', opacity: 1 });
+    expect(shapes[0]!.lineWidth).toBe(vm.provider!.getToolState().lineWidth);
+    wrapper.unmount();
+  });
+});
+
 // ── 快捷键：Ctrl+Z/Y/Shift+Z 撤销重做、Esc 取消选中/中止绘制 ──────────────
 describe('WhiteBoard.vue 快捷键', () => {
   function drawOneCircle(vm: SelVM) {
