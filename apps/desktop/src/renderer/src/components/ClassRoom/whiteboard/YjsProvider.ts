@@ -222,6 +222,18 @@ onSynced(cb: () => void) {
     return true;
   }
 
+  // 删除元素上的指定字段（undo 在 before/after 键集不同时清理旧形态字段，如圆↔椭圆的 radius/radiusX）
+  deleteElementKeys(id: string, keys: string[]): boolean {
+    if (this.readOnly) return false;
+    const idx = this.findElementIndex(id);
+    if (idx < 0) return false;
+    const map = this.getActiveElements()!.get(idx);
+    this.doc.transact(() => {
+      keys.forEach(k => { if (map.has(k)) map.delete(k); });
+    });
+    return true;
+  }
+
   removeElement(id: string): number {
     if (this.readOnly) return -1;
     const idx = this.findElementIndex(id);

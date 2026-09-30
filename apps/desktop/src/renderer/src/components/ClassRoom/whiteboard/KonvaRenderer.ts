@@ -6,6 +6,9 @@ import { renderPdfPage } from './pdfAsset';
 export class KonvaRenderer {
   stage: Konva.Stage;
   layer: Konva.Layer;
+  // 绘制预览专用层：与当前页 layer 同步视口变换（预览坐标存层局部坐标，
+  // 任意缩放/平移下位置与尺寸和最终图形一致；不进 layers 列表，不参与翻页/绑定）
+  previewLayer: Konva.Layer;
   tempLayer: Konva.Layer;
   private layers: Konva.Layer[] = [];
   private layerMap = new Map<number, Konva.Layer>();
@@ -32,8 +35,10 @@ export class KonvaRenderer {
       height: container.clientHeight,
     });
     this.layer = new Konva.Layer();
+    this.previewLayer = new Konva.Layer();
     this.tempLayer = new Konva.Layer();
     this.stage.add(this.layer);
+    this.stage.add(this.previewLayer);
     this.stage.add(this.tempLayer);
     this.layers = [this.layer];
     this.layerMap.set(0, this.layer);
@@ -67,7 +72,12 @@ export class KonvaRenderer {
     this.layer.scaleY(this.zoomLevel / 100);
     this.layer.x(this.viewX);
     this.layer.y(this.viewY);
+    this.previewLayer.scaleX(this.zoomLevel / 100);
+    this.previewLayer.scaleY(this.zoomLevel / 100);
+    this.previewLayer.x(this.viewX);
+    this.previewLayer.y(this.viewY);
     this.clearSelection();
+    this.previewLayer.moveToTop();
     this.tempLayer.moveToTop();
     this.rebuildLayerMap();
     this.stage.batchDraw();
@@ -79,7 +89,10 @@ export class KonvaRenderer {
     this.viewY = y;
     this.layer.x(x);
     this.layer.y(y);
+    this.previewLayer.x(x);
+    this.previewLayer.y(y);
     this.layer.batchDraw();
+    this.previewLayer.batchDraw();
   }
 
   getView(): { x: number; y: number } {
@@ -121,7 +134,10 @@ export class KonvaRenderer {
     const scale = this.zoomLevel / 100;
     this.layer.scaleX(scale);
     this.layer.scaleY(scale);
+    this.previewLayer.scaleX(scale);
+    this.previewLayer.scaleY(scale);
     this.layer.batchDraw();
+    this.previewLayer.batchDraw();
   }
 
   zoomIn(): number {
@@ -247,7 +263,8 @@ export class KonvaRenderer {
       this.transformer = new Konva.Transformer({ rotateEnabled: false, padding: 4 });
       this.tempLayer.add(this.transformer);
     }
-    this.transformer.keepRatio(node.getClassName() === 'Circle');
+    // 自由缩放（圆可拉成椭圆）；Konva 默认 shiftBehavior='default' → 按住 Shift 自动约束比例
+    this.transformer.keepRatio(false);
     this.transformer.nodes([node]);
     this.tempLayer.batchDraw();
     return true;
@@ -271,7 +288,18 @@ export class KonvaRenderer {
     if (sx === 1 && sy === 1) return attrs;
     const cls = node.getClassName ? node.getClassName() : '';
     if (cls === 'Circle') {
-      attrs.radius = (Number(node.radius()) || 0) * sx;
+      const r = Number(node.radius()) || 0;
+      if (sx === sy) {
+        attrs.radius = r * sx;
+      } else {
+        // 非等比缩放 → 转为椭圆字段（一旦变椭圆永远椭圆，避免 radius 残留歧义）
+        attrs.radiusX = r * sx;
+        attrs.radiusY = r * sy;
+      }
+    } else if (cls === 'Ellipse') {
+      // 椭圆恒写 radiusX/radiusY（即便等比），维持「椭圆恒椭圆」模型
+      attrs.radiusX = (Number(node.radiusX()) || 0) * sx;
+      attrs.radiusY = (Number(node.radiusY()) || 0) * sy;
     } else if (cls === 'Text') {
       attrs.fontSize = Math.max(1, Math.round((Number(node.fontSize()) || 14) * sy));
     } else if (cls === 'Line' || cls === 'Arrow') {
@@ -306,14 +334,22 @@ export class KonvaRenderer {
           strokeWidth: data.get('lineWidth') || 1,
           opacity,
         });
-      case 'circle':
-        return new Konva.Circle({
-          x: data.get('x') || 0, y: data.get('y') || 0,
-          radius: data.get('radius') || 0,
+      case 'circle': {
+        const base = {
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
           stroke: data.get('color') || '#000',
           strokeWidth: (data.get('lineWidth') as number) || 1,
           opacity,
-        });
+        };
+        const rx = data.get('radiusX');
+        const ry = data.get('radiusY');
+        // 有 radiusX/radiusY 即椭圆（优先判定，正圆只存 radius）
+        if (rx !== undefined && rx !== null) {
+          return new Konva.Ellipse({ ...base, radiusX: Number(rx) || 0, radiusY: Number(ry) || 0 });
+        }
+        return new Konva.Circle({ ...base, radius: data.get('radius') || 0 });
+      }
       case 'arrow':
         return new Konva.Arrow({
           x: data.get('x') || 0, y: data.get('y') || 0,

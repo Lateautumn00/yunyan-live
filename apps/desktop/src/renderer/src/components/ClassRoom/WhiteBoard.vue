@@ -480,6 +480,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
+import Konva from 'konva';
 import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
@@ -499,8 +500,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{ (e: 'paint-log', data: any): void }>();
 
-const KonvaLib = (window as any).Konva;
-
 function serializeStage(): Record<string, unknown> | null {
   const stage = renderer?.getStage();
   if (!stage) return null;
@@ -517,7 +516,7 @@ function serializeStage(): Record<string, unknown> | null {
     children: [] as unknown[],
   };
   for (const child of stage.getChildren()) {
-    if (child.className === 'Layer' || (KonvaLib && child instanceof KonvaLib.Layer)) {
+    if (child.className === 'Layer') {
       const layerObj: Record<string, unknown> = {
         attrs: {
           width: child.width(),
@@ -538,7 +537,7 @@ function serializeStage(): Record<string, unknown> | null {
         const visible = node.visible !== undefined ? node.visible() : true;
         if (!visible) continue;
         const className = node.getClassName?.() || node.className;
-        if (['Line', 'Rect', 'Circle', 'Text', 'Arrow', 'Image'].includes(className)) {
+        if (['Line', 'Rect', 'Circle', 'Ellipse', 'Text', 'Arrow', 'Image'].includes(className)) {
           const nodeObj: Record<string, unknown> = {
             attrs: node.getAttrs(),
             className,
@@ -848,7 +847,12 @@ function snapshotShape(id: string, keys: string[]): Record<string, any> | null {
   const m = els.toArray().find((x: any) => x.get('id') === id);
   if (!m) return null;
   const out: Record<string, any> = {};
-  keys.forEach(k => { out[k] = m.get(k); });
+  // 只记录元素上实际存在的键：before/after 键集差即「形态字段差」（圆↔椭圆），
+  // 供 undo/redo 用 deleteElementKeys 清理；缺失键写 undefined 会污染 Yjs 并破坏键集差判定
+  keys.forEach(k => {
+    const v = m.get(k);
+    if (v !== undefined) out[k] = v;
+  });
   return out;
 }
 
@@ -890,11 +894,23 @@ function commitShapeMove(id: string, x: number, y: number) {
   emitPaintLog();
 }
 
+// 写入目标键并清理「对侧」独有的旧形态字段（圆↔椭圆的 radius/radiusX 互斥），
+// 提交/撤销/重做三处共用，保持 Yjs 字段规范（createNode 按 radiusX 优先判定椭圆）
+function applyShapeUpdate(id: string, target: Record<string, any>, other: Record<string, any>): boolean {
+  if (!provider || !provider.updateElement(id, target)) return false;
+  const stale = Object.keys(other).filter(k => !(k in target));
+  if (stale.length) provider.deleteElementKeys(id, stale);
+  return true;
+}
+
 function commitShapeTransform(id: string, attrs: Record<string, any>) {
   if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
-  const before = snapshotShape(id, Object.keys(attrs));
+  const keys = Object.keys(attrs);
+  // 圆→椭圆转换：快照里带上 radius，撤销才能还原正圆字段
+  if (('radiusX' in attrs || 'radiusY' in attrs) && !keys.includes('radius')) keys.push('radius');
+  const before = snapshotShape(id, keys);
   if (!before) return;
-  if (!provider.updateElement(id, attrs)) {
+  if (!applyShapeUpdate(id, attrs, before)) {
     // 提交失败：立即回滚视觉（transformer 已烘焙 scale，必须重绑 Yjs 实况），不入 undo 栈
     refreshLayer();
     return;
@@ -1000,7 +1016,7 @@ function onPointerDown(e: any) {
   } else if (m === 'cur') {
     // 点击空白处取消选中（点中图形由节点 click 处理器选中）
     const target = e.target;
-    if (!target || target === renderer?.getStage() || target === renderer?.layer || target === renderer?.tempLayer) {
+    if (!target || target === renderer?.getStage() || target === renderer?.layer || target === renderer?.previewLayer || target === renderer?.tempLayer) {
       renderer?.clearSelection();
     }
   }
@@ -1014,22 +1030,25 @@ function onPointerMove(e: any) {
 
   if (['brush', 'eraser'].includes(m)) {
     currentPath.push(pos.x, pos.y);
-    renderer!.tempLayer.destroyChildren();
-    const KonvaLib = (window as any).Konva;
-    if (KonvaLib) {
-      const line = new KonvaLib.Line({
-        points: currentPath,
-        stroke: m === 'eraser' ? '#ffffff' : currentColor.value,
-        strokeWidth: currentSize.value * (m === 'eraser' ? 3 : 1),
-        lineCap: 'round', lineJoin: 'round', tension: 0.5,
-      });
-      renderer!.tempLayer.add(line);
-      renderer!.tempLayer.batchDraw();
+    renderer!.previewLayer.destroyChildren();
+    // previewLayer 与 layer 同变换 → 预览节点必须存层局部坐标
+    const layerPath: number[] = [];
+    for (let i = 0; i < currentPath.length; i += 2) {
+      const lp = toLayerCoords({ x: currentPath[i]!, y: currentPath[i + 1]! });
+      layerPath.push(lp.x, lp.y);
     }
+    const line = new Konva.Line({
+      points: layerPath,
+      stroke: m === 'eraser' ? '#ffffff' : currentColor.value,
+      strokeWidth: currentSize.value * (m === 'eraser' ? 3 : 1),
+      lineCap: 'round', lineJoin: 'round', tension: 0.5,
+    });
+    renderer!.previewLayer.add(line);
+    renderer!.previewLayer.batchDraw();
   } else if (['circle', 'rectangle', 'arrows'].includes(m) && startPos) {
-    renderer!.tempLayer.destroyChildren();
-    drawTempShape(pos);
-    renderer!.tempLayer.batchDraw();
+    renderer!.previewLayer.destroyChildren();
+    drawTempShape(pos, !!e?.evt?.shiftKey);
+    renderer!.previewLayer.batchDraw();
   } else if (m === 'move' && startPos) {
     const dx = pos.x - startPos.x;
     const dy = pos.y - startPos.y;
@@ -1043,15 +1062,20 @@ function onPointerMove(e: any) {
   provider?.updateCursor({ userId, userName: displayName, x: pos.x, y: pos.y, color: userColor });
 }
 
-function onPointerUp(_e: any) {
+function onPointerUp(e: any) {
   if (!isDrawing) return;
   isDrawing = false;
-  const pos = getPointerPos(_e);
-  renderer!.tempLayer.destroyChildren();
-  renderer!.tempLayer.batchDraw();
+  const pos = getPointerPos(e);
+  // 只清预览层：tempLayer 上的选中框/手柄（transformer）不能被绘制清理连带销毁
+  renderer!.previewLayer.destroyChildren();
+  renderer!.previewLayer.batchDraw();
   const m = mode.value;
 
   if (m !== 'move') redoStack.value = [];
+  // 同步尚未完成时 pages 可能未播种，否则 addShape 静默丢弃；与图片添加一致先兜底建页
+  if (provider && !provider.getActiveElements() && ['brush', 'eraser', 'circle', 'rectangle', 'arrows'].includes(m)) {
+    provider.addPage();
+  }
 
   if (['brush', 'eraser'].includes(m) && currentPath.length > 2) {
     const layerPath: number[] = [];
@@ -1073,12 +1097,18 @@ function onPointerUp(_e: any) {
     const layerEnd = toLayerCoords(pos);
     const dx = layerEnd.x - layerStart.x;
     const dy = layerEnd.y - layerStart.y;
-    const radius = Math.sqrt(dx * dx + dy * dy);
-    if (radius > 2) {
+    const rx = Math.abs(dx);
+    const ry = Math.abs(dy);
+    const shift = !!e?.evt?.shiftKey;
+    // 自由拖 = 椭圆（横纵半径分别取 |dx|/|dy|，起点为圆心）；Shift = 正圆（取较大值）
+    const radius = Math.max(rx, ry);
+    if (Math.max(rx, ry) > 2) {
       const shapeData: Record<string, any> = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        type: 'circle', x: layerStart.x, y: layerStart.y, radius, color: currentColor.value, lineWidth: currentSize.value,
+        type: 'circle', x: layerStart.x, y: layerStart.y,
+        color: currentColor.value, lineWidth: currentSize.value,
         opacity: currentOpacity.value,
+        ...(shift ? { radius } : { radiusX: rx, radiusY: ry }),
       };
       provider?.addShape(shapeData);
       refreshLayer();
@@ -1120,27 +1150,37 @@ function onPointerUp(_e: any) {
   emitPaintLog();
 }
 
-function drawTempShape(pos: { x: number; y: number }) {
+function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
   if (!startPos || !renderer) return;
-  const KonvaLib = (window as any).Konva;
-  if (!KonvaLib) return;
   const m = mode.value;
+  // 预览节点存层局部坐标（previewLayer 与 layer 同变换），与最终落盘完全一致
+  const ls = toLayerCoords(startPos);
+  const le = toLayerCoords(pos);
 
   if (m === 'rectangle') {
-    renderer.tempLayer.add(new KonvaLib.Rect({
-      x: Math.min(startPos.x, pos.x), y: Math.min(startPos.y, pos.y),
-      width: Math.abs(pos.x - startPos.x), height: Math.abs(pos.y - startPos.y),
+    renderer.previewLayer.add(new Konva.Rect({
+      x: Math.min(ls.x, le.x), y: Math.min(ls.y, le.y),
+      width: Math.abs(le.x - ls.x), height: Math.abs(le.y - ls.y),
       stroke: currentColor.value, strokeWidth: currentSize.value,
     }));
   } else if (m === 'circle') {
-    const r = Math.sqrt((pos.x - startPos.x) ** 2 + (pos.y - startPos.y) ** 2);
-    renderer.tempLayer.add(new KonvaLib.Circle({
-      x: startPos.x, y: startPos.y, radius: r,
-      stroke: currentColor.value, strokeWidth: currentSize.value,
-    }));
+    const dx = le.x - ls.x;
+    const dy = le.y - ls.y;
+    if (shift) {
+      // Shift 约束为正圆（取较大值），与 Konva Transformer 的 Shift 行为一致
+      renderer.previewLayer.add(new Konva.Circle({
+        x: ls.x, y: ls.y, radius: Math.max(Math.abs(dx), Math.abs(dy)),
+        stroke: currentColor.value, strokeWidth: currentSize.value,
+      }));
+    } else {
+      renderer.previewLayer.add(new Konva.Ellipse({
+        x: ls.x, y: ls.y, radiusX: Math.abs(dx), radiusY: Math.abs(dy),
+        stroke: currentColor.value, strokeWidth: currentSize.value,
+      }));
+    }
   } else if (m === 'arrows') {
-    renderer.tempLayer.add(new KonvaLib.Arrow({
-      points: [startPos.x, startPos.y, pos.x, pos.y],
+    renderer.previewLayer.add(new Konva.Arrow({
+      points: [ls.x, ls.y, le.x, le.y],
       stroke: currentColor.value, strokeWidth: currentSize.value, fill: currentColor.value,
     }));
   }
@@ -1203,7 +1243,7 @@ function revocation(type: string) {
       refreshLayer();
     } else if (action.type === 'updateShape') {
       ensurePageIndex(action.pageIndex);
-      provider?.updateElement(action.shapeId!, action.before!);
+      applyShapeUpdate(action.shapeId!, action.before!, action.after!);
       refreshLayer();
     } else if (action.type === 'removeShape') {
       ensurePageIndex(action.pageIndex);
@@ -1222,7 +1262,7 @@ function revocation(type: string) {
       provider?.addPage();
     } else if (action.type === 'updateShape') {
       ensurePageIndex(action.pageIndex);
-      provider?.updateElement(action.shapeId!, action.after!);
+      applyShapeUpdate(action.shapeId!, action.after!, action.before!);
       refreshLayer();
     } else if (action.type === 'removeShape') {
       ensurePageIndex(action.pageIndex);

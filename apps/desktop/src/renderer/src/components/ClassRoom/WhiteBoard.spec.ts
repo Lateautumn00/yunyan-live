@@ -29,7 +29,9 @@ const konvaMocks = vi.hoisted(() => {
     on(evt: string, cb: (e?: unknown) => void) {
       evt.split(' ').forEach(k => { this._handlers[k] = cb; });
     }
-    getPointerPosition() { return { x: 100, y: 100 }; }
+    // 可设状态：绘制类用例通过 stage._pointer 模拟鼠标落点
+    _pointer = { x: 100, y: 100 };
+    getPointerPosition() { return this._pointer; }
     getChildren() { return this.children; }
     find(_sel?: string) { return []; }
     getAttr(key: string) {
@@ -181,6 +183,12 @@ const konvaMocks = vi.hoisted(() => {
   }
   class MockRect extends MockNode {}
   class MockImage extends MockNode {}
+  class MockEllipse extends MockNode {
+    _rx = 0;
+    _ry = 0;
+    radiusX(val?: unknown) { if (val !== undefined) this._rx = val as number; return this._rx; }
+    radiusY(val?: unknown) { if (val !== undefined) this._ry = val as number; return this._ry; }
+  }
   class MockTransformer extends MockNode {
     _nodes: unknown[] = [];
     _keepRatio = false;
@@ -191,7 +199,7 @@ const konvaMocks = vi.hoisted(() => {
 
   return {
     MockStage, MockLayer, MockLine, MockArrow, MockText,
-    MockCircle, MockRect, MockImage, MockTransformer, MockGroup,
+    MockCircle, MockRect, MockImage, MockEllipse, MockTransformer, MockGroup,
   };
 });
 
@@ -203,6 +211,7 @@ vi.mock('konva', () => ({
     Arrow: konvaMocks.MockArrow,
     Text: konvaMocks.MockText,
     Circle: konvaMocks.MockCircle,
+    Ellipse: konvaMocks.MockEllipse,
     Rect: konvaMocks.MockRect,
     Image: konvaMocks.MockImage,
     Transformer: konvaMocks.MockTransformer,
@@ -1525,6 +1534,87 @@ describe('WhiteBoard.vue 选择器', () => {
     expect(() => vm.commitShapeTransform('any-id', { x: 1, y: 1 })).not.toThrow();
     expect(() => vm.deleteSelected()).not.toThrow();
     expect(vm.getSelectedShapeId()).toBeNull();
+    wrapper.unmount();
+  });
+});
+
+// ── 圆形工具绘制：自由拖=椭圆、Shift=正圆、实时预览 ───────────────────────
+type DrawVM = SelVM & {
+  renderer: { previewLayer: { getChildren: () => unknown[] } };
+};
+
+describe('WhiteBoard.vue 圆形工具绘制', () => {
+  it('自由拖出椭圆（radiusX/radiusY）并带实时预览，撤销可移除', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    vm.tool('circle');
+    const stage = konvaMocks.MockStage.last()!;
+
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 300, y: 160 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+
+    // 拖拽过程实时预览（previewLayer 上一个节点）
+    expect(vm.renderer.previewLayer.getChildren().length).toBe(1);
+
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
+    // 预览清理，不残留
+    expect(vm.renderer.previewLayer.getChildren().length).toBe(0);
+
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(1);
+    expect(shapes[0]).toMatchObject({ type: 'circle', x: 100, y: 100, radiusX: 200, radiusY: 60 });
+    expect(shapes[0]!.radius).toBeUndefined();
+
+    vm.revocation('pre');
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('Shift 拖出正圆（radius 取大值，无 radiusX/radiusY）', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    vm.tool('circle');
+    const stage = konvaMocks.MockStage.last()!;
+
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 140, y: 180 };
+    stage.fire('mousemove', { target: stage, evt: { shiftKey: true } });
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: true } });
+
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(1);
+    expect(shapes[0]).toMatchObject({ type: 'circle', x: 100, y: 100, radius: 80 });
+    expect(shapes[0]!.radiusX).toBeUndefined();
+    expect(shapes[0]!.radiusY).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('圆形转椭圆提交：撤销还原 radius，重做再转回（字段互斥清理）', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const provider = vm.provider!;
+    // 与生产路径一致：WS 未同步时无页，先建页（onPointerUp 兜底建页的等价测试前置）
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape({ id: 'cc1', type: 'circle', x: 50, y: 50, radius: 30, color: '#000', lineWidth: 1, opacity: 1 });
+    const el = () => provider.getActiveElements()!.toArray().find(m => m.get('id') === 'cc1')!;
+
+    vm.commitShapeTransform('cc1', { x: 50, y: 50, radiusX: 60, radiusY: 20 });
+    expect(el().get('radiusX')).toBe(60);
+    expect(el().get('radiusY')).toBe(20);
+    expect(el().has('radius')).toBe(false);
+
+    vm.revocation('pre');
+    expect(el().get('radius')).toBe(30);
+    expect(el().has('radiusX')).toBe(false);
+    expect(el().has('radiusY')).toBe(false);
+
+    vm.revocation('next');
+    expect(el().get('radiusX')).toBe(60);
+    expect(el().get('radiusY')).toBe(20);
+    expect(el().has('radius')).toBe(false);
     wrapper.unmount();
   });
 });

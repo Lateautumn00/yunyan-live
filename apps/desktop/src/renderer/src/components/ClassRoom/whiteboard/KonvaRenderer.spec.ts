@@ -228,6 +228,42 @@ const konvaMocks = vi.hoisted(() => {
     }
   }
 
+  class MockCircle extends MockShape {
+    _radius = 0;
+    constructor(attrs: Record<string, unknown>) {
+      super(attrs);
+      if (attrs.radius !== undefined) this._radius = attrs.radius as number;
+    }
+    radius(v?: number) {
+      if (v !== undefined) this._radius = v;
+      return this._radius;
+    }
+    override getClassName() {
+      return 'Circle';
+    }
+  }
+
+  class MockEllipse extends MockShape {
+    _rx = 0;
+    _ry = 0;
+    constructor(attrs: Record<string, unknown>) {
+      super(attrs);
+      if (attrs.radiusX !== undefined) this._rx = attrs.radiusX as number;
+      if (attrs.radiusY !== undefined) this._ry = attrs.radiusY as number;
+    }
+    radiusX(v?: number) {
+      if (v !== undefined) this._rx = v;
+      return this._rx;
+    }
+    radiusY(v?: number) {
+      if (v !== undefined) this._ry = v;
+      return this._ry;
+    }
+    override getClassName() {
+      return 'Ellipse';
+    }
+  }
+
   class MockTransformer {
     _nodes: unknown[] = [];
     _keepRatio = false;
@@ -251,7 +287,7 @@ const konvaMocks = vi.hoisted(() => {
     }
   }
 
-  return { MockStage, MockLayer, MockImage, MockShape, MockLineShape, MockTransformer, MockShape2: MockShape };
+  return { MockStage, MockLayer, MockImage, MockShape, MockLineShape, MockCircle, MockEllipse, MockTransformer, MockShape2: MockShape };
 });
 
 vi.mock('konva', () => ({
@@ -262,7 +298,8 @@ vi.mock('konva', () => ({
     Line: konvaMocks.MockLineShape,
     Arrow: konvaMocks.MockLineShape,
     Text: konvaMocks.MockShape,
-    Circle: konvaMocks.MockShape,
+    Circle: konvaMocks.MockCircle,
+    Ellipse: konvaMocks.MockEllipse,
     Rect: konvaMocks.MockShape,
     Transformer: konvaMocks.MockTransformer,
   },
@@ -562,6 +599,115 @@ describe('KonvaRenderer selection', () => {
     node.fire('transformend');
 
     expect(baked[0]).toEqual({ x: 0, y: 0, points: [20, 60, 60, 120] });
+    renderer.destroy();
+  });
+});
+
+// ── 圆形/椭圆：数据模型（radius vs radiusX/radiusY）、自由缩放、烘焙 ────────
+describe('KonvaRenderer circle/ellipse', () => {
+  function circleData(overrides: Record<string, unknown> = {}) {
+    const data: Record<string, unknown> = {
+      id: 'c1', type: 'circle', x: 10, y: 20, radius: 30,
+      color: '#000', lineWidth: 1, opacity: 1, ...overrides,
+    };
+    return { get: (k: string) => data[k] };
+  }
+
+  function bindOne(renderer: KonvaRenderer, data: Record<string, unknown>) {
+    renderer.bindElements([data] as unknown as Parameters<typeof renderer.bindElements>[0]);
+    return renderer.layer.getChildren()[0] as unknown as {
+      scaleX: (v?: number) => number;
+      scaleY: (v?: number) => number;
+      fire: (evt: string) => void;
+      getClassName: () => string;
+    };
+  }
+
+  it('creates Circle from radius and Ellipse from radiusX/radiusY', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    renderer.bindElements([
+      circleData({ id: 'c1' }),
+      circleData({ id: 'e1', radius: undefined, radiusX: 60, radiusY: 20 }),
+    ] as unknown as Parameters<typeof renderer.bindElements>[0]);
+
+    const c = renderer.layer.getChildren()[0] as unknown as InstanceType<typeof konvaMocks.MockCircle>;
+    const e = renderer.layer.getChildren()[1] as unknown as InstanceType<typeof konvaMocks.MockEllipse>;
+    expect(c.getClassName()).toBe('Circle');
+    expect(c.radius()).toBe(30);
+    expect(e.getClassName()).toBe('Ellipse');
+    expect(e.radiusX()).toBe(60);
+    expect(e.radiusY()).toBe(20);
+    renderer.destroy();
+  });
+
+  it('selectNode keeps transformer free-scaling (keepRatio false) for circles', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    bindOne(renderer, circleData());
+    renderer.setSelectMode(true);
+    expect(renderer.selectNode('c1')).toBe(true);
+
+    const temp = renderer.tempLayer as unknown as InstanceType<typeof konvaMocks.MockLayer>;
+    const tf = temp.children[0] as unknown as InstanceType<typeof konvaMocks.MockTransformer>;
+    expect(tf._keepRatio).toBe(false);
+    renderer.destroy();
+  });
+
+  it('bakes non-uniform circle scale into radiusX/radiusY (converts to ellipse)', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const node = bindOne(renderer, circleData());
+    const baked: Array<Record<string, number>> = [];
+    renderer.onShapeTransformEnd = (_id, attrs) => baked.push(attrs);
+    renderer.setSelectMode(true);
+
+    node.scaleX(2);
+    node.scaleY(1);
+    node.fire('transformend');
+    expect(baked[0]).toEqual({ x: 10, y: 20, radiusX: 60, radiusY: 30 });
+    renderer.destroy();
+  });
+
+  it('bakes uniform circle scale into radius (stays circle)', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const node = bindOne(renderer, circleData());
+    const baked: Array<Record<string, number>> = [];
+    renderer.onShapeTransformEnd = (_id, attrs) => baked.push(attrs);
+    renderer.setSelectMode(true);
+
+    node.scaleX(2);
+    node.scaleY(2);
+    node.fire('transformend');
+    expect(baked[0]).toEqual({ x: 10, y: 20, radius: 60 });
+    renderer.destroy();
+  });
+
+  it('bakes ellipse scale into radiusX/radiusY even when uniform (ellipse stays ellipse)', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const node = bindOne(renderer, circleData({ radius: undefined, radiusX: 60, radiusY: 20 }));
+    const baked: Array<Record<string, number>> = [];
+    renderer.onShapeTransformEnd = (_id, attrs) => baked.push(attrs);
+    renderer.setSelectMode(true);
+
+    node.scaleX(1.5);
+    node.scaleY(1.5);
+    node.fire('transformend');
+    expect(baked[0]).toEqual({ x: 10, y: 20, radiusX: 90, radiusY: 30 });
+    renderer.destroy();
+  });
+
+  it('mirrors viewport transform on previewLayer', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    renderer.setZoom(150);
+    renderer.setViewport(10, -20);
+
+    const preview = renderer.previewLayer as unknown as InstanceType<typeof konvaMocks.MockLayer>;
+    expect(preview.scaleX()).toBe(1.5);
+    expect(preview.scaleY()).toBe(1.5);
+    expect(preview.x()).toBe(10);
+    expect(preview.y()).toBe(-20);
+
+    renderer.showPage(0);
+    expect(preview.scaleX()).toBe(1.5);
+    expect(preview.x()).toBe(10);
     renderer.destroy();
   });
 });
