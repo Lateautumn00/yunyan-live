@@ -1618,3 +1618,90 @@ describe('WhiteBoard.vue 圆形工具绘制', () => {
     wrapper.unmount();
   });
 });
+
+// ── 快捷键：Ctrl+Z/Y/Shift+Z 撤销重做、Esc 取消选中/中止绘制 ──────────────
+describe('WhiteBoard.vue 快捷键', () => {
+  function drawOneCircle(vm: SelVM) {
+    const stage = konvaMocks.MockStage.last()!;
+    vm.tool('circle');
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 160, y: 160 };
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: true } });
+  }
+
+  function key(k: string, init: KeyboardEventInit = {}) {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: k, ...init }));
+  }
+
+  it('Ctrl+Z 撤销、Ctrl+Y 与 Ctrl+Shift+Z 重做', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    drawOneCircle(vm);
+    expect(vm.getCurrentPageShapes().length).toBe(1);
+
+    key('z', { ctrlKey: true });
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+
+    key('y', { ctrlKey: true });
+    expect(vm.getCurrentPageShapes().length).toBe(1);
+
+    key('z', { ctrlKey: true });
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+
+    key('z', { ctrlKey: true, shiftKey: true });
+    expect(vm.getCurrentPageShapes().length).toBe(1);
+    wrapper.unmount();
+  });
+
+  it('Esc 取消选中并中止进行中的绘制', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    drawOneCircle(vm);
+    const id = vm.getCurrentPageShapes()[0]!.id as string;
+
+    vm.tool('cur');
+    vm.selectShape(id);
+    expect(vm.getSelectedShapeId()).toBe(id);
+    key('Escape');
+    expect(vm.getSelectedShapeId()).toBeNull();
+
+    // 绘制中 Esc → 中止，松开不落盘
+    const stage = konvaMocks.MockStage.last()!;
+    vm.tool('circle');
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 200, y: 200 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    key('Escape');
+    stage.fire('mouseup', { target: stage, evt: {} });
+    expect(vm.getCurrentPageShapes().length).toBe(1);
+    wrapper.unmount();
+  });
+
+  it('输入框聚焦时 Ctrl+Z 不劫持（图形保留）', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    drawOneCircle(vm);
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    key('z', { ctrlKey: true });
+    expect(vm.getCurrentPageShapes().length).toBe(1);
+    input.remove();
+    wrapper.unmount();
+  });
+
+  it('学生端快捷键不产生副作用', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as SelVM;
+    expect(() => {
+      key('z', { ctrlKey: true });
+      key('y', { ctrlKey: true });
+      key('Escape');
+    }).not.toThrow();
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+    wrapper.unmount();
+  });
+});

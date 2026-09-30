@@ -952,19 +952,40 @@ function deleteSelected() {
   emitPaintLog();
 }
 
-function onSelectionKeydown(e: KeyboardEvent) {
-  if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-  const ae = document.activeElement;
-  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || (ae as HTMLElement).isContentEditable)) return;
-  if (!renderer?.getSelectedId()) return;
-  e.preventDefault();
-  deleteSelected();
-}
-
 // --- Drawing state ---
 let isDrawing = false;
 let startPos: { x: number; y: number } | null = null;
 let currentPath: number[] = [];
+
+function onSelectionKeydown(e: KeyboardEvent) {
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || (ae as HTMLElement).isContentEditable)) return;
+
+  const mod = e.ctrlKey || e.metaKey;
+  const key = e.key.toLowerCase();
+  if (mod && key === 'z' && !e.shiftKey) {
+    e.preventDefault();
+    revocation('pre');
+    return;
+  }
+  if (mod && (key === 'y' || (key === 'z' && e.shiftKey))) {
+    e.preventDefault();
+    revocation('next');
+    return;
+  }
+  if (e.key === 'Escape') {
+    // Esc：取消选中并中止进行中的绘制/拖拽（学生端由 revocation/clearSelection 自身守卫）
+    clearSelection();
+    isDrawing = false;
+    startPos = null;
+    currentPath = [];
+    return;
+  }
+  if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+  if (!renderer?.getSelectedId()) return;
+  e.preventDefault();
+  deleteSelected();
+}
 
 function onPointerDown(e: any) {
   // 学生端白板只读：不响应任何绘制/交互
