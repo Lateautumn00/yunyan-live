@@ -710,4 +710,21 @@ describe('KonvaRenderer circle/ellipse', () => {
     expect(preview.x()).toBe(10);
     renderer.destroy();
   });
+
+  it('creates Line nodes for line shapes with points', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const data: Record<string, unknown> = {
+      id: 'l1', type: 'line', points: [10, 20, 80, 90], color: '#000', lineWidth: 2, opacity: 1,
+    };
+    renderer.bindElements([{ get: (k: string) => data[k] }] as unknown as Parameters<
+      typeof renderer.bindElements
+    >[0]);
+
+    const node = renderer.layer.getChildren()[0] as unknown as InstanceType<
+      typeof konvaMocks.MockLineShape
+    >;
+    expect(node.getClassName()).toBe('Line');
+    expect(node.points()).toEqual([10, 20, 80, 90]);
+    renderer.destroy();
+  });
 });

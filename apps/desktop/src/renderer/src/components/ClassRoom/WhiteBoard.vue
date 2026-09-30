@@ -75,6 +75,17 @@
           </div>
         </el-tooltip>
         <el-tooltip
+          content="直线工具 · 按住 Shift 锁定水平/垂直"
+          placement="right"
+        >
+          <div
+            :class="['line', { on: mode === 'line' }]"
+            @click="tool('line')"
+          >
+            <el-icon><Minus /></el-icon>
+          </div>
+        </el-tooltip>
+        <el-tooltip
           content="橡皮擦"
           placement="right"
         >
@@ -829,7 +840,7 @@ function setMode(type: string) {
 
 function tool(type: string) {
   setMode(type);
-  showEditer.value = ['brush', 'eraser', 'text', 'circle', 'rectangle', 'arrows'].includes(type);
+  showEditer.value = ['brush', 'eraser', 'text', 'circle', 'rectangle', 'arrows', 'line'].includes(type);
   showFileList.value = type === 'file';
   provider?.setToolState({ type: type as any });
 }
@@ -997,7 +1008,7 @@ function onPointerDown(e: any) {
   if (['brush', 'eraser'].includes(m)) {
     isDrawing = true;
     currentPath = [pos.x, pos.y];
-  } else if (['circle', 'rectangle', 'arrows'].includes(m)) {
+  } else if (['circle', 'rectangle', 'arrows', 'line'].includes(m)) {
     isDrawing = true;
     startPos = pos;
   } else if (m === 'text') {
@@ -1066,7 +1077,7 @@ function onPointerMove(e: any) {
     });
     renderer!.previewLayer.add(line);
     renderer!.previewLayer.batchDraw();
-  } else if (['circle', 'rectangle', 'arrows'].includes(m) && startPos) {
+  } else if (['circle', 'rectangle', 'arrows', 'line'].includes(m) && startPos) {
     renderer!.previewLayer.destroyChildren();
     drawTempShape(pos, !!e?.evt?.shiftKey);
     renderer!.previewLayer.batchDraw();
@@ -1094,7 +1105,7 @@ function onPointerUp(e: any) {
 
   if (m !== 'move') redoStack.value = [];
   // 同步尚未完成时 pages 可能未播种，否则 addShape 静默丢弃；与图片添加一致先兜底建页
-  if (provider && !provider.getActiveElements() && ['brush', 'eraser', 'circle', 'rectangle', 'arrows'].includes(m)) {
+  if (provider && !provider.getActiveElements() && ['brush', 'eraser', 'circle', 'rectangle', 'arrows', 'line'].includes(m)) {
     provider.addPage();
   }
 
@@ -1130,6 +1141,29 @@ function onPointerUp(e: any) {
         color: currentColor.value, lineWidth: currentSize.value,
         opacity: currentOpacity.value,
         ...(shift ? { radius } : { radiusX: rx, radiusY: ry }),
+      };
+      provider?.addShape(shapeData);
+      refreshLayer();
+      undoStack.value.push({ type: 'addShape', pageId: provider!.getCurrentPageId(), pageIndex: renderer!.getCurrentPageIndex(), shapeData });
+    }
+  } else if (m === 'line' && startPos && pos) {
+    const layerStart = toLayerCoords(startPos);
+    const layerEnd = toLayerCoords(pos);
+    let dx = layerEnd.x - layerStart.x;
+    let dy = layerEnd.y - layerStart.y;
+    const shift = !!e?.evt?.shiftKey;
+    // Shift 锁定水平/垂直（按主方向取舍，与直线预览一致）
+    if (shift) {
+      if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
+      else dx = 0;
+    }
+    if (Math.sqrt(dx * dx + dy * dy) > 5) {
+      const shapeData: Record<string, any> = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type: 'line',
+        points: [layerStart.x, layerStart.y, layerStart.x + dx, layerStart.y + dy],
+        color: currentColor.value, lineWidth: currentSize.value,
+        opacity: currentOpacity.value,
       };
       provider?.addShape(shapeData);
       refreshLayer();
@@ -1199,6 +1233,18 @@ function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
         stroke: currentColor.value, strokeWidth: currentSize.value,
       }));
     }
+  } else if (m === 'line') {
+    let dx = le.x - ls.x;
+    let dy = le.y - ls.y;
+    if (shift) {
+      if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
+      else dx = 0;
+    }
+    renderer.previewLayer.add(new Konva.Line({
+      points: [ls.x, ls.y, ls.x + dx, ls.y + dy],
+      stroke: currentColor.value, strokeWidth: currentSize.value,
+      lineCap: 'round', lineJoin: 'round',
+    }));
   } else if (m === 'arrows') {
     renderer.previewLayer.add(new Konva.Arrow({
       points: [ls.x, ls.y, le.x, le.y],

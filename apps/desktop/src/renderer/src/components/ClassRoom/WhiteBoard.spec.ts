@@ -1705,3 +1705,56 @@ describe('WhiteBoard.vue 快捷键', () => {
     wrapper.unmount();
   });
 });
+
+// ── 直线工具：自由拖、Shift 锁定水平/垂直、预览 ────────────────────────────
+describe('WhiteBoard.vue 直线工具', () => {
+  function drawLine(stage: InstanceType<typeof konvaMocks.MockStage>, to: { x: number; y: number }, shift = false) {
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = to;
+    stage.fire('mousemove', { target: stage, evt: { shiftKey: shift } });
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: shift } });
+  }
+
+  it('自由拖出直线并带实时预览，撤销可移除', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    vm.tool('line');
+    const stage = konvaMocks.MockStage.last()!;
+
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 300, y: 160 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    expect(vm.renderer.previewLayer.getChildren().length).toBe(1);
+
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
+    expect(vm.renderer.previewLayer.getChildren().length).toBe(0);
+
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(1);
+    expect(shapes[0]).toMatchObject({ type: 'line', points: [100, 100, 300, 160] });
+
+    vm.revocation('pre');
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('Shift 锁定水平/垂直方向', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    vm.tool('line');
+    const stage = konvaMocks.MockStage.last()!;
+
+    // 水平：|dx| >= |dy| → dy 归零
+    drawLine(stage, { x: 300, y: 160 }, true);
+    // 垂直：|dy| > |dx| → dx 归零
+    drawLine(stage, { x: 140, y: 300 }, true);
+
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(2);
+    expect(shapes[0]!.points).toEqual([100, 100, 300, 100]);
+    expect(shapes[1]!.points).toEqual([100, 100, 100, 300]);
+    wrapper.unmount();
+  });
+});

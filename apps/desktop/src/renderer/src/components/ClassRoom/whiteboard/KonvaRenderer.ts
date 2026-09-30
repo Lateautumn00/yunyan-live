@@ -359,6 +359,15 @@ export class KonvaRenderer {
           fill: data.get('color') || '#000',
           opacity,
         });
+      case 'line':
+        return new Konva.Line({
+          x: data.get('x') || 0, y: data.get('y') || 0,
+          points: (data.get('points') as number[]) || [],
+          stroke: data.get('color') || '#000',
+          strokeWidth: (data.get('lineWidth') as number) || 1,
+          lineCap: 'round', lineJoin: 'round',
+          opacity,
+        });
       case 'text':
         return new Konva.Text({
           x: data.get('x') || 0, y: data.get('y') || 0,
