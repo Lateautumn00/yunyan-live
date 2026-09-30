@@ -99,9 +99,9 @@
             <el-button
               type="text"
               size="small"
-              @click="leaveRoom(row as RoomItem)"
+              @click="deleteRoom(row as RoomItem)"
             >
-              离开
+              删除
             </el-button>
           </template>
         </el-table-column>
@@ -270,9 +270,9 @@ async function enterRoom(room: RoomItem) {
   });
 }
 
-async function leaveRoom(room: RoomItem) {
+async function deleteRoom(room: RoomItem) {
   try {
-    await ElMessageBox.confirm('确定要离开该直播间吗？', '提示', {
+    await ElMessageBox.confirm('确定要删除该直播间吗？', '提示', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning'
@@ -280,7 +280,7 @@ async function leaveRoom(room: RoomItem) {
 
     const res = await api.batch_leave([room.roomId]);
     if (res.data.code === 1000) {
-      ElMessage.success('已离开');
+      ElMessage.success('删除成功');
       await loadRooms();
     }
   } catch {
