@@ -307,8 +307,8 @@
         />
         <div class="edit-size">
           <div class="size-title">
-            <div>{{ mode === 'text' ? '小' : '细' }}</div>
-            <div>{{ mode === 'text' ? '大' : '粗' }}</div>
+            <div>{{ sizeTargetsText() ? '小' : '细' }}</div>
+            <div>{{ sizeTargetsText() ? '大' : '粗' }}</div>
           </div>
           <div
             class="strip"
@@ -335,6 +335,18 @@
             class="item colours"
             @click="showPallet = !showPallet"
           />
+        </div>
+        <div
+          v-if="showFillToggle"
+          class="fill-bar"
+        >
+          <span class="fill-label">填充</span>
+          <div
+            :class="['fill-toggle', { on: fillEnabled }]"
+            @click="toggleFill"
+          >
+            {{ fillEnabled ? '已填充' : '无填充' }}
+          </div>
         </div>
         <div
           v-show="showPallet"
@@ -381,6 +393,7 @@
             :value="currentOpacity"
             class="opacity-slider"
             @input="onOpacityInput"
+            @change="onOpacityChange"
           >
           <span class="opacity-val">{{ Math.round(currentOpacity * 100) }}%</span>
         </div>
@@ -585,6 +598,8 @@ const currentSize = ref(1);
 const textSize = ref(14);
 const zoomLevel = ref(100);
 const showEditer = ref(false);
+const showFillToggle = ref(false);
+const fillEnabled = ref(false);
 const showPallet = ref(false);
 const showFileList = ref(false);
 const showZoomInput = ref(false);
@@ -842,6 +857,7 @@ function setMode(type: string) {
 function tool(type: string) {
   setMode(type);
   showEditer.value = ['brush', 'eraser', 'text', 'circle', 'rectangle', 'arrows', 'line'].includes(type);
+  showFillToggle.value = false;
   showFileList.value = type === 'file';
   provider?.setToolState({ type: type as any });
 }
@@ -871,10 +887,37 @@ function snapshotShape(id: string, keys: string[]): Record<string, any> | null {
 function selectShape(id: string) {
   if (!props.isTeacher || mode.value !== 'cur' || !renderer) return;
   renderer.selectNode(id);
+  // 选中即打开属性面板并回填该图形当前值（仅本地显示，不广播 toolState）
+  const m = provider?.getActiveElements()?.toArray().find(x => x.get('id') === id);
+  if (!m) return;
+  const type = String(m.get('type'));
+  if (type === 'image' || type === 'ppt-image') {
+    showEditer.value = false;
+    showFillToggle.value = false;
+    return;
+  }
+  colorPanelCollapsed.value = false;
+  if (m.get('color') !== undefined) currentColor.value = String(m.get('color'));
+  if (m.get('opacity') !== undefined) currentOpacity.value = Number(m.get('opacity'));
+  const isText = type === 'text';
+  if (isText && m.get('fontSize') !== undefined) textSize.value = Number(m.get('fontSize'));
+  if (!isText && m.get('lineWidth') !== undefined) currentSize.value = Number(m.get('lineWidth'));
+  if (isText && m.get('fontSize') !== undefined) {
+    sizeBtnLeft.value = Math.max(0, Math.min(130, ((textSize.value - 8) / 40) * 130));
+  } else if (m.get('lineWidth') !== undefined) {
+    sizeBtnLeft.value = Math.max(0, Math.min(130, ((currentSize.value - 1) / 19) * 130));
+  }
+  showFillToggle.value = type === 'rect' || type === 'circle';
+  fillEnabled.value = showFillToggle.value && m.get('fill') !== undefined;
+  showEditer.value = true;
 }
 
 function clearSelection() {
   renderer?.clearSelection();
+  if (mode.value === 'cur') {
+    showEditer.value = false;
+    showFillToggle.value = false;
+  }
 }
 
 // 双击已有文本：原位弹出编辑框；Enter/失焦提交，Esc 弃改；
@@ -975,6 +1018,38 @@ function applyShapeUpdate(id: string, target: Record<string, any>, other: Record
   return true;
 }
 
+// 选中图形的属性回改：写回 + 键集差清理 + 入 undo 栈（与提交/撤销/重做同一机制）。
+// snapshotKeys 供「仅删除字段」类提交（如去填充）取快照——patch 为空时快照键需显式给出
+function commitSelectedStyle(patch: Record<string, any>, snapshotKeys?: string[]) {
+  if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  const id = renderer.getSelectedId();
+  if (!id) return;
+  const keys = snapshotKeys ?? Object.keys(patch);
+  const before = snapshotShape(id, keys);
+  if (!before) return;
+  // 无变化不入栈（含「去填充但本就无填充」）
+  if (!keys.length && !Object.keys(before).length) return;
+  if (keys.length && keys.every(k => before[k] === patch[k])) return;
+  if (!applyShapeUpdate(id, patch, before)) return;
+  refreshLayer();
+  redoStack.value = [];
+  undoStack.value.push({
+    type: 'updateShape', pageId: provider.getCurrentPageId(),
+    pageIndex: renderer.getCurrentPageIndex(), shapeId: id,
+    before, after: { ...patch },
+  });
+  emitPaintLog();
+}
+
+// 粗细条当前作用对象：绘制文本模式，或选中的是文本图形 → 字号；否则线宽
+function sizeTargetsText(): boolean {
+  if (mode.value === 'text') return true;
+  if (mode.value !== 'cur') return false;
+  const id = renderer?.getSelectedId();
+  if (!id) return false;
+  return provider?.getActiveElements()?.toArray().find(x => x.get('id') === id)?.get('type') === 'text';
+}
+
 function commitShapeTransform(id: string, attrs: Record<string, any>) {
   if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
   const keys = Object.keys(attrs);
@@ -1011,7 +1086,7 @@ function deleteSelected() {
   m.forEach((v: any, k: string) => { shapeData[k] = v; });
   const index = provider.removeElement(id);
   if (index < 0) return;
-  renderer.clearSelection();
+  clearSelection();
   refreshLayer();
   redoStack.value = [];
   undoStack.value.push({
@@ -1110,7 +1185,7 @@ function onPointerDown(e: any) {
     // 点击空白处取消选中（点中图形由节点 click 处理器选中）
     const target = e.target;
     if (!target || target === renderer?.getStage() || target === renderer?.layer || target === renderer?.previewLayer || target === renderer?.tempLayer) {
-      renderer?.clearSelection();
+      clearSelection();
     }
   }
 }
@@ -1503,6 +1578,8 @@ function selectColor(color: string) {
   if (idx > -1) endSelectColor.value.splice(idx, 1);
   endSelectColor.value.unshift(color);
   if (endSelectColor.value.length > 4) endSelectColor.value.pop();
+  // 选中状态下改色 → 同步写回所选图形（入 undo 栈）
+  commitSelectedStyle({ color });
 }
 
 function clickColor(e: MouseEvent) {
@@ -1549,8 +1626,27 @@ function editSizeStart(e: MouseEvent) {
 function editSizeMove(e: MouseEvent) {
   if (sizeDragging) updateSizeFromMouse(e);
 }
-function editSizeEnd() { sizeDragging = false; }
-function editLeave() { sizeDragging = false; }
+function editSizeEnd() {
+  commitSizeStyle();
+  sizeDragging = false;
+}
+function editLeave() {
+  if (sizeDragging) commitSizeStyle();
+  sizeDragging = false;
+}
+// 拖拽结束时把最终粗细/字号写回所选图形（拖拽过程只动本地值，避免连环入栈）
+function commitSizeStyle() {
+  if (sizeTargetsText()) commitSelectedStyle({ fontSize: textSize.value });
+  else commitSelectedStyle({ lineWidth: currentSize.value });
+}
+
+// --- Fill (仅矩形/圆形)：二态切换——填充(取当前描边色) / 无填充(删 fill 字段) ---
+function toggleFill() {
+  if (!props.isTeacher || mode.value !== 'cur') return;
+  fillEnabled.value = !fillEnabled.value;
+  if (fillEnabled.value) commitSelectedStyle({ fill: currentColor.value });
+  else commitSelectedStyle({}, ['fill']);
+}
 
 // Color panel drag
 function onColorPanelDragStart(e: MouseEvent) {
@@ -1588,6 +1684,11 @@ function onOpacityInput(e: Event) {
   currentOpacity.value = val;
   provider?.setToolState({ opacity: val });
 }
+// 松手（change）才写回所选图形，拖动过程仅本地预览
+function onOpacityChange(e: Event) {
+  const val = parseFloat((e.target as HTMLInputElement).value);
+  commitSelectedStyle({ opacity: val });
+}
 function onPanelOpacityInput(e: Event) {
   panelOpacity.value = parseFloat((e.target as HTMLInputElement).value);
 }
@@ -1596,8 +1697,8 @@ function updateSizeFromMouse(e: MouseEvent) {
   const rect = target.getBoundingClientRect();
   const x = Math.max(0, Math.min(130, e.clientX - rect.left));
   sizeBtnLeft.value = x;
-  const size = mode.value === 'text' ? Math.round(8 + (x / 130) * 40) : Math.round(1 + (x / 130) * 19);
-  if (mode.value === 'text') {
+  const size = sizeTargetsText() ? Math.round(8 + (x / 130) * 40) : Math.round(1 + (x / 130) * 19);
+  if (sizeTargetsText()) {
     textSize.value = size;
     provider?.setToolState({ fontSize: size });
   } else {
@@ -2091,6 +2192,12 @@ defineExpose({
       &::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #409eff; cursor: pointer; border: 2px solid #fff; box-shadow: 0 0 2px #000; }
     }
     .opacity-val { min-width: 28px; text-align: right; }
+  }
+  .fill-bar { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; color: #666;
+    .fill-label { white-space: nowrap; }
+    .fill-toggle { padding: 2px 10px; border-radius: 10px; background: #eee; color: #666; cursor: pointer; border: 1px solid #ddd; user-select: none;
+      &.on { background: #409eff; color: #fff; border-color: #409eff; }
+    }
   }
 }
 

@@ -334,6 +334,7 @@ export class KonvaRenderer {
           width: data.get('width') || 0, height: data.get('height') || 0,
           stroke: data.get('color') || '#000',
           strokeWidth: data.get('lineWidth') || 1,
+          fill: data.get('fill') || undefined,
           opacity,
         });
       case 'circle': {
@@ -342,6 +343,7 @@ export class KonvaRenderer {
           y: data.get('y') || 0,
           stroke: data.get('color') || '#000',
           strokeWidth: (data.get('lineWidth') as number) || 1,
+          fill: data.get('fill') || undefined,
           opacity,
         };
         const rx = data.get('radiusX');

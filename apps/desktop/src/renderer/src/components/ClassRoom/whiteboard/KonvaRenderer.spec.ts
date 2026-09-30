@@ -747,4 +747,30 @@ describe('KonvaRenderer circle/ellipse', () => {
     expect(hits).toEqual(['c1']); // 退出选择模式后不再触发
     renderer.destroy();
   });
+
+  it('passes fill through for rect/circle; absent fill stays unfilled', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const rectData = (overrides: Record<string, unknown> = {}) => {
+      const data: Record<string, unknown> = {
+        id: 'r1', type: 'rect', x: 5, y: 6, width: 40, height: 30,
+        color: '#000', lineWidth: 1, opacity: 1, ...overrides,
+      };
+      return { get: (k: string) => data[k] };
+    };
+    renderer.bindElements([
+      rectData({ id: 'r1', fill: '#00ff00' }),
+      rectData({ id: 'r2' }),
+      circleData({ id: 'c1', fill: '#ff0000' }),
+      circleData({ id: 'c2' }),
+    ] as unknown as Parameters<typeof renderer.bindElements>[0]);
+
+    const [rf, rn, cf, cn] = renderer.layer.getChildren() as unknown as Array<{
+      attrs: Record<string, unknown>;
+    }>;
+    expect(rf!.attrs.fill).toBe('#00ff00');
+    expect(rn!.attrs.fill).toBeUndefined();
+    expect(cf!.attrs.fill).toBe('#ff0000');
+    expect(cn!.attrs.fill).toBeUndefined();
+    renderer.destroy();
+  });
 });

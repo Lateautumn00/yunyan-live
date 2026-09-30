@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { enableAutoUnmount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import type { YjsProvider } from './whiteboard/YjsProvider';
 
 // 失败用例也必须卸载组件（onUnmounted 会 destroy Yjs provider），避免跨测试状态泄漏
@@ -270,6 +271,7 @@ vi.mock('vue-router', async (importOriginal) => {
 import WhiteBoard from './WhiteBoard.vue';
 import { mount } from '@vue/test-utils';
 import { getPdfPageCount, getPdfPageDims } from './whiteboard/pdfAsset';
+import { PRESET_COLORS } from './whiteboard/types';
 
 // pdf.js 管线在单测中不可用（worker/网络），mock 模块级 API
 vi.mock('./whiteboard/pdfAsset', () => ({
@@ -1845,6 +1847,111 @@ describe('WhiteBoard.vue 双击编辑文本', () => {
     };
     node.fire('dblclick');
     expect(document.querySelector('textarea')).toBeNull();
+    wrapper.unmount();
+  });
+});
+
+// ── 属性回改：选中回填面板、改属性写回入栈、矩形/圆形填充二态 ─────────────
+describe('WhiteBoard.vue 属性回改与填充', () => {
+  function seedShape(vm: SelVM, shape: Record<string, unknown>) {
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape(shape);
+    vm.tool('cur');
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(provider.getActiveElements());
+  }
+
+  it('选中矩形回填属性并打开面板，改色写回可撤销，清选中关闭面板', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 100, height: 60, color: '#123456', lineWidth: 3, opacity: 0.8 });
+
+    expect(wrapper.find('.color-panel').isVisible()).toBe(false);
+    vm.selectShape('r1');
+    await nextTick();
+    expect(wrapper.find('.color-panel').isVisible()).toBe(true);
+    // 矩形选中 → 粗细条作用于线宽（"细/粗"）
+    expect(wrapper.find('.size-title').text()).toContain('细');
+
+    // 点击第一个预设色 → 写回所选图形并入 undo 栈
+    const items = wrapper.findAll('.edit-color .item');
+    await items[0]!.trigger('click');
+    expect(vm.getCurrentPageShapes()[0]!.color).toBe(PRESET_COLORS[0]);
+    expect(vm.getCurrentPageShapes()[0]!.color).not.toBe('#123456');
+
+    vm.revocation('pre');
+    expect(vm.getCurrentPageShapes()[0]!.color).toBe('#123456');
+
+    vm.clearSelection();
+    await nextTick();
+    expect(wrapper.find('.color-panel').isVisible()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('选中文字后粗细条作用于字号，拖拽结束写回并可撤销', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    seedShape(vm, { id: 't1', type: 'text', x: 50, y: 60, text: 'hi', fontSize: 20, color: '#000', opacity: 1 });
+    vm.selectShape('t1');
+    await nextTick();
+    expect(wrapper.find('.size-title').text()).toContain('小');
+
+    const strip = wrapper.find('.strip');
+    // jsdom getBoundingClientRect 全 0 → x=65 → 字号 = round(8 + 65/130*40) = 28
+    await strip.trigger('mousedown', { clientX: 65 });
+    expect(vm.getCurrentPageShapes()[0]!.fontSize).toBe(20); // 拖拽中仅本地预览，不写回
+
+    await strip.trigger('mouseup');
+    expect(vm.getCurrentPageShapes()[0]!.fontSize).toBe(28);
+
+    vm.revocation('pre');
+    expect(vm.getCurrentPageShapes()[0]!.fontSize).toBe(20);
+    wrapper.unmount();
+  });
+
+  it('矩形填充二态：启用写入 fill、禁用删除字段，可撤销/重做', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    vm.selectShape('r1');
+    await nextTick();
+
+    const toggle = wrapper.find('.fill-toggle');
+    expect(toggle.exists()).toBe(true);
+    expect(toggle.text()).toBe('无填充');
+
+    await toggle.trigger('click');
+    expect(vm.getCurrentPageShapes()[0]!.fill).toBeTruthy();
+    expect(wrapper.find('.fill-toggle').text()).toBe('已填充');
+
+    vm.revocation('pre');
+    expect('fill' in vm.getCurrentPageShapes()[0]!).toBe(false);
+    vm.revocation('next');
+    expect(vm.getCurrentPageShapes()[0]!.fill).toBeTruthy();
+
+    await wrapper.find('.fill-toggle').trigger('click');
+    expect('fill' in vm.getCurrentPageShapes()[0]!).toBe(false);
+    expect(wrapper.find('.fill-toggle').text()).toBe('无填充');
+    wrapper.unmount();
+  });
+
+  it('选中图片不打开属性面板', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    seedShape(vm, { id: 'i1', type: 'image', x: 0, y: 0, width: 100, height: 100, url: 'http://mock.test/pic.png', opacity: 1 });
+    vm.selectShape('i1');
+    await nextTick();
+    expect(wrapper.find('.color-panel').isVisible()).toBe(false);
+    expect(wrapper.find('.fill-toggle').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('学生端 selectShape 不回填不闪面板', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as SelVM;
+    expect(() => vm.selectShape('any')).not.toThrow();
+    expect(vm.getSelectedShapeId()).toBeNull();
+    expect(wrapper.find('.color-panel').isVisible()).toBe(false);
     wrapper.unmount();
   });
 });
