@@ -5,6 +5,7 @@ import { firstValueFrom, Observable } from 'rxjs';
 import * as bcrypt from 'bcryptjs';
 import { status } from '@grpc/grpc-js';
 import { UsersService } from '../users/users.service';
+import { decryptPassword } from './password-crypto';
 import { LoginDto, RegisterDto, ResetPasswordDto, ChangePasswordDto } from './dto/auth.dto';
 
 interface MailServiceClient {
@@ -30,10 +31,11 @@ export class AuthService implements OnModuleInit {
   }
 
   async login(dto: LoginDto) {
+    const password = decryptPassword(dto.password);
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) throw grpcError(status.NOT_FOUND, '用户不存在');
 
-    const valid = await bcrypt.compare(dto.password, user.passwordHash);
+    const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) throw grpcError(status.UNAUTHENTICATED, '密码错误');
 
     const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role });
@@ -49,13 +51,14 @@ export class AuthService implements OnModuleInit {
   }
 
   async register(dto: RegisterDto) {
+    const password = decryptPassword(dto.password);
     const emailExists = await this.usersService.findByEmail(dto.email);
     if (emailExists) throw grpcError(status.ALREADY_EXISTS, '邮箱已存在');
 
     const result = await firstValueFrom<{ valid: boolean }>(this.mailService.verifyCode({ email: dto.email, code: dto.code }));
     if (!result.valid) throw grpcError(status.INVALID_ARGUMENT, '验证码无效或已过期');
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
     const user = await this.usersService.create({
       username: dto.userName,
       email: dto.email,
@@ -71,30 +74,33 @@ export class AuthService implements OnModuleInit {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
+    const password = decryptPassword(dto.password);
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) throw grpcError(status.NOT_FOUND, '邮箱未注册');
 
     const result = await firstValueFrom<{ valid: boolean }>(this.mailService.verifyCode({ email: dto.email, code: dto.code }));
     if (!result.valid) throw grpcError(status.INVALID_ARGUMENT, '验证码无效或已过期');
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
     await this.usersService.updatePassword(user.id, passwordHash);
 
     return { code: '0', msg: 'success' };
   }
 
   async changePassword(dto: ChangePasswordDto, userId: string) {
+    const oldPassword = decryptPassword(dto.oldPassword);
+    const password = decryptPassword(dto.password);
     const user = await this.usersService.findById(userId);
     if (!user) throw grpcError(status.NOT_FOUND, '用户不存在');
 
-    const valid = await bcrypt.compare(dto.oldPassword, user.passwordHash);
+    const valid = await bcrypt.compare(oldPassword, user.passwordHash);
     if (!valid) throw grpcError(status.INVALID_ARGUMENT, '旧密码错误');
 
-    if (dto.oldPassword === dto.password) {
+    if (oldPassword === password) {
       throw grpcError(status.INVALID_ARGUMENT, '新密码不能与旧密码相同');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
     await this.usersService.updatePassword(userId, passwordHash);
 
     return { code: '0', msg: 'success' };

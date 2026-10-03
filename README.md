@@ -139,6 +139,9 @@ cp apps/desktop/.env.example          apps/desktop/.env.production   # 仅 pnpm 
 cp init/.env.example                  init/.env
 
 # 按需编辑，填入你的服务器地址与密钥（各 .env 均已被 gitignore）
+
+# 生成密码加密密钥对（首次或轮换时执行一次）
+pnpm gen:keys --write-env   # RSA-2048：公钥内置桌面端，私钥写入 apps/auth-service/.env
 ```
 
 前端环境变量示例：

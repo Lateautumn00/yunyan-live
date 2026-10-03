@@ -4,6 +4,15 @@
 
 所有成功响应均包裹为 `{ code: 1000, msg: "success", data }`，下文仅列出 `data` 结构。
 
+## 密码字段加密（必读）
+
+登录 / 注册 / 重置密码 / 修改密码请求中的所有密码字段（`password`、`oldPassword`）必须为
+**RSA-OAEP-SHA256 密文**（桌面端内置公钥加密，结果 base64 编码，RSA-2048 输出 344 字符）：
+
+- 公钥内置在桌面端（`apps/desktop/.../utils/passwordPublicKey.ts`，由 `pnpm gen:keys` 生成）。
+- Gateway 仅透传与校验长度（≤ 1024 字符），**auth-service 内使用私钥解密**后再走 bcrypt 比对。
+- 旧版客户端发送的明文密码会被拒绝（返回密码解密失败），无兼容模式。
+
 ## 单端登录（会话管理）
 
 同一账号仅允许一个客户端在线，会话记录存于 Redis（键 `session:<guid>` → `sid`，TTL 7 天）：
@@ -28,10 +37,10 @@
 
 **请求体：**
 
-| 字段     | 类型   | 必填 | 校验     |
-| -------- | ------ | ---- | -------- |
-| email    | string | 是   | 合法邮箱 |
-| password | string | 是   | 长度 ≥ 6 |
+| 字段     | 类型   | 必填 | 校验                           |
+| -------- | ------ | ---- | ------------------------------ |
+| email    | string | 是   | 合法邮箱                       |
+| password | string | 是   | RSA-OAEP base64 密文，长度 ≥ 6 |
 
 **响应 data：**
 
@@ -55,13 +64,13 @@
 
 **请求体：**
 
-| 字段     | 类型   | 必填 | 校验               |
-| -------- | ------ | ---- | ------------------ |
-| userName | string | 是   | 长度 2-50          |
-| email    | string | 是   | 合法邮箱           |
-| password | string | 是   | 长度 6-50          |
-| code     | string | 是   | 邮箱验证码，长度 6 |
-| role     | number | 否   | 1 或 2，默认 2     |
+| 字段     | 类型   | 必填 | 校验                              |
+| -------- | ------ | ---- | --------------------------------- |
+| userName | string | 是   | 长度 2-50                         |
+| email    | string | 是   | 合法邮箱                          |
+| password | string | 是   | RSA-OAEP base64 密文，长度 6-1024 |
+| code     | string | 是   | 邮箱验证码，长度 6                |
+| role     | number | 否   | 1 或 2，默认 2                    |
 
 **响应 data：** gRPC `RegisterResponse` 直透（`code`/`msg`/`guid` 字段）。
 
@@ -81,11 +90,11 @@
 
 **请求体：**
 
-| 字段     | 类型   | 必填 | 校验               |
-| -------- | ------ | ---- | ------------------ |
-| email    | string | 是   | 合法邮箱           |
-| code     | string | 是   | 邮箱验证码，长度 6 |
-| password | string | 是   | 长度 ≥ 6           |
+| 字段     | 类型   | 必填 | 校验                           |
+| -------- | ------ | ---- | ------------------------------ |
+| email    | string | 是   | 合法邮箱                       |
+| code     | string | 是   | 邮箱验证码，长度 6             |
+| password | string | 是   | RSA-OAEP base64 密文，长度 ≥ 6 |
 
 ## 5. 修改密码
 
@@ -95,10 +104,10 @@
 
 **请求体：**
 
-| 字段        | 类型   | 必填 | 校验               |
-| ----------- | ------ | ---- | ------------------ |
-| oldPassword | string | 是   | 无额外校验         |
-| password    | string | 是   | 长度 ≥ 6（新密码） |
+| 字段        | 类型   | 必填 | 校验                                       |
+| ----------- | ------ | ---- | ------------------------------------------ |
+| oldPassword | string | 是   | RSA-OAEP base64 密文（旧密码）             |
+| password    | string | 是   | RSA-OAEP base64 密文（新密码，解密后 ≥ 6） |
 
 用户 ID 从 JWT 中取，通过 gRPC metadata `user-id` 传给 auth-service。
 

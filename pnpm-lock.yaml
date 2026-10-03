@@ -92,6 +92,9 @@ importers:
       class-validator:
         specifier: ^0.14.0
         version: 0.14.4
+      dotenv:
+        specifier: ^16.6.1
+        version: 16.6.1
       passport:
         specifier: ^0.7.0
         version: 0.7.0
@@ -126,6 +129,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.1)(happy-dom@20.11.6)(jiti@2.7.0)(jsdom@30.1.1(@noble/hashes@2.3.0))(less@4.9.0)(terser@5.50.0)(tsx@4.23.12)(yaml@2.9.0)
 
   apps/chat-ws-service:
     dependencies:

@@ -30,6 +30,7 @@
     "kill-backend": "node scripts/kill-backend.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "gen:keys": "node scripts/gen-password-keypair.mjs",
     "prepare": "husky"
   },
   "lint-staged": {

@@ -20,8 +20,8 @@ export class RegisterDto {
 
   @IsString()
   @MinLength(6)
-  @MaxLength(50)
-  password: string;
+  @MaxLength(1024)
+  password: string; // RSA-OAEP 加密后的 base64 密文（解密后为 6-30 位明文）
 
   @IsOptional()
   @IsIn([1, 2])

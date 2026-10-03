@@ -1,3 +1,4 @@
+import { encryptPassword } from '@/utils/passwordCrypto';
 import { http, config } from './instance';
 
 export { config } from './instance';
@@ -6,8 +7,11 @@ export default {
   user_msg() {
     return http.get(`${config.userApi}/user/getUserMsg`);
   },
-  user_login(params: { email: string; password: string }) {
-    return http.post(`${config.userApi}/user/login`, params);
+  async user_login(params: { email: string; password: string }) {
+    return http.post(`${config.userApi}/user/login`, {
+      ...params,
+      password: await encryptPassword(params.password)
+    });
   },
   user_logout(params: { token: string; guid: string }) {
     return http.post(`${config.userApi}/user/logout`, params);
@@ -21,14 +25,18 @@ export default {
   updateForbid(params: { roomId: string; liveUserId: string; status: number }) {
     return http.post(`${config.liveApi}/push/updateForbid`, params);
   },
-  register(params: { email: string; userName: string; password: string; role?: number; code: string }) {
-    return http.post(`${config.userApi}/user/register`, params);
+  async register(params: { email: string; userName: string; password: string; role?: number; code: string }) {
+    return http.post(`${config.userApi}/user/register`, {
+      ...params,
+      password: await encryptPassword(params.password)
+    });
   },
-  update_pass(params: { email: string; password: string }, operateType?: string) {
+  async update_pass(params: { email: string; password: string }, operateType?: string) {
+    const body = { ...params, password: await encryptPassword(params.password) };
     if (operateType) {
-      return http.post(`${config.userApi}/user/updatePassword?operateType=${operateType}`, params);
+      return http.post(`${config.userApi}/user/updatePassword?operateType=${operateType}`, body);
     }
-    return http.post(`${config.userApi}/user/updatePassword`, params);
+    return http.post(`${config.userApi}/user/updatePassword`, body);
   },
   email_code(params: { email: string }) {
     return http.post(`${config.userApi}/mail/reqEmailCode`, params);
@@ -60,11 +68,17 @@ export default {
   get_participants(roomId: string) {
     return http.get(`${config.liveApi}/liveInfo/participants`, { params: { roomId } });
   },
-  reset_password(params: { email: string; code: string; password: string }) {
-    return http.post(`${config.userApi}/user/resetPassword`, params);
+  async reset_password(params: { email: string; code: string; password: string }) {
+    return http.post(`${config.userApi}/user/resetPassword`, {
+      ...params,
+      password: await encryptPassword(params.password)
+    });
   },
-  change_password(params: { oldPassword: string; password: string }) {
-    return http.post(`${config.userApi}/user/changePassword`, params);
+  async change_password(params: { oldPassword: string; password: string }) {
+    return http.post(`${config.userApi}/user/changePassword`, {
+      oldPassword: await encryptPassword(params.oldPassword),
+      password: await encryptPassword(params.password)
+    });
   },
   update_user_name(params: { userName: string }) {
     return http.post(`${config.userApi}/user/updateUserName`, params);

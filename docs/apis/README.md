@@ -29,7 +29,13 @@
 
 需要登录的接口通过 `Authorization: Bearer <JWT>` 传递令牌（部分历史端也接受 `token` / `guid` 请求头）。登录接口在 `POST /user/user/login` 返回 `token`。
 
-### 3. gRPC 响应
+### 3. 密码传输加密
+
+所有涉及密码的接口（登录 / 注册 / 重置密码 / 修改密码）中，密码字段均为
+**RSA-OAEP-SHA256 + base64 密文**（公钥内置桌面端），auth-service 解密后再做 bcrypt 比对；
+明文密码一律拒绝。详见 [server/auth.md](server/auth.md) 与 [auth-service/auth.md](auth-service/auth.md)。
+
+### 4. gRPC 响应
 
 内部 gRPC 服务统一返回 `{ code: "0", msg: "success", ... }`，`code === "0"` 表示成功。Gateway 通过 `grpcCall` 将其映射为 HTTP 状态码。
 

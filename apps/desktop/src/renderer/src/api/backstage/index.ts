@@ -1,4 +1,5 @@
 import type { LiveForm } from '@/types/pages/teacher/live';
+import { encryptPassword } from '@/utils/passwordCrypto';
 import axios from 'axios';
 import { http, config } from '../instance';
 
@@ -41,8 +42,12 @@ export default {
   save_video_recording(params: object) {
     return http.post(`${config.liveApi}/liveInfo/saveVideoRecording`, params);
   },
-  update_pass(params: object) {
-    return http.post(`${config.userApi}/user/updatePassword`, params);
+  async update_pass(params: object) {
+    const body = { ...params } as Record<string, unknown>;
+    if (typeof body.password === 'string') {
+      body.password = await encryptPassword(body.password);
+    }
+    return http.post(`${config.userApi}/user/updatePassword`, body);
   },
   update_user(params: object) {
     return http.post(`${config.userApi}/user/updateSysUserInfo`, params);

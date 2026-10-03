@@ -9,6 +9,9 @@
 - 所有 RPC 为 unary（请求-响应）。
 - 成功响应 `code === "0"`。
 - `ChangePassword` 需要 gRPC metadata `user-id` 为当前登录用户 ID（由 Gateway 鉴权后注入）。
+- **密码字段**（`password` / `old_password` / `new_password`）为客户端 RSA-OAEP-SHA256 密文的
+  base64 原样透传，auth-service 在内部用 `PASSWORD_PRIVATE_KEY` 私钥解密后再做 bcrypt 比对；
+  明文或非法密文一律拒绝。解密实现见 `apps/auth-service/src/auth/password-crypto.ts`。
 
 ## 消息结构
 
