@@ -43,70 +43,82 @@
           </el-button>
         </div>
       </div>
-      <el-table
-        :data="rooms"
-        style="width: 100%"
-        @selection-change="handleSelectionChange"
-      >
-        <el-table-column
-          type="selection"
-          width="40"
-        />
-        <el-table-column
-          prop="title"
-          label="直播名称"
-        />
-        <el-table-column
-          prop="speakerName"
-          label="老师"
-        />
-        <el-table-column
-          label="直播类型"
-          min-width="80"
+      <div v-loading="loading">
+        <el-table
+          v-if="rooms.length > 0"
+          :data="rooms"
+          style="width: 100%"
+          @selection-change="handleSelectionChange"
         >
-          <template #default="{ row }">
-            {{ row.type === 0 ? '小班教学' : '大班教学' }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="joinCode"
-          label="直播码"
-        />
-        <el-table-column label="状态">
-          <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">
-              {{ getStatusText(row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="开始时间">
-          <template #default="{ row }">
-            {{ formatDate(Number(row.startTime)) }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="操作"
-          min-width="120"
+          <el-table-column
+            type="selection"
+            width="40"
+          />
+          <el-table-column
+            prop="title"
+            label="直播名称"
+          />
+          <el-table-column
+            prop="speakerName"
+            label="老师"
+          />
+          <el-table-column
+            label="直播类型"
+            min-width="80"
+          >
+            <template #default="{ row }">
+              {{ row.type === 0 ? '小班教学' : '大班教学' }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="joinCode"
+            label="直播码"
+          />
+          <el-table-column label="状态">
+            <template #default="{ row }">
+              <el-tag :type="getStatusType(row.status)">
+                {{ getStatusText(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="开始时间">
+            <template #default="{ row }">
+              {{ formatDate(Number(row.startTime)) }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="操作"
+            min-width="120"
+          >
+            <template #default="{ row }">
+              <el-button
+                type="text"
+                size="small"
+                @click="enterRoom(row as RoomItem)"
+              >
+                进入
+              </el-button>
+              <el-button
+                type="text"
+                size="small"
+                @click="deleteRoom(row as RoomItem)"
+              >
+                删除
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty
+          v-else-if="!loading"
+          description="暂无直播数据"
         >
-          <template #default="{ row }">
-            <el-button
-              type="text"
-              size="small"
-              @click="enterRoom(row as RoomItem)"
-            >
-              进入
-            </el-button>
-            <el-button
-              type="text"
-              size="small"
-              @click="deleteRoom(row as RoomItem)"
-            >
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+          <p class="empty-hint">
+            如有直播码，可在上方输入并加入直播
+          </p>
+        </el-empty>
+      </div>
       <el-pagination
+        v-show="total !== 0"
         background
         :current-page="params.page"
         :page-size="params.pageSize"
@@ -149,6 +161,7 @@ const multipleSelection = ref<RoomItem[]>([]);
 const params = ref({ page: 1, pageSize: 10 });
 const settingsVisible = ref(false);
 const total = ref(0);
+const loading = ref(true);
 
 function getStatusType(status: number) {
   const map: Record<number, 'info' | 'success' | 'danger' | 'warning'> = {
@@ -171,14 +184,20 @@ function getStatusText(status: number) {
 }
 
 async function loadRooms() {
+  loading.value = true;
   try {
-    const res = await api.student_rooms({ page: params.value.page, pageSize: params.value.pageSize });
+    const res = await api.student_rooms({
+      page: params.value.page,
+      pageSize: params.value.pageSize
+    });
     if (res.data.code === 1000) {
       rooms.value = res.data.data.list;
       total.value = res.data.data.total;
     }
   } catch (err) {
     console.error('加载直播间列表失败', err);
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -344,5 +363,15 @@ onMounted(() => {
     display: flex;
     gap: 10px;
   }
+}
+
+.el-empty {
+  margin-top: 8px;
+}
+
+.empty-hint {
+  margin: 0;
+  font-size: @fs12;
+  color: #999;
 }
 </style>

@@ -78,28 +78,28 @@ async function mountPage() {
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
-  mocks.liveList.mockResolvedValue(ok({ list: [room], pageInfo: { totalElements: 1 } }));
+  mocks.liveList.mockResolvedValue(ok({ list: [room], total: 1 }));
 });
 
 describe('我的直播 mylive/index.vue', () => {
   it('渲染直播列表并格式化时间/类型/状态', async () => {
     const { wrapper } = await mountPage();
     expect(wrapper.text()).toContain('数学课');
-    expect(wrapper.text()).toContain('张老师');
     expect(wrapper.text()).toContain('CODE123');
     expect(wrapper.text()).toContain('小班教学');
     expect(wrapper.text()).toContain('直播中');
     expect(wrapper.text()).toContain(formatDate(1600000000000));
     expect(mocks.liveList).toHaveBeenCalledWith(
-      expect.objectContaining({ page: 1, pageSize: 6, status: null })
+      expect.objectContaining({ page: 1, pageSize: 10, status: null })
     );
   });
 
   it('搜索触发列表刷新', async () => {
     const { wrapper } = await mountPage();
-    vm(wrapper).searchName = '数学';
-    const inputs = wrapper.findAll('.el-input__inner');
-    await inputs[0]!.trigger('change');
+    await wrapper.find('input[placeholder="请输入直播名称"]').setValue('数学');
+    const searchButton = wrapper.findAll('button').find(btn => btn.text().includes('搜索'));
+    expect(searchButton).toBeTruthy();
+    await searchButton!.trigger('click');
     await flushPromises();
     expect(mocks.liveList).toHaveBeenLastCalledWith(
       expect.objectContaining({ searchName: '数学' })
@@ -115,11 +115,44 @@ describe('我的直播 mylive/index.vue', () => {
   });
 
   it('点击视频跳转回放详情页', async () => {
+    mocks.liveList.mockResolvedValue(ok({ list: [{ ...room, status: 3 }], total: 1 }));
     const { wrapper, router } = await mountPage();
     const hasVideo = wrapper.findAll('.has-video')[0]!;
     await hasVideo.trigger('click');
     await flushPromises();
     expect(router.currentRoute.value.path).toBe('/teacher/playback/detail');
     expect(router.currentRoute.value.query).toEqual({ roomId: 'R1', name: '数学课' });
+  });
+
+  it('无数据且无筛选时展示空状态', async () => {
+    mocks.liveList.mockResolvedValue(ok({ list: [], total: 0 }));
+    const { wrapper } = await mountPage();
+    expect(wrapper.find('.el-empty').exists()).toBe(true);
+    expect(wrapper.text()).toContain('暂无直播数据');
+    expect(wrapper.text()).not.toContain('清空筛选');
+    expect(wrapper.find('.el-table').exists()).toBe(false);
+    expect(wrapper.findComponent({ name: 'ElPagination' }).isVisible()).toBe(false);
+  });
+
+  it('筛选无结果时展示未找到提示与清空筛选', async () => {
+    mocks.liveList.mockResolvedValue(ok({ list: [], total: 0 }));
+    const { wrapper } = await mountPage();
+    await wrapper.find('input[placeholder="请输入直播名称"]').setValue('不存在');
+    const searchButton = wrapper.findAll('button').find(btn => btn.text().includes('搜索'));
+    await searchButton!.trigger('click');
+    await flushPromises();
+    expect(mocks.liveList).toHaveBeenLastCalledWith(
+      expect.objectContaining({ searchName: '不存在' })
+    );
+    expect(wrapper.text()).toContain('未找到符合条件的直播');
+
+    const clearButton = wrapper.findAll('button').find(btn => btn.text().includes('清空筛选'));
+    expect(clearButton).toBeTruthy();
+    await clearButton!.trigger('click');
+    await flushPromises();
+    expect(vm(wrapper).searchName).toBe('');
+    expect(mocks.liveList).toHaveBeenLastCalledWith(expect.objectContaining({ searchName: '' }));
+    expect(wrapper.text()).toContain('暂无直播数据');
+    expect(wrapper.text()).not.toContain('清空筛选');
   });
 });

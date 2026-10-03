@@ -63,8 +63,13 @@
           重置
         </el-button>
       </div>
-      <div style="overflow-x: auto">
+      <div
+        v-loading="loading"
+        class="live-list"
+        style="overflow-x: auto"
+      >
         <el-table
+          v-if="tableData.length > 0"
           :data="tableData"
           style="width: 100%"
           border
@@ -140,6 +145,18 @@
             </template>
           </el-table-column>
         </el-table>
+        <el-empty
+          v-else-if="!loading"
+          :description="emptyDescription"
+        >
+          <el-button
+            v-if="isFiltered"
+            type="primary"
+            @click="resetFilters"
+          >
+            清空筛选
+          </el-button>
+        </el-empty>
       </div>
       <div
         v-show="total !== 0"
@@ -160,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import type { DatePickerProps } from 'element-plus';
 import { formatDate } from '@yunyan-live/utils';
@@ -197,6 +214,21 @@ const statusOptions = ref([
 ]);
 const tableData = ref<LiveRoom[]>([]);
 const total = ref(0);
+const loading = ref(true);
+
+const isFiltered = computed(() => {
+  const range = timerange.value as Array<string | Date> | null;
+  return (
+    searchName.value !== '' ||
+    Boolean(range && range.length > 0) ||
+    Boolean(status.value) ||
+    type.value !== ''
+  );
+});
+
+const emptyDescription = computed(() =>
+  isFiltered.value ? '未找到符合条件的直播' : '暂无直播数据'
+);
 
 function handleSizeChange(size: number) {
   params.value.pageSize = size;
@@ -219,6 +251,7 @@ function resetFilters() {
 }
 
 async function getLiveList() {
+  loading.value = true;
   let startTime = '';
   let endTime = '';
   const toTimestamp = (value?: string | Date) =>
@@ -245,6 +278,8 @@ async function getLiveList() {
     total.value = data.total;
   } catch (e) {
     console.error('[mylive] getLiveList error:', e);
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -303,11 +338,19 @@ onMounted(() => {
   margin-top: 16px;
 }
 
+.live-list {
+  min-height: 120px;
+}
+
 .el-table {
   margin-top: 17px;
   .has-video {
     cursor: pointer;
   }
+}
+
+.el-empty {
+  margin-top: 17px;
 }
 </style>
 
