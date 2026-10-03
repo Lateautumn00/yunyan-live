@@ -2,25 +2,59 @@
   "name": "@yunyan-live/nest-shared",
   "version": "0.5.0",
   "private": true,
-  "type": "module",
-  "main": "./src/index.ts",
-  "module": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./grpc": "./src/grpc/index.ts",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./grpc": {
+      "types": "./dist/grpc/index.d.ts",
+      "require": "./dist/grpc/index.js",
+      "default": "./dist/grpc/index.js"
+    },
     "./protos/*": "./src/protos/*",
-    "./session": "./src/session/index.ts",
-    "./jwt": "./src/jwt/index.ts",
-    "./redis": "./src/redis/index.ts",
-    "./dto": "./src/dto/index.ts",
-    "./guards": "./src/guards/index.ts",
-    "./pagination": "./src/pagination/index.ts",
-    "./http": "./src/http/index.ts"
+    "./session": {
+      "types": "./dist/session/index.d.ts",
+      "require": "./dist/session/index.js",
+      "default": "./dist/session/index.js"
+    },
+    "./jwt": {
+      "types": "./dist/jwt/index.d.ts",
+      "require": "./dist/jwt/index.js",
+      "default": "./dist/jwt/index.js"
+    },
+    "./redis": {
+      "types": "./dist/redis/index.d.ts",
+      "require": "./dist/redis/index.js",
+      "default": "./dist/redis/index.js"
+    },
+    "./dto": {
+      "types": "./dist/dto/index.d.ts",
+      "require": "./dist/dto/index.js",
+      "default": "./dist/dto/index.js"
+    },
+    "./guards": {
+      "types": "./dist/guards/index.d.ts",
+      "require": "./dist/guards/index.js",
+      "default": "./dist/guards/index.js"
+    },
+    "./pagination": {
+      "types": "./dist/pagination/index.d.ts",
+      "require": "./dist/pagination/index.js",
+      "default": "./dist/pagination/index.js"
+    },
+    "./http": {
+      "types": "./dist/http/index.d.ts",
+      "require": "./dist/http/index.js",
+      "default": "./dist/http/index.js"
+    }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint . --max-warnings=0"
   },
   "dependencies": {
