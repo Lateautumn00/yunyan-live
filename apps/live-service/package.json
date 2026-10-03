@@ -14,6 +14,7 @@
     "@nestjs/core": "^10.0.0",
     "@nestjs/microservices": "^10.4.22",
     "@nestjs/typeorm": "^10.0.0",
+    "@yunyan-live/nest-shared": "workspace:*",
     "@grpc/grpc-js": "~1.10.0",
     "@grpc/proto-loader": "^0.8.1",
     "typeorm": "^0.3.0",

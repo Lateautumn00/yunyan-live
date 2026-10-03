@@ -19,6 +19,7 @@
     "@nestjs/microservices": "^10.4.22",
     "@nestjs/passport": "^10.0.0",
     "@nestjs/typeorm": "^10.0.0",
+    "@yunyan-live/nest-shared": "workspace:*",
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.0",
     "class-validator": "^0.14.0",

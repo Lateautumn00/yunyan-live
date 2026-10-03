@@ -83,6 +83,9 @@ importers:
       '@nestjs/typeorm':
         specifier: ^10.0.0
         version: 10.0.2(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(ioredis@6.0.0)(pg@8.23.0)(ts-node@10.9.2(@types/node@22.20.1)(typescript@5.9.3)))
+      '@yunyan-live/nest-shared':
+        specifier: workspace:*
+        version: link:../../packages/nest-shared
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -305,6 +308,9 @@ importers:
       '@nestjs/typeorm':
         specifier: ^10.0.0
         version: 10.0.2(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(ioredis@6.0.0)(pg@8.23.0)(ts-node@10.9.2(@types/node@22.20.1)(typescript@5.9.3)))
+      '@yunyan-live/nest-shared':
+        specifier: workspace:*
+        version: link:../../packages/nest-shared
       axios:
         specifier: ^1.0.0
         version: 1.19.0
@@ -360,6 +366,9 @@ importers:
       '@nestjs/microservices':
         specifier: ^10.4.22
         version: 10.4.22(@grpc/grpc-js@1.10.12)(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(@nestjs/websockets@10.4.22)(amqplib@2.0.1)(ioredis@6.0.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@yunyan-live/nest-shared':
+        specifier: workspace:*
+        version: link:../../packages/nest-shared
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0
@@ -424,6 +433,9 @@ importers:
       '@types/jsonwebtoken':
         specifier: ^9.0.10
         version: 9.0.10
+      '@yunyan-live/nest-shared':
+        specifier: workspace:*
+        version: link:../../packages/nest-shared
       '@yunyan-live/shared':
         specifier: workspace:*
         version: link:../../packages/shared

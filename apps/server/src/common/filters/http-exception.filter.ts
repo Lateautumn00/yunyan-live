@@ -1,26 +1,6 @@
 import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Response } from 'express';
-import { status as GrpcStatus } from '@grpc/grpc-js';
-
-const GRPC_STATUS_MAP: Record<number, number> = {
-  [GrpcStatus.NOT_FOUND]: 404,
-  [GrpcStatus.UNAUTHENTICATED]: 401,
-  [GrpcStatus.PERMISSION_DENIED]: 403,
-  [GrpcStatus.ALREADY_EXISTS]: 409,
-  [GrpcStatus.INVALID_ARGUMENT]: 400,
-  [GrpcStatus.INTERNAL]: 500,
-  [GrpcStatus.UNAVAILABLE]: 503,
-};
-
-const GRPC_MSG_MAP: Record<number, string> = {
-  [GrpcStatus.NOT_FOUND]: 'Not found',
-  [GrpcStatus.UNAUTHENTICATED]: 'Unauthorized',
-  [GrpcStatus.PERMISSION_DENIED]: 'Forbidden',
-  [GrpcStatus.ALREADY_EXISTS]: 'Conflict',
-  [GrpcStatus.INVALID_ARGUMENT]: 'Bad request',
-  [GrpcStatus.INTERNAL]: 'Internal server error',
-  [GrpcStatus.UNAVAILABLE]: 'Service unavailable',
-};
+import { GRPC_STATUS_MSG, GRPC_STATUS_TO_HTTP } from '@yunyan-live/nest-shared';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -58,12 +38,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     } else if (exception && typeof exception === 'object' && 'code' in exception) {
       const grpcError = exception as { code: number; details?: string; message?: string };
       const grpcCode = typeof grpcError.code === 'number' ? grpcError.code : -1;
-      const mapped = GRPC_STATUS_MAP[grpcCode];
+      const mapped = GRPC_STATUS_TO_HTTP[grpcCode];
       if (mapped) {
         status = mapped;
         code = mapped;
       }
-      message = grpcError.details || grpcError.message || GRPC_MSG_MAP[grpcCode] || 'Internal server error';
+      message = grpcError.details || grpcError.message || GRPC_STATUS_MSG[grpcCode] || 'Internal server error';
     } else if (exception instanceof Error) {
       message = exception.message;
     }

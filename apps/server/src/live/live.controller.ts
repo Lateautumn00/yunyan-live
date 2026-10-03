@@ -7,6 +7,7 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { grpcCall } from '../common/helpers/grpc.helper';
+import { userIdMetadata } from '@yunyan-live/nest-shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateLiveDto, JoinLiveDto, ChangeStatusDto, UpdateLiveDto, CreateCoursewareDto } from './dto/live.dto';
 
@@ -164,8 +165,7 @@ export class LiveController implements OnModuleInit {
   @Post('createLive')
   @UseGuards(JwtAuthGuard)
   create(@Body() dto: CreateLiveDto, @Request() req: { user: { userId: string } }) {
-    const metadata = new Metadata();
-    metadata.add('user-id', req.user.userId);
+    const metadata = userIdMetadata(req.user.userId);
     return grpcCall(this.liveService.createLive({
       title: dto.title,
       type: dto.type ?? 0,
@@ -236,8 +236,7 @@ export class LiveController implements OnModuleInit {
   @Post('cmsLiveList')
   @UseGuards(JwtAuthGuard)
   async cmsList(@Body() body: { page?: number; pageSize?: number; status?: number; searchName?: string; startTime?: string; endTime?: string; type?: number }, @Request() req: { user: { userId: string } }) {
-    const metadata = new Metadata();
-    metadata.add('user-id', req.user.userId);
+    const metadata = userIdMetadata(req.user.userId);
     const result = await grpcCall(this.liveService.cmsList({
       page: body.page,
       page_size: body.pageSize,
@@ -312,8 +311,7 @@ export class LiveController implements OnModuleInit {
   @Get('studentRooms')
   @UseGuards(JwtAuthGuard)
   async getStudentRooms(@Query('page') page: string, @Query('pageSize') pageSize: string, @Request() req: { user: { userId: string } }) {
-    const metadata = new Metadata();
-    metadata.add('user-id', req.user.userId);
+    const metadata = userIdMetadata(req.user.userId);
     const result = await grpcCall(this.liveService.getStudentRooms({
       page: parseInt(page) || 1,
       page_size: parseInt(pageSize) || 10,
@@ -340,16 +338,14 @@ export class LiveController implements OnModuleInit {
   @Delete('leave')
   @UseGuards(JwtAuthGuard)
   leaveRoom(@Body('roomId') roomId: string, @Request() req: { user: { userId: string } }) {
-    const metadata = new Metadata();
-    metadata.add('user-id', req.user.userId);
+    const metadata = userIdMetadata(req.user.userId);
     return grpcCall(this.liveService.leaveRoom({ room_id: roomId }, metadata));
   }
 
   @Delete('batchLeave')
   @UseGuards(JwtAuthGuard)
   batchLeave(@Body('roomIds') roomIds: string[], @Request() req: { user: { userId: string } }) {
-    const metadata = new Metadata();
-    metadata.add('user-id', req.user.userId);
+    const metadata = userIdMetadata(req.user.userId);
     return grpcCall(this.liveService.batchLeave({ room_ids: roomIds }, metadata));
   }
 
@@ -470,8 +466,7 @@ export class LiveController implements OnModuleInit {
   @Post('saveCourseware')
   @UseGuards(JwtAuthGuard)
   saveCourseware(@Body() dto: CreateCoursewareDto, @Request() req: { user: { userId: string } }) {
-    const metadata = new Metadata();
-    metadata.add('user-id', req.user.userId);
+    const metadata = userIdMetadata(req.user.userId);
     return grpcCall(this.liveService.saveCourseware({
       room_id: dto.roomId,
       filename: dto.filename,

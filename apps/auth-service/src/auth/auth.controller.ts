@@ -1,6 +1,8 @@
 import { Controller, Logger } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { Metadata } from '@grpc/grpc-js';
+import { userIdFromMetadata } from '@yunyan-live/nest-shared';
+
 import { AuthService } from './auth.service';
 
 @Controller()
@@ -35,7 +37,7 @@ export class AuthController {
 
   @GrpcMethod('AuthService', 'ChangePassword')
   async changePassword(data: { old_password: string; new_password: string }, metadata: Metadata) {
-    const userId = metadata.get('user-id')?.[0] as string;
+    const userId = userIdFromMetadata(metadata);
     this.logger.log(`gRPC ChangePassword: ${userId}`);
     return this.authService.changePassword(
       { oldPassword: data.old_password, password: data.new_password },

@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Metadata } from '@grpc/grpc-js';
 import { Observable } from 'rxjs';
 import { grpcCall } from '../common/helpers/grpc.helper';
+import { userIdMetadata } from '@yunyan-live/nest-shared';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { SessionService } from './session.service';
 import { LoginDto, RegisterDto, ResetPasswordDto, ChangePasswordDto, UpdateUserNameDto } from './dto/auth.dto';
@@ -106,8 +107,7 @@ export class AuthController implements OnModuleInit {
   @Post('changePassword')
   @UseGuards(JwtAuthGuard)
   changePassword(@Body() dto: ChangePasswordDto, @Request() req: { user: { userId: string } }) {
-    const metadata = new Metadata();
-    metadata.add('user-id', req.user.userId);
+    const metadata = userIdMetadata(req.user.userId);
     return grpcCall(this.authService.changePassword(
       { user_id: req.user.userId, old_password: dto.oldPassword, new_password: dto.password },
       metadata,

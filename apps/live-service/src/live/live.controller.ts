@@ -1,6 +1,8 @@
 import { Controller, Logger } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { Metadata } from '@grpc/grpc-js';
+import { ok, userIdFromMetadata } from '@yunyan-live/nest-shared';
+
 import { LiveService } from './live.service';
 
 @Controller()
@@ -17,7 +19,7 @@ export class LiveController {
     duration?: number;
     room_id?: string;
   }, metadata: Metadata) {
-    const userId = metadata.get('user-id')?.[0] as string;
+    const userId = userIdFromMetadata(metadata);
     this.logger.log(`gRPC CreateLive: ${data.title} by ${userId}`);
     const room = await this.liveService.create({
       title: data.title,
@@ -26,9 +28,7 @@ export class LiveController {
       duration: data.duration,
       roomId: data.room_id,
     }, userId);
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         room_id: room.roomId,
         title: room.title,
@@ -36,7 +36,7 @@ export class LiveController {
         join_code: room.joinCode,
         status: room.status,
       },
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'JoinLive')
@@ -46,9 +46,7 @@ export class LiveController {
       joinCode: data.join_code,
       liveUserId: data.live_user_id,
     });
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         live_user_id: result.liveUserId,
         room_id: result.roomId,
@@ -57,16 +55,14 @@ export class LiveController {
         live_type: result.liveType,
         status: result.status,
       },
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'ShowRoom')
   async showRoom(data: { room_id: string }) {
     this.logger.log(`gRPC ShowRoom: ${data.room_id}`);
     const room = await this.liveService.showRoom(data.room_id);
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         room_id: room.roomId,
         title: room.title,
@@ -77,16 +73,14 @@ export class LiveController {
         live_started_at: room.liveStartedAt?.getTime().toString() || '',
         live_user_id: room.liveUserId,
       },
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'ChangeStatus')
   async changeStatus(data: { room_id: string; status: number }) {
     this.logger.log(`gRPC ChangeStatus: ${data.room_id} -> ${data.status}`);
     const room = await this.liveService.changeStatus({ roomId: data.room_id, status: data.status });
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         room_id: room.roomId,
         title: room.title,
@@ -94,7 +88,7 @@ export class LiveController {
         join_code: room.joinCode,
         status: room.status,
       },
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'UpdateLive')
@@ -107,9 +101,7 @@ export class LiveController {
       startTime: data.start_time,
       duration: data.duration,
     });
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         room_id: room.roomId,
         title: room.title,
@@ -120,17 +112,15 @@ export class LiveController {
         start_time: room.startTime instanceof Date ? room.startTime.getTime().toString() : String(room.startTime || ''),
         duration: room.duration,
       },
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'CmsList')
   async cmsList(data: { page?: number; page_size?: number; status?: number; live_user_id?: string; search_name?: string; start_time?: string; end_time?: string; type?: number }, metadata: Metadata) {
-    const userId = metadata.get('user-id')?.[0] as string;
+    const userId = userIdFromMetadata(metadata);
     this.logger.log(`gRPC CmsList: page=${data.page}`);
     const result = await this.liveService.cmsList(data.page, data.page_size, data.status, userId, data.search_name, data.start_time, data.end_time, data.type);
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         items: result.list.map(item => ({
           room_id: item.roomId,
@@ -147,16 +137,14 @@ export class LiveController {
         })),
         total: result.total,
       },
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'CmsDetail')
   async cmsDetail(data: { room_id: string }) {
     this.logger.log(`gRPC CmsDetail: ${data.room_id}`);
     const room = await this.liveService.cmsDetail(data.room_id);
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         room_id: room.roomId,
         title: room.title,
@@ -169,31 +157,29 @@ export class LiveController {
         teacher_code: room.joinCode,
         student_code: room.joinCode,
       },
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'DeleteLive')
   async deleteLive(data: { room_id: string }) {
     this.logger.log(`gRPC DeleteLive: ${data.room_id}`);
     await this.liveService.delete(data.room_id);
-    return { code: '0', msg: 'success' };
+    return ok();
   }
 
   @GrpcMethod('LiveService', 'UpdateCode')
   async updateCode(data: { room_id: string }) {
     this.logger.log(`gRPC UpdateCode: ${data.room_id}`);
     const joinCode = await this.liveService.updateCode(data.room_id);
-    return { code: '0', msg: 'success', join_code: joinCode };
+    return ok({ join_code: joinCode });
   }
 
   @GrpcMethod('LiveService', 'GetStudentRooms')
   async getStudentRooms(data: { page?: number; page_size?: number }, metadata: Metadata) {
-    const userId = metadata.get('user-id')?.[0] as string;
+    const userId = userIdFromMetadata(metadata);
     this.logger.log(`gRPC GetStudentRooms: ${userId}`);
     const { items, total } = await this.liveService.getStudentRooms(userId, data.page, data.page_size);
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         items: items.map(r => ({
           room_id: r.roomId,
@@ -207,32 +193,30 @@ export class LiveController {
         })),
         total,
       },
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'LeaveRoom')
   async leaveRoom(data: { room_id: string }, metadata: Metadata) {
-    const userId = metadata.get('user-id')?.[0] as string;
+    const userId = userIdFromMetadata(metadata);
     this.logger.log(`gRPC LeaveRoom: ${data.room_id} by ${userId}`);
     await this.liveService.leaveRoom(userId, data.room_id);
-    return { code: '0', msg: 'success' };
+    return ok();
   }
 
   @GrpcMethod('LiveService', 'BatchLeave')
   async batchLeave(data: { room_ids: string[] }, metadata: Metadata) {
-    const userId = metadata.get('user-id')?.[0] as string;
+    const userId = userIdFromMetadata(metadata);
     this.logger.log(`gRPC BatchLeave: ${data.room_ids} by ${userId}`);
     await this.liveService.batchLeave(userId, data.room_ids);
-    return { code: '0', msg: 'success' };
+    return ok();
   }
 
   @GrpcMethod('LiveService', 'GetParticipants')
   async getParticipants(data: { room_id: string }) {
     this.logger.log(`gRPC GetParticipants: ${data.room_id}`);
     const participants = await this.liveService.getParticipants(data.room_id);
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         items: participants.map(p => ({
           user_id: p.userId,
@@ -241,26 +225,24 @@ export class LiveController {
         })),
         total: participants.length,
       },
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'GenerateTransferCode')
   async generateTransferCode(data: { room_id: string; target_user_id: string }) {
     this.logger.log(`gRPC GenerateTransferCode: room=${data.room_id} target=${data.target_user_id}`);
     const result = await this.liveService.generateRoomTransferCode(data.room_id, data.target_user_id);
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       transfer_code: result.code,
       expires_at: result.expiresAt,
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'ExecuteTransfer')
   async executeTransfer(data: { room_id: string; transfer_code: string; from_user_id: string }) {
     this.logger.log(`gRPC ExecuteTransfer: room=${data.room_id} code=${data.transfer_code}`);
     await this.liveService.executeRoomTransfer(data.room_id, data.transfer_code, data.from_user_id);
-    return { code: '0', msg: '转移成功' };
+    return ok(undefined, '转移成功');
   }
 
   @GrpcMethod('LiveService', 'SaveVideoRecording')
@@ -283,7 +265,7 @@ export class LiveController {
       recordType: data.record_type,
       teacherName: data.teacher_name,
     });
-    return { code: '0', msg: 'success' };
+    return ok();
   }
 
   @GrpcMethod('LiveService', 'GetVideoList')
@@ -306,9 +288,7 @@ export class LiveController {
       endTime: data.end_time,
       type: data.type,
     });
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         items: result.items.map(item => ({
           room_id: item.roomId,
@@ -320,7 +300,7 @@ export class LiveController {
         })),
         total: result.total,
       },
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'GetVideoDetail')
@@ -331,9 +311,7 @@ export class LiveController {
       startTime: data.start_time,
       endTime: data.end_time,
     });
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         items: result.items.map(item => ({
           id: item.id,
@@ -348,21 +326,21 @@ export class LiveController {
         })),
         total: result.total,
       },
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'DeleteVideoByRoomIds')
   async deleteVideoByRoomIds(data: { room_ids: string[] }) {
     this.logger.log(`gRPC DeleteVideoByRoomIds: ${data.room_ids}`);
     await this.liveService.deleteVideoByRoomIds(data.room_ids);
-    return { code: '0', msg: 'success' };
+    return ok();
   }
 
   @GrpcMethod('LiveService', 'DeleteVideoByVideoIds')
   async deleteVideoByVideoIds(data: { video_ids: string[] }) {
     this.logger.log(`gRPC DeleteVideoByVideoIds: ${data.video_ids}`);
     await this.liveService.deleteVideoByVideoIds(data.video_ids);
-    return { code: '0', msg: 'success' };
+    return ok();
   }
 
   @GrpcMethod('LiveService', 'SaveCourseware')
@@ -383,16 +361,14 @@ export class LiveController {
       fileurl: data.fileurl,
       createUserId: data.create_user_id,
     });
-    return { code: '0', msg: 'success' };
+    return ok();
   }
 
   @GrpcMethod('LiveService', 'ListCourseware')
   async listCourseware(data: { room_id: string }) {
     this.logger.log(`gRPC ListCourseware: room=${data.room_id}`);
     const result = await this.liveService.listCoursewares(data.room_id);
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         items: result.items.map(item => ({
           id: item.id,
@@ -405,14 +381,14 @@ export class LiveController {
         })),
         total: result.total,
       },
-    };
+    });
   }
 
   @GrpcMethod('LiveService', 'DeleteCourseware')
   async deleteCourseware(data: { id: string }) {
     this.logger.log(`gRPC DeleteCourseware: ${data.id}`);
     await this.liveService.deleteCourseware(data.id);
-    return { code: '0', msg: 'success' };
+    return ok();
   }
 
 
@@ -430,9 +406,7 @@ export class LiveController {
       roomId: data.room_id,
       searchName: data.search_name,
     });
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         items: result.items.map(item => ({
           user_id: item.userId,
@@ -447,6 +421,6 @@ export class LiveController {
         total: result.total,
         total_time_by_room: result.totalTime,
       },
-    };
+    });
   }
 }

@@ -1,16 +1,6 @@
 import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { firstValueFrom, Observable } from 'rxjs';
-import { status as GrpcStatus } from '@grpc/grpc-js';
-
-const GRPC_MAP: Record<number, HttpStatus> = {
-  [GrpcStatus.NOT_FOUND]: HttpStatus.NOT_FOUND,
-  [GrpcStatus.UNAUTHENTICATED]: HttpStatus.UNAUTHORIZED,
-  [GrpcStatus.PERMISSION_DENIED]: HttpStatus.FORBIDDEN,
-  [GrpcStatus.ALREADY_EXISTS]: HttpStatus.CONFLICT,
-  [GrpcStatus.INVALID_ARGUMENT]: HttpStatus.BAD_REQUEST,
-  [GrpcStatus.INTERNAL]: HttpStatus.INTERNAL_SERVER_ERROR,
-  [GrpcStatus.UNAVAILABLE]: HttpStatus.BAD_GATEWAY,
-};
+import { GRPC_STATUS_TO_HTTP } from '@yunyan-live/nest-shared';
 
 const logger = new Logger('GrpcHelper');
 
@@ -25,7 +15,7 @@ export async function grpcCall<T>(observable: Observable<T>): Promise<T> {
 
     const grpcCode = e?.code ?? e?.error?.code ?? -1;
     const details = e?.details || e?.error?.details || e?.message || e?.error?.message || '服务异常';
-    const httpStatus = GRPC_MAP[grpcCode] || HttpStatus.INTERNAL_SERVER_ERROR;
+    const httpStatus = GRPC_STATUS_TO_HTTP[grpcCode] ?? HttpStatus.INTERNAL_SERVER_ERROR;
 
     throw new HttpException(details, httpStatus);
   }

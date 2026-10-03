@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import { RpcException } from '@nestjs/microservices';
+import { grpcError } from '@yunyan-live/nest-shared';
 import { status as GrpcStatus } from '@grpc/grpc-js';
 import { LiveRoom } from './live-room.entity';
 import { LiveParticipant } from './live-participant.entity';
@@ -92,10 +92,10 @@ export class LiveService {
   async update(dto: { roomId: string; title?: string; type?: number; startTime?: string; duration?: number }): Promise<LiveRoom> {
     const room = await this.repo.findOne({ where: { roomId: dto.roomId } });
     if (!room) {
-      throw new RpcException({ code: GrpcStatus.NOT_FOUND, message: '房间不存在' });
+      throw grpcError(GrpcStatus.NOT_FOUND, '房间不存在');
     }
     if (room.status !== 1) {
-      throw new RpcException({ code: GrpcStatus.FAILED_PRECONDITION, message: '只有未开播的房间才能编辑' });
+      throw grpcError(GrpcStatus.FAILED_PRECONDITION, '只有未开播的房间才能编辑');
     }
 
     if (dto.title !== undefined) room.title = dto.title;
@@ -344,8 +344,8 @@ export class LiveService {
 
   async generateRoomTransferCode(roomId: string, targetUserId: string) {
     const room = await this.repo.findOne({ where: { roomId } });
-    if (!room) throw new RpcException({ code: GrpcStatus.NOT_FOUND, message: '房间不存在' });
-    if (room.status !== 1) throw new RpcException({ code: GrpcStatus.INVALID_ARGUMENT, message: '只有未开播的房间才能转移' });
+    if (!room) throw grpcError(GrpcStatus.NOT_FOUND, '房间不存在');
+    if (room.status !== 1) throw grpcError(GrpcStatus.INVALID_ARGUMENT, '只有未开播的房间才能转移');
 
     await this.transferCodeRepo.update(
       { roomId, targetUserId, status: 0 },
@@ -369,15 +369,15 @@ export class LiveService {
 
   async executeRoomTransfer(roomId: string, code: string, fromUserId: string) {
     const room = await this.repo.findOne({ where: { roomId } });
-    if (!room) throw new RpcException({ code: GrpcStatus.NOT_FOUND, message: '房间不存在' });
-    if (room.status !== 1) throw new RpcException({ code: GrpcStatus.INVALID_ARGUMENT, message: '只有未开播的房间才能转移' });
-    if (room.liveUserId !== fromUserId) throw new RpcException({ code: GrpcStatus.PERMISSION_DENIED, message: '只能转移自己的直播间' });
+    if (!room) throw grpcError(GrpcStatus.NOT_FOUND, '房间不存在');
+    if (room.status !== 1) throw grpcError(GrpcStatus.INVALID_ARGUMENT, '只有未开播的房间才能转移');
+    if (room.liveUserId !== fromUserId) throw grpcError(GrpcStatus.PERMISSION_DENIED, '只能转移自己的直播间');
 
     const transferCode = await this.transferCodeRepo.findOne({ where: { code } });
-    if (!transferCode) throw new RpcException({ code: GrpcStatus.INVALID_ARGUMENT, message: '转移码无效' });
-    if (transferCode.status !== 0) throw new RpcException({ code: GrpcStatus.INVALID_ARGUMENT, message: '转移码已使用或已过期' });
-    if (transferCode.expiresAt < new Date()) throw new RpcException({ code: GrpcStatus.INVALID_ARGUMENT, message: '转移码已过期' });
-    if (transferCode.roomId !== roomId) throw new RpcException({ code: GrpcStatus.INVALID_ARGUMENT, message: '转移码与房间不匹配' });
+    if (!transferCode) throw grpcError(GrpcStatus.INVALID_ARGUMENT, '转移码无效');
+    if (transferCode.status !== 0) throw grpcError(GrpcStatus.INVALID_ARGUMENT, '转移码已使用或已过期');
+    if (transferCode.expiresAt < new Date()) throw grpcError(GrpcStatus.INVALID_ARGUMENT, '转移码已过期');
+    if (transferCode.roomId !== roomId) throw grpcError(GrpcStatus.INVALID_ARGUMENT, '转移码与房间不匹配');
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();

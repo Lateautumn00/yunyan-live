@@ -1,19 +1,16 @@
 import { Injectable, Inject, OnModuleInit } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { ClientGrpc, RpcException } from '@nestjs/microservices';
+import { ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom, Observable } from 'rxjs';
 import * as bcrypt from 'bcryptjs';
 import { status } from '@grpc/grpc-js';
+import { grpcError, ok } from '@yunyan-live/nest-shared';
 import { UsersService } from '../users/users.service';
 import { decryptPassword } from './password-crypto';
 import { LoginDto, RegisterDto, ResetPasswordDto, ChangePasswordDto } from './dto/auth.dto';
 
 interface MailServiceClient {
   verifyCode(data: { email: string; code: string }): Observable<{ code: string; msg: string; valid: boolean }>;
-}
-
-function grpcError(grpcStatus: number, message: string) {
-  return new RpcException({ code: grpcStatus, message });
 }
 
 @Injectable()
@@ -39,15 +36,12 @@ export class AuthService implements OnModuleInit {
     if (!valid) throw grpcError(status.UNAUTHENTICATED, '密码错误');
 
     const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role });
-    const result = {
-      code: '0',
-      msg: 'success',
+    return ok({
       access_token: token,
       expires_in: 604800,
       guid: user.id,
-      role: user.role,
-    };
-    return result;
+      role: user.role
+    });
   }
 
   async register(dto: RegisterDto) {
@@ -66,11 +60,9 @@ export class AuthService implements OnModuleInit {
       role: dto.role || 2,
     });
 
-    return {
-      code: '0',
-      msg: 'success',
-      guid: user.id,
-    };
+    return ok({
+      guid: user.id
+    });
   }
 
   async resetPassword(dto: ResetPasswordDto) {
@@ -84,7 +76,7 @@ export class AuthService implements OnModuleInit {
     const passwordHash = await bcrypt.hash(password, 10);
     await this.usersService.updatePassword(user.id, passwordHash);
 
-    return { code: '0', msg: 'success' };
+    return ok();
   }
 
   async changePassword(dto: ChangePasswordDto, userId: string) {
@@ -103,23 +95,21 @@ export class AuthService implements OnModuleInit {
     const passwordHash = await bcrypt.hash(password, 10);
     await this.usersService.updatePassword(userId, passwordHash);
 
-    return { code: '0', msg: 'success' };
+    return ok();
   }
 
   async getUser(userId: string) {
     const user = await this.usersService.findById(userId);
     if (!user) throw grpcError(status.NOT_FOUND, '用户不存在');
 
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: {
         id: user.id,
         username: user.username,
         email: user.email,
-        role: user.role,
-      },
-    };
+        role: user.role
+      }
+    });
   }
 
   async updateUserName(userId: string, username: string) {
@@ -127,34 +117,30 @@ export class AuthService implements OnModuleInit {
     if (!user) throw grpcError(status.NOT_FOUND, '用户不存在');
 
     await this.usersService.updateUsername(userId, username);
-    return { code: '0', msg: 'success' };
+    return ok();
   }
 
   async batchGetUsers(userIds: string[]) {
     const users = await this.usersService.findByIds(userIds);
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: users.map(u => ({
         id: u.id,
         username: u.username,
         email: u.email,
-        role: u.role,
-      })),
-    };
+        role: u.role
+      }))
+    });
   }
 
   async searchTeachers(keyword: string) {
     const users = await this.usersService.searchTeachers(keyword);
-    return {
-      code: '0',
-      msg: 'success',
+    return ok({
       data: users.map(u => ({
         id: u.id,
         username: u.username,
         email: u.email,
-        role: u.role,
-      })),
-    };
+        role: u.role
+      }))
+    });
   }
 }

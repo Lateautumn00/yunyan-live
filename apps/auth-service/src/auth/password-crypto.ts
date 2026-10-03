@@ -1,15 +1,12 @@
 import { createPrivateKey, privateDecrypt, constants, KeyObject } from 'node:crypto';
 import { status } from '@grpc/grpc-js';
 import { RpcException } from '@nestjs/microservices';
-
-function rpcError(grpcStatus: number, message: string) {
-  return new RpcException({ code: grpcStatus, message });
-}
+import { grpcError } from '@yunyan-live/nest-shared';
 
 function getPrivateKey(): KeyObject {
   const raw = process.env.PASSWORD_PRIVATE_KEY;
   if (!raw) {
-    throw rpcError(
+    throw grpcError(
       status.INTERNAL,
       '服务端未配置 PASSWORD_PRIVATE_KEY（运行 pnpm gen:keys --write-env 生成）',
     );
@@ -21,7 +18,7 @@ function getPrivateKey(): KeyObject {
       type: 'pkcs8',
     });
   } catch {
-    throw rpcError(status.INTERNAL, 'PASSWORD_PRIVATE_KEY 格式无效，需为 PKCS8 DER base64');
+    throw grpcError(status.INTERNAL, 'PASSWORD_PRIVATE_KEY 格式无效，需为 PKCS8 DER base64');
   }
 }
 
@@ -31,7 +28,7 @@ function getPrivateKey(): KeyObject {
  */
 export function decryptPassword(cipherBase64: string): string {
   if (!cipherBase64) {
-    throw rpcError(status.INVALID_ARGUMENT, '密码不能为空');
+    throw grpcError(status.INVALID_ARGUMENT, '密码不能为空');
   }
   let plaintext: Buffer;
   try {
@@ -42,11 +39,11 @@ export function decryptPassword(cipherBase64: string): string {
     );
   } catch (err) {
     if (err instanceof RpcException) throw err;
-    throw rpcError(status.INVALID_ARGUMENT, '密码解密失败，请使用最新版客户端重试');
+    throw grpcError(status.INVALID_ARGUMENT, '密码解密失败，请使用最新版客户端重试');
   }
   const password = plaintext.toString('utf8');
   if (password.length < 6 || password.length > 190) {
-    throw rpcError(status.INVALID_ARGUMENT, '密码长度需为 6-190 字符');
+    throw grpcError(status.INVALID_ARGUMENT, '密码长度需为 6-190 字符');
   }
   return password;
 }

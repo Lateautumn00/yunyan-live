@@ -25,6 +25,7 @@
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/throttler": "^5.0.0",
     "@nestjs/typeorm": "^10.0.0",
+    "@yunyan-live/nest-shared": "workspace:*",
     "@yunyan-live/shared": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "amqplib": "^2.0.1",
