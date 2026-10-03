@@ -144,6 +144,19 @@ cp init/.env.example                  init/.env
 pnpm gen:keys --write-env   # RSA-2048：公钥内置桌面端，私钥写入 apps/auth-service/.env
 ```
 
+**密钥分发（服务端与桌面端不在同一台机器时）**
+
+公钥随代码走：`passwordPublicKey.ts` 已入库，桌面端零配置。私钥只放运行 `auth-service` 的机器。
+典型场景：服务端部署在 VM/远程 Ubuntu，本地执行 `pnpm dev:desktop`：
+
+1. 本地 `.env` 中 `PASSWORD_PRIVATE_KEY=...` 整行复制到 **VM 的 `apps/auth-service/.env`**
+   （scp 或手动粘贴，禁止提交 git），然后在 VM 重启 auth-service。
+2. 验证：桌面端登录一次——返回 `用户不存在` / `密码错误` / 登录成功即密钥匹配；
+   返回 `密码解密失败，请使用最新版客户端重试` 说明私钥与桌面端公钥不匹配。
+
+> **不要在 VM 上执行 `pnpm gen:keys --force`**：会覆盖已提交的公钥文件，导致所有桌面端失配。
+> 轮换流程：本地 `pnpm gen:keys --force --write-env` → 新私钥同步到 VM `.env` → 提交新公钥 → 重启服务。
+
 前端环境变量示例：
 
 ```bash
