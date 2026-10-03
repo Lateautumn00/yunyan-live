@@ -2,7 +2,7 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MailerService } from '@nestjs-modules/mailer';
 import Redis from 'ioredis';
-import { REDIS_CLIENT } from '../redis/redis.module';
+import { REDIS_CLIENT } from '@yunyan-live/nest-shared';
 
 @Injectable()
 export class MailService {
