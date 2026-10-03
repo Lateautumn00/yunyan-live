@@ -15,6 +15,7 @@
         <el-button
           type="primary"
           :disabled="!roomId"
+          :loading="generating"
           @click="generateCode"
         >
           生成转移码
@@ -57,9 +58,11 @@ const activeKey = '4';
 const roomId = ref('');
 const transferCode = ref('');
 const expireTime = ref('');
+const generating = ref(false);
 
 async function generateCode() {
-  if (!roomId.value) return;
+  if (generating.value || !roomId.value) return;
+  generating.value = true;
   try {
     const res = await Live.generate_transfer_code({ roomId: roomId.value });
     const data = res.data.data as { transfer_code: string; expires_at: string };
@@ -69,6 +72,8 @@ async function generateCode() {
   } catch (e) {
     const msg = (e as { msg?: string })?.msg ?? '生成失败';
     ElMessage.error(msg);
+  } finally {
+    generating.value = false;
   }
 }
 

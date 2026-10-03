@@ -3,6 +3,7 @@
     <div class="bottom">
       <el-button
         v-if="isPlay"
+        :loading="playPending"
         @click="startPlayout"
       >
         <el-icon><VideoPlay /></el-icon>
@@ -30,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import type { JanusHandle, JanusSession } from '@/vendor/live/live';
 import Live from '@/vendor/live/live';
@@ -43,7 +44,18 @@ const props = defineProps<{ id?: string; opaqueId?: string }>();
 const record = ref<JanusSession | null>(null);
 const recordPlay = ref<JanusHandle | null>(null);
 const isPlay = ref(true);
+const playPending = ref(false);
 const videoPlayerRef = ref<InstanceType<typeof VideoPlayer>>();
+
+let playPendingTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearPlayPending() {
+  playPending.value = false;
+  if (playPendingTimer) {
+    clearTimeout(playPendingTimer);
+    playPendingTimer = null;
+  }
+}
 
 onMounted(() => {
   Live.init({
@@ -61,6 +73,13 @@ onMounted(() => {
       });
     }
   });
+});
+
+onUnmounted(() => {
+  if (playPendingTimer) {
+    clearTimeout(playPendingTimer);
+    playPendingTimer = null;
+  }
 });
 
 function recordAttach() {
@@ -117,13 +136,16 @@ function message(msg: Record<string, unknown>, jsep?: unknown) {
         });
       } else if (status === 'playing') {
         isPlay.value = false;
+        clearPlayPending();
       } else if (status === 'stopped') {
         isPlay.value = true;
+        clearPlayPending();
         recordPlay.value?.hangup();
       }
     }
   } else if (result === 'done') {
     isPlay.value = true;
+    clearPlayPending();
     recordPlay.value?.hangup();
   }
 }
@@ -151,10 +173,15 @@ function playStream(element: HTMLVideoElement | undefined, stream: MediaStream) 
 }
 
 function startPlayout() {
+  if (playPending.value) return;
   if (!props.id) {
     ElMessage.error('视频不存在');
     return;
   }
+  playPending.value = true;
+  playPendingTimer = setTimeout(() => {
+    clearPlayPending();
+  }, 5000);
   recordPlay.value?.send({
     message: {
       request: 'play',

@@ -98,7 +98,11 @@ function videoLists(status: boolean, data: HistoryVideoItem) {
   if (status) videoList.value.unshift(data);
 }
 
+const deleting = ref(false);
+
 function delVideoList(id: string | undefined, index: number) {
+  if (deleting.value) return;
+  deleting.value = true;
   void apiBackstage
     .videoids_delete({ data: { videoIds: [id] } })
     .then(() => {
@@ -106,7 +110,10 @@ function delVideoList(id: string | undefined, index: number) {
     })
     .catch((e) => {
       console.error(e);
-      ElMessage.error('删除服务异常');
+      ElMessage.error('删除录像出异常');
+    })
+    .finally(() => {
+      deleting.value = false;
     });
 }
 

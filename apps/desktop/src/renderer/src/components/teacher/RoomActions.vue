@@ -76,6 +76,7 @@
           <el-button @click="deleteDialogVisible = false">取 消</el-button>
           <el-button
             type="primary"
+            :loading="deleting"
             @click="submitDelete"
           >确 定</el-button>
         </span>
@@ -151,6 +152,7 @@
           <el-button
             type="primary"
             :disabled="!transferCode"
+            :loading="transferring"
             @click="submitTransfer"
           >确 定</el-button>
         </span>
@@ -224,6 +226,7 @@
           <el-button @click="editDialogVisible = false">取 消</el-button>
           <el-button
             type="primary"
+            :loading="editing"
             @click="submitEdit"
           >确认修改</el-button>
         </span>
@@ -291,6 +294,9 @@ const editDialogVisible = ref(false);
 const coursewareDialogVisible = ref(false);
 const transferCode = ref('');
 const isHostRoom = ref(false);
+const transferring = ref(false);
+const editing = ref(false);
+const deleting = ref(false);
 const editForm = ref<{
   roomId: string;
   title: string;
@@ -348,6 +354,8 @@ function goLiveRoom(identity: number) {
 }
 
 async function submitDelete() {
+  if (deleting.value) return;
+  deleting.value = true;
   deleteDialogVisible.value = false;
   try {
     const res = await Live.live_delete({ roomId: props.room.roomId });
@@ -355,10 +363,14 @@ async function submitDelete() {
     emit('deleted');
   } catch (e) {
     console.error(e);
+  } finally {
+    deleting.value = false;
   }
 }
 
 async function submitTransfer() {
+  if (transferring.value) return;
+  transferring.value = true;
   try {
     const res = await Live.execute_transfer({
       roomId: props.room.roomId,
@@ -370,14 +382,18 @@ async function submitTransfer() {
   } catch (e) {
     const msg = (e as { msg?: string })?.msg ?? '转移失败';
     ElMessage.error(msg);
+  } finally {
+    transferring.value = false;
   }
 }
 
 async function submitEdit() {
-  const valid = await editFormRef.value?.validate().catch(() => false);
-  if (!valid) return;
-
+  if (editing.value) return;
+  editing.value = true;
   try {
+    const valid = await editFormRef.value?.validate().catch(() => false);
+    if (!valid) return;
+
     await Live.update_live({
       roomId: editForm.value.roomId,
       title: editForm.value.title,
@@ -391,6 +407,8 @@ async function submitEdit() {
   } catch (e) {
     const msg = (e as { msg?: string })?.msg ?? '修改失败';
     ElMessage.error(msg);
+  } finally {
+    editing.value = false;
   }
 }
 </script>

@@ -202,6 +202,7 @@ let lockReconnect = false;
 let time = 0;
 let sessionClosed = false;
 const speechClose = ref(1);
+const forbidLoading = ref(false);
 const sockets = ref<{
   liveSocket: WebSocket | null;
   socketUrl: string;
@@ -273,6 +274,8 @@ function apply(status: boolean, num: number) {
 }
 
 async function updateForbid(status: number) {
+  if (forbidLoading.value) return;
+  forbidLoading.value = true;
   const data = {
     roomId: props.roomId ?? '',
     liveUserId: props.liveUserId ?? '',
@@ -285,6 +288,8 @@ async function updateForbid(status: number) {
     }
   } catch (e) {
     console.error(e);
+  } finally {
+    forbidLoading.value = false;
   }
 }
 

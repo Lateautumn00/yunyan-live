@@ -200,6 +200,7 @@
           <p>确定要退出当前账号吗？</p>
           <el-button
             type="danger"
+            :loading="loggingOut"
             @click="handleLogout"
           >
             退出登录
@@ -235,6 +236,7 @@ const router = useRouter();
 const activeMenu = ref('username');
 const loading = ref(false);
 const passLoading = ref(false);
+const loggingOut = ref(false);
 const formRef = ref<FormInstance>();
 const passFormRef = ref<FormInstance>();
 const contentRef = ref<HTMLDivElement>();
@@ -394,9 +396,15 @@ async function handlePassSubmit() {
 }
 
 async function handleLogout() {
-  await userStore.login_out({ token: userStore.token, guid: userStore.guid });
-  localStorage.removeItem('role');
-  void router.push('/login');
+  if (loggingOut.value) return;
+  loggingOut.value = true;
+  try {
+    await userStore.login_out({ token: userStore.token, guid: userStore.guid });
+    localStorage.removeItem('role');
+    void router.push('/login');
+  } finally {
+    loggingOut.value = false;
+  }
 }
 
 function resetForm() {

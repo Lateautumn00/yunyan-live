@@ -12,7 +12,10 @@
           <CopyDocument />
         </el-icon>
       </div>
-      <el-button @click="updateCode">
+      <el-button
+        :loading="updating"
+        @click="updateCode"
+      >
         更新参加码
       </el-button>
     </div>
@@ -51,6 +54,7 @@ const emit = defineEmits<{ updated: [code: string] }>();
 
 const localCode = ref(props.joinCode);
 const entryLink = props.clientLink;
+const updating = ref(false);
 
 watch(
   () => props.joinCode,
@@ -60,6 +64,8 @@ watch(
 );
 
 async function updateCode() {
+  if (updating.value) return;
+  updating.value = true;
   try {
     const res = await Live.update_code({ roomId: props.roomId });
     const data = res.data.data as string;
@@ -68,6 +74,8 @@ async function updateCode() {
     ElMessage.success(res.data.msg ?? '更新成功');
   } catch (e) {
     console.error(e);
+  } finally {
+    updating.value = false;
   }
 }
 
