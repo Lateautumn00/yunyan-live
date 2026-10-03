@@ -81,6 +81,7 @@
       </div>
       <el-button
         type="primary"
+        :loading="creating"
         @click="submitForm"
       >
         创建
@@ -120,6 +121,7 @@ const plugin = ref<JanusHandle | null>(null);
 const boardPlugin = ref<JanusHandle | null>(null);
 const janusLib = ref<typeof import('@/vendor/live/live')['default'] | null>(null);
 const liveFormRef = ref<FormInstance>();
+const creating = ref(false);
 const liveForm = ref<CreateForm>({
   title: '',
   startTime: null,
@@ -186,8 +188,10 @@ function disabledMinutes(hour: number) {
 }
 
 function submitForm(): void {
+  if (creating.value) return;
   liveFormRef.value?.validate((valid: boolean) => {
     if (valid) {
+      creating.value = true;
       void createLive();
     }
   });
@@ -213,17 +217,20 @@ async function LiveCreate() {
     });
   } catch (e) {
     ElMessage.error('创建直播失败');
+    creating.value = false;
   }
 }
 
 async function createLive() {
   if (dayjs(liveForm.value.startTime).isBefore(dayjs())) {
     ElMessage.error('开始时间不能早于当前时间');
+    creating.value = false;
     return;
   }
   const serverTime = await getServerTime();
   if (!serverTime) {
     ElMessage.error('获取服务器时间失败');
+    creating.value = false;
     return;
   }
   const id = randomString(2, true);
@@ -234,6 +241,7 @@ async function createLive() {
 function getRoomId() {
   if (!plugin.value) {
     ElMessage.error('Janus 未连接，请检查直播服务');
+    creating.value = false;
     return;
   }
   const data = {
@@ -261,6 +269,7 @@ function getRoomId() {
     },
     error: () => {
       ElMessage.error('操作失败！');
+      creating.value = false;
     }
   });
 }
@@ -276,6 +285,7 @@ function setWhiteBoard() {
     text: JSON.stringify(data),
     error: () => {
       ElMessage.error('操作失败');
+      creating.value = false;
       destroyLive();
     }
   });

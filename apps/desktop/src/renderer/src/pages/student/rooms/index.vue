@@ -24,6 +24,7 @@
           <el-button
             type="danger"
             :disabled="multipleSelection.length === 0"
+            :loading="deleting"
             @click="handleBatchDelete"
           >
             批量删除
@@ -37,6 +38,7 @@
           />
           <el-button
             type="primary"
+            :loading="joining"
             @click="handleJoin"
           >
             加入
@@ -94,6 +96,7 @@
               <el-button
                 type="text"
                 size="small"
+                :loading="entering"
                 @click="enterRoom(row as RoomItem)"
               >
                 进入
@@ -101,6 +104,7 @@
               <el-button
                 type="text"
                 size="small"
+                :loading="deleting"
                 @click="deleteRoom(row as RoomItem)"
               >
                 删除
@@ -162,6 +166,9 @@ const params = ref({ page: 1, pageSize: 10 });
 const settingsVisible = ref(false);
 const total = ref(0);
 const loading = ref(true);
+const joining = ref(false);
+const deleting = ref(false);
+const entering = ref(false);
 
 function getStatusType(status: number) {
   const map: Record<number, 'info' | 'success' | 'danger' | 'warning'> = {
@@ -206,6 +213,8 @@ function handleSelectionChange(val: RoomItem[]) {
 }
 
 async function handleBatchDelete() {
+  if (deleting.value) return;
+  deleting.value = true;
   try {
     await ElMessageBox.confirm(`确定要删除选中的 ${multipleSelection.value.length} 条记录吗？`, '提示', {
       confirmButtonText: '确定',
@@ -221,6 +230,8 @@ async function handleBatchDelete() {
     }
   } catch {
     // 取消操作
+  } finally {
+    deleting.value = false;
   }
 }
 
@@ -230,11 +241,13 @@ function handleCurrentChange(current: number) {
 }
 
 async function handleJoin() {
+  if (joining.value) return;
   if (!joinCode.value.trim()) {
     ElMessage.warning('请输入直播码');
     return;
   }
 
+  joining.value = true;
   try {
     const res = await api.join_live({
       joinCode: joinCode.value.trim(),
@@ -250,46 +263,56 @@ async function handleJoin() {
     }
   } catch {
     ElMessage.error('加入失败，请检查直播码');
+  } finally {
+    joining.value = false;
   }
 }
 
 async function enterRoom(room: RoomItem) {
+  if (entering.value) return;
   if (room.status === 3) {
     ElMessage.warning('该直播已结束');
     return;
   }
 
-  const type = room.type === 0 ? 'small' : 'large';
-  const role = room.liveUserId === userStore.guid ? 'teacher' : 'student';
+  entering.value = true;
+  try {
+    const type = room.type === 0 ? 'small' : 'large';
+    const role = room.liveUserId === userStore.guid ? 'teacher' : 'student';
 
-  if (role === 'student') {
-    try {
-      const res = await api.join_live({
-        joinCode: room.joinCode,
-        nickName: userStore.userInfo.userName
-      });
-      if (res.data.code !== 1000) {
-        ElMessage.error(res.data.msg || '加入失败');
+    if (role === 'student') {
+      try {
+        const res = await api.join_live({
+          joinCode: room.joinCode,
+          nickName: userStore.userInfo.userName
+        });
+        if (res.data.code !== 1000) {
+          ElMessage.error(res.data.msg || '加入失败');
+          return;
+        }
+      } catch {
+        ElMessage.error('加入失败');
         return;
       }
-    } catch {
-      ElMessage.error('加入失败');
-      return;
     }
-  }
 
-  router.push({
-    path: `/classroom/${type}${role}`,
-    query: {
-      roomId: room.roomId,
-      code: joinCode.value || '',
-      identity: role,
-      nickName: userStore.userInfo.userName
-    }
-  });
+    router.push({
+      path: `/classroom/${type}${role}`,
+      query: {
+        roomId: room.roomId,
+        code: joinCode.value || '',
+        identity: role,
+        nickName: userStore.userInfo.userName
+      }
+    });
+  } finally {
+    entering.value = false;
+  }
 }
 
 async function deleteRoom(room: RoomItem) {
+  if (deleting.value) return;
+  deleting.value = true;
   try {
     await ElMessageBox.confirm('确定要删除该直播间吗？', '提示', {
       confirmButtonText: '确定',
@@ -304,6 +327,8 @@ async function deleteRoom(room: RoomItem) {
     }
   } catch {
     // 取消操作
+  } finally {
+    deleting.value = false;
   }
 }
 
