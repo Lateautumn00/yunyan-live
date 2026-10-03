@@ -44,7 +44,7 @@
             class="name"
             :title="item.filename"
           >{{ item.filename }}</span>
-          <span class="size">{{ formatSize(item.filesize) }}</span>
+          <span class="size">{{ formatFileSize(item.filesize) }}</span>
           <el-button
             link
             type="danger"
@@ -62,6 +62,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { formatFileSize } from '@yunyan-live/utils';
 import Live from '@/api/backstage';
 import { uploadPptFile, loadPptMeta } from '@/components/ClassRoom/whiteboard/pptImport';
 
@@ -171,13 +172,6 @@ async function removeItem(item: CoursewareItem) {
   } finally {
     deletingId.value = '';
   }
-}
-
-function formatSize(size: number): string {
-  const n = Number(size) || 0;
-  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)}MB`;
-  if (n >= 1024) return `${(n / 1024).toFixed(1)}KB`;
-  return `${n}B`;
 }
 </script>
 

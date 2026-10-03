@@ -201,7 +201,7 @@
         <div class="top-left content">
           <el-icon :size="18">
             <Timer />
-          </el-icon><span>{{ conversions(liveTimeLen) }}</span>
+          </el-icon><span>{{ formatStopwatch(liveTimeLen) }}</span>
         </div>
       </div>
       <div class="right">
@@ -281,7 +281,7 @@
             aria-label="录制中"
           >
             <VideoCameraFilled />
-          </el-icon><span v-show="!recordMouseType">{{ conversions(recordTimeLen) }}</span><span v-show="recordMouseType">停止录制</span>
+          </el-icon><span v-show="!recordMouseType">{{ formatStopwatch(recordTimeLen) }}</span><span v-show="recordMouseType">停止录制</span>
         </div>
         <div
           v-if="btn && isTeacher"
@@ -348,7 +348,7 @@
         </div>
         <div class="num">
           <div class="timeLen">
-            <span class="con">{{ conversions(endMessage.realDuration) }}</span><span class="title2">总时长</span>
+            <span class="con">{{ formatStopwatch(endMessage.realDuration) }}</span><span class="title2">总时长</span>
           </div>
 
           <el-divider direction="vertical" />
@@ -409,6 +409,7 @@ import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Setting } from '@element-plus/icons-vue';
+import { formatStopwatch } from '@yunyan-live/utils';
 import api from '@/api';
 import { copyText } from '@/utils/webBridge';
 
@@ -477,24 +478,6 @@ const recordMouseType = ref(false);
 let dia = false;
 const delayed = ref(0);
 const isDotNum = ref(0);
-
-function conversions(time: number | undefined): string {
-  let str = `00'00"`;
-  if (time && time > 0) {
-    const minute = Math.floor(time / 60);
-    const second = time % 60;
-    if (minute < 10 && second < 10) {
-      str = `0${minute}'0${second}"`;
-    } else if (minute < 10 && second >= 10) {
-      str = `0${minute}'${second}"`;
-    } else if (minute >= 10 && second < 10) {
-      str = `${minute}'0${second}"`;
-    } else {
-      str = `${minute}'${second}"`;
-    }
-  }
-  return str;
-}
 
 function getOnline() {
   if (!navigator.onLine) visible2.value = true;

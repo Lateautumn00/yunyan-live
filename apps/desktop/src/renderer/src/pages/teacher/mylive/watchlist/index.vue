@@ -27,7 +27,7 @@
             min-width="193"
           >
             <template #default="scope">
-              <span>{{ formatDuration(scope.row.watchTime) }}</span>
+              <span>{{ formatDurationCn(scope.row.watchTime) }}</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -71,6 +71,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import { formatDurationCn } from '@yunyan-live/utils';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import type { WatchItem } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
@@ -92,14 +93,6 @@ function formatTime(ts: string): string {
   if (!ts) return '-';
   const d = new Date(ts);
   return d.toLocaleString('zh-CN', { hour12: false });
-}
-
-function formatDuration(seconds: number): string {
-  if (!seconds || seconds < 1) return '0秒';
-  if (seconds < 60) return `${seconds}秒`;
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return s > 0 ? `${m}分${s}秒` : `${m}分`;
 }
 
 function handleSizeChange(size: number) {

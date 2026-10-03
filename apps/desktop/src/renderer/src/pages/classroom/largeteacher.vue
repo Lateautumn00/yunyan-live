@@ -121,6 +121,7 @@
 import { defineComponent, ref, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
+import { uid } from '@yunyan-live/utils';
 import Top from '@/components/ClassRoom/Top.vue';
 import WhiteBoard from '@/components/ClassRoom/WhiteBoard.vue';
 import VideoView from '@/components/ClassRoom/Video.vue';
@@ -161,7 +162,7 @@ export default defineComponent({
     const chatNum = ref(0);
     const max = ref(99);
     const userName = ref(nickName);
-    const opaqueId = ref(Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+    const opaqueId = ref(uid());
     const isTeacher = ref(true);
     const activeName = ref('chat');
     const layoutNum = ref(3);

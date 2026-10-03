@@ -348,6 +348,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { extractErrorMessage } from '@yunyan-live/utils';
 import { useUserStore } from '@/store/user';
 import api from '@/api';
 import { ElMessage } from 'element-plus';
@@ -606,10 +607,7 @@ async function handleRegister() {
     activeTab.value = 'login';
     loginForm.email = registerForm.email;
   } catch (error: unknown) {
-    const msg = (error instanceof Error ? error.message : null)
-      || (error as Record<string, unknown>)?.message
-      || (error as Record<string, unknown>)?.msg
-      || '注册失败';
+    const msg = extractErrorMessage(error, '注册失败');
     ElMessage.error(msg);
   } finally {
     registerLoading.value = false;
@@ -652,10 +650,7 @@ async function handleResetPassword() {
     activeTab.value = 'login';
     loginForm.email = forgotForm.email;
   } catch (error: unknown) {
-    const msg = (error instanceof Error ? error.message : null)
-      || (error as Record<string, unknown>)?.message
-      || (error as Record<string, unknown>)?.msg
-      || '重置失败';
+    const msg = extractErrorMessage(error, '重置失败');
     ElMessage.error(msg);
   } finally {
     forgotLoading.value = false;

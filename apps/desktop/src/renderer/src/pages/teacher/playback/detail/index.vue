@@ -139,8 +139,7 @@
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, type DatePickerProps } from 'element-plus';
-import dayjs from 'dayjs';
-import { formatDate } from '@yunyan-live/utils';
+import { formatCnDateTime, formatDate } from '@yunyan-live/utils';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import type { VideoItem } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
@@ -202,19 +201,12 @@ function playClick(row: VideoItem) {
       roomId: row.roomId,
       videoId: recordType === 1 ? (row.filePath || row.address) : row.address,
       recordType: String(recordType),
-      title: `${recordType === 1 ? '窗口录制' : '流录制'} - ${getTextTime(Number(row.createTime))}`,
+      title: `${recordType === 1 ? '窗口录制' : '流录制'} - ${formatCnDateTime(Number(row.createTime))}`,
       duration: String(row.duration || 0),
       createTime: row.createTime,
       filePath: row.filePath || '',
     }
   });
-}
-
-function getTextTime(time: number) {
-  const day = dayjs(time).format('YYYY-MM-DD');
-  const a = dayjs(time).format('A') === 'AM' ? '上午' : '下午';
-  const times = dayjs(time).format('HH:mm:ss');
-  return `${day} ${a} ${times}`;
 }
 
 async function downloadClick(row: VideoItem) {
@@ -280,7 +272,7 @@ async function doDownload(videoId: string, createTime?: string | number) {
     const res = await Live.download_recording_file(videoId);
     const blob = new Blob([res.data], { type: 'video/mp4' });
     const buffer = await blob.arrayBuffer();
-    const defaultName = `录制_${getTextTime(Number(createTime))}.mp4`;
+    const defaultName = `录制_${formatCnDateTime(Number(createTime))}.mp4`;
     const saved = await saveBinaryFile(buffer, defaultName);
     if (saved) {
       ElMessage.success('下载成功');

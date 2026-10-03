@@ -219,6 +219,7 @@ import { ElMessage } from 'element-plus';
 import type { FormInstance, FormRules } from 'element-plus';
 import { useUserStore } from '@/store/user';
 import { isVoid, isCheckedAllRules } from '@yunyan-live/validation';
+import { extractErrorMessage } from '@yunyan-live/utils';
 import EquipmentTestPanel from '@/components/LandingPage/EquipmentTestPanel.vue';
 
 defineProps<{
@@ -362,10 +363,7 @@ async function handleSubmit() {
     userStore.setName(form.userName);
     ElMessage.success('设置成功');
   } catch (error: unknown) {
-    const msg = (error instanceof Error ? error.message : null)
-      || (error as Record<string, unknown>)?.message
-      || (error as Record<string, unknown>)?.msg
-      || '修改失败';
+    const msg = extractErrorMessage(error, '修改失败');
     ElMessage.error(msg);
   } finally {
     loading.value = false;
@@ -385,10 +383,7 @@ async function handlePassSubmit() {
     ElMessage.success('修改成功，请重新登录');
     await handleLogout();
   } catch (error: unknown) {
-    const msg = (error instanceof Error ? error.message : null)
-      || (error as Record<string, unknown>)?.message
-      || (error as Record<string, unknown>)?.msg
-      || '修改失败';
+    const msg = extractErrorMessage(error, '修改失败');
     ElMessage.error(msg);
   } finally {
     passLoading.value = false;

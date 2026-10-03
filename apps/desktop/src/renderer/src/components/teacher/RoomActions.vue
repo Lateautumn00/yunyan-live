@@ -244,6 +244,7 @@
 import { computed, ref } from 'vue';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import dayjs from 'dayjs';
+import { extractErrorMessage } from '@yunyan-live/utils';
 import Live from '@/api/backstage';
 import ShareLinks from '@/components/teacher/ShareLinks.vue';
 import CoursewareUpload from '@/components/teacher/CoursewareUpload.vue';
@@ -380,7 +381,7 @@ async function submitTransfer() {
     transferDialogVisible.value = false;
     emit('transferred');
   } catch (e) {
-    const msg = (e as { msg?: string })?.msg ?? '转移失败';
+    const msg = extractErrorMessage(e, '转移失败');
     ElMessage.error(msg);
   } finally {
     transferring.value = false;
@@ -405,7 +406,7 @@ async function submitEdit() {
     editDialogVisible.value = false;
     emit('updated');
   } catch (e) {
-    const msg = (e as { msg?: string })?.msg ?? '修改失败';
+    const msg = extractErrorMessage(e, '修改失败');
     ElMessage.error(msg);
   } finally {
     editing.value = false;

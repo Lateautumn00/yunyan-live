@@ -24,7 +24,7 @@
         >
           流录制
         </el-tag>
-        <span class="duration">{{ formatDuration(duration) }}</span>
+        <span class="duration">{{ formatDurationClock(duration) }}</span>
         <span class="time">{{ formatDate(Number(createTime)) }}</span>
         <el-button
           v-if="recordType === 2"
@@ -67,7 +67,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ArrowLeft, Download } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
-import { formatDate } from '@yunyan-live/utils';
+import { formatDate, formatDurationClock } from '@yunyan-live/utils';
 import HistoryVideo from '@/components/ClassRoom/HistoryVideo.vue';
 import { useUserStore } from '@/store/user';
 import Live from '@/api/backstage';
@@ -92,13 +92,6 @@ const downloading = ref(false);
 
 function releaseDownload() {
   downloading.value = false;
-}
-
-function formatDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return '';
-  const min = Math.floor(seconds / 60);
-  const sec = seconds % 60;
-  return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
 }
 
 async function loadFileUrl() {

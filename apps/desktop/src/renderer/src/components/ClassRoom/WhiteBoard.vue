@@ -548,7 +548,7 @@
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import Konva from 'konva';
-import { debounce, frameThrottle, throttle } from '@yunyan-live/utils';
+import { debounce, formatFileSize, frameThrottle, throttle, uid } from '@yunyan-live/utils';
 import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
@@ -678,7 +678,7 @@ const colorPanelDragOffsetY = ref(0);
 const isDraggingColor = ref(false);
 let colorPanelTimer: number | null = null;
 
-const userId = (route.query.userId as string) || props.opaqueId || Date.now().toString(36);
+const userId = (route.query.userId as string) || props.opaqueId || uid();
 const displayName = props.userName || (props.isTeacher ? 'Teacher' : 'Student');
 const userColor = (() => {
   let h = 0;
@@ -714,12 +714,6 @@ function toast(msg: string) {
   toastMsg.value = msg;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toastMsg.value = ''; }, 2000);
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + 'B';
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + 'KB';
-  return (bytes / 1048576).toFixed(1) + 'MB';
 }
 
 onMounted(() => {
@@ -1244,7 +1238,7 @@ function onPointerDown(e: any) {
         if (val) {
           const layerPos = toLayerCoords(pos);
           const shapeData: Record<string, any> = {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            id: uid(),
             type: 'text', x: layerPos.x, y: layerPos.y, text: val, fontSize: textSize.value, color: currentColor.value,
             opacity: currentOpacity.value,
           };
@@ -1350,7 +1344,7 @@ function onPointerUp(e: any) {
       layerPath.push(lp.x, lp.y);
     }
     const shapeData: Record<string, any> = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: uid(),
       type: m, points: layerPath, color: currentColor.value, lineWidth: currentSize.value,
       // 橡皮是白盖而非笔迹：强制不透明，否则透明度滑杆会让被擦内容透回来
       opacity: m === 'eraser' ? 1 : currentOpacity.value,
@@ -1371,7 +1365,7 @@ function onPointerUp(e: any) {
     const radius = Math.max(rx, ry);
     if (Math.max(rx, ry) > 2) {
       const shapeData: Record<string, any> = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: uid(),
         type: 'circle', x: layerStart.x, y: layerStart.y,
         color: currentColor.value, lineWidth: currentSize.value,
         opacity: currentOpacity.value,
@@ -1395,7 +1389,7 @@ function onPointerUp(e: any) {
     }
     if (Math.sqrt(dx * dx + dy * dy) > 5) {
       const shapeData: Record<string, any> = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: uid(),
         type: 'line',
         points: [layerStart.x, layerStart.y, layerStart.x + dx, layerStart.y + dy],
         color: currentColor.value, lineWidth: currentSize.value,
@@ -1412,7 +1406,7 @@ function onPointerUp(e: any) {
     const h = Math.abs(layerEnd.y - layerStart.y);
     if (w > 2 && h > 2) {
       const shapeData: Record<string, any> = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: uid(),
         type: 'rect', x: Math.min(layerStart.x, layerEnd.x), y: Math.min(layerStart.y, layerEnd.y),
         width: w, height: h, color: currentColor.value, lineWidth: currentSize.value,
         opacity: currentOpacity.value,
@@ -1429,7 +1423,7 @@ function onPointerUp(e: any) {
     const dy = layerEnd.y - layerStart.y;
     if (Math.sqrt(dx * dx + dy * dy) > 5) {
       const shapeData: Record<string, any> = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: uid(),
         type: 'arrow', points: [layerStart.x, layerStart.y, layerEnd.x, layerEnd.y], color: currentColor.value, lineWidth: currentSize.value,
         opacity: currentOpacity.value,
       };
@@ -1647,7 +1641,7 @@ function importZoom() {
 
 // --- Pages ---
 function addLayer() {
-  const pageId = provider?.addPage() || `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const pageId = provider?.addPage() || uid('local_');
   redoStack.value = [];
   undoStack.value.push({ type: 'addPage', pageId, pageIndex: provider!.getCurrentPageIndex() });
   emitPaintLog();
@@ -2027,7 +2021,7 @@ async function uploadImage(file: File) {
         w = maxW;
       }
       const shapeData: Record<string, any> = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: uid(),
         type: 'image',
         url: fileUrl,
         x: 50,

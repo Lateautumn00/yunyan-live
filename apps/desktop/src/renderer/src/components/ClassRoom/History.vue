@@ -12,7 +12,7 @@
           <span>回放{{ item.title }}</span>
         </div>
         <div class="bottom">
-          <span class="time">时长:{{ conversions(item.duration) }}</span>
+          <span class="time">时长:{{ formatStopwatch(item.duration) }}</span>
           <div class="img-but">
             <el-icon
               aria-label="回放"
@@ -39,7 +39,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import dayjs from 'dayjs';
+import { formatCnDateTime, formatStopwatch } from '@yunyan-live/utils';
 import apiBackstage from '@/api/backstage';
 
 interface HistoryVideoItem {
@@ -60,31 +60,6 @@ const emit = defineEmits<{
 
 const videoList = ref<HistoryVideoItem[]>([]);
 
-function conversions(time: number | undefined): string {
-  let str = `00'00"`;
-  if (time && time > 0) {
-    const minute = Math.floor(time / 60);
-    const second = time % 60;
-    if (minute < 10 && second < 10) {
-      str = `0${minute}'0${second}"`;
-    } else if (minute < 10 && second >= 10) {
-      str = `0${minute}'${second}"`;
-    } else if (minute >= 10 && second < 10) {
-      str = `${minute}'0${second}"`;
-    } else {
-      str = `${minute}'${second}"`;
-    }
-  }
-  return str;
-}
-
-function getTextTime(time: number) {
-  const day = dayjs(time).format('YYYY-MM-DD');
-  const a = dayjs(time).format('A') === 'AM' ? '上午' : '下午';
-  const times = dayjs(time).format('HH:mm:ss');
-  return `${day} ${a} ${times}`;
-}
-
 function palyHistoryVideo(id: string | undefined, title: string) {
   if (!id) {
     ElMessage.warning('该视频无有效播放地址，无法回放');
@@ -94,7 +69,7 @@ function palyHistoryVideo(id: string | undefined, title: string) {
 }
 
 function videoLists(status: boolean, data: HistoryVideoItem) {
-  data.title = getTextTime(data.createTime as number);
+  data.title = formatCnDateTime(data.createTime as number);
   if (status) videoList.value.unshift(data);
 }
 

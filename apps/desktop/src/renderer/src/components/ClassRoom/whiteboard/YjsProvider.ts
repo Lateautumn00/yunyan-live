@@ -3,6 +3,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
+import { uid } from '@yunyan-live/utils';
+import { YjsClose } from '@yunyan-live/types';
 import { DEFAULT_TOOL, ToolState, FileItem, CursorData } from './types';
 
 export class YjsProvider {
@@ -54,9 +56,9 @@ export class YjsProvider {
     // y-websocket only emits `closed` for terminal close codes (4400-4499):
     // 4401 = kicked by another login, 4402 = session expired/invalid.
     this.provider.on('closed', (event: { code: number; reason: string }) => {
-      if (event.code === 4401) {
+      if (event.code === YjsClose.SESSION_KICKED) {
         onSessionClosed?.('kicked');
-      } else if (event.code === 4402) {
+      } else if (event.code === YjsClose.SESSION_INVALID) {
         onSessionClosed?.('expired');
       }
     });
@@ -68,7 +70,7 @@ export class YjsProvider {
     if (!this.readOnly && this.pages.length === 0) {
       this.doc.transact(() => {
         const page = new Y.Map();
-        page.set('id', `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+        page.set('id', uid('page_'));
         page.set('name', 'Page 1');
         page.set('visible', true);
         page.set('elements', new Y.Array());
@@ -151,7 +153,7 @@ onSynced(cb: () => void) {
     const newIndex = this.pages.length;
     const page = new Y.Map();
     // 同一毫秒内的多次调用必须产生不同 id（pages.observe 按 id 去重，重复会导致丢层）
-    const pageId = `page_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const pageId = uid('page_');
     page.set('id', pageId);
     page.set('name', `Page ${newIndex + 1}`);
     page.set('visible', true);

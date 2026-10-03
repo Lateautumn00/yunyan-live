@@ -1,3 +1,4 @@
+import { uid } from '@yunyan-live/utils';
 import { getPdfPageCount, getPdfPageDims } from './pdfAsset';
 import type { YjsProvider } from './YjsProvider';
 
@@ -52,13 +53,13 @@ export function importPptPages(
   for (let i = 0; i < meta.numPages; i++) {
     // pages.observe 会同步创建并切换对应的 Konva 层，此处不得重复 showPage
     const pageId =
-      provider?.addPage() || `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      provider?.addPage() || uid('local_');
     const { w, h } = meta.dims[i]!;
     const k = Math.min(1, (cw * 0.9) / w, (ch * 0.9) / h);
     const width = w * k;
     const height = h * k;
     provider?.addShape({
-      id: `pptimg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: uid('pptimg_'),
       type: 'ppt-image',
       pdfUrl: fileUrl,
       page: i + 1,

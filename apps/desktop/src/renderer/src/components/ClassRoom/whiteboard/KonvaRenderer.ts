@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Konva from 'konva';
 import * as Y from 'yjs';
+import { uid } from '@yunyan-live/utils';
 import { renderPdfPage } from './pdfAsset';
 import { ERASER_WIDTH_MULT, HIT_STROKE_MIN } from './types';
 
@@ -55,7 +56,7 @@ export class KonvaRenderer {
   addPage(index: number, pageId?: string): Konva.Layer {
     if (index < this.layers.length && index >= this.pageIds.length) {
       const existingLayer = this.layers[index]!;
-      this.pageIds.splice(index, 0, pageId || `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+      this.pageIds.splice(index, 0, pageId || uid('local_'));
       this.rebuildLayerMap();
       return existingLayer;
     }
@@ -63,7 +64,7 @@ export class KonvaRenderer {
     this.stage.add(newLayer);
     newLayer.hide();
     this.layers.splice(index, 0, newLayer);
-    this.pageIds.splice(index, 0, pageId || `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+    this.pageIds.splice(index, 0, pageId || uid('local_'));
     this.layerMap.set(index, newLayer);
     this.rebuildLayerMap();
     return newLayer;

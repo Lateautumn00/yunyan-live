@@ -50,6 +50,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
+import { extractErrorMessage } from '@yunyan-live/utils';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import Live from '@/api/backstage';
 import { copyText } from '@/utils/webBridge';
@@ -70,7 +71,7 @@ async function generateCode() {
     expireTime.value = new Date(data.expires_at).toLocaleString();
     ElMessage.success('转移码生成成功');
   } catch (e) {
-    const msg = (e as { msg?: string })?.msg ?? '生成失败';
+    const msg = extractErrorMessage(e, '生成失败');
     ElMessage.error(msg);
   } finally {
     generating.value = false;

@@ -156,6 +156,7 @@
 import { onMounted, onUnmounted, onUpdated, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Top as RaiseHand } from '@element-plus/icons-vue';
+import { WsClose } from '@yunyan-live/types';
 import api from '@/api';
 import { config } from '@/api';
 import { useUserStore } from '@/store/user';
@@ -400,13 +401,13 @@ function liveSocketMessage(e: MessageEvent) {
 function liveSocketClose(e?: Event) {
   clearLiveSocket();
   const code = e instanceof CloseEvent ? e.code : 0;
-  if (code === 4002) {
+  if (code === WsClose.SESSION_KICKED) {
     sessionClosed = true;
     stopReconnect();
     useUserStore().sessionInterrupted('kicked');
     return;
   }
-  if (code === 4001 && localStorage.getItem('token')) {
+  if (code === WsClose.UNAUTHORIZED && localStorage.getItem('token')) {
     sessionClosed = true;
     stopReconnect();
     useUserStore().sessionInterrupted('expired');
