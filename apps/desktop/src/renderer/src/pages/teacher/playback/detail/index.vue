@@ -85,6 +85,7 @@
             <el-button
               type="text"
               size="small"
+              :loading="downloading"
               @click="downloadClick(scope.row as VideoItem)"
             >
               下载
@@ -125,6 +126,7 @@
           <el-button @click="centerDialogVisible = false">取 消</el-button>
           <el-button
             type="primary"
+            :loading="deleting"
             @click="submitDelete"
           >确 定</el-button>
         </span>
@@ -161,6 +163,12 @@ const total = ref(0);
 const multipleSelection = ref<VideoItem[]>([]);
 const videoIdList = ref<string[]>([]);
 const centerDialogVisible = ref(false);
+const downloading = ref(false);
+const deleting = ref(false);
+
+function releaseDownload() {
+  downloading.value = false;
+}
 
 function handleSelectionChange(val: VideoItem[]) {
   multipleSelection.value = val;
@@ -210,6 +218,7 @@ function getTextTime(time: number) {
 }
 
 async function downloadClick(row: VideoItem) {
+  if (downloading.value) return;
   const recordType = row.recordType ?? 1;
   if (recordType !== 2) {
     ElMessage.warning('仅流录制支持下载');
@@ -220,17 +229,22 @@ async function downloadClick(row: VideoItem) {
     ElMessage.warning('无效的视频记录');
     return;
   }
+  downloading.value = true;
+  let polling = false;
   try {
     const statusRes = await Live.download_recording(videoId);
     if (statusRes.data.code === 2002) {
       ElMessage.info(statusRes.data.msg || '视频转码中，请稍候...');
       startPolling(videoId, row.createTime);
+      polling = true;
       return;
     }
     await doDownload(videoId, row.createTime);
   } catch (e) {
     console.error(e);
     ElMessage.error('下载失败');
+  } finally {
+    if (!polling) releaseDownload();
   }
 }
 
@@ -242,6 +256,7 @@ function startPolling(videoId: string, createTime?: string | number) {
     if (count >= maxCount) {
       clearInterval(timer);
       ElMessage.warning('转码时间过长，请稍后再试');
+      releaseDownload();
       return;
     }
     try {
@@ -249,10 +264,12 @@ function startPolling(videoId: string, createTime?: string | number) {
       if (res.data.code !== 2002) {
         clearInterval(timer);
         await doDownload(videoId, createTime);
+        releaseDownload();
       }
     } catch {
       clearInterval(timer);
       ElMessage.error('下载失败');
+      releaseDownload();
     }
   }, 3000);
 }
@@ -277,6 +294,8 @@ async function doDownload(videoId: string, createTime?: string | number) {
 }
 
 async function submitDelete() {
+  if (deleting.value) return;
+  deleting.value = true;
   centerDialogVisible.value = false;
   try {
     const res = await Live.videoids_delete({ videoIds: videoIdList.value });
@@ -284,6 +303,8 @@ async function submitDelete() {
     void getVideoDetail();
   } catch (e) {
     console.error(e);
+  } finally {
+    deleting.value = false;
   }
 }
 

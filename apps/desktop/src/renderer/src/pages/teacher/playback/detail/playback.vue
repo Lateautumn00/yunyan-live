@@ -29,6 +29,7 @@
         <el-button
           v-if="recordType === 2"
           class="download-btn"
+          :loading="downloading"
           @click="handleDownload"
         >
           <el-icon><Download /></el-icon>
@@ -87,6 +88,11 @@ const filePath = ref(route.query.filePath as string || '');
 const fileUrl = ref('');
 const opaqueId = ref('');
 const historyVideoRef = ref<InstanceType<typeof HistoryVideo> | null>(null);
+const downloading = ref(false);
+
+function releaseDownload() {
+  downloading.value = false;
+}
 
 function formatDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return '';
@@ -115,17 +121,23 @@ function goBack() {
 }
 
 async function handleDownload() {
+  if (downloading.value) return;
+  downloading.value = true;
+  let polling = false;
   try {
     const statusRes = await Live.download_recording(videoId.value);
     if (statusRes.data.code === 2002) {
       ElMessage.info(statusRes.data.msg || '视频转码中，请稍候...');
       startDownloadPolling();
+      polling = true;
       return;
     }
     await doDownload();
   } catch (e) {
     console.error(e);
     ElMessage.error('下载失败');
+  } finally {
+    if (!polling) releaseDownload();
   }
 }
 
@@ -137,6 +149,7 @@ function startDownloadPolling() {
     if (count >= maxCount) {
       clearInterval(timer);
       ElMessage.warning('转码时间过长，请稍后再试');
+      releaseDownload();
       return;
     }
     try {
@@ -144,10 +157,12 @@ function startDownloadPolling() {
       if (res.data.code !== 2002) {
         clearInterval(timer);
         await doDownload();
+        releaseDownload();
       }
     } catch {
       clearInterval(timer);
       ElMessage.error('下载失败');
+      releaseDownload();
     }
   }, 3000);
 }
