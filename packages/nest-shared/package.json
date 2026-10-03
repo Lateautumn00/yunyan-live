@@ -1,0 +1,41 @@
+{
+  "name": "@yunyan-live/nest-shared",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./grpc": "./src/grpc/index.ts",
+    "./protos/*": "./src/protos/*",
+    "./session": "./src/session/index.ts",
+    "./jwt": "./src/jwt/index.ts",
+    "./redis": "./src/redis/index.ts",
+    "./dto": "./src/dto/index.ts",
+    "./guards": "./src/guards/index.ts",
+    "./pagination": "./src/pagination/index.ts",
+    "./http": "./src/http/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings=0"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "~1.10.0",
+    "@grpc/proto-loader": "^0.8.1",
+    "@nestjs/common": "^10.0.0",
+    "@yunyan-live/types": "workspace:*",
+    "class-transformer": "^0.5.0",
+    "class-validator": "^0.14.0",
+    "ioredis": "^6.0.0",
+    "jsonwebtoken": "^9.0.3"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "typescript": "^5.9.3"
+  },
+  "license": "MIT"
+}

@@ -578,6 +578,40 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.2.0)(happy-dom@20.11.6)(jsdom@30.1.1(@noble/hashes@2.3.0))(vite@7.3.6(@types/node@26.2.0)(jiti@2.7.0)(less@4.9.0)(terser@5.50.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/nest-shared:
+    dependencies:
+      '@grpc/grpc-js':
+        specifier: ~1.10.0
+        version: 1.10.12
+      '@grpc/proto-loader':
+        specifier: ^0.8.1
+        version: 0.8.1
+      '@nestjs/common':
+        specifier: ^10.0.0
+        version: 10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@yunyan-live/types':
+        specifier: workspace:*
+        version: link:../types
+      class-transformer:
+        specifier: ^0.5.0
+        version: 0.5.1
+      class-validator:
+        specifier: ^0.14.0
+        version: 0.14.4
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0
+      jsonwebtoken:
+        specifier: ^9.0.3
+        version: 9.0.3
+    devDependencies:
+      '@types/jsonwebtoken':
+        specifier: ^9.0.10
+        version: 9.0.10
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/shared:
     dependencies:
       typeorm:
