@@ -3,9 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { join } from 'path';
-import { grpcClientOptions } from '@yunyan-live/nest-shared';
-import { AuthController } from './auth.controller';
+import { grpcClientOptions, resolveProto } from '@yunyan-live/nest-shared';import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { UsersModule } from '../users/users.module';
 
@@ -28,7 +26,7 @@ import { UsersModule } from '../users/users.module';
         transport: Transport.GRPC,
         options: grpcClientOptions({
           package: 'mail',
-          protoPath: join(__dirname, '../proto/mail.proto'),
+          protoPath: resolveProto('mail.proto'),
           url: process.env.MAIL_GRPC_URL || 'localhost:50053'
         })
       }

@@ -1,15 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
-import { join } from 'path';
-import { grpcServerOptions } from '@yunyan-live/nest-shared';
-import { AppModule } from './app.module';
+import { grpcServerOptions, resolveProto } from '@yunyan-live/nest-shared';import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
     transport: Transport.GRPC,
     options: grpcServerOptions({
       package: 'live',
-      protoPath: join(__dirname, '../proto/live.proto'),
+      protoPath: resolveProto('live.proto'),
       url: `0.0.0.0:${process.env.GRPC_PORT || 50052}`
     })
   });

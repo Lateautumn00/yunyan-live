@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { join } from 'path';
-import { grpcClientOptions } from '@yunyan-live/nest-shared';
-
+import { grpcClientOptions, resolveProto } from '@yunyan-live/nest-shared';
 @Module({
   imports: [
     ClientsModule.register([
@@ -11,7 +9,7 @@ import { grpcClientOptions } from '@yunyan-live/nest-shared';
         transport: Transport.GRPC,
         options: grpcClientOptions({
           package: 'mail',
-          protoPath: join(__dirname, '../proto/mail.proto'),
+          protoPath: resolveProto('mail.proto'),
           url: 'localhost:50053'
         })
       },
@@ -20,7 +18,7 @@ import { grpcClientOptions } from '@yunyan-live/nest-shared';
         transport: Transport.GRPC,
         options: grpcClientOptions({
           package: 'auth',
-          protoPath: join(__dirname, '../proto/auth.proto'),
+          protoPath: resolveProto('auth.proto'),
           url: 'localhost:50051'
         })
       },
@@ -29,7 +27,7 @@ import { grpcClientOptions } from '@yunyan-live/nest-shared';
         transport: Transport.GRPC,
         options: grpcClientOptions({
           package: 'live',
-          protoPath: join(__dirname, '../proto/live.proto'),
+          protoPath: resolveProto('live.proto'),
           url: 'localhost:50052'
         })
       }

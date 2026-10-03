@@ -3,8 +3,8 @@
   "version": "0.5.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter @yunyan-live/nest-shared build && node -e \"require('fs').cpSync('proto','dist/proto',{recursive:true})\" && nest start --watch",
-    "build": "nest build && node -e \"require('fs').cpSync('proto','dist/proto',{recursive:true})\"",
+    "dev": "pnpm --filter @yunyan-live/nest-shared build && nest start --watch",
+    "build": "nest build",
     "start": "node dist/main",
     "typecheck": "tsc --noEmit"
   },
