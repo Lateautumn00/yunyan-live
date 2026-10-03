@@ -27,6 +27,7 @@
     "@grpc/grpc-js": "~1.10.0",
     "@grpc/proto-loader": "^0.8.1",
     "@nestjs/common": "^10.0.0",
+    "@nestjs/microservices": "^10.4.22",
     "@yunyan-live/types": "workspace:*",
     "class-transformer": "^0.5.0",
     "class-validator": "^0.14.0",
