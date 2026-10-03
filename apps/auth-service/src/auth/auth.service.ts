@@ -4,7 +4,7 @@ import { ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom, Observable } from 'rxjs';
 import * as bcrypt from 'bcryptjs';
 import { status } from '@grpc/grpc-js';
-import { grpcError, ok } from '@yunyan-live/nest-shared';
+import { grpcError, JWT_EXPIRES_IN_SECONDS, ok } from '@yunyan-live/nest-shared';
 import { UsersService } from '../users/users.service';
 import { decryptPassword } from './password-crypto';
 import { LoginDto, RegisterDto, ResetPasswordDto, ChangePasswordDto } from './dto/auth.dto';
@@ -38,7 +38,7 @@ export class AuthService implements OnModuleInit {
     const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role });
     return ok({
       access_token: token,
-      expires_in: 604800,
+      expires_in: JWT_EXPIRES_IN_SECONDS,
       guid: user.id,
       role: user.role
     });

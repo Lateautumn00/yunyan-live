@@ -2,11 +2,10 @@ import Koa from 'koa';
 import http from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { URL } from 'url';
-import * as jwt from 'jsonwebtoken';
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
 import { WsClose } from '@yunyan-live/types';
-import { subscribeKick, validateSession } from '@yunyan-live/nest-shared';
+import { requireJwtSecret, subscribeKick, validateSession, verifyToken } from '@yunyan-live/nest-shared';
 
 dotenv.config();
 
@@ -28,11 +27,7 @@ const rooms = new Map<string, Map<string, WsClient>>();
 const clientIds = new WeakMap<WebSocket, string>();
 const whiteboardStates = new Map<string, string>();
 
-const JWT_SECRET = process.env.JWT_SECRET ?? '';
-if (!JWT_SECRET) {
-  console.error('JWT_SECRET is not set. Copy .env.example to .env and set a strong secret.');
-  process.exit(1);
-}
+const JWT_SECRET = requireJwtSecret();
 
 const redis = new Redis({
   host: process.env.REDIS_HOST || '127.0.0.1',
@@ -165,10 +160,8 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
     return;
   }
 
-  let payload: jwt.JwtPayload;
-  try {
-    payload = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
-  } catch {
+  const payload = verifyToken(token, JWT_SECRET);
+  if (!payload) {
     connection.close(WsClose.UNAUTHORIZED, 'Invalid token');
     return;
   }
@@ -189,7 +182,7 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
   const sessionState = await validateSession(
     redis,
     payload.sub,
-    payload.sid as string | undefined,
+    payload.sid,
     (err) => console.error('[ChatWS] session check fail-open:', err instanceof Error ? err.message : String(err)),
   );
   if (sessionState === 'kicked') {
@@ -206,7 +199,7 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
   const userId = url.searchParams.get('liveUserId') || 'anonymous';
   const nickName = url.searchParams.get('nickName') || '';
 
-  const clientId = registerClient(connection, roomId, userId, nickName, payload.sub, payload.sid as string | undefined);
+  const clientId = registerClient(connection, roomId, userId, nickName, payload.sub, payload.sid);
 
   sendTo(connection, { type: 'pong' });
   sendTo(connection, {

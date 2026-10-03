@@ -13,12 +13,10 @@
     "@yunyan-live/types": "workspace:*",
     "dotenv": "^16.0.0",
     "ioredis": "^6.0.0",
-    "jsonwebtoken": "^9.0.3",
     "koa": "^2.15.0",
     "ws": "^8.21.3"
   },
   "devDependencies": {
-    "@types/jsonwebtoken": "^9.0.10",
     "@types/koa": "^2.15.0",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.18.1",

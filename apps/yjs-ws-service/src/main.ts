@@ -4,11 +4,10 @@ import http from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { URL } from 'url';
 import * as Y from 'yjs';
-import * as jwt from 'jsonwebtoken';
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
 import { YjsClose } from '@yunyan-live/types';
-import { subscribeKick, validateSession } from '@yunyan-live/nest-shared';
+import { requireJwtSecret, subscribeKick, validateSession, verifyToken } from '@yunyan-live/nest-shared';
 
 dotenv.config();
 
@@ -24,11 +23,7 @@ const decoding = require('lib0/decoding');
 const messageSync = 0;
 const messageAwareness = 1;
 
-const JWT_SECRET = process.env.JWT_SECRET ?? '';
-if (!JWT_SECRET) {
-  console.error('JWT_SECRET is not set. Copy .env.example to .env and set a strong secret.');
-  process.exit(1);
-}
+const JWT_SECRET = requireJwtSecret();
 
 // y-websocket stops reconnecting on close codes 4400-4499 and emits a terminal
 // `closed` event, so every unrecoverable auth failure must use YjsClose (44xx).
@@ -204,10 +199,8 @@ async function handleYjsConnection(connection: WebSocket, req: http.IncomingMess
     connection.close(YjsClose.SESSION_INVALID, 'Token required');
     return;
   }
-  let payload: jwt.JwtPayload;
-  try {
-    payload = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
-  } catch {
+  const payload = verifyToken(token, JWT_SECRET);
+  if (!payload) {
     connection.close(YjsClose.SESSION_INVALID, 'Invalid token');
     return;
   }
@@ -228,7 +221,7 @@ async function handleYjsConnection(connection: WebSocket, req: http.IncomingMess
   const sessionState = await validateSession(
     redis,
     payload.sub,
-    payload.sid as string | undefined,
+    payload.sid,
     (err) => console.error('[YjsWS] session check fail-open:', err instanceof Error ? err.message : String(err)),
   );
   if (sessionState === 'kicked') {
@@ -250,7 +243,7 @@ async function handleYjsConnection(connection: WebSocket, req: http.IncomingMess
   connMeta.set(connection, {
     docName,
     authUserId: payload.sub,
-    sid: payload.sid as string | undefined,
+    sid: payload.sid,
   });
 
   connection.binaryType = 'arraybuffer';
