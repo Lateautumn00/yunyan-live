@@ -9,3 +9,11 @@ export function randomString(len: number, isNum: boolean = false): string {
   }
   return randomString;
 }
+
+/**
+ * 生成时间可排序的唯一 ID：`[prefix]<base36 时间戳><8 位随机>`。
+ * 替代散落各处的 `Date.now() + Math.random()` 手写拼接。
+ */
+export function uid(prefix = ''): string {
+  return `${prefix}${Date.now().toString(36)}${randomString(8)}`;
+}

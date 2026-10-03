@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { randomString } from '../random';
+import { randomString, uid } from '../random';
 
 describe('randomString (baseline freeze)', () => {
   it('generates string of requested length', () => {
@@ -19,5 +19,23 @@ describe('randomString (baseline freeze)', () => {
 
   it('produces different values across calls', () => {
     expect(randomString(10)).not.toBe(randomString(10));
+  });
+});
+
+describe('uid', () => {
+  it('prepends the given prefix', () => {
+    expect(uid('page_')).toMatch(/^page_[0-9a-z]+[A-Za-z0-9]{8}$/);
+    expect(uid()).toMatch(/^[0-9a-z]+[A-Za-z0-9]{8}$/);
+  });
+
+  it('produces unique values across rapid calls', () => {
+    const ids = new Set(Array.from({ length: 500 }, () => uid()));
+    expect(ids.size).toBe(500);
+  });
+
+  it('is lexicographically sortable within the same millisecond boundary', () => {
+    const a = uid();
+    const b = uid();
+    expect(a.slice(0, a.length - 8) <= b.slice(0, b.length - 8)).toBe(true);
   });
 });
