@@ -64,15 +64,18 @@
     "@nestjs/config": "^3.0.0",
     "@nestjs/jwt": "^10.0.0",
     "@nestjs/microservices": "^10.4.22",
+    "@nestjs/passport": "^10.0.0",
     "@yunyan-live/types": "workspace:*",
     "class-transformer": "^0.5.0",
     "class-validator": "^0.14.0",
     "ioredis": "^6.0.0",
-    "jsonwebtoken": "^9.0.3"
+    "jsonwebtoken": "^9.0.3",
+    "passport-jwt": "^4.0.0"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.0.0",
+    "@types/passport-jwt": "^4.0.0",
     "typescript": "^5.9.3"
   },
   "license": "MIT"
