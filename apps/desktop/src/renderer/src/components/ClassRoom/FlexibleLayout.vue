@@ -40,6 +40,7 @@
 
 <script setup lang="ts">
 import { ref, onBeforeUnmount, watch } from 'vue';
+import { frameThrottle } from '@yunyan-live/utils';
 
 const props = withDefaults(
   defineProps<{
@@ -90,12 +91,13 @@ function onVerticalDragStart(e: MouseEvent) {
   const startX = e.clientX;
   const startWidth = chatWidth.value;
 
-  function onMouseMove(ev: MouseEvent) {
+  const onMouseMove = frameThrottle((ev: MouseEvent) => {
     const delta = startX - ev.clientX;
     chatWidth.value = Math.min(CHAT_MAX, Math.max(CHAT_MIN, startWidth + delta));
-  }
+  });
 
   function onMouseUp() {
+    onMouseMove.flush();
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
     document.body.style.cursor = '';
@@ -116,12 +118,13 @@ function onHorizontalDragStart(e: MouseEvent) {
   const startY = e.clientY;
   const startHeight = videoHeight.value;
 
-  function onMouseMove(ev: MouseEvent) {
+  const onMouseMove = frameThrottle((ev: MouseEvent) => {
     const delta = startY - ev.clientY;
     videoHeight.value = Math.min(VIDEO_MAX, Math.max(VIDEO_MIN, startHeight + delta));
-  }
+  });
 
   function onMouseUp() {
+    onMouseMove.flush();
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
     document.body.style.cursor = '';

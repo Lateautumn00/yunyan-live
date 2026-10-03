@@ -199,7 +199,7 @@ import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import type { DesktopSource } from '@yunyan-live/ipc';
-import { randomString } from '@yunyan-live/utils';
+import { frameThrottle, randomString } from '@yunyan-live/utils';
 import '@/vendor/live/adapter/adapter.min';
 import Live from '@/vendor/live/live';
 import type { JanusHandle, JanusSession } from '@/vendor/live/live';
@@ -287,7 +287,7 @@ function onDragStart(e: MouseEvent) {
   isDragging.value = true;
   dragOffsetX.value = e.clientX - posX.value;
   dragOffsetY.value = e.clientY - posY.value;
-  document.addEventListener('mousemove', onDragMove);
+  document.addEventListener('mousemove', throttledDragMove);
   document.addEventListener('mouseup', onDragEnd);
   e.preventDefault();
 }
@@ -299,8 +299,9 @@ function onDragMove(e: MouseEvent) {
 }
 
 function onDragEnd() {
+  throttledDragMove.flush();
   isDragging.value = false;
-  document.removeEventListener('mousemove', onDragMove);
+  document.removeEventListener('mousemove', throttledDragMove);
   document.removeEventListener('mouseup', onDragEnd);
 }
 
@@ -322,7 +323,7 @@ function onResizeStart(
   resizeStartH.value = floatingHeight.value;
   resizeStartPosX.value = posX.value;
   resizeStartPosY.value = posY.value;
-  document.addEventListener('mousemove', onResizeMove);
+  document.addEventListener('mousemove', throttledResizeMove);
   document.addEventListener('mouseup', onResizeEnd);
   e.preventDefault();
   e.stopPropagation();
@@ -356,8 +357,9 @@ function onResizeMove(e: MouseEvent) {
 }
 
 function onResizeEnd() {
+  throttledResizeMove.flush();
   isResizing.value = false;
-  document.removeEventListener('mousemove', onResizeMove);
+  document.removeEventListener('mousemove', throttledResizeMove);
   document.removeEventListener('mouseup', onResizeEnd);
 }
 
@@ -367,12 +369,17 @@ function onWindowResize() {
   posY.value = Math.max(0, Math.min(window.innerHeight - 40, posY.value));
 }
 
+const throttledDragMove = frameThrottle(onDragMove);
+const throttledResizeMove = frameThrottle(onResizeMove);
+const throttledWindowResize = frameThrottle(onWindowResize);
+
 onMounted(() => {
-  window.addEventListener('resize', onWindowResize);
+  window.addEventListener('resize', throttledWindowResize);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', onWindowResize);
+  window.removeEventListener('resize', throttledWindowResize);
+  throttledWindowResize.cancel();
 });
 
 const setAudioType = ref({ type: false, display: '' });
