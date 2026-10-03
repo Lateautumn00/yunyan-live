@@ -4,9 +4,8 @@ import { JwtService } from '@nestjs/jwt';
 import { Metadata } from '@grpc/grpc-js';
 import { Observable } from 'rxjs';
 import { grpcCall } from '../common/helpers/grpc.helper';
-import { userIdMetadata } from '@yunyan-live/nest-shared';
+import { SessionService, userIdMetadata } from '@yunyan-live/nest-shared';
 import { JwtAuthGuard } from './jwt-auth.guard';
-import { SessionService } from './session.service';
 import { LoginDto, RegisterDto, ResetPasswordDto, ChangePasswordDto, UpdateUserNameDto } from './dto/auth.dto';
 
 interface AuthResponse {

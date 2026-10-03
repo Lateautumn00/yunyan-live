@@ -7,6 +7,8 @@ import * as Y from 'yjs';
 import * as jwt from 'jsonwebtoken';
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
+import { YjsClose } from '@yunyan-live/types';
+import { subscribeKick, validateSession } from '@yunyan-live/nest-shared';
 
 dotenv.config();
 
@@ -29,10 +31,7 @@ if (!JWT_SECRET) {
 }
 
 // y-websocket stops reconnecting on close codes 4400-4499 and emits a terminal
-// `closed` event, so every unrecoverable auth failure must use this range.
-const CLOSE_KICKED = 4401;
-const CLOSE_SESSION_INVALID = 4402;
-const SESSION_KICK_CHANNEL = 'session:kick';
+// `closed` event, so every unrecoverable auth failure must use YjsClose (44xx).
 
 interface ConnMeta {
   docName: string;
@@ -53,19 +52,6 @@ redis.on('error', (err: unknown) => {
   console.error('[YjsWS] Redis error:', err instanceof Error ? err.message : String(err));
 });
 
-// 'ok' | 'expired' | 'kicked' | 'fail-open' �?fail-open on Redis outage.
-async function validateSession(guid?: string, sid?: string): Promise<string> {
-  if (!guid || !sid) return 'expired';
-  try {
-    const current = await redis.get(`session:${guid}`);
-    if (current === null) return 'expired';
-    return current === sid ? 'ok' : 'kicked';
-  } catch (err) {
-    console.error('[YjsWS] session check fail-open:', err instanceof Error ? err.message : String(err));
-    return 'fail-open';
-  }
-}
-
 function findKickConns(guid: string, oldSid: string): WebSocket[] {
   const targets: WebSocket[] = [];
   for (const doc of docs.values()) {
@@ -81,25 +67,12 @@ function findKickConns(guid: string, oldSid: string): WebSocket[] {
   return targets;
 }
 
-const redisSubscriber = redis.duplicate();
-redisSubscriber.on('error', (err: unknown) => {
-  console.error('[YjsWS] Redis subscriber error:', err instanceof Error ? err.message : String(err));
-});
-function subscribeKickChannel() {
-  redisSubscriber.subscribe(SESSION_KICK_CHANNEL).catch((err: unknown) => {
-    console.error('[YjsWS] subscribe failed, retrying:', err instanceof Error ? err.message : String(err));
-    setTimeout(subscribeKickChannel, 3000);
-  });
-}
-subscribeKickChannel();
-redisSubscriber.on('message', (channel: string, message: string) => {
-  if (channel !== SESSION_KICK_CHANNEL) return;
-  try {
-    const { guid, oldSid } = JSON.parse(message) as { guid?: string; oldSid?: string };
-    if (!guid || !oldSid) return;
+subscribeKick(
+  redis,
+  (guid, oldSid) => {
     for (const conn of findKickConns(guid, oldSid)) {
       if (conn.readyState === WebSocket.OPEN) {
-        conn.close(CLOSE_KICKED, 'Session replaced by another login');
+        conn.close(YjsClose.SESSION_KICKED, 'Session replaced by another login');
       }
       const meta = connMeta.get(conn);
       if (meta) {
@@ -108,10 +81,17 @@ redisSubscriber.on('message', (channel: string, message: string) => {
       }
       console.log(`[YjsWS] Kicked conn for guid=${guid}`);
     }
-  } catch (err) {
-    console.error('[YjsWS] bad kick payload:', err);
-  }
-});
+  },
+  (err, stage) => {
+    if (stage === 'connection') {
+      console.error('[YjsWS] Redis subscriber error:', err instanceof Error ? err.message : String(err));
+    } else if (stage === 'subscribe') {
+      console.error('[YjsWS] subscribe failed, retrying:', err instanceof Error ? err.message : String(err));
+    } else {
+      console.error('[YjsWS] bad kick payload:', err);
+    }
+  },
+);
 
 function broadcast(doc: Y.Doc, msg: Uint8Array, origin: WebSocket | null = null) {
   const conns = (doc as any).conns as Map<WebSocket, Set<any>> | undefined;
@@ -221,14 +201,14 @@ async function handleYjsConnection(connection: WebSocket, req: http.IncomingMess
 
   const token = url.searchParams.get('token');
   if (!token) {
-    connection.close(CLOSE_SESSION_INVALID, 'Token required');
+    connection.close(YjsClose.SESSION_INVALID, 'Token required');
     return;
   }
   let payload: jwt.JwtPayload;
   try {
     payload = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
   } catch {
-    connection.close(CLOSE_SESSION_INVALID, 'Invalid token');
+    connection.close(YjsClose.SESSION_INVALID, 'Invalid token');
     return;
   }
 
@@ -245,13 +225,18 @@ async function handleYjsConnection(connection: WebSocket, req: http.IncomingMess
     messageListener(connection, doc, bytes);
   });
 
-  const sessionState = await validateSession(payload.sub, payload.sid as string | undefined);
+  const sessionState = await validateSession(
+    redis,
+    payload.sub,
+    payload.sid as string | undefined,
+    (err) => console.error('[YjsWS] session check fail-open:', err instanceof Error ? err.message : String(err)),
+  );
   if (sessionState === 'kicked') {
-    connection.close(CLOSE_KICKED, 'Session replaced by another login');
+    connection.close(YjsClose.SESSION_KICKED, 'Session replaced by another login');
     return;
   }
   if (sessionState === 'expired') {
-    connection.close(CLOSE_SESSION_INVALID, 'Session expired');
+    connection.close(YjsClose.SESSION_INVALID, 'Session expired');
     return;
   }
   if (connection.readyState !== WebSocket.OPEN) return;

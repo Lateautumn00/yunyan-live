@@ -5,6 +5,8 @@ import { URL } from 'url';
 import * as jwt from 'jsonwebtoken';
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
+import { WsClose } from '@yunyan-live/types';
+import { subscribeKick, validateSession } from '@yunyan-live/nest-shared';
 
 dotenv.config();
 
@@ -32,8 +34,6 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
-const SESSION_KICK_CHANNEL = 'session:kick';
-
 const redis = new Redis({
   host: process.env.REDIS_HOST || '127.0.0.1',
   port: Number(process.env.REDIS_PORT) || 6379,
@@ -44,50 +44,30 @@ redis.on('error', (err: unknown) => {
   console.error('[ChatWS] Redis error:', err instanceof Error ? err.message : String(err));
 });
 
-// 'ok' | 'expired' | 'kicked' | 'fail-open' — fail-open on Redis outage.
-async function validateSession(guid?: string, sid?: string): Promise<string> {
-  if (!guid || !sid) return 'expired';
-  try {
-    const current = await redis.get(`session:${guid}`);
-    if (current === null) return 'expired';
-    return current === sid ? 'ok' : 'kicked';
-  } catch (err) {
-    console.error('[ChatWS] session check fail-open:', err instanceof Error ? err.message : String(err));
-    return 'fail-open';
-  }
-}
-
 function kickSessionClients(guid: string, oldSid: string) {
   for (const [rid, clients] of rooms) {
     for (const [cid, client] of clients) {
       if (client.authUserId === guid && client.sid === oldSid && client.ws.readyState === WebSocket.OPEN) {
-        client.ws.close(4002, 'Session replaced by another login');
+        client.ws.close(WsClose.SESSION_KICKED, 'Session replaced by another login');
         console.log(`[ChatWS] Kicked: roomId=${rid}, id=${cid}`);
       }
     }
   }
 }
 
-const redisSubscriber = redis.duplicate();
-redisSubscriber.on('error', (err: unknown) => {
-  console.error('[ChatWS] Redis subscriber error:', err instanceof Error ? err.message : String(err));
-});
-function subscribeKickChannel() {
-  redisSubscriber.subscribe(SESSION_KICK_CHANNEL).catch((err: unknown) => {
-    console.error('[ChatWS] subscribe failed, retrying:', err instanceof Error ? err.message : String(err));
-    setTimeout(subscribeKickChannel, 3000);
-  });
-}
-subscribeKickChannel();
-redisSubscriber.on('message', (channel: string, message: string) => {
-  if (channel !== SESSION_KICK_CHANNEL) return;
-  try {
-    const { guid, oldSid } = JSON.parse(message) as { guid?: string; oldSid?: string };
-    if (guid && oldSid) kickSessionClients(guid, oldSid);
-  } catch (err) {
-    console.error('[ChatWS] bad kick payload:', err);
-  }
-});
+subscribeKick(
+  redis,
+  (guid, oldSid) => kickSessionClients(guid, oldSid),
+  (err, stage) => {
+    if (stage === 'connection') {
+      console.error('[ChatWS] Redis subscriber error:', err instanceof Error ? err.message : String(err));
+    } else if (stage === 'subscribe') {
+      console.error('[ChatWS] subscribe failed, retrying:', err instanceof Error ? err.message : String(err));
+    } else {
+      console.error('[ChatWS] bad kick payload:', err);
+    }
+  },
+);
 
 function sendTo(client: WebSocket, data: LiveMessage) {
   if (client.readyState === WebSocket.OPEN) {
@@ -181,7 +161,7 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
   const url = new URL(req.url!, `http://${req.headers.host}`);
   const token = url.searchParams.get('token');
   if (!token) {
-    connection.close(4001, 'Token required');
+    connection.close(WsClose.UNAUTHORIZED, 'Token required');
     return;
   }
 
@@ -189,7 +169,7 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
   try {
     payload = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
   } catch {
-    connection.close(4001, 'Invalid token');
+    connection.close(WsClose.UNAUTHORIZED, 'Invalid token');
     return;
   }
 
@@ -206,13 +186,18 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
     handleMessage(connection, text);
   });
 
-  const sessionState = await validateSession(payload.sub, payload.sid as string | undefined);
+  const sessionState = await validateSession(
+    redis,
+    payload.sub,
+    payload.sid as string | undefined,
+    (err) => console.error('[ChatWS] session check fail-open:', err instanceof Error ? err.message : String(err)),
+  );
   if (sessionState === 'kicked') {
-    connection.close(4002, 'Session replaced by another login');
+    connection.close(WsClose.SESSION_KICKED, 'Session replaced by another login');
     return;
   }
   if (sessionState === 'expired') {
-    connection.close(4001, 'Session expired');
+    connection.close(WsClose.UNAUTHORIZED, 'Session expired');
     return;
   }
   if (connection.readyState !== WebSocket.OPEN) return;

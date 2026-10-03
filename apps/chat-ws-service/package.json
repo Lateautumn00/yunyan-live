@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@yunyan-live/nest-shared": "workspace:*",
+    "@yunyan-live/types": "workspace:*",
     "dotenv": "^16.0.0",
     "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",

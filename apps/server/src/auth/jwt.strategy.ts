@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { SessionService } from './session.service';
+import { SessionService } from '@yunyan-live/nest-shared';
 
 export interface JwtPayload {
   sub: string;

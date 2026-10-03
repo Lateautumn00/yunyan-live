@@ -138,6 +138,12 @@ importers:
 
   apps/chat-ws-service:
     dependencies:
+      '@yunyan-live/nest-shared':
+        specifier: workspace:*
+        version: link:../../packages/nest-shared
+      '@yunyan-live/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -515,6 +521,12 @@ importers:
 
   apps/yjs-ws-service:
     dependencies:
+      '@yunyan-live/nest-shared':
+        specifier: workspace:*
+        version: link:../../packages/nest-shared
+      '@yunyan-live/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
