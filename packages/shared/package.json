@@ -8,9 +8,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./entities": "./src/entities/index.ts",
-    "./dto": "./src/dto/index.ts",
-    "./guards": "./src/guards/index.ts"
+    "./entities": "./src/entities/index.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
