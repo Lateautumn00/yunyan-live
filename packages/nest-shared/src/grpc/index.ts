@@ -4,3 +4,4 @@ export * from './status-map';
 export * from './envelope';
 export * from './error';
 export * from './metadata';
+export * from './protos';
