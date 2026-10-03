@@ -7,9 +7,7 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { grpcCall } from '../common/helpers/grpc.helper';
-import { userIdMetadata } from '@yunyan-live/nest-shared';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CreateLiveDto, JoinLiveDto, ChangeStatusDto, UpdateLiveDto, CreateCoursewareDto } from './dto/live.dto';
+import { ChangeStatusDto, CreateCoursewareDto, CreateLiveDto, JoinLiveDto, JwtAuthGuard, UpdateLiveDto, userIdMetadata } from '@yunyan-live/nest-shared';
 
 interface LiveResponse {
   code: string;

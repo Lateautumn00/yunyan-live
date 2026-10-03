@@ -2,7 +2,7 @@ import { Controller, Post, Body, Inject, OnModuleInit } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { Observable } from 'rxjs';
 import { grpcCall } from '../common/helpers/grpc.helper';
-import { SendCodeDto } from './dto/mail.dto';
+import { SendCodeDto } from '@yunyan-live/nest-shared';
 
 interface MailServiceClient {
   sendCode(data: { email: string }): Observable<{ code: string; msg: string }>;

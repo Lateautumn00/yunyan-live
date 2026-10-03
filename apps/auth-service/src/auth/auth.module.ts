@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
 import { ConfigModule } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { grpcClientOptions, jwtModuleAsyncOptions, resolveProto } from '@yunyan-live/nest-shared';
@@ -11,7 +10,6 @@ import { UsersModule } from '../users/users.module';
 @Module({
   imports: [
     UsersModule,
-    PassportModule,
     ConfigModule,
     JwtModule.registerAsync(jwtModuleAsyncOptions()),
     ClientsModule.register([

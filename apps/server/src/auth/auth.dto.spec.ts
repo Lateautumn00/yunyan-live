@@ -1,6 +1,6 @@
 import { validateSync } from 'class-validator';
 import { describe, expect, it } from 'vitest';
-import { RegisterDto } from './auth.dto';
+import { RegisterDto } from '@yunyan-live/nest-shared';
 
 function buildDto(overrides: Partial<RegisterDto> = {}): RegisterDto {
   const dto = new RegisterDto();

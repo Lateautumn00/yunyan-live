@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
-import { grpcServerOptions, resolveProto } from '@yunyan-live/nest-shared';import { AppModule } from './app.module';
+import { grpcServerOptions, resolveProto } from '@yunyan-live/nest-shared';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {

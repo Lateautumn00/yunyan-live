@@ -4,10 +4,17 @@ import { ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom, Observable } from 'rxjs';
 import * as bcrypt from 'bcryptjs';
 import { status } from '@grpc/grpc-js';
-import { grpcError, JWT_EXPIRES_IN_SECONDS, ok } from '@yunyan-live/nest-shared';
+import {
+  ChangePasswordDto,
+  grpcError,
+  JWT_EXPIRES_IN_SECONDS,
+  LoginDto,
+  ok,
+  RegisterDto,
+  ResetPasswordDto,
+} from '@yunyan-live/nest-shared';
 import { UsersService } from '../users/users.service';
 import { decryptPassword } from './password-crypto';
-import { LoginDto, RegisterDto, ResetPasswordDto, ChangePasswordDto } from './dto/auth.dto';
 
 interface MailServiceClient {
   verifyCode(data: { email: string; code: string }): Observable<{ code: string; msg: string; valid: boolean }>;

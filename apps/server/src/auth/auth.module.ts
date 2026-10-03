@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { jwtModuleAsyncOptions, SessionService } from '@yunyan-live/nest-shared';
+import { jwtModuleAsyncOptions, JwtStrategy, SessionService } from '@yunyan-live/nest-shared';
 import { AuthController } from './auth.controller';
-import { JwtStrategy } from './jwt.strategy';
 import { GatewayClientsModule } from '../gateway/clients.module';
 
 @Module({

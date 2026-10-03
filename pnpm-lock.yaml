@@ -77,9 +77,6 @@ importers:
       '@nestjs/microservices':
         specifier: ^10.4.22
         version: 10.4.22(@grpc/grpc-js@1.10.12)(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(@nestjs/websockets@10.4.22)(amqplib@2.0.1)(ioredis@6.0.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/passport':
-        specifier: ^10.0.0
-        version: 10.0.3(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(passport@0.7.0)
       '@nestjs/typeorm':
         specifier: ^10.0.0
         version: 10.0.2(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(ioredis@6.0.0)(pg@8.23.0)(ts-node@10.9.2(@types/node@22.20.1)(typescript@5.9.3)))
@@ -89,21 +86,9 @@ importers:
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
-      class-transformer:
-        specifier: ^0.5.0
-        version: 0.5.1
-      class-validator:
-        specifier: ^0.14.0
-        version: 0.14.4
       dotenv:
         specifier: ^16.6.1
         version: 16.6.1
-      passport:
-        specifier: ^0.7.0
-        version: 0.7.0
-      passport-jwt:
-        specifier: ^4.0.0
-        version: 4.0.1
       pg:
         specifier: ^8.0.0
         version: 8.23.0
@@ -126,9 +111,6 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
-      '@types/passport-jwt':
-        specifier: ^4.0.0
-        version: 4.0.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -314,12 +296,6 @@ importers:
       axios:
         specifier: ^1.0.0
         version: 1.19.0
-      class-transformer:
-        specifier: ^0.5.0
-        version: 0.5.1
-      class-validator:
-        specifier: ^0.14.0
-        version: 0.14.4
       pg:
         specifier: ^8.0.0
         version: 8.23.0
@@ -616,6 +592,9 @@ importers:
       '@nestjs/microservices':
         specifier: ^10.4.22
         version: 10.4.22(@grpc/grpc-js@1.10.12)(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(@nestjs/websockets@10.4.22)(amqplib@2.0.1)(ioredis@6.0.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/passport':
+        specifier: ^10.0.0
+        version: 10.0.3(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(passport@0.7.0)
       '@yunyan-live/types':
         specifier: workspace:*
         version: link:../types
@@ -631,6 +610,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
+      passport-jwt:
+        specifier: ^4.0.0
+        version: 4.0.1
     devDependencies:
       '@types/jsonwebtoken':
         specifier: ^9.0.10
@@ -638,6 +620,9 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
+      '@types/passport-jwt':
+        specifier: ^4.0.0
+        version: 4.0.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
