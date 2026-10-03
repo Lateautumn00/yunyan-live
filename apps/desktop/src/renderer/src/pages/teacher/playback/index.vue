@@ -8,7 +8,7 @@
           v-model="searchName"
           placeholder="请输入直播名称"
           style="width: 200px"
-          @keyup.enter="getVideoList"
+          @keyup.enter="onSearch"
         />
         <label for="timerange">选择时间</label>
         <el-date-picker
@@ -41,16 +41,21 @@
         </el-select>
         <el-button
           type="primary"
-          @click="getVideoList"
+          :loading="listLoading"
+          @click="onSearch"
         >
           搜索
         </el-button>
-        <el-button @click="resetFilters">
+        <el-button
+          :loading="listLoading"
+          @click="onReset"
+        >
           重置
         </el-button>
         <div class="delete">
           <el-button
             :disabled="multipleSelection.length === 0"
+            :loading="deleting"
             @click="handleDelete"
           >
             批量删除
@@ -166,6 +171,8 @@ const typeOptions = ref([
 const tableData = ref<LiveRoom[]>([]);
 const total = ref(0);
 const multipleSelection = ref<LiveRoom[]>([]);
+const listLoading = ref(false);
+const deleting = ref(false);
 
 function handleSelectionChange(val: LiveRoom[]) {
   multipleSelection.value = val;
@@ -206,14 +213,21 @@ async function deleteClips() {
   }
 }
 
-function handleDelete() {
-  ElMessageBox.confirm('批量删除后将无法恢复，确定删除么？', '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning',
-  }).then(() => {
-    void deleteClips();
-  }).catch(() => {});
+async function handleDelete() {
+  if (deleting.value) return;
+  deleting.value = true;
+  try {
+    await ElMessageBox.confirm('批量删除后将无法恢复，确定删除么？', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    });
+    await deleteClips();
+  } catch {
+    // 取消操作
+  } finally {
+    deleting.value = false;
+  }
 }
 
 function resetFilters() {
@@ -224,7 +238,18 @@ function resetFilters() {
   void getVideoList();
 }
 
+function onSearch() {
+  if (listLoading.value) return;
+  void getVideoList();
+}
+
+function onReset() {
+  if (listLoading.value) return;
+  resetFilters();
+}
+
 async function getVideoList() {
+  listLoading.value = true;
   let startTime = '';
   let endTime = '';
   const range = timerange.value as Array<string | Date> | null;
@@ -247,6 +272,8 @@ async function getVideoList() {
     total.value = data.pageInfo.totalElements;
   } catch (e) {
     console.error(e);
+  } finally {
+    listLoading.value = false;
   }
 }
 

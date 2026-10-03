@@ -8,7 +8,7 @@
           v-model="searchName"
           placeholder="请输入直播名称"
           style="width: 200px"
-          @keyup.enter="getLiveList"
+          @keyup.enter="onSearch"
         />
         <label for="startTime">选择时间</label>
         <el-date-picker
@@ -55,11 +55,15 @@
         </el-select>
         <el-button
           type="primary"
-          @click="getLiveList"
+          :loading="loading"
+          @click="onSearch"
         >
           搜索
         </el-button>
-        <el-button @click="resetFilters">
+        <el-button
+          :loading="loading"
+          @click="onReset"
+        >
           重置
         </el-button>
       </div>
@@ -152,7 +156,8 @@
           <el-button
             v-if="isFiltered"
             type="primary"
-            @click="resetFilters"
+            :loading="loading"
+            @click="onReset"
           >
             清空筛选
           </el-button>
@@ -248,6 +253,16 @@ function resetFilters() {
   type.value = '';
   params.value.pageNum = 1;
   void getLiveList();
+}
+
+function onSearch() {
+  if (loading.value) return;
+  void getLiveList();
+}
+
+function onReset() {
+  if (loading.value) return;
+  resetFilters();
 }
 
 async function getLiveList() {
