@@ -548,6 +548,7 @@
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import Konva from 'konva';
+import { debounce, frameThrottle, throttle } from '@yunyan-live/utils';
 import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
@@ -848,22 +849,28 @@ onMounted(() => {
 
 onUnmounted(() => {
   currentElementsObserver?.();
-  window.removeEventListener('resize', onResize);
-  document.removeEventListener('keydown', onSelectionKeydown);
-  document.removeEventListener('mousemove', onWheelMove);
+    window.removeEventListener('resize', onResize);
+    broadcastViewport.cancel();
+    document.removeEventListener('keydown', onSelectionKeydown);
+    document.removeEventListener('mousemove', throttledWheelMove);
   document.removeEventListener('mouseup', onWheelUp);
   provider?.awareness.off('change', onAwarenessLaser);
   renderer?.destroy();
   provider?.destroy();
 });
 
-function onResize() {
-  const el = document.getElementById(containerId.value);
-  if (el && renderer) renderer.resize(el.clientWidth, el.clientHeight);
+// 视口广播节流：窗口连续缩放时仅按 100ms 节奏同步 Yjs，renderer.resize 仍即时执行
+const broadcastViewport = throttle(() => {
   if (!renderer || !provider) return;
   // 教师端：广播新 stage 尺寸（学生端按新比例重适配）；学生端：按最新远端视口重适配
   if (props.isTeacher) syncViewportToYjs();
   else applyRemoteViewport();
+}, 100);
+
+function onResize() {
+  const el = document.getElementById(containerId.value);
+  if (el && renderer) renderer.resize(el.clientWidth, el.clientHeight);
+  broadcastViewport();
 }
 
 function getPointerPos(_e: any): { x: number; y: number } | null {
@@ -1803,10 +1810,14 @@ function onWheelMove(e: MouseEvent) {
   if (hex) wheelHex = hex;
 }
 
+// 色轮取样节流：30ms 窗口内合并高频采样（首次同步触发，保证按压即时预览）
+const throttledWheelMove = throttle(onWheelMove, 30);
+
 function onWheelUp() {
   if (!wheelDragging) return;
   wheelDragging = false;
-  document.removeEventListener('mousemove', onWheelMove);
+  throttledWheelMove.cancel();
+  document.removeEventListener('mousemove', throttledWheelMove);
   document.removeEventListener('mouseup', onWheelUp);
   const hex = wheelHex;
   wheelHex = null;
@@ -1823,7 +1834,7 @@ function startWheelPick(e: MouseEvent, kind: 'stroke' | 'fill') {
   wheelDragKind = kind;
   wheelDragging = true;
   wheelHex = wheelSample(kind, e.clientX, e.clientY);
-  document.addEventListener('mousemove', onWheelMove);
+  document.addEventListener('mousemove', throttledWheelMove);
   document.addEventListener('mouseup', onWheelUp);
 }
 
@@ -1881,16 +1892,18 @@ function onColorPanelDragStart(e: MouseEvent) {
   isDraggingColor.value = true;
   colorPanelDragOffsetX.value = e.clientX - colorPanelX.value;
   colorPanelDragOffsetY.value = e.clientY - colorPanelY.value;
-  document.addEventListener('mousemove', onColorPanelDragMove);
+  document.addEventListener('mousemove', throttledColorPanelDragMove);
   document.addEventListener('mouseup', onColorPanelDragEnd);
 }
 function onColorPanelDragMove(e: MouseEvent) {
   colorPanelX.value = e.clientX - colorPanelDragOffsetX.value;
   colorPanelY.value = e.clientY - colorPanelDragOffsetY.value;
 }
+const throttledColorPanelDragMove = frameThrottle(onColorPanelDragMove);
 function onColorPanelDragEnd() {
   isDraggingColor.value = false;
-  document.removeEventListener('mousemove', onColorPanelDragMove);
+  throttledColorPanelDragMove.flush();
+  document.removeEventListener('mousemove', throttledColorPanelDragMove);
   document.removeEventListener('mouseup', onColorPanelDragEnd);
 }
 function openColorPanel() {
@@ -1907,19 +1920,30 @@ function startCloseColorPanel() {
 function cancelCloseColorPanel() {
   if (colorPanelTimer) { clearTimeout(colorPanelTimer); colorPanelTimer = null; }
 }
+// 透明度广播防抖：滑杆拖动期间本地预览即时，工具状态在 80ms 静默后才同步 Yjs
+const broadcastOpacity = debounce((opacity: number) => {
+  provider?.setToolState({ opacity });
+}, 80);
+
 function onOpacityInput(e: Event) {
   const val = parseFloat((e.target as HTMLInputElement).value);
   currentOpacity.value = val;
-  provider?.setToolState({ opacity: val });
+  broadcastOpacity(val);
 }
-// 松手（change）才写回所选图形，拖动过程仅本地预览
+// 松手（change）才写回所选图形，拖动过程仅本地预览；提交前补发最后一次工具状态
 function onOpacityChange(e: Event) {
   const val = parseFloat((e.target as HTMLInputElement).value);
+  broadcastOpacity.flush();
   commitSelectedStyle({ opacity: val });
 }
 function onPanelOpacityInput(e: Event) {
   panelOpacity.value = parseFloat((e.target as HTMLInputElement).value);
 }
+// 笔尖大小广播节流：拖动期间本地尺寸即时更新，Yjs 工具状态按 50ms 节奏同步（对齐激光笔）
+const broadcastSizeState = throttle((state: { fontSize?: number; lineWidth?: number }) => {
+  provider?.setToolState(state);
+}, 50);
+
 function updateSizeFromMouse(e: MouseEvent) {
   const target = e.currentTarget as HTMLElement;
   const rect = target.getBoundingClientRect();
@@ -1928,10 +1952,10 @@ function updateSizeFromMouse(e: MouseEvent) {
   const size = sizeTargetsText() ? Math.round(8 + (x / 130) * 40) : Math.round(1 + (x / 130) * 19);
   if (sizeTargetsText()) {
     textSize.value = size;
-    provider?.setToolState({ fontSize: size });
+    broadcastSizeState({ fontSize: size });
   } else {
     currentSize.value = size;
-    provider?.setToolState({ lineWidth: size });
+    broadcastSizeState({ lineWidth: size });
   }
 }
 
