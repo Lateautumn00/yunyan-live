@@ -14,6 +14,8 @@ async function mountNavMenu(activeKey: string) {
       { path: '/teacher/createlive', component: { template: '<div />' } },
       { path: '/teacher/mylive', component: { template: '<div />' } },
       { path: '/teacher/playback', component: { template: '<div />' } },
+      { path: '/teacher/transfer', component: { template: '<div />' } },
+      { path: '/teacher/statistics', component: { template: '<div />' } },
       { path: '/teacher/account', component: { template: '<div />' } }
     ]
   });
@@ -41,7 +43,7 @@ beforeEach(() => {
 });
 
 describe('NavMenu.vue', () => {
-  it('渲染 logo 与四个菜单项', async () => {
+  it('渲染 logo 与五个菜单项', async () => {
     const { wrapper } = await mountNavMenu('1');
     expect(wrapper.text()).toContain('云砚直播');
     const items = wrapper.findAll('.el-menu-item');
@@ -49,7 +51,8 @@ describe('NavMenu.vue', () => {
       '创建直播',
       '我的直播',
       '回放管理',
-      '账户信息'
+      '转让管理',
+      '数据统计'
     ]);
   });
 
@@ -67,5 +70,8 @@ describe('NavMenu.vue', () => {
     await items[2]!.trigger('click');
     await flushPromises();
     expect(router.currentRoute.value.path).toBe('/teacher/playback');
+    await items[4]!.trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe('/teacher/statistics');
   });
 });

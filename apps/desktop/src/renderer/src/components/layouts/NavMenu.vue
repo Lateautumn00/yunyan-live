@@ -40,6 +40,12 @@
         </el-icon>
         <span>转让管理</span>
       </el-menu-item>
+      <el-menu-item index="5">
+        <el-icon :size="18">
+          <DataAnalysis />
+        </el-icon>
+        <span>数据统计</span>
+      </el-menu-item>
     </el-menu>
 
     <img
@@ -76,20 +82,18 @@ const navTreeData = [
     index: 4,
     label: '转让管理',
     link: '/teacher/transfer'
+  },
+  {
+    index: 5,
+    label: '数据统计',
+    link: '/teacher/statistics'
   }
 ];
 
 function handleSelect(key: string) {
-  console.log('[NavMenu] handleSelect called with key:', key);
   const target = navTreeData.find((item) => String(item.index) === key);
-  console.log('[NavMenu] target:', target);
   if (target) {
-    console.log('[NavMenu] pushing to:', target.link);
-    void router.push(target.link).then((res) => {
-      console.log('[NavMenu] navigation result:', res);
-    }).catch((err) => {
-      console.error('[NavMenu] navigation error:', err);
-    });
+    void router.push(target.link);
   }
 }
 </script>

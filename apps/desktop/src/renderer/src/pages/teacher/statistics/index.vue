@@ -36,7 +36,7 @@
 import { ref } from 'vue';
 import SidebarMenu from '@/layouts/sidebar.vue';
 
-const activeKey = '4';
+const activeKey = '5';
 const type = ref('');
 const timerange = ref('');
 </script>
