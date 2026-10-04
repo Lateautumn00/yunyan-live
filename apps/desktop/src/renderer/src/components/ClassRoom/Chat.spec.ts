@@ -99,7 +99,7 @@ describe('ClassRoom Chat.vue', () => {
   });
 
   it('createTutorSocket 建立连接并发送白板请求', async () => {
-    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus] } });
+    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus], components: { ...ElementPlusIconsVue } } });
     vmOf(wrapper).createTutorSocket();
     const ws = MockWebSocket.instances[0];
     expect(ws).toBeTruthy();
@@ -128,7 +128,7 @@ describe('ClassRoom Chat.vue', () => {
   });
 
   it('收到 bullet 弹幕渲染到列表', async () => {
-    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus] } });
+    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus], components: { ...ElementPlusIconsVue } } });
     vmOf(wrapper).createTutorSocket();
     const ws = MockWebSocket.instances[0]!;
     ws.onmessage?.({
@@ -146,7 +146,7 @@ describe('ClassRoom Chat.vue', () => {
   });
 
   it('收到 updateForbid 更新禁言状态', async () => {
-    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus] } });
+    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus], components: { ...ElementPlusIconsVue } } });
     vmOf(wrapper).createTutorSocket();
     const ws = MockWebSocket.instances[0]!;
     ws.onmessage?.({ data: JSON.stringify({ type: 'updateForbid', status: 0 }) });
@@ -156,7 +156,7 @@ describe('ClassRoom Chat.vue', () => {
   });
 
   it('关闭码 4002 触发被踢处理并停止重连', async () => {
-    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus] } });
+    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus], components: { ...ElementPlusIconsVue } } });
     const vm = vmOf(wrapper);
     vm.createTutorSocket();
     expect(MockWebSocket.instances).toHaveLength(1);
@@ -171,7 +171,7 @@ describe('ClassRoom Chat.vue', () => {
 
   it('关闭码 4001 且有 token 时触发过期处理', async () => {
     localStorage.setItem('token', 'some-token');
-    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus] } });
+    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus], components: { ...ElementPlusIconsVue } } });
     const vm = vmOf(wrapper);
     vm.createTutorSocket();
 
@@ -182,7 +182,7 @@ describe('ClassRoom Chat.vue', () => {
   });
 
   it('普通关闭码不触发会话中断', async () => {
-    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus] } });
+    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus], components: { ...ElementPlusIconsVue } } });
     const vm = vmOf(wrapper);
     vm.createTutorSocket();
 
@@ -192,7 +192,7 @@ describe('ClassRoom Chat.vue', () => {
   });
 
   it('卸载时清理 WebSocket 与定时器', async () => {
-    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus] } });
+    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus], components: { ...ElementPlusIconsVue } } });
     const vm = vmOf(wrapper);
     vm.createTutorSocket();
     const ws = MockWebSocket.instances[0]!;

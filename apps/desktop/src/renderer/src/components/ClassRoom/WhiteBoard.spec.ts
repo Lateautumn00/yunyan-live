@@ -273,6 +273,8 @@ vi.mock('vue-router', async (importOriginal) => {
 // ── Helpers ─────────────────────────────────────────────────────────────
 import WhiteBoard from './WhiteBoard.vue';
 import { mount } from '@vue/test-utils';
+import ElementPlus from 'element-plus';
+import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import { getPdfPageCount, getPdfPageDims } from './whiteboard/pdfAsset';
 import { PRESET_COLORS } from './whiteboard/types';
 
@@ -307,6 +309,8 @@ function mountWB(props: Record<string, unknown> = {}) {
     attachTo: document.body,
     global: {
       stubs: { teleport: true },
+      plugins: [ElementPlus],
+      components: { ...ElementPlusIconsVue },
     },
   });
   return wrapper;

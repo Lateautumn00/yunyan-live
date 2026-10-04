@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { createPinia, setActivePinia } from 'pinia';
 import ElementPlus from 'element-plus';
+import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import type { ElectronApi } from '@yunyan-live/ipc';
 import Header from '@/components/layouts/Header.vue';
 import { useUserStore } from '@/store/user';
@@ -32,6 +33,7 @@ async function mountHeader(userName: string) {
   const wrapper = mount(Header, {
     global: {
       plugins: [pinia, router, ElementPlus],
+      components: { ...ElementPlusIconsVue }
     }
   });
   await flushPromises();
