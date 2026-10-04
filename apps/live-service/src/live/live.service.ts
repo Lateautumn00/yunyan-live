@@ -3,12 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { grpcError } from '@yunyan-live/nest-shared';
 import { status as GrpcStatus } from '@grpc/grpc-js';
-import { LiveRoom } from './live-room.entity';
-import { LiveParticipant } from './live-participant.entity';
-import { LiveTransferCode } from './live-transfer-code.entity';
-import { VideoRecording } from './video-recording.entity';
-import { UserWatchTime } from './user-watch-time.entity';
-import { Courseware } from './courseware.entity';
+import { Courseware, LiveParticipant, LiveRoom, LiveTransferCode, UserWatchTime, VideoRecording } from '@yunyan-live/shared';
 import { JanusService } from '../janus/janus.service';
 
 @Injectable()

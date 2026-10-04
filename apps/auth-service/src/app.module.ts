@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { User } from '@yunyan-live/shared';
 import { AuthModule } from './auth/auth.module';
-import { User } from './users/user.entity';
 
 @Module({
   imports: [

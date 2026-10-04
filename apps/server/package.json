@@ -3,7 +3,7 @@
   "version": "0.5.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter @yunyan-live/nest-shared build && nest start --watch",
+    "dev": "pnpm --filter @yunyan-live/nest-shared build && pnpm --filter @yunyan-live/shared build && nest start --watch",
     "build": "nest build",
     "start": "node dist/main",
     "typecheck": "tsc --noEmit",

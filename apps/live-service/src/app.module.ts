@@ -1,14 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { Courseware, LiveParticipant, LiveRoom, LiveTransferCode, UserWatchTime, VideoRecording } from '@yunyan-live/shared';
 import { JanusModule } from './janus/janus.module';
 import { LiveModule } from './live/live.module';
-import { LiveRoom } from './live/live-room.entity';
-import { LiveParticipant } from './live/live-participant.entity';
-import { LiveTransferCode } from './live/live-transfer-code.entity';
-import { UserWatchTime } from './live/user-watch-time.entity';
-import { VideoRecording } from './live/video-recording.entity';
-import { Courseware } from './live/courseware.entity';
 
 @Module({
   imports: [

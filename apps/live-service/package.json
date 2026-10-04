@@ -3,7 +3,7 @@
   "version": "0.5.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter @yunyan-live/nest-shared build && nest start --watch",
+    "dev": "pnpm --filter @yunyan-live/nest-shared build && pnpm --filter @yunyan-live/shared build && nest start --watch",
     "build": "nest build",
     "start": "node dist/main",
     "typecheck": "tsc --noEmit"
@@ -15,6 +15,7 @@
     "@nestjs/microservices": "^10.4.22",
     "@nestjs/typeorm": "^10.0.0",
     "@yunyan-live/nest-shared": "workspace:*",
+    "@yunyan-live/shared": "workspace:*",
     "@grpc/grpc-js": "~1.10.0",
     "@grpc/proto-loader": "^0.8.1",
     "typeorm": "^0.3.0",
