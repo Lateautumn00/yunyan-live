@@ -117,7 +117,7 @@
             min-width="56"
           >
             <template #default="scope">
-              <span>{{ statusOptions[scope.row.status]!['label'] }}</span>
+              <span>{{ ROOM_STATUS_TEXT[scope.row.status] ?? '未知' }}</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -192,6 +192,7 @@ import type { LiveRoom } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
 import { useRoomNavigation } from '@/composables/useRoomNavigation';
 import { usePagedList } from '@/composables/usePagedList';
+import { ROOM_STATUS_TEXT } from '@/constants/room';
 
 interface LiveListResult {
   list: LiveRoom[];
@@ -212,10 +213,7 @@ const typeOptions = ref([
 ]);
 const statusOptions = ref([
   { value: 0, label: '全部' },
-  { value: 1, label: '未开始' },
-  { value: 2, label: '直播中' },
-  { value: 3, label: '已结束' },
-  { value: 4, label: '暂停' }
+  ...Object.entries(ROOM_STATUS_TEXT).map(([value, label]) => ({ value: Number(value), label }))
 ]);
 const {
   params,

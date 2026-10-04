@@ -146,6 +146,7 @@ import { ApiError } from '@yunyan-live/http';
 import { formatDate } from '@yunyan-live/utils';
 import { ElMessage } from 'element-plus';
 import SettingsDialog from '@/components/SettingsDialog.vue';
+import { RoomStatus, ROOM_STATUS_TEXT, ROOM_STATUS_TAG } from '@/constants/room';
 
 interface RoomItem {
   id: string;
@@ -196,23 +197,11 @@ const { deleting, confirmAndDelete } = useConfirmDelete<{ message: string; roomI
 });
 
 function getStatusType(status: number) {
-  const map: Record<number, 'info' | 'success' | 'danger' | 'warning'> = {
-    1: 'info',
-    2: 'success',
-    3: 'danger',
-    4: 'warning'
-  };
-  return map[status] || 'info';
+  return ROOM_STATUS_TAG[status] || 'info';
 }
 
 function getStatusText(status: number) {
-  const map: Record<number, string> = {
-    1: '已创建',
-    2: '直播中',
-    3: '已结束',
-    4: '暂停'
-  };
-  return map[status] || '未知';
+  return ROOM_STATUS_TEXT[status] || '未知';
 }
 
 function handleSelectionChange(val: RoomItem[]) {
@@ -253,7 +242,7 @@ async function handleJoin() {
 
 async function enterRoom(room: RoomItem) {
   if (entering.value) return;
-  if (room.status === 3) {
+  if (room.status === RoomStatus.ENDED) {
     ElMessage.warning('该直播已结束');
     return;
   }

@@ -250,6 +250,7 @@ import CoursewareUpload from '@/components/teacher/CoursewareUpload.vue';
 import { useRoomNavigation } from '@/composables/useRoomNavigation';
 import { useAsyncAction } from '@/composables/useAsyncAction';
 import type { LiveRoom } from '@/types/pages/teacher/live';
+import { RoomStatus } from '@/constants/room';
 
 const props = withDefaults(
   defineProps<{
@@ -280,7 +281,7 @@ const menuItems = computed(() => {
   if (isDropdown.value) {
     items.push({ command: 'upload', label: '上传课件' });
   }
-  if (props.room.status === 1) {
+  if (props.room.status === RoomStatus.NOT_STARTED) {
     items.push({ command: 'transfer', label: '转移' }, { command: 'edit', label: '编辑' });
   }
   items.push({ command: 'delete', label: '删除' });
