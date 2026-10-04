@@ -1,7 +1,14 @@
 import type { LiveForm } from '@/types/pages/teacher/live';
-import { encryptPassword } from '@/utils/passwordCrypto';
 import axios from 'axios';
 import { http, config } from '../instance';
+
+function fetchRecording(url: string, responseType?: 'blob') {
+  const token = localStorage.getItem('token');
+  return axios.get(url, {
+    ...(responseType ? { responseType } : {}),
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
 
 export default {
   create_live(params: LiveForm) {
@@ -39,33 +46,11 @@ export default {
   videoids_delete(params: object) {
     return http.delete(`${config.liveApi}/liveInfo/deleteVideoByIds`, { data: params });
   },
-  save_video_recording(params: object) {
-    return http.post(`${config.liveApi}/liveInfo/saveVideoRecording`, params);
-  },
-  async update_pass(params: object) {
-    const body = { ...params } as Record<string, unknown>;
-    if (typeof body.password === 'string') {
-      body.password = await encryptPassword(body.password);
-    }
-    return http.post(`${config.userApi}/user/updatePassword`, body);
-  },
-  update_user(params: object) {
-    return http.post(`${config.userApi}/user/updateSysUserInfo`, params);
-  },
-  email_code(params: object) {
-    return http.post(`${config.userApi}/mail/reqEmailCode`, params);
-  },
-  update_email(params: object) {
-    return http.get(`${config.userApi}/user/updateEmail`, { params });
-  },
   generate_transfer_code(params: object) {
     return http.post(`${config.liveApi}/liveInfo/generateTransferCode`, params);
   },
   execute_transfer(params: object) {
     return http.post(`${config.liveApi}/liveInfo/executeTransfer`, params);
-  },
-  search_teachers(params: object) {
-    return http.get(`${config.liveApi}/liveInfo/searchTeachers`, { params });
   },
   save_courseware(params: { roomId: string; filename: string; filext?: string; filesize?: number; fileUrl: string }) {
     return http.post(`${config.liveApi}/liveInfo/saveCourseware`, params);
@@ -77,16 +62,9 @@ export default {
     return http.delete(`${config.liveApi}/liveInfo/deleteCourseware`, { data: { id } });
   },
   download_recording(id: string) {
-    const token = localStorage.getItem('token');
-    return axios.get(`${config.liveApi}/liveInfo/downloadRecording/${id}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    return fetchRecording(`${config.liveApi}/liveInfo/downloadRecording/${id}`);
   },
   download_recording_file(id: string) {
-    const token = localStorage.getItem('token');
-    return axios.get(`${config.liveApi}/liveInfo/downloadRecording/${id}?download=true`, {
-      responseType: 'blob',
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    return fetchRecording(`${config.liveApi}/liveInfo/downloadRecording/${id}?download=true`, 'blob');
   }
 };

@@ -19,9 +19,6 @@ export default {
   getNowTime() {
     return http.get(`${config.userApi}/user/getNowTime`);
   },
-  sendMessage(liveUserId: string, params: Record<string, unknown>) {
-    return http.post(`${config.liveApi}/push/sendMessage/${liveUserId}`, params);
-  },
   updateForbid(params: { roomId: string; liveUserId: string; status: number }) {
     return http.post(`${config.liveApi}/push/updateForbid`, params);
   },
@@ -30,13 +27,6 @@ export default {
       ...params,
       password: await encryptPassword(params.password)
     });
-  },
-  async update_pass(params: { email: string; password: string }, operateType?: string) {
-    const body = { ...params, password: await encryptPassword(params.password) };
-    if (operateType) {
-      return http.post(`${config.userApi}/user/updatePassword?operateType=${operateType}`, body);
-    }
-    return http.post(`${config.userApi}/user/updatePassword`, body);
   },
   email_code(params: { email: string }) {
     return http.post(`${config.userApi}/mail/reqEmailCode`, params);
@@ -53,9 +43,6 @@ export default {
   save_play_back_url(params: Record<string, unknown>) {
     return http.post(`${config.liveApi}/liveInfo/savePlayBackUrl`, params);
   },
-  live_end_info(params: Record<string, unknown>) {
-    return http.get(`${config.liveApi}/liveInfo/liveEndInfo`, { params });
-  },
   student_rooms(params: { page: number; pageSize: number }) {
     return http.get(`${config.liveApi}/liveInfo/studentRooms`, { params });
   },
@@ -64,9 +51,6 @@ export default {
   },
   batch_leave(roomIds: string[]) {
     return http.delete(`${config.liveApi}/liveInfo/batchLeave`, { data: { roomIds } });
-  },
-  get_participants(roomId: string) {
-    return http.get(`${config.liveApi}/liveInfo/participants`, { params: { roomId } });
   },
   async reset_password(params: { email: string; code: string; password: string }) {
     return http.post(`${config.userApi}/user/resetPassword`, {
@@ -82,8 +66,5 @@ export default {
   },
   update_user_name(params: { userName: string }) {
     return http.post(`${config.userApi}/user/updateUserName`, params);
-  },
-  get_user_by_id(userId: string) {
-    return http.get(`${config.userApi}/user/getUserById`, { params: { userId } });
   }
 };
