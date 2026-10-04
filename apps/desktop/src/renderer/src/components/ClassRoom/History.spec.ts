@@ -62,7 +62,7 @@ describe('ClassRoom History.vue', () => {
     await delIcon.trigger('click');
     await flushPromises();
     expect(apiBackstageMocks.videoids_delete).toHaveBeenCalledWith({
-      data: { videoIds: ['v1'] }
+      videoIds: ['v1']
     });
     expect(wrapper.emitted('delList')?.[0]).toEqual(['v1', 0]);
   });

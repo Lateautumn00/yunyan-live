@@ -76,10 +76,11 @@ function videoLists(status: boolean, data: HistoryVideoItem) {
 const deleting = ref(false);
 
 function delVideoList(id: string | undefined, index: number) {
+  if (!id) return;
   if (deleting.value) return;
   deleting.value = true;
   void apiBackstage
-    .videoids_delete({ data: { videoIds: [id] } })
+    .videoids_delete({ videoIds: [id] })
     .then(() => {
       delList(id, index);
     })
