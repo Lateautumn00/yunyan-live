@@ -53,7 +53,7 @@ import { ElMessage } from 'element-plus';
 import { extractErrorMessage } from '@yunyan-live/utils';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import Live from '@/api/backstage';
-import { copyText } from '@/utils/webBridge';
+import { useCopy } from '@/composables/useCopy';
 
 const activeKey = '4';
 const roomId = ref('');
@@ -78,11 +78,10 @@ async function generateCode() {
   }
 }
 
+const { copy } = useCopy();
+
 function copyCode() {
-  if (transferCode.value) {
-    void copyText(transferCode.value);
-    ElMessage.success('复制成功');
-  }
+  if (transferCode.value) void copy(transferCode.value);
 }
 </script>
 

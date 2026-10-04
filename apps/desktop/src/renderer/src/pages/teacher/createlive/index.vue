@@ -99,7 +99,8 @@ import { randomString } from '@yunyan-live/utils';
 import { isVoid, isCheckedAllRules } from '@yunyan-live/validation';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import type { JanusHandle, JanusSession } from '@/vendor/live/live';
-import api, { config } from '@/api';
+import { config } from '@/api';
+import { useServerTime } from '@/composables/useServerTime';
 import Live from '@/api/backstage';
 import { useUserStore } from '@/store/user';
 
@@ -402,16 +403,7 @@ function pluginTextSend(data: Record<string, unknown>, jsep?: unknown) {
   boardPlugin.value?.send(options);
 }
 
-async function getServerTime() {
-  let serverTime = '';
-  try {
-    const res = await api.getNowTime();
-    serverTime = (res.data as { nowTime: string }).nowTime;
-  } catch {
-    // ignore
-  }
-  return serverTime;
-}
+const { getServerTime } = useServerTime();
 </script>
 
 <style lang="less" scoped>

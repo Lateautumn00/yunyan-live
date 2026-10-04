@@ -205,6 +205,7 @@ import Live from '@/vendor/live/live';
 import type { JanusHandle, JanusSession } from '@/vendor/live/live';
 import api from '@/api';
 import { config } from '@/api';
+import { useServerTime } from '@/composables/useServerTime';
 import VideoPlayer from '@/components/ClassRoom/VideoPlayer.vue';
 
 const props = withDefaults(
@@ -1893,16 +1894,7 @@ async function isTalkingTxt(type: string) {
   );
 }
 
-async function getServerTime() {
-  let serverTime = '';
-  try {
-    const req = await api.getNowTime();
-    serverTime = req.data.nowTime;
-  } catch (e) {
-    console.error(e);
-  }
-  return serverTime;
-}
+const { getServerTime } = useServerTime();
 
 defineExpose({
   apply,

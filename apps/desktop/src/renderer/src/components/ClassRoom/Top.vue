@@ -407,11 +407,10 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
 import { Setting } from '@element-plus/icons-vue';
 import { formatStopwatch } from '@yunyan-live/utils';
-import api from '@/api';
-import { copyText } from '@/utils/webBridge';
+import { useCopy } from '@/composables/useCopy';
+import { useServerTime } from '@/composables/useServerTime';
 
 interface RoomInfo {
   title?: string;
@@ -516,10 +515,7 @@ function sendTime(time: number) {
   delayed.value = time;
 }
 
-function copy(content: string) {
-  void copyText(content);
-  ElMessage.success('复制成功');
-}
+const { copy } = useCopy();
 
 function lookLive(status: boolean) {
   isNavigating.value = true;
@@ -608,16 +604,7 @@ async function setsTime(time: string) {
   setTime('open');
 }
 
-async function getServerTime() {
-  let serverTime = '';
-  try {
-    const req = await api.getNowTime();
-    serverTime = req.data.nowTime;
-  } catch (e) {
-    console.error(e);
-  }
-  return serverTime;
-}
+const { getServerTime } = useServerTime();
 
 function setLayout(num: number) {
   if (layoutNum.value === num) return;

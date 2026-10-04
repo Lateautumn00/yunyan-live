@@ -39,7 +39,7 @@
 import { ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import Live from '@/api/backstage';
-import { copyText } from '@/utils/webBridge';
+import { useCopy } from '@/composables/useCopy';
 
 const props = withDefaults(
   defineProps<{
@@ -79,9 +79,10 @@ async function updateCode() {
   }
 }
 
+const { copy } = useCopy();
+
 function copyLink(content: string | undefined) {
-  if (content) void copyText(content);
-  ElMessage.success('复制成功');
+  if (content) void copy(content);
 }
 </script>
 
