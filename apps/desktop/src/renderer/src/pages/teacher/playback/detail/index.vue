@@ -143,7 +143,7 @@ import { formatCnDateTime, formatDate } from '@yunyan-live/utils';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import type { VideoItem } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
-import { saveBinaryFile } from '@/utils/webBridge';
+import { useRecordingDownload } from '@/composables/useRecordingDownload';
 
 interface VideoDetailResult {
   list: VideoItem[];
@@ -162,12 +162,8 @@ const total = ref(0);
 const multipleSelection = ref<VideoItem[]>([]);
 const videoIdList = ref<string[]>([]);
 const centerDialogVisible = ref(false);
-const downloading = ref(false);
 const deleting = ref(false);
-
-function releaseDownload() {
-  downloading.value = false;
-}
+const { downloading, download } = useRecordingDownload();
 
 function handleSelectionChange(val: VideoItem[]) {
   multipleSelection.value = val;
@@ -221,68 +217,7 @@ async function downloadClick(row: VideoItem) {
     ElMessage.warning('无效的视频记录');
     return;
   }
-  downloading.value = true;
-  let polling = false;
-  try {
-    const statusRes = await Live.download_recording(videoId);
-    if (statusRes.data.code === 2002) {
-      ElMessage.info(statusRes.data.msg || '视频转码中，请稍候...');
-      startPolling(videoId, row.createTime);
-      polling = true;
-      return;
-    }
-    await doDownload(videoId, row.createTime);
-  } catch (e) {
-    console.error(e);
-    ElMessage.error('下载失败');
-  } finally {
-    if (!polling) releaseDownload();
-  }
-}
-
-function startPolling(videoId: string, createTime?: string | number) {
-  let count = 0;
-  const maxCount = 200;
-  const timer = setInterval(async () => {
-    count++;
-    if (count >= maxCount) {
-      clearInterval(timer);
-      ElMessage.warning('转码时间过长，请稍后再试');
-      releaseDownload();
-      return;
-    }
-    try {
-      const res = await Live.download_recording(videoId);
-      if (res.data.code !== 2002) {
-        clearInterval(timer);
-        await doDownload(videoId, createTime);
-        releaseDownload();
-      }
-    } catch {
-      clearInterval(timer);
-      ElMessage.error('下载失败');
-      releaseDownload();
-    }
-  }, 3000);
-}
-
-async function doDownload(videoId: string, createTime?: string | number) {
-  try {
-    ElMessage.info('正在下载，请稍候...');
-    const res = await Live.download_recording_file(videoId);
-    const blob = new Blob([res.data], { type: 'video/mp4' });
-    const buffer = await blob.arrayBuffer();
-    const defaultName = `录制_${formatCnDateTime(Number(createTime))}.mp4`;
-    const saved = await saveBinaryFile(buffer, defaultName);
-    if (saved) {
-      ElMessage.success('下载成功');
-    } else {
-      ElMessage.info('已取消下载');
-    }
-  } catch (e) {
-    console.error(e);
-    ElMessage.error('下载失败');
-  }
+  await download(videoId, `录制_${formatCnDateTime(Number(row.createTime))}.mp4`);
 }
 
 async function submitDelete() {
