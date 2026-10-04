@@ -75,6 +75,7 @@ import { formatDurationCn } from '@yunyan-live/utils';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import type { WatchItem } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
+import { usePagedList } from '@/composables/usePagedList';
 
 interface WatchListResult {
   list: WatchItem[];
@@ -84,41 +85,32 @@ interface WatchListResult {
 const route = useRoute();
 
 const activeKey = '2';
-const params = ref({ pageNum: 1, pageSize: 6 });
-const tableData = ref<WatchItem[]>([]);
-const total = ref(0);
 const roomTitle = ref('');
+
+const {
+  params,
+  list: tableData,
+  total,
+  load: getWatchList,
+  handleSizeChange,
+  handleCurrentChange
+} = usePagedList<WatchItem>({
+  pageSize: 6,
+  fetchPage: async (query) => {
+    const res = await Live.watchtime_list({
+      pageNum: query.pageNum,
+      pageSize: query.pageSize,
+      roomId: route.query.roomId,
+    });
+    const data = res.data as WatchListResult;
+    return { list: data.list, total: data.pageInfo.totalElements };
+  }
+});
 
 function formatTime(ts: string): string {
   if (!ts) return '-';
   const d = new Date(ts);
   return d.toLocaleString('zh-CN', { hour12: false });
-}
-
-function handleSizeChange(size: number) {
-  params.value.pageSize = size;
-  params.value.pageNum = 1;
-  void getWatchList();
-}
-
-function handleCurrentChange(current: number) {
-  params.value.pageNum = current;
-  void getWatchList();
-}
-
-async function getWatchList() {
-  try {
-    const res = await Live.watchtime_list({
-      pageNum: params.value.pageNum,
-      pageSize: params.value.pageSize,
-      roomId: route.query.roomId,
-    });
-    const data = res.data as WatchListResult;
-    tableData.value = data.list;
-    total.value = data.pageInfo.totalElements;
-  } catch (e) {
-    console.error(e);
-  }
 }
 
 onMounted(() => {

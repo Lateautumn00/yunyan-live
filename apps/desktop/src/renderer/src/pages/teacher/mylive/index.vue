@@ -191,6 +191,7 @@ import RoomActions from '@/components/teacher/RoomActions.vue';
 import type { LiveRoom } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
 import { useRoomNavigation } from '@/composables/useRoomNavigation';
+import { usePagedList } from '@/composables/usePagedList';
 
 interface LiveListResult {
   list: LiveRoom[];
@@ -201,7 +202,6 @@ const router = useRouter();
 const nav = useRoomNavigation();
 
 const activeKey = '2';
-const params = ref({ pageNum: 1, pageSize: 10 });
 const timerange = ref<DatePickerProps['modelValue']>([]);
 const searchName = ref('');
 const type = ref<number | string>('');
@@ -217,9 +217,44 @@ const statusOptions = ref([
   { value: 3, label: '已结束' },
   { value: 4, label: '暂停' }
 ]);
-const tableData = ref<LiveRoom[]>([]);
-const total = ref(0);
-const loading = ref(true);
+const {
+  params,
+  list: tableData,
+  total,
+  loading,
+  load,
+  handleSizeChange,
+  handleCurrentChange
+} = usePagedList<LiveRoom>({
+  pageSize: 10,
+  initialLoading: true,
+  onError: (e) => console.error('[mylive] getLiveList error:', e),
+  fetchPage: async (query) => {
+    let startTime = '';
+    let endTime = '';
+    const toTimestamp = (value?: string | Date) =>
+      value === undefined
+        ? ''
+        : String(value instanceof Date ? value.getTime() : new Date(value).getTime());
+    const range = timerange.value as Array<string | Date> | null;
+    if (range && range.length > 0) {
+      startTime = toTimestamp(range[0]);
+      endTime = toTimestamp(range[1]);
+    }
+    const res = await Live.live_list({
+      page: query.pageNum,
+      pageSize: query.pageSize,
+      startTime,
+      endTime,
+      status: status.value ? status.value : null,
+      type: type.value === '' ? null : type.value,
+      searchName: searchName.value
+    });
+    const data = res.data as LiveListResult;
+    return { list: data.list, total: data.total };
+  }
+});
+const getLiveList = load;
 
 const isFiltered = computed(() => {
   const range = timerange.value as Array<string | Date> | null;
@@ -234,17 +269,6 @@ const isFiltered = computed(() => {
 const emptyDescription = computed(() =>
   isFiltered.value ? '未找到符合条件的直播' : '暂无直播数据'
 );
-
-function handleSizeChange(size: number) {
-  params.value.pageSize = size;
-  params.value.pageNum = 1;
-  void getLiveList();
-}
-
-function handleCurrentChange(current: number) {
-  params.value.pageNum = current;
-  void getLiveList();
-}
 
 function resetFilters() {
   searchName.value = '';
@@ -263,39 +287,6 @@ function onSearch() {
 function onReset() {
   if (loading.value) return;
   resetFilters();
-}
-
-async function getLiveList() {
-  loading.value = true;
-  let startTime = '';
-  let endTime = '';
-  const toTimestamp = (value?: string | Date) =>
-    value === undefined
-      ? ''
-      : String(value instanceof Date ? value.getTime() : new Date(value).getTime());
-  const range = timerange.value as Array<string | Date> | null;
-  if (range && range.length > 0) {
-    startTime = toTimestamp(range[0]);
-    endTime = toTimestamp(range[1]);
-  }
-  try {
-    const res = await Live.live_list({
-      page: params.value.pageNum,
-      pageSize: params.value.pageSize,
-      startTime,
-      endTime,
-      status: status.value ? status.value : null,
-      type: type.value === '' ? null : type.value,
-      searchName: searchName.value
-    });
-    const data = res.data as LiveListResult;
-    tableData.value = data.list;
-    total.value = data.total;
-  } catch (e) {
-    console.error('[mylive] getLiveList error:', e);
-  } finally {
-    loading.value = false;
-  }
 }
 
 function dateFormatter(row: LiveRoom): string {

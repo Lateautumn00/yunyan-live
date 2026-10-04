@@ -124,7 +124,7 @@
       <el-pagination
         v-show="total !== 0"
         background
-        :current-page="params.page"
+        :current-page="params.pageNum"
         :page-size="params.pageSize"
         layout="prev, pager, next, jumper"
         :total="total"
@@ -140,9 +140,11 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/store/user';
 import api from '@/api';
+import { usePagedList } from '@/composables/usePagedList';
+import { useConfirmDelete } from '@/composables/useConfirmDelete';
 import { ApiError } from '@yunyan-live/http';
 import { formatDate } from '@yunyan-live/utils';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage } from 'element-plus';
 import SettingsDialog from '@/components/SettingsDialog.vue';
 
 interface RoomItem {
@@ -161,15 +163,37 @@ interface RoomItem {
 const router = useRouter();
 const userStore = useUserStore();
 const joinCode = ref('');
-const rooms = ref<RoomItem[]>([]);
-const multipleSelection = ref<RoomItem[]>([]);
-const params = ref({ page: 1, pageSize: 10 });
 const settingsVisible = ref(false);
-const total = ref(0);
-const loading = ref(true);
 const joining = ref(false);
-const deleting = ref(false);
 const entering = ref(false);
+const multipleSelection = ref<RoomItem[]>([]);
+
+const {
+  params,
+  list: rooms,
+  total,
+  loading,
+  load: loadRooms,
+  handleCurrentChange
+} = usePagedList<RoomItem>({
+  pageSize: 10,
+  initialLoading: true,
+  onError: (err) => console.error('加载直播间列表失败', err),
+  fetchPage: async (query) => {
+    const res = await api.student_rooms({
+      page: query.pageNum,
+      pageSize: query.pageSize
+    });
+    return { list: res.data.list, total: res.data.total };
+  }
+});
+
+const { deleting, confirmAndDelete } = useConfirmDelete<{ message: string; roomIds: string[] }>({
+  message: (payload) => payload.message,
+  action: (payload) => api.batch_leave(payload.roomIds),
+  successMessage: () => '删除成功',
+  refresh: () => loadRooms()
+});
 
 function getStatusType(status: number) {
   const map: Record<number, 'info' | 'success' | 'danger' | 'warning'> = {
@@ -191,50 +215,15 @@ function getStatusText(status: number) {
   return map[status] || '未知';
 }
 
-async function loadRooms() {
-  loading.value = true;
-  try {
-    const res = await api.student_rooms({
-      page: params.value.page,
-      pageSize: params.value.pageSize
-    });
-    rooms.value = res.data.list;
-    total.value = res.data.total;
-  } catch (err) {
-    console.error('加载直播间列表失败', err);
-  } finally {
-    loading.value = false;
-  }
-}
-
 function handleSelectionChange(val: RoomItem[]) {
   multipleSelection.value = val;
 }
 
 async function handleBatchDelete() {
-  if (deleting.value) return;
-  deleting.value = true;
-  try {
-    await ElMessageBox.confirm(`确定要删除选中的 ${multipleSelection.value.length} 条记录吗？`, '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    });
-
-    const roomIds = multipleSelection.value.map(item => item.roomId);
-    await api.batch_leave(roomIds);
-    ElMessage.success('删除成功');
-    void loadRooms();
-  } catch {
-    // 取消操作
-  } finally {
-    deleting.value = false;
-  }
-}
-
-function handleCurrentChange(current: number) {
-  params.value.page = current;
-  void loadRooms();
+  await confirmAndDelete({
+    message: `确定要删除选中的 ${multipleSelection.value.length} 条记录吗？`,
+    roomIds: multipleSelection.value.map(item => item.roomId)
+  });
 }
 
 async function handleJoin() {
@@ -303,23 +292,7 @@ async function enterRoom(room: RoomItem) {
 }
 
 async function deleteRoom(room: RoomItem) {
-  if (deleting.value) return;
-  deleting.value = true;
-  try {
-    await ElMessageBox.confirm('确定要删除该直播间吗？', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    });
-
-    await api.batch_leave([room.roomId]);
-    ElMessage.success('删除成功');
-    await loadRooms();
-  } catch {
-    // 取消操作
-  } finally {
-    deleting.value = false;
-  }
+  await confirmAndDelete({ message: '确定要删除该直播间吗？', roomIds: [room.roomId] });
 }
 
 onMounted(() => {

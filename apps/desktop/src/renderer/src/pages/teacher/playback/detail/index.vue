@@ -144,6 +144,7 @@ import SidebarMenu from '@/layouts/sidebar.vue';
 import type { VideoItem } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
 import { useRecordingDownload } from '@/composables/useRecordingDownload';
+import { usePagedList } from '@/composables/usePagedList';
 
 interface VideoDetailResult {
   list: VideoItem[];
@@ -154,30 +155,43 @@ const route = useRoute();
 const router = useRouter();
 
 const activeKey = '3';
-const params = ref({ pageNum: 1, pageSize: 6 });
 const timerange = ref<DatePickerProps['modelValue']>([]);
-const tableData = ref<VideoItem[]>([]);
 const roomTitle = ref('');
-const total = ref(0);
 const multipleSelection = ref<VideoItem[]>([]);
 const videoIdList = ref<string[]>([]);
 const centerDialogVisible = ref(false);
 const deleting = ref(false);
 const { downloading, download } = useRecordingDownload();
 
+const {
+  params,
+  list: tableData,
+  total,
+  load,
+  handleSizeChange,
+  handleCurrentChange
+} = usePagedList<VideoItem>({
+  pageSize: 6,
+  fetchPage: async (query) => {
+    const range = timerange.value as Array<string | Date> | null;
+    const startTime = range && range.length > 0 ? String(range[0]) : '';
+    const endTime = range && range.length > 1 ? String(range[1]) : '';
+    const res = await Live.video_detail({
+      pageNum: query.pageNum,
+      pageSize: query.pageSize,
+      roomId: route.query.roomId,
+      startTime,
+      endTime
+    });
+    const data = res.data as VideoDetailResult;
+    console.log('[playback/index] getVideoDetail', data.list?.map(i => ({ id: i.id, recordType: i.recordType, filePath: i.filePath, address: i.address })));
+    return { list: data.list, total: data.pageInfo.totalElements };
+  }
+});
+const getVideoDetail = load;
+
 function handleSelectionChange(val: VideoItem[]) {
   multipleSelection.value = val;
-}
-
-function handleSizeChange(size: number) {
-  params.value.pageSize = size;
-  params.value.pageNum = 1;
-  void getVideoDetail();
-}
-
-function handleCurrentChange(current: number) {
-  params.value.pageNum = current;
-  void getVideoDetail();
 }
 
 function multiDeleteClick() {
@@ -232,27 +246,6 @@ async function submitDelete() {
     console.error(e);
   } finally {
     deleting.value = false;
-  }
-}
-
-async function getVideoDetail() {
-  const range = timerange.value as Array<string | Date> | null;
-  const startTime = range && range.length > 0 ? String(range[0]) : '';
-  const endTime = range && range.length > 1 ? String(range[1]) : '';
-  try {
-    const res = await Live.video_detail({
-      pageNum: params.value.pageNum,
-      pageSize: params.value.pageSize,
-      roomId: route.query.roomId,
-      startTime,
-      endTime
-    });
-    const data = res.data as VideoDetailResult;
-    console.log('[playback/index] getVideoDetail', data.list?.map(i => ({ id: i.id, recordType: i.recordType, filePath: i.filePath, address: i.address })));
-    tableData.value = data.list;
-    total.value = data.pageInfo.totalElements;
-  } catch (e) {
-    console.error(e);
   }
 }
 

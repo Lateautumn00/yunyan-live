@@ -145,11 +145,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage, ElMessageBox, type DatePickerProps } from 'element-plus';
+import { type DatePickerProps } from 'element-plus';
 import { formatDate } from '@yunyan-live/utils';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import type { LiveRoom } from '@/types/pages/teacher/live';
 import Live from '@/api/backstage';
+import { usePagedList } from '@/composables/usePagedList';
+import { useConfirmDelete } from '@/composables/useConfirmDelete';
 
 interface VideoListResult {
   list: LiveRoom[];
@@ -159,7 +161,6 @@ interface VideoListResult {
 const router = useRouter();
 
 const activeKey = '3';
-const params = ref({ pageNum: 1, pageSize: 6 });
 const timerange = ref<DatePickerProps['modelValue']>([]);
 const searchName = ref('');
 const status = ref<number | null>(null);
@@ -168,25 +169,43 @@ const typeOptions = ref([
   { value: 0, label: '小班教学' },
   { value: 1, label: '大班教学' }
 ]);
-const tableData = ref<LiveRoom[]>([]);
-const total = ref(0);
 const multipleSelection = ref<LiveRoom[]>([]);
-const listLoading = ref(false);
-const deleting = ref(false);
+
+const {
+  params,
+  list: tableData,
+  total,
+  loading: listLoading,
+  load,
+  handleSizeChange,
+  handleCurrentChange
+} = usePagedList<LiveRoom>({
+  pageSize: 6,
+  fetchPage: async (query) => {
+    let startTime = '';
+    let endTime = '';
+    const range = timerange.value as Array<string | Date> | null;
+    if (range && range.length > 0) {
+      startTime = String(range[0]);
+      endTime = String(range[1]);
+    }
+    const res = await Live.video_list({
+      pageNum: query.pageNum,
+      pageSize: query.pageSize,
+      startTime,
+      endTime,
+      status: status.value,
+      type: type.value,
+      searchName: searchName.value
+    });
+    const data = res.data as VideoListResult;
+    return { list: data.list, total: data.pageInfo.totalElements };
+  }
+});
+const getVideoList = load;
 
 function handleSelectionChange(val: LiveRoom[]) {
   multipleSelection.value = val;
-}
-
-function handleSizeChange(size: number) {
-  params.value.pageSize = size;
-  params.value.pageNum = 1;
-  void getVideoList();
-}
-
-function handleCurrentChange(current: number) {
-  params.value.pageNum = current;
-  void getVideoList();
 }
 
 function handleClick(row: LiveRoom) {
@@ -199,35 +218,23 @@ function handleClick(row: LiveRoom) {
   });
 }
 
-async function deleteClips() {
+const { deleting, confirmAndDelete } = useConfirmDelete<{ roomIds: string[] }>({
+  message: () => '批量删除后将无法恢复，确定删除么？',
+  action: async (payload) => {
+    const res = await Live.roomids_delete({ roomIds: payload.roomIds });
+    return res;
+  },
+  successMessage: (result) => (result as { msg?: string }).msg ?? '删除成功',
+  refresh: () => getVideoList(),
+  onError: (e) => console.error(e)
+});
+
+async function handleDelete() {
   const roomIds: string[] = [];
   multipleSelection.value.forEach((item) => {
     if (item.roomId) roomIds.push(item.roomId);
   });
-  try {
-    const res = await Live.roomids_delete({ roomIds });
-    ElMessage.success(res.msg ?? '删除成功');
-    void getVideoList();
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-async function handleDelete() {
-  if (deleting.value) return;
-  deleting.value = true;
-  try {
-    await ElMessageBox.confirm('批量删除后将无法恢复，确定删除么？', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    });
-    await deleteClips();
-  } catch {
-    // 取消操作
-  } finally {
-    deleting.value = false;
-  }
+  await confirmAndDelete({ roomIds });
 }
 
 function resetFilters() {
@@ -246,35 +253,6 @@ function onSearch() {
 function onReset() {
   if (listLoading.value) return;
   resetFilters();
-}
-
-async function getVideoList() {
-  listLoading.value = true;
-  let startTime = '';
-  let endTime = '';
-  const range = timerange.value as Array<string | Date> | null;
-  if (range && range.length > 0) {
-    startTime = String(range[0]);
-    endTime = String(range[1]);
-  }
-  try {
-    const res = await Live.video_list({
-      pageNum: params.value.pageNum,
-      pageSize: params.value.pageSize,
-      startTime,
-      endTime,
-      status: status.value,
-      type: type.value,
-      searchName: searchName.value
-    });
-    const data = res.data as VideoListResult;
-    tableData.value = data.list;
-    total.value = data.pageInfo.totalElements;
-  } catch (e) {
-    console.error(e);
-  } finally {
-    listLoading.value = false;
-  }
 }
 
 onMounted(() => {

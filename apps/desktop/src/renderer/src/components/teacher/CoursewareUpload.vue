@@ -61,9 +61,10 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage } from 'element-plus';
 import { formatFileSize } from '@yunyan-live/utils';
 import Live from '@/api/backstage';
+import { useConfirmDelete } from '@/composables/useConfirmDelete';
 import { uploadPptFile, loadPptMeta } from '@/components/ClassRoom/whiteboard/pptImport';
 
 interface CoursewareItem {
@@ -146,29 +147,28 @@ async function takeFile(e: Event) {
   }
 }
 
+const { ask, perform } = useConfirmDelete<CoursewareItem>({
+  message: (item) => `确定删除课件「${item.filename}」？删除后直播间将不再自动导入它。`,
+  boxTitle: '删除课件',
+  action: (item) => Live.delete_courseware(item.id),
+  successMessage: () => '已删除',
+  refresh: () => refresh(),
+  onError: (e) => {
+    console.error('课件删除失败', e);
+    ElMessage.error('删除失败');
+  }
+});
+
 async function removeItem(item: CoursewareItem) {
   // 空 id 会让服务端静默返回成功但一条没删，直接拦截并提示
   if (!item.id) {
     ElMessage.error('课件数据异常（缺少ID），请刷新后重试');
     return;
   }
-  try {
-    await ElMessageBox.confirm(
-      `确定删除课件「${item.filename}」？删除后直播间将不再自动导入它。`,
-      '删除课件',
-      { type: 'warning' }
-    );
-  } catch {
-    return;
-  }
+  if (!(await ask(item))) return;
   deletingId.value = item.id;
   try {
-    await Live.delete_courseware(item.id);
-    ElMessage.success('已删除');
-    await refresh();
-  } catch (e) {
-    console.error('课件删除失败', e);
-    ElMessage.error('删除失败');
+    await perform(item);
   } finally {
     deletingId.value = '';
   }
