@@ -2,11 +2,14 @@
 import { autoUpdater } from 'electron-updater';
 import { IpcChannels, type UpdateMessage } from '@yunyan-live/ipc';
 
-export function initUpdater(window: BrowserWindow, feedUrl: string): void {
+export function initUpdater(getWindow: () => BrowserWindow | null, feedUrl: string): void {
   autoUpdater.setFeedURL({ provider: 'generic', url: feedUrl });
 
   const send = (type: UpdateMessage, message?: unknown): void => {
-    window.webContents.send(IpcChannels.message, { type, message });
+    const window = getWindow();
+    if (window && !window.isDestroyed()) {
+      window.webContents.send(IpcChannels.message, { type, message });
+    }
   };
 
   autoUpdater.on('error', (error) => send('error', String(error)));

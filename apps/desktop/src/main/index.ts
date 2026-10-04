@@ -56,11 +56,6 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
-
-  registerIpcHandlers(() => mainWindow);
-  if (app.isPackaged) {
-    initUpdater(mainWindow, config.uploadUrl);
-  }
 }
 
 const gotLock = app.requestSingleInstanceLock();
@@ -88,6 +83,13 @@ if (!gotLock) {
       const filePath = decodeURIComponent(request.url.replace(`${PROTOCOL_SCHEME}://`, ''));
       callback({ path: filePath });
     });
+    // IPC 与更新器注册必须在进程生命周期内只执行一次：
+    // macOS activate 会再次调用 createWindow()，若在此重复注册
+    // ipcMain.handle 将抛出 "Attempted to register a second handler"。
+    registerIpcHandlers(() => mainWindow);
+    if (app.isPackaged) {
+      initUpdater(() => mainWindow, config.uploadUrl);
+    }
     createWindow();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
