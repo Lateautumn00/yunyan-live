@@ -53,9 +53,10 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json",
-    "lint": "eslint . --max-warnings=0"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run"
   },
   "dependencies": {
     "@grpc/grpc-js": "~1.10.0",
@@ -78,7 +79,8 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.0.0",
     "@types/passport-jwt": "^4.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   },
   "license": "MIT"
 }
