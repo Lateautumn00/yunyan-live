@@ -160,6 +160,7 @@ import { WsClose } from '@yunyan-live/types';
 import api from '@/api';
 import { config } from '@/api';
 import { useUserStore } from '@/store/user';
+import { useAsyncAction } from '@/composables/useAsyncAction';
 
 interface TanmuItem {
   userName?: string;
@@ -203,7 +204,6 @@ let lockReconnect = false;
 let time = 0;
 let sessionClosed = false;
 const speechClose = ref(1);
-const forbidLoading = ref(false);
 const sockets = ref<{
   liveSocket: WebSocket | null;
   socketUrl: string;
@@ -274,23 +274,18 @@ function apply(status: boolean, num: number) {
   emit('apply', status, num);
 }
 
-async function updateForbid(status: number) {
-  if (forbidLoading.value) return;
-  forbidLoading.value = true;
-  const data = {
-    roomId: props.roomId ?? '',
-    liveUserId: props.liveUserId ?? '',
-    status
-  };
-  try {
+const { run: updateForbid } = useAsyncAction(
+  async (status: number) => {
+    const data = {
+      roomId: props.roomId ?? '',
+      liveUserId: props.liveUserId ?? '',
+      status
+    };
     await api.updateForbid(data);
     speechClose.value = status;
-  } catch (e) {
-    console.error(e);
-  } finally {
-    forbidLoading.value = false;
-  }
-}
+  },
+  { onError: (e) => console.error(e) }
+);
 
 function createTutorSocket() {
   if (sessionClosed) {

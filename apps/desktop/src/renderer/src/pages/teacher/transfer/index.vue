@@ -50,32 +50,30 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { extractErrorMessage } from '@yunyan-live/utils';
 import SidebarMenu from '@/layouts/sidebar.vue';
 import Live from '@/api/backstage';
 import { useCopy } from '@/composables/useCopy';
+import { useAsyncAction } from '@/composables/useAsyncAction';
 
 const activeKey = '4';
 const roomId = ref('');
 const transferCode = ref('');
 const expireTime = ref('');
-const generating = ref(false);
 
-async function generateCode() {
-  if (generating.value || !roomId.value) return;
-  generating.value = true;
-  try {
+const { loading: generating, run: runGenerate } = useAsyncAction(
+  async () => {
     const res = await Live.generate_transfer_code({ roomId: roomId.value });
     const data = res.data as { transfer_code: string; expires_at: string };
     transferCode.value = data.transfer_code;
     expireTime.value = new Date(data.expires_at).toLocaleString();
     ElMessage.success('转移码生成成功');
-  } catch (e) {
-    const msg = extractErrorMessage(e, '生成失败');
-    ElMessage.error(msg);
-  } finally {
-    generating.value = false;
-  }
+  },
+  { fallbackMessage: '生成失败' }
+);
+
+async function generateCode() {
+  if (!roomId.value) return;
+  await runGenerate();
 }
 
 const { copy } = useCopy();

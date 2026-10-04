@@ -65,6 +65,7 @@ import { ElMessage } from 'element-plus';
 import { formatFileSize } from '@yunyan-live/utils';
 import Live from '@/api/backstage';
 import { useConfirmDelete } from '@/composables/useConfirmDelete';
+import { useAsyncAction } from '@/composables/useAsyncAction';
 import { uploadPptFile, loadPptMeta } from '@/components/ClassRoom/whiteboard/pptImport';
 
 interface CoursewareItem {
@@ -86,10 +87,21 @@ const emit = defineEmits<{
 
 const uploadPptApi = import.meta.env.VITE_UPLOAD_PPT_URL || '';
 const fileInputRef = ref<HTMLInputElement>();
-const uploading = ref(false);
-const loadingList = ref(false);
 const deletingId = ref('');
 const items = ref<CoursewareItem[]>([]);
+
+const { loading: loadingList, run: runRefresh } = useAsyncAction(
+  async () => {
+    const res = await Live.courseware_list(props.roomId);
+    items.value = res.data?.list ?? [];
+  },
+  {
+    onError: (e) => {
+      console.error('课件列表加载失败', e);
+      ElMessage.error('课件列表加载失败');
+    }
+  }
+);
 
 // 打开弹窗时才拉取列表（挂载即拉会拖慢宿主页面，且列表可能还没进房就变化）
 watch(
@@ -101,31 +113,11 @@ watch(
 
 async function refresh() {
   if (!props.roomId) return;
-  loadingList.value = true;
-  try {
-    const res = await Live.courseware_list(props.roomId);
-    items.value = res.data?.list ?? [];
-  } catch (e) {
-    console.error('课件列表加载失败', e);
-    ElMessage.error('课件列表加载失败');
-  } finally {
-    loadingList.value = false;
-  }
+  await runRefresh();
 }
 
-async function takeFile(e: Event) {
-  const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file) return;
-  input.value = '';
-
-  if (!/\.pptx?$/i.test(file.name)) {
-    ElMessage.warning('仅支持 .ppt / .pptx 文件');
-    return;
-  }
-
-  uploading.value = true;
-  try {
+const { loading: uploading, run: runUpload } = useAsyncAction(
+  async (file: File) => {
     const fileUrl = await uploadPptFile(uploadPptApi, file);
     // 提前校验 PDF 可读性：坏文件不入表（服务端 LibreOffice 转换最长约 2 分钟）
     await loadPptMeta(fileUrl);
@@ -140,11 +132,22 @@ async function takeFile(e: Event) {
     });
     ElMessage.success('课件已上传，进入直播间后自动导入');
     await refresh();
-  } catch (err) {
-    ElMessage.error((err as Error).message || '课件上传失败');
-  } finally {
-    uploading.value = false;
+  },
+  { onError: (err) => ElMessage.error((err as Error).message || '课件上传失败') }
+);
+
+async function takeFile(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  input.value = '';
+
+  if (!/\.pptx?$/i.test(file.name)) {
+    ElMessage.warning('仅支持 .ppt / .pptx 文件');
+    return;
   }
+
+  await runUpload(file);
 }
 
 const { ask, perform } = useConfirmDelete<CoursewareItem>({

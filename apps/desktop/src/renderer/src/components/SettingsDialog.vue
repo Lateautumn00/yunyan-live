@@ -219,7 +219,7 @@ import { ElMessage } from 'element-plus';
 import type { FormInstance, FormRules } from 'element-plus';
 import { useUserStore } from '@/store/user';
 import { isVoid, isCheckedAllRules } from '@yunyan-live/validation';
-import { extractErrorMessage } from '@yunyan-live/utils';
+import { useAsyncAction } from '@/composables/useAsyncAction';
 import EquipmentTestPanel from '@/components/LandingPage/EquipmentTestPanel.vue';
 
 defineProps<{
@@ -235,9 +235,6 @@ const userStore = useUserStore();
 const router = useRouter();
 
 const activeMenu = ref('username');
-const loading = ref(false);
-const passLoading = ref(false);
-const loggingOut = ref(false);
 const formRef = ref<FormInstance>();
 const passFormRef = ref<FormInstance>();
 const contentRef = ref<HTMLDivElement>();
@@ -353,53 +350,47 @@ function initObserver() {
   }
 }
 
-async function handleSubmit() {
-  const valid = await formRef.value?.validate().catch(() => false);
-  if (!valid) return;
-
-  loading.value = true;
-  try {
+const { loading, run: runSubmit } = useAsyncAction(
+  async () => {
     await api.update_user_name({ userName: form.userName });
     userStore.setName(form.userName);
     ElMessage.success('设置成功');
-  } catch (error: unknown) {
-    const msg = extractErrorMessage(error, '修改失败');
-    ElMessage.error(msg);
-  } finally {
-    loading.value = false;
-  }
+  },
+  { fallbackMessage: '修改失败' }
+);
+
+async function handleSubmit() {
+  const valid = await formRef.value?.validate().catch(() => false);
+  if (!valid) return;
+  await runSubmit();
 }
 
-async function handlePassSubmit() {
-  const valid = await passFormRef.value?.validate().catch(() => false);
-  if (!valid) return;
-
-  passLoading.value = true;
-  try {
+const { loading: passLoading, run: runPassSubmit } = useAsyncAction(
+  async () => {
     await api.change_password({
       oldPassword: passForm.oldPassword,
       password: passForm.password
     });
     ElMessage.success('修改成功，请重新登录');
     await handleLogout();
-  } catch (error: unknown) {
-    const msg = extractErrorMessage(error, '修改失败');
-    ElMessage.error(msg);
-  } finally {
-    passLoading.value = false;
-  }
+  },
+  { fallbackMessage: '修改失败' }
+);
+
+async function handlePassSubmit() {
+  const valid = await passFormRef.value?.validate().catch(() => false);
+  if (!valid) return;
+  await runPassSubmit();
 }
 
+const { loading: loggingOut, run: runLogout } = useAsyncAction(async () => {
+  await userStore.login_out({ token: userStore.token, guid: userStore.guid });
+  localStorage.removeItem('role');
+  void router.push('/login');
+});
+
 async function handleLogout() {
-  if (loggingOut.value) return;
-  loggingOut.value = true;
-  try {
-    await userStore.login_out({ token: userStore.token, guid: userStore.guid });
-    localStorage.removeItem('role');
-    void router.push('/login');
-  } finally {
-    loggingOut.value = false;
-  }
+  await runLogout();
 }
 
 function resetForm() {

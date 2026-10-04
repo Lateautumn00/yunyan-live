@@ -40,6 +40,7 @@ import { ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import Live from '@/api/backstage';
 import { useCopy } from '@/composables/useCopy';
+import { useAsyncAction } from '@/composables/useAsyncAction';
 
 const props = withDefaults(
   defineProps<{
@@ -54,7 +55,6 @@ const emit = defineEmits<{ updated: [code: string] }>();
 
 const localCode = ref(props.joinCode);
 const entryLink = props.clientLink;
-const updating = ref(false);
 
 watch(
   () => props.joinCode,
@@ -63,21 +63,16 @@ watch(
   }
 );
 
-async function updateCode() {
-  if (updating.value) return;
-  updating.value = true;
-  try {
+const { loading: updating, run: updateCode } = useAsyncAction(
+  async () => {
     const res = await Live.update_code({ roomId: props.roomId });
     const data = res.data as string;
     localCode.value = data;
     emit('updated', data);
     ElMessage.success(res.msg ?? '更新成功');
-  } catch (e) {
-    console.error(e);
-  } finally {
-    updating.value = false;
-  }
-}
+  },
+  { onError: (e) => console.error(e) }
+);
 
 const { copy } = useCopy();
 

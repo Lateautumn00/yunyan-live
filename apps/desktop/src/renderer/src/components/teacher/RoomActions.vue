@@ -244,11 +244,11 @@
 import { computed, ref } from 'vue';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import dayjs from 'dayjs';
-import { extractErrorMessage } from '@yunyan-live/utils';
 import Live from '@/api/backstage';
 import ShareLinks from '@/components/teacher/ShareLinks.vue';
 import CoursewareUpload from '@/components/teacher/CoursewareUpload.vue';
 import { useRoomNavigation } from '@/composables/useRoomNavigation';
+import { useAsyncAction } from '@/composables/useAsyncAction';
 import type { LiveRoom } from '@/types/pages/teacher/live';
 
 const props = withDefaults(
@@ -295,9 +295,6 @@ const editDialogVisible = ref(false);
 const coursewareDialogVisible = ref(false);
 const transferCode = ref('');
 const isHostRoom = ref(false);
-const transferring = ref(false);
-const editing = ref(false);
-const deleting = ref(false);
 const editForm = ref<{
   roomId: string;
   title: string;
@@ -354,25 +351,18 @@ function goLiveRoom(identity: number) {
   nav.goLiveRoom(props.room, identity);
 }
 
-async function submitDelete() {
-  if (deleting.value) return;
-  deleting.value = true;
-  deleteDialogVisible.value = false;
-  try {
+const { loading: deleting, run: submitDelete } = useAsyncAction(
+  async () => {
+    deleteDialogVisible.value = false;
     const res = await Live.live_delete({ roomId: props.room.roomId });
     ElMessage.success(res.msg ?? '删除成功');
     emit('deleted');
-  } catch (e) {
-    console.error(e);
-  } finally {
-    deleting.value = false;
-  }
-}
+  },
+  { onError: (e) => console.error(e) }
+);
 
-async function submitTransfer() {
-  if (transferring.value) return;
-  transferring.value = true;
-  try {
+const { loading: transferring, run: submitTransfer } = useAsyncAction(
+  async () => {
     const res = await Live.execute_transfer({
       roomId: props.room.roomId,
       transferCode: transferCode.value
@@ -380,18 +370,12 @@ async function submitTransfer() {
     ElMessage.success(res.msg ?? '转移成功');
     transferDialogVisible.value = false;
     emit('transferred');
-  } catch (e) {
-    const msg = extractErrorMessage(e, '转移失败');
-    ElMessage.error(msg);
-  } finally {
-    transferring.value = false;
-  }
-}
+  },
+  { fallbackMessage: '转移失败' }
+);
 
-async function submitEdit() {
-  if (editing.value) return;
-  editing.value = true;
-  try {
+const { loading: editing, run: submitEdit } = useAsyncAction(
+  async () => {
     const valid = await editFormRef.value?.validate().catch(() => false);
     if (!valid) return;
 
@@ -405,13 +389,9 @@ async function submitEdit() {
     ElMessage.success('修改成功');
     editDialogVisible.value = false;
     emit('updated');
-  } catch (e) {
-    const msg = extractErrorMessage(e, '修改失败');
-    ElMessage.error(msg);
-  } finally {
-    editing.value = false;
-  }
-}
+  },
+  { fallbackMessage: '修改失败' }
+);
 </script>
 
 <style lang="less" scoped>

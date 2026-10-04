@@ -348,7 +348,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { extractErrorMessage } from '@yunyan-live/utils';
+import { useAsyncAction } from '@/composables/useAsyncAction';
 import { useUserStore } from '@/store/user';
 import api from '@/api';
 import { ElMessage } from 'element-plus';
@@ -369,9 +369,6 @@ const showRegPass = ref(false);
 const showRegRePass = ref(false);
 const showForgotPass = ref(false);
 const showForgotRePass = ref(false);
-const loginLoading = ref(false);
-const registerLoading = ref(false);
-const forgotLoading = ref(false);
 const codeCountdown = ref(0);
 const forgotCountdown = ref(0);
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -558,44 +555,38 @@ async function sendCode() {
   }
 }
 
+const { loading: loginLoading, run: runLogin } = useAsyncAction(async () => {
+  await userStore.login({
+    email: loginForm.email,
+    password: loginForm.password
+  });
+  if (userStore.token) {
+    if (rememberMe.value) {
+      localStorage.setItem('savedEmail', loginForm.email);
+      localStorage.setItem('savedPass', loginForm.password);
+    } else {
+      localStorage.removeItem('savedEmail');
+      localStorage.removeItem('savedPass');
+    }
+    const role = localStorage.getItem('role');
+    if (role === '1') {
+      router.push('/teacher/mylive');
+    } else {
+      router.push('/student/rooms');
+    }
+  } else {
+    ElMessage.error('用户名或密码错误');
+  }
+});
+
 async function handleLogin() {
   const valid = await loginFormRef.value?.validate().catch(() => false);
   if (!valid) return;
-
-  loginLoading.value = true;
-  try {
-    await userStore.login({
-      email: loginForm.email,
-      password: loginForm.password
-    });
-    if (userStore.token) {
-      if (rememberMe.value) {
-        localStorage.setItem('savedEmail', loginForm.email);
-        localStorage.setItem('savedPass', loginForm.password);
-      } else {
-        localStorage.removeItem('savedEmail');
-        localStorage.removeItem('savedPass');
-      }
-      const role = localStorage.getItem('role');
-      if (role === '1') {
-        router.push('/teacher/mylive');
-      } else {
-        router.push('/student/rooms');
-      }
-    } else {
-      ElMessage.error('用户名或密码错误');
-    }
-  } finally {
-    loginLoading.value = false;
-  }
+  await runLogin();
 }
 
-async function handleRegister() {
-  const valid = await registerFormRef.value?.validate().catch(() => false);
-  if (!valid) return;
-
-  registerLoading.value = true;
-  try {
+const { loading: registerLoading, run: runRegister } = useAsyncAction(
+  async () => {
     await api.register({
       email: registerForm.email,
       userName: registerForm.userName,
@@ -606,12 +597,14 @@ async function handleRegister() {
     ElMessage.success('注册成功，请登录');
     activeTab.value = 'login';
     loginForm.email = registerForm.email;
-  } catch (error: unknown) {
-    const msg = extractErrorMessage(error, '注册失败');
-    ElMessage.error(msg);
-  } finally {
-    registerLoading.value = false;
-  }
+  },
+  { fallbackMessage: '注册失败' }
+);
+
+async function handleRegister() {
+  const valid = await registerFormRef.value?.validate().catch(() => false);
+  if (!valid) return;
+  await runRegister();
 }
 
 async function sendForgotCode() {
@@ -635,12 +628,8 @@ async function sendForgotCode() {
   }
 }
 
-async function handleResetPassword() {
-  const valid = await forgotFormRef.value?.validate().catch(() => false);
-  if (!valid) return;
-
-  forgotLoading.value = true;
-  try {
+const { loading: forgotLoading, run: runResetPassword } = useAsyncAction(
+  async () => {
     await api.reset_password({
       email: forgotForm.email,
       code: forgotForm.code,
@@ -649,12 +638,14 @@ async function handleResetPassword() {
     ElMessage.success('密码重置成功，请重新登录');
     activeTab.value = 'login';
     loginForm.email = forgotForm.email;
-  } catch (error: unknown) {
-    const msg = extractErrorMessage(error, '重置失败');
-    ElMessage.error(msg);
-  } finally {
-    forgotLoading.value = false;
-  }
+  },
+  { fallbackMessage: '重置失败' }
+);
+
+async function handleResetPassword() {
+  const valid = await forgotFormRef.value?.validate().catch(() => false);
+  if (!valid) return;
+  await runResetPassword();
 }
 </script>
 
