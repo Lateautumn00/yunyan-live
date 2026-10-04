@@ -56,13 +56,13 @@ describe('createRequestInterceptor', () => {
 });
 
 describe('createResponseInterceptor', () => {
-  it('resolves when code is 1000', () => {
+  it('resolves with the envelope when code is 1000', () => {
     const interceptor = createResponseInterceptor();
     const response = {
       data: { code: 1000, data: { id: 1 } }
     } as AxiosResponse<ApiResult<{ id: number }>>;
 
-    expect(interceptor(response)).toBe(response);
+    expect(interceptor(response)).toEqual({ code: 1000, data: { id: 1 } });
   });
 
   it('rejects and calls onMessageError when code != 1000', async () => {

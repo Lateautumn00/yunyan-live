@@ -1,6 +1,7 @@
 ﻿import axios, {
   AxiosError,
   AxiosInstance,
+  AxiosRequestConfig,
   AxiosResponse,
   InternalAxiosRequestConfig
 } from 'axios';
@@ -9,6 +10,16 @@ import type { ApiResult } from '@yunyan-live/types';
 export interface TokenProvider {
   token: string | null;
   guid?: string | null;
+}
+
+export class ApiError extends Error {
+  readonly apiCode?: number;
+
+  constructor(message: string, apiCode?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.apiCode = apiCode;
+  }
 }
 
 export interface RequestInterceptorOptions {
@@ -34,6 +45,24 @@ export interface HttpClientOptions extends RequestInterceptorOptions, ResponseIn
   onServerError?: (msg: string) => void;
 }
 
+/**
+ * Envelope-typed view of an http client whose response interceptor unwraps to ApiResult.
+ * Methods resolve the `{ code, msg, data }` envelope instead of AxiosResponse.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export type HttpClient = Omit<
+  AxiosInstance,
+  'get' | 'post' | 'put' | 'delete' | 'patch' | 'request'
+> & {
+  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResult<T>>;
+  post<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResult<T>>;
+  put<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResult<T>>;
+  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResult<T>>;
+  patch<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResult<T>>;
+  request<T = any>(config: AxiosRequestConfig): Promise<ApiResult<T>>;
+};
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export function createRequestInterceptor(opts: RequestInterceptorOptions = {}) {
   return (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
     const tokens = opts.tokenProvider?.();
@@ -48,15 +77,13 @@ export function createRequestInterceptor(opts: RequestInterceptorOptions = {}) {
 }
 
 export function createResponseInterceptor(opts: ResponseInterceptorOptions = {}) {
-  return <T = unknown>(
-    response: AxiosResponse<ApiResult<T>>
-  ): AxiosResponse<ApiResult<T>> | Promise<never> => {
+  return (response: AxiosResponse<ApiResult>): ApiResult | Promise<never> => {
     const res = response.data;
     if (res.code !== 1000) {
       opts.onMessageError?.(res.msg || 'Error');
-      return Promise.reject(new Error(res.msg || 'Error'));
+      return Promise.reject(new ApiError(res.msg || 'Error', res.code));
     }
-    return response;
+    return res;
   };
 }
 
@@ -94,7 +121,7 @@ export function createHttpClient(opts: HttpClientOptions): AxiosInstance {
     Promise.reject(error)
   );
   instance.interceptors.response.use(
-    createResponseInterceptor(opts),
+    createResponseInterceptor(opts) as unknown as (response: AxiosResponse) => AxiosResponse,
     createResponseErrorInterceptor(opts)
   );
   return instance;
