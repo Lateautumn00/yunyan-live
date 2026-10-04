@@ -7,7 +7,7 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { grpcCall } from '../common/helpers/grpc.helper';
-import { ChangeStatusDto, CreateCoursewareDto, CreateLiveDto, JoinLiveDto, JwtAuthGuard, UpdateLiveDto, userIdMetadata } from '@yunyan-live/nest-shared';
+import { ChangeStatusDto, CreateCoursewareDto, CreateLiveDto, JoinLiveDto, JwtAuthGuard, normalizePageQuery, toGrpcPage, UpdateLiveDto, userIdMetadata } from '@yunyan-live/nest-shared';
 
 interface LiveResponse {
   code: string;
@@ -311,8 +311,7 @@ export class LiveController implements OnModuleInit {
   async getStudentRooms(@Query('page') page: string, @Query('pageSize') pageSize: string, @Request() req: { user: { userId: string } }) {
     const metadata = userIdMetadata(req.user.userId);
     const result = await grpcCall(this.liveService.getStudentRooms({
-      page: parseInt(page) || 1,
-      page_size: parseInt(pageSize) || 10,
+      ...toGrpcPage(normalizePageQuery({ page, pageSize })),
     }, metadata));
 
     const userIds = result.data.items.map(r => r.live_user_id).filter(Boolean);
@@ -404,8 +403,7 @@ export class LiveController implements OnModuleInit {
   @UseGuards(JwtAuthGuard)
   async getVideoList(@Query('page') page: string, @Query('pageSize') pageSize: string, @Query('searchName') searchName: string, @Query('startTime') startTime: string, @Query('endTime') endTime: string, @Query('type') type: string, @Request() req: { user: { userId: string } }) {
     const result = await grpcCall(this.liveService.getVideoList({
-      page: parseInt(page) || 1,
-      page_size: parseInt(pageSize) || 10,
+      ...toGrpcPage(normalizePageQuery({ page, pageSize })),
       live_user_id: req.user.userId,
       search_name: searchName || '',
       start_time: startTime || '',
@@ -549,8 +547,7 @@ export class LiveController implements OnModuleInit {
   @UseGuards(JwtAuthGuard)
   async getUserWatchTimeList(@Body() body: { pageNum?: number; pageSize?: number; roomId?: string; searchName?: string }) {
     const result = await grpcCall(this.liveService.getUserWatchTimeList({
-      page: body.pageNum || 1,
-      page_size: body.pageSize || 10,
+      ...toGrpcPage(normalizePageQuery({ pageNum: body.pageNum, pageSize: body.pageSize })),
       room_id: body.roomId || "",
       search_name: body.searchName || "",
     }));
