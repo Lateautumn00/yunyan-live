@@ -30,13 +30,52 @@ export interface SystemInfo {
   node: string;
 }
 
-export type UpdateMessage = 'checking' | 'update-available' | 'update-not-available' | 'error';
+export type UpdateMessage =
+  | 'checking'
+  | 'update-available'
+  | 'update-not-available'
+  | 'error'
+  | 'download-progress'
+  | 'update-downloaded';
 
 export type AppMessageLevel = 'info' | 'error' | 'success';
 
 export interface AppMessagePayload {
   level: AppMessageLevel;
   message: string;
+}
+
+export interface RecordingSaveFileArgs {
+  buffer: ArrayBuffer;
+  fileName: string;
+}
+
+export interface RecordingSaveToPathArgs {
+  buffer: ArrayBuffer;
+  filePath: string;
+}
+
+export interface RecordingSaveBlobArgs {
+  buffer: ArrayBuffer;
+  defaultName: string;
+}
+
+export interface RecordingWriteResult {
+  success: boolean;
+  filePath?: string;
+  fileSize?: number;
+  error?: string;
+}
+
+export interface RecordingChoosePathResult {
+  success: boolean;
+  filePath?: string;
+}
+
+export interface RecordingSaveBlobResult {
+  success: boolean;
+  filePath?: string;
+  error?: string;
 }
 
 export interface ElectronApi {
@@ -47,9 +86,9 @@ export interface ElectronApi {
   getSources: () => Promise<DesktopSource[]>;
   clipboardWriteText: (text: string) => void;
   getSystemInfo: () => Promise<SystemInfo>;
-  recordingSaveFile: (data: { buffer: ArrayBuffer; fileName: string }) => Promise<{ success: boolean; filePath?: string; fileSize?: number; error?: string }>;
-  recordingChooseSavePath: (defaultName: string) => Promise<{ success: boolean; filePath?: string }>;
-  recordingSaveToPath: (data: { buffer: ArrayBuffer; filePath: string }) => Promise<{ success: boolean; filePath?: string; fileSize?: number; error?: string }>;
+  recordingSaveFile: (data: RecordingSaveFileArgs) => Promise<RecordingWriteResult>;
+  recordingChooseSavePath: (defaultName: string) => Promise<RecordingChoosePathResult>;
+  recordingSaveToPath: (data: RecordingSaveToPathArgs) => Promise<RecordingWriteResult>;
   recordingGetFileUrl: (filePath: string) => Promise<string>;
-  recordingSaveBlob: (data: { buffer: ArrayBuffer; defaultName: string }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
+  recordingSaveBlob: (data: RecordingSaveBlobArgs) => Promise<RecordingSaveBlobResult>;
 }
