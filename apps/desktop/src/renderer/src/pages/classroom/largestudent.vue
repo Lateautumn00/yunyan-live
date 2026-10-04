@@ -135,9 +135,7 @@
 </template>
 <script lang="ts">
 // @ts-nocheck — TODO: align event-handler types with sub-component emits
-import { defineComponent, ref, onMounted, onBeforeUnmount } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { defineComponent, ref } from 'vue';
 import { uid } from '@yunyan-live/utils';
 import Top from '@/components/ClassRoom/Top.vue';
 import History from '@/components/ClassRoom/History.vue';
@@ -146,12 +144,17 @@ import VideoView from '@/components/ClassRoom/Video.vue';
 import Chat from '@/components/ClassRoom/Chat.vue';
 import Pople from '@/components/ClassRoom/Pople.vue';
 import Apply from '@/components/ClassRoom/Apply.vue';
-import api from '@/api';
-import { ApiError } from '@yunyan-live/http';
 import TabBar from '@/components/ClassRoom/TabBar.vue';
 import HistoryVideoDialog from '@/components/ClassRoom/HistoryVideoDialog.vue';
 import FlexibleLayout from '@/components/ClassRoom/FlexibleLayout.vue';
 import ClassNotification from '@/components/ClassRoom/ClassNotification.vue';
+import { useClassroomNotifications } from '@/composables/useClassroomNotifications';
+import { useClassroomTabs } from '@/composables/useClassroomTabs';
+import { useClassroomHelpers } from '@/composables/useClassroomHelpers';
+import { useClassroomRoom } from '@/composables/useClassroomRoom';
+import { useClassroomDisplay } from '@/composables/useClassroomDisplay';
+import { useClassroomWhiteboard } from '@/composables/useClassroomWhiteboard';
+import { useClassroomStudentHooks } from '@/composables/useClassroomStudentHooks';
 
 export default defineComponent({
   name: 'LargeStudent',
@@ -169,10 +172,6 @@ export default defineComponent({
     ClassNotification,
   },
   setup() {
-    const router = useRouter();
-    const route = useRoute();
-    const roomId = (route.query.roomId as string) || '';
-    const nickName = (route.query.nickName as string) || '';
     const top = ref<InstanceType<typeof Top> | null>(null);
     const video = ref<InstanceType<typeof VideoView> | null>(null);
     const chat = ref<InstanceType<typeof Chat> | null>(null);
@@ -181,297 +180,106 @@ export default defineComponent({
     const history = ref<InstanceType<typeof History> | null>(null);
     const classNotification = ref<InstanceType<typeof ClassNotification> | null>(null);
 
-    const centerDialogVisible = ref(false);
-    const playId = ref('');
-    const playTitle = ref('');
-    const playbackNum = ref(0);
-    const chatNum = ref(0);
-    const max = ref(99);
+    const {
+      activeName,
+      chatNum,
+      max,
+      num,
+      badgeNum: playbackNum,
+      layoutNum,
+      chatVisible,
+      handleClick,
+      updateNum,
+      setLayouts,
+      popleNum
+    } = useClassroomTabs({
+      role: 'student',
+      initialLayoutNum: 3,
+      withVideosPane: false,
+      video,
+      dotTop: top
+    });
+
+    const { router, roomId, nickName, roomInfo, getRoomInfo, videoList } = useClassroomRoom({
+      role: 'student',
+      top,
+      video,
+      chat,
+      updateNum,
+      history
+    });
+
     const userName = ref(nickName);
     const opaqueId = ref(uid());
     const isTeacher = ref(false);
-    const activeName = ref('chat');
-    const layoutNum = ref(3);
-    const chatVisible = ref(true);
-    const isDisplay = ref(true);
-    const roomInfo = ref<{ status: number; [key: string]: unknown }>({ status: 0 });
-    const num = ref(0);
     const isInteraction = ref(0);
     const btn = ref(false);
-    const teacherStage = ref<{ [key: string]: unknown } | null>(null);
-    const wbdata = ref('');
     const liveType = ref('');
     const type = ref('');
-    const dis = ref('');
 
-    function act(data: string) {
-      console.log('1白板实时接收消息', data);
-      if (data !== '|WBDATAEND|') {
-        wbdata.value += data;
-      } else {
-        try {
-          console.log('拼接完成数据字符串');
-          teacherStage.value = JSON.parse(wbdata.value);
-          wbdata.value = '';
-        } catch (_err) {
-          console.error('获取白板数据字符串出错', wbdata.value);
-          wbdata.value = '';
-        }
-      }
-    }
+    const { teacherStage, wbdata, getWhiteBoard, act } = useClassroomWhiteboard({
+      video,
+      chat,
+      roomId,
+      actMode: 'assemble',
+      actLogText: '1白板实时接收消息',
+      actLogData: true
+    });
 
-    function getWhiteBoard(data: Record<string, unknown>) {
-      console.log('白板历史信息', data);
-      teacherStage.value = data;
-    }
+    const { isDisplay, dis, setDisplay, setDisplay2, pall } = useClassroomDisplay({
+      video,
+      rootSelector: '.large-student'
+    });
 
-    function onLiveStarted() {
-      video.value?.retryExists();
-    }
+    const { sendTime, socketClose, setLiveType, setDiaBla, openLive, updatePopleList, setAudioAll } =
+      useClassroomHelpers({
+        top,
+        chat,
+        pople,
+        video,
+        liveType,
+        type,
+        audioTarget: apply,
+        diaBlaSyncsLiveType: true
+      });
 
-    function sendTime(time: string) {
-      top.value?.sendTime(time);
-    }
-
-    function closedPlay() {
-    }
-
-    function palyHistoryVideo(id: string, title: string) {
-      playId.value = id;
-      playTitle.value = title;
-      centerDialogVisible.value = true;
-    }
-
-    function updateNum(status: boolean, numArg: number, typeStr: string) {
-      if (layoutNum.value === 1) top.value?.setIsDotNum(1);
-      if (activeName.value === typeStr) return;
-      if (status) {
-        if (typeStr === 'playback') playbackNum.value += numArg;
-        if (typeStr === 'chat') chatNum.value += numArg;
-      } else {
-        if (numArg === 0) {
-          if (typeStr === 'playback') playbackNum.value = 0;
-          if (typeStr === 'chat') chatNum.value = 0;
-        } else {
-          if (typeStr === 'playback') playbackNum.value -= numArg;
-          if (typeStr === 'chat') chatNum.value -= numArg;
-        }
-      }
-    }
-
-    function lookLive(status: boolean) {
-      video.value?.lookLive(status);
-    }
-
-    function onLookLive(status: boolean, _type: string, liveTimeLen: number) {
-      if (status && btn.value === false) getRoomInfo(false);
-      btn.value = status;
-      top.value?.onLookLive(status);
-      if (!status) {
-        if (_type == 'end' || _type == '') socketClose();
-        stopApplication();
-        if (_type == '') router.push('/');
-        if (_type == 'end') top.value?.endClass(liveTimeLen, num.value);
-      }
-    }
-
-    function isTalking(talkType: number, userType: string) {
-      video.value?.isTalking(talkType, userType);
-    }
-
-    function setHires() {
-      top.value?.setHires();
-    }
-
-    function setDiaBla(status: boolean) {
-      top.value?.setDiaBla(status);
-      setLiveType(liveType.value);
-    }
-
-    function setLiveType(_liveType: string) {
-      liveType.value = _liveType;
-    }
-
-    function openLive(status: boolean, _liveType: string, _type: string, liveTimeLen: number) {
-      if (_liveType !== 'screen') liveType.value = _liveType;
-      type.value = _type;
-      video.value?.openLive(status, _liveType, _type, liveTimeLen);
-    }
+    const {
+      centerDialogVisible,
+      playId,
+      playTitle,
+      onLookLive,
+      onLiveStarted,
+      closedPlay,
+      palyHistoryVideo,
+      setTime,
+      apply: handleApply,
+      application,
+      stopApplication,
+      isTalking,
+      lookLive,
+      setHires,
+      studentMediaStream
+    } = useClassroomStudentHooks({
+      top,
+      video,
+      router,
+      btn,
+      num,
+      isInteraction,
+      socketClose,
+      getRoomInfo,
+      setDiaBla
+    });
 
     function setCameraType(_status: boolean) {
     }
 
-    function studentMediaStream(_stream: MediaStream, _display: string, _id: string) {
-      setDiaBla(false);
-    }
-
-    function stopApplication() {
-      video.value?.stopApplication();
-    }
-
-    function setAudioAll(user: string) {
-      apply.value?.setAudioAll(user);
-    }
-
-    function handleApply(status: boolean, numArg: number) {
-      isInteraction.value = status ? 1 : 0;
-      video.value?.apply(status, numArg);
-    }
-
-    function videoList(status: boolean, data: Record<string, unknown>) {
-      if (status) {
-        history.value?.videoLists(status, data);
-      } else {
-        history.value?.setSplice((data as { index: number }).index);
-      }
-      updateNum(status, 1, 'playback');
-    }
-
-    function application(numArg: number, message: string) {
-      isInteraction.value = numArg;
-      if (message !== '') ElMessage.success(message);
-    }
-
-    async function getRoomInfo(status: boolean, retryCount = 0) {
-      try {
-        const res = await api.show_room_info({ roomId });
-        const data = res.data;
-        roomInfo.value = data;
-        if (data.status == 2) {
-          top.value?.setsTime(data.liveStartedAt || Date.now().toString());
-        }
-        if (status) {
-          if (data.videoList?.length) {
-            const list = data.videoList.reverse();
-            list.forEach((item: Record<string, unknown>) => {
-              videoList(true, item);
-            });
-          }
-          video.value?.setInit();
-          chat.value?.createTutorSocket();
-        }
-      } catch (e) {
-        console.error('getRoomInfo failed:', e);
-        if (e instanceof ApiError) {
-          router.push('/');
-        } else if (retryCount < 1) {
-          setTimeout(() => getRoomInfo(status, retryCount + 1), 2000);
-        } else {
-          ElMessage.error('获取房间信息失败，请检查网络连接');
-          setTimeout(() => router.push('/'), 1500);
-        }
-      }
-    }
-
-    function setTime(typeStr: string) {
-      top.value?.setTime(typeStr);
-    }
-
-    function popleNum(numArg: number) {
-      num.value = numArg;
-    }
-
-    function socketClose() {
-      chat.value?.liveSocketClose();
-    }
-
-    function updatePopleList(poples: unknown[]) {
-      pople.value?.updatePopleList(poples);
-    }
-
-    function handleClick(tab: string) {
-      if (tab === 'people') video.value?.listparticipants();
-      if (tab === 'playback' || tab === 'chat') updateNum(false, 0, tab);
-      activeName.value = tab;
-    }
-
-    function setLayouts(_layoutNum: number) {
-      layoutNum.value = _layoutNum;
-      chatVisible.value = _layoutNum !== 1;
-    }
-
-    function setDisplay2(disStr: string, mouse: string) {
-      if (!isDisplay.value) {
-        setDisplay();
-      }
-      if (mouse === 'over' && dis.value === disStr) return;
-      dis.value = mouse === 'over' ? disStr : '';
-      const el = document.querySelector('.large-student') as HTMLElement | null;
-      if (!el) return;
-      const disChild = el.querySelector(`#${disStr}`)?.firstChild as Node | null;
-      const divChild = el.querySelector('#div5')?.firstChild as Node | null;
-      if (disChild && divChild) {
-        el.querySelector('#div5')?.appendChild(disChild);
-        el.querySelector(`#${disStr}`)?.appendChild(divChild);
-      }
-    }
-
-    function setDisplay() {
-      if (dis.value === 'over') {
-        setDisplay2(dis.value, 'leave');
-      }
-      const el = document.querySelector('.large-student') as HTMLElement | null;
-      if (!el) return;
-      const div1 = el.querySelector('#div1');
-      const div2 = el.querySelector('#div2');
-      const div3 = el.querySelector('#div3');
-      const div4 = el.querySelector('#div4');
-      if (!div1 || !div2 || !div3 || !div4) return;
-      if (isDisplay.value) {
-        div3.before(div2);
-        div4.before(div1);
-      } else {
-        div3.before(div1);
-        div4.before(div2);
-      }
-      isDisplay.value = !isDisplay.value;
-    }
-
-    function pall() {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ele = (video.value as any)?.$refs?.videoPlayer?.$refs?.videoPlayers;
-      if (!ele) return;
-      if (ele.requestFullscreen) {
-        ele.requestFullscreen();
-      } else if (ele.mozRequestFullScreen) {
-        ele.mozRequestFullScreen();
-      } else if (ele.webkitRequestFullScreen) {
-        ele.webkitRequestFullScreen();
-      } else if (ele.msRequestFullscreen) {
-        ele.msRequestFullscreen();
-      } else if (ele.webkitEnterFullScreen || ele.enterFullScreen) {
-        if (ele.webkitEnterFullscreen) ele.webkitEnterFullscreen();
-        if (ele.enterFullScreen) ele.enterFullScreen();
-      }
-    }
-
-    function onParticipantJoin(name: string) {
-      console.log('[LargeStudent] onParticipantJoin:', name);
-      classNotification.value?.add(`${name} 进入直播间`);
-    }
-
-    function onParticipantLeave(name: string) {
-      console.log('[LargeStudent] onParticipantLeave:', name);
-      classNotification.value?.add(`${name} 离开直播间`);
-    }
-
-    function onBroadcastStart() {
-      classNotification.value?.add('开始直播');
-    }
-
-    function onBroadcastStop(status?: string) {
-      classNotification.value?.add(status === 'stop' ? '暂停直播' : '直播已结束');
-    }
-
-    onBeforeUnmount(() => {
-      if (roomId) {
-        void api.leave_room(roomId).catch(() => {});
-      }
-    });
-
-    onMounted(() => {
-      getRoomInfo(true);
-    });
+    const {
+      onParticipantJoin,
+      onParticipantLeave,
+      onBroadcastStart,
+      onBroadcastStop
+    } = useClassroomNotifications(classNotification, '[LargeStudent]');
 
     return {
       roomId, top, video, chat, apply, pople, history,
