@@ -12,6 +12,6 @@ export class LiveParticipant {
   @Column()
   roomId: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   joinedAt: Date;
 }

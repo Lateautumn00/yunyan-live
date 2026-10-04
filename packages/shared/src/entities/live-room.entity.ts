@@ -17,7 +17,7 @@ export class LiveRoom {
   @Column({ type: 'int', default: 1 })
   status: number;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'timestamptz' })
   startTime: Date;
 
   @Column({ type: 'int', default: 60 })
@@ -29,12 +29,15 @@ export class LiveRoom {
   @Column({ type: 'int', default: 0 })
   liveNums: number;
 
-  @CreateDateColumn()
+  @Column({ type: 'timestamptz', nullable: true })
+  liveStartedAt: Date | null;
+
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 
-  @DeleteDateColumn()
+  @DeleteDateColumn({ type: 'timestamptz' })
   deletedAt: Date;
 }
