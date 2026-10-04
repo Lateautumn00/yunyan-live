@@ -5,3 +5,4 @@ export * from './session';
 export * from './dto';
 export * from './guards';
 export * from './http';
+export * from './pagination';
