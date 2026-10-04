@@ -219,6 +219,7 @@ import { ElMessage } from 'element-plus';
 import type { FormInstance, FormRules } from 'element-plus';
 import { useUserStore } from '@/store/user';
 import { isVoid, isCheckedAllRules } from '@yunyan-live/validation';
+import { passwordRules, passwordConfirmRules } from '@/utils/formRules';
 import { useAsyncAction } from '@/composables/useAsyncAction';
 import EquipmentTestPanel from '@/components/LandingPage/EquipmentTestPanel.vue';
 
@@ -270,23 +271,8 @@ const rules: FormRules = {
 
 const passRules: FormRules = {
   oldPassword: [{ required: true, message: '请输入旧密码', trigger: 'blur' }],
-  password: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码至少6位', trigger: 'blur' }
-  ],
-  repassword: [
-    { required: true, message: '请确认密码', trigger: 'blur' },
-    {
-      validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
-        if (value !== passForm.password) {
-          callback(new Error('两次输入密码不一致'));
-        } else {
-          callback();
-        }
-      },
-      trigger: 'blur'
-    }
-  ]
+  password: passwordRules('请输入新密码'),
+  repassword: passwordConfirmRules(() => passForm.password)
 };
 
 function handleMenuSelect(index: string) {

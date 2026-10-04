@@ -353,6 +353,7 @@ import { useUserStore } from '@/store/user';
 import api from '@/api';
 import { ElMessage } from 'element-plus';
 import type { FormInstance, FormRules } from 'element-plus';
+import { emailRules, passwordRules, passwordConfirmRules } from '@/utils/formRules';
 
 const route = useRoute();
 const router = useRouter();
@@ -402,10 +403,7 @@ const forgotForm = reactive({
 });
 
 const loginRules: FormRules = {
-  email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' }
-  ],
+  email: emailRules(),
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 };
 
@@ -414,54 +412,18 @@ const registerRules: FormRules = {
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 2, max: 15, message: '2-15位字符', trigger: 'blur' }
   ],
-  email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' }
-  ],
+  email: emailRules(),
   code: [{ required: true, message: '请输入验证码', trigger: 'blur' }],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 16, message: '6-16位字符', trigger: 'blur' }
-  ],
-  repassword: [
-    { required: true, message: '请确认密码', trigger: 'blur' },
-    {
-      validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
-        if (value !== registerForm.password) {
-          callback(new Error('两次输入密码不一致'));
-        } else {
-          callback();
-        }
-      },
-      trigger: 'blur'
-    }
-  ],
+  password: passwordRules(),
+  repassword: passwordConfirmRules(() => registerForm.password),
   role: [{ required: true, message: '请选择角色', trigger: 'change' }]
 };
 
 const forgotRules: FormRules = {
-  email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' }
-  ],
+  email: emailRules(),
   code: [{ required: true, message: '请输入验证码', trigger: 'blur' }],
-  password: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码至少6位', trigger: 'blur' }
-  ],
-  repassword: [
-    { required: true, message: '请确认密码', trigger: 'blur' },
-    {
-      validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
-        if (value !== forgotForm.password) {
-          callback(new Error('两次输入密码不一致'));
-        } else {
-          callback();
-        }
-      },
-      trigger: 'blur'
-    }
-  ]
+  password: passwordRules('请输入新密码'),
+  repassword: passwordConfirmRules(() => forgotForm.password)
 };
 
 const strengthLevel = computed(() => {
