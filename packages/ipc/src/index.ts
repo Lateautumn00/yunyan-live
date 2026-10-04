@@ -1,13 +1,8 @@
 export const IpcChannels = {
   checkForUpdate: 'app:check-for-update',
   message: 'app:message',
-  openExternal: 'shell:open-external',
   getSources: 'desktop-capturer:get-sources',
   clipboardWrite: 'clipboard:write-text',
-  getSystemInfo: 'app:get-system-info',
-  recordingSaveFile: 'recording:save-file',
-  recordingChooseSavePath: 'recording:choose-save-path',
-  recordingSaveToPath: 'recording:save-to-path',
   recordingGetFileUrl: 'recording:get-file-url',
   recordingSaveBlob: 'recording:save-blob',
 } as const;
@@ -19,15 +14,6 @@ export interface DesktopSource {
   name: string;
   thumbnailDataUrl: string;
   displayId?: string;
-}
-
-export interface SystemInfo {
-  version: string;
-  platform: string;
-  arch: string;
-  electron: string;
-  chrome: string;
-  node: string;
 }
 
 export type UpdateMessage =
@@ -45,31 +31,9 @@ export interface AppMessagePayload {
   message: string;
 }
 
-export interface RecordingSaveFileArgs {
-  buffer: ArrayBuffer;
-  fileName: string;
-}
-
-export interface RecordingSaveToPathArgs {
-  buffer: ArrayBuffer;
-  filePath: string;
-}
-
 export interface RecordingSaveBlobArgs {
   buffer: ArrayBuffer;
   defaultName: string;
-}
-
-export interface RecordingWriteResult {
-  success: boolean;
-  filePath?: string;
-  fileSize?: number;
-  error?: string;
-}
-
-export interface RecordingChoosePathResult {
-  success: boolean;
-  filePath?: string;
 }
 
 export interface RecordingSaveBlobResult {
@@ -80,15 +44,9 @@ export interface RecordingSaveBlobResult {
 
 export interface ElectronApi {
   checkForUpdate: () => void;
-  onUpdateMessage: (callback: (type: UpdateMessage, message?: string) => void) => void;
-  onMessage: (callback: (payload: AppMessagePayload) => void) => void;
-  openExternal: (url: string) => void;
+  onMessage: (callback: (payload: AppMessagePayload) => void) => () => void;
   getSources: () => Promise<DesktopSource[]>;
-  clipboardWriteText: (text: string) => void;
-  getSystemInfo: () => Promise<SystemInfo>;
-  recordingSaveFile: (data: RecordingSaveFileArgs) => Promise<RecordingWriteResult>;
-  recordingChooseSavePath: (defaultName: string) => Promise<RecordingChoosePathResult>;
-  recordingSaveToPath: (data: RecordingSaveToPathArgs) => Promise<RecordingWriteResult>;
+  clipboardWriteText: (text: string) => Promise<void>;
   recordingGetFileUrl: (filePath: string) => Promise<string>;
   recordingSaveBlob: (data: RecordingSaveBlobArgs) => Promise<RecordingSaveBlobResult>;
 }

@@ -1,7 +1,6 @@
-﻿import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, shell } from 'electron';
-import { DesktopSource, IpcChannels, SystemInfo } from '@yunyan-live/ipc';
+﻿import { BrowserWindow, clipboard, desktopCapturer, ipcMain } from 'electron';
+import { DesktopSource, IpcChannels } from '@yunyan-live/ipc';
 import { registerRecordingHandlers } from './recording';
-import { isHttpUrl } from './constants';
 
 type GetWindow = () => BrowserWindow | null;
 
@@ -21,24 +20,6 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
 
   ipcMain.handle(IpcChannels.clipboardWrite, (_event, text: string) => {
     clipboard.writeText(text);
-  });
-
-  ipcMain.handle(IpcChannels.openExternal, (_event, url: string) => {
-    if (isHttpUrl(url)) {
-      return shell.openExternal(url);
-    }
-    return Promise.resolve();
-  });
-
-  ipcMain.handle(IpcChannels.getSystemInfo, (): SystemInfo => {
-    return {
-      version: app.getVersion(),
-      platform: process.platform,
-      arch: process.arch,
-      electron: process.versions.electron ?? '',
-      chrome: process.versions.chrome ?? '',
-      node: process.versions.node ?? ''
-    };
   });
 
   ipcMain.on(IpcChannels.message, (_event, payload: unknown) => {

@@ -43,7 +43,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   Object.assign(window, {
     electronAPI: {
-      openExternal: vi.fn(),
       clipboardWriteText: vi.fn(),
       onMessage: vi.fn(() => () => undefined)
     } as unknown as ElectronApi
