@@ -160,7 +160,6 @@ function handleMessage(client: WebSocket, raw: string) {
         });
         break;
       }
-      case 'over':
       case 'live_started':
         broadcast(roomId, raw);
         break;
