@@ -1,4 +1,12 @@
-import { IsString, IsNotEmpty, IsNumber, IsOptional, MinLength, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsIn,
+  MinLength,
+  MaxLength
+} from 'class-validator';
 import { IsAfterNow } from './validators/is-after-now';
 
 export class CreateLiveDto {
@@ -42,6 +50,22 @@ export class ChangeStatusDto {
   roomId: string;
 
   @IsNumber()
+  status: number;
+}
+
+export class UpdateForbidDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+
+  /** 操作者 liveUserId，网关不消费，仅保持与前端契约一致 */
+  @IsString()
+  @IsOptional()
+  liveUserId?: string;
+
+  /** 0=禁言，1=可发言 */
+  @IsNumber()
+  @IsIn([0, 1])
   status: number;
 }
 

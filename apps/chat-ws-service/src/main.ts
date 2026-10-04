@@ -5,7 +5,14 @@ import { URL } from 'url';
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
 import { WsClose } from '@yunyan-live/types';
-import { requireJwtSecret, subscribeKick, validateSession, verifyToken } from '@yunyan-live/nest-shared';
+import {
+  requireJwtSecret,
+  subscribeForbid,
+  subscribeKick,
+  readForbid,
+  validateSession,
+  verifyToken,
+} from '@yunyan-live/nest-shared';
 
 dotenv.config();
 
@@ -64,6 +71,17 @@ subscribeKick(
   },
 );
 
+// 禁言状态变更（网关 live/push/updateForbid 写入并 publish）→ 广播给房间内所有客户端
+subscribeForbid(
+  redis,
+  (roomId, status) => {
+    broadcast(roomId, JSON.stringify({ type: 'updateForbid', status }));
+  },
+  (err, stage) => {
+    console.error(`[ChatWS] forbid ${stage}:`, err instanceof Error ? err.message : String(err));
+  },
+);
+
 function sendTo(client: WebSocket, data: LiveMessage) {
   if (client.readyState === WebSocket.OPEN) {
     client.send(JSON.stringify(data));
@@ -116,9 +134,11 @@ function handleMessage(client: WebSocket, raw: string) {
         sendTo(client, { type: 'pong' });
         break;
       case 'msg':
-        sendTo(client, {
-          type: 'msg',
-          data: { liveMsg: { liveNums: rooms.get(roomId)?.size ?? 0, forbid: 0 } },
+        void readForbid(redis, roomId).then((forbid) => {
+          sendTo(client, {
+            type: 'msg',
+            data: { liveMsg: { liveNums: rooms.get(roomId)?.size ?? 0, forbid } },
+          });
         });
         break;
       case 'bullet':
@@ -202,9 +222,10 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
   const clientId = registerClient(connection, roomId, userId, nickName, payload.sub, payload.sid);
 
   sendTo(connection, { type: 'pong' });
+  const forbid = await readForbid(redis, roomId);
   sendTo(connection, {
     type: 'msg',
-    data: { liveMsg: { liveNums: rooms.get(roomId)!.size, forbid: 0 } },
+    data: { liveMsg: { liveNums: rooms.get(roomId)!.size, forbid } },
   });
 
   console.log(`[ChatWS] Connected: roomId=${roomId}, userId=${userId}, id=${clientId}`);
