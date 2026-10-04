@@ -157,6 +157,7 @@ import VideoView from '@/components/ClassRoom/Video.vue';
 import Chat from '@/components/ClassRoom/Chat.vue';
 import Pople from '@/components/ClassRoom/Pople.vue';
 import api from '@/api';
+import { ApiError } from '@yunyan-live/http';
 import TabBar from '@/components/ClassRoom/TabBar.vue';
 import VideoList from '@/components/ClassRoom/Small/VideoList.vue';
 import HistoryVideoDialog from '@/components/ClassRoom/HistoryVideoDialog.vue';
@@ -349,30 +350,27 @@ export default defineComponent({
 
     async function getRoomInfo(status: boolean, retryCount = 0) {
       try {
-        const dataMessage = await api.show_room_info({ roomId });
-        const { code, data, msg } = dataMessage.data;
-        if (code === 1000) {
-          roomInfo.value = data;
-          if (data.status == 2) {
-            top.value?.setsTime(data.liveStartedAt || Date.now().toString());
+        const res = await api.show_room_info({ roomId });
+        const data = res.data;
+        roomInfo.value = data;
+        if (data.status == 2) {
+          top.value?.setsTime(data.liveStartedAt || Date.now().toString());
+        }
+        if (status) {
+          if (data.videoList?.length) {
+            const list = data.videoList.reverse();
+            list.forEach((item: Record<string, unknown>) => {
+              videoList(true, item);
+            });
           }
-          if (status) {
-            if (data.videoList?.length) {
-              const list = data.videoList.reverse();
-              list.forEach((item: Record<string, unknown>) => {
-                videoList(true, item);
-              });
-            }
-            video.value?.setInit();
-            chat.value?.createTutorSocket();
-          }
-        } else {
-          ElMessage.error(msg);
-          router.push('/');
+          video.value?.setInit();
+          chat.value?.createTutorSocket();
         }
       } catch (e) {
         console.error('getRoomInfo failed:', e);
-        if (retryCount < 1) {
+        if (e instanceof ApiError) {
+          router.push('/');
+        } else if (retryCount < 1) {
           setTimeout(() => getRoomInfo(status, retryCount + 1), 2000);
         } else {
           ElMessage.error('获取房间信息失败，请检查网络连接');

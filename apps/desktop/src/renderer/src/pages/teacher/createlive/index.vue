@@ -208,7 +208,7 @@ async function LiveCreate() {
       roomId: liveForm.value.roomId,
       duration: liveForm.value.duration ? Number(liveForm.value.duration) : undefined
     });
-    ElMessage.success(res.data.msg ?? '创建成功');
+    ElMessage.success(res.msg ?? '创建成功');
     void router.push({
       path: '/teacher/createlive/detail',
       query: {
@@ -406,9 +406,7 @@ async function getServerTime() {
   let serverTime = '';
   try {
     const res = await api.getNowTime();
-    if (res.data.code === 1000) {
-      serverTime = (res.data.data as { nowTime: string }).nowTime;
-    }
+    serverTime = (res.data as { nowTime: string }).nowTime;
   } catch {
     // ignore
   }

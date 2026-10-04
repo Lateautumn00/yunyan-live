@@ -2129,7 +2129,7 @@ async function importServerCoursewares() {
   });
   if (!res) return;
   const items: Array<{ id: string; filename: string; filext: string; filesize: number; fileUrl: string }> =
-    res.data.data?.list ?? [];
+    res.data?.list ?? [];
 
   // 对账清幽灵：doc 里 fileurl 不在服务端集合的条目 = 已在服务端被删除
   const serverUrls = new Set(items.map(it => it.fileUrl).filter(Boolean));
@@ -2285,7 +2285,7 @@ async function delFile(i: number) {
   if (item.fileurl) {
     try {
       const res = await Live.courseware_list(props.roomId);
-      const list: Array<{ id: string; fileUrl: string }> = res.data.data?.list ?? [];
+      const list: Array<{ id: string; fileUrl: string }> = res.data?.list ?? [];
       const hit = list.find(r => r.fileUrl === item.fileurl);
       if (hit?.id) await Live.delete_courseware(hit.id);
     } catch (e) {

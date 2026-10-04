@@ -19,8 +19,8 @@ const stubs = {
 
 vi.mock('@/api', () => ({
   default: {
-    show_room_info: vi.fn().mockResolvedValue({ data: { code: 1000, data: { status: 0, videoList: [], updateTime: '' }, msg: '' } }),
-    getNowTime: vi.fn().mockResolvedValue({ data: { code: 1000, data: { nowTime: '' }, msg: '' } })
+    show_room_info: vi.fn().mockResolvedValue({ code: 1000, data: { status: 0, videoList: [], updateTime: '' }, msg: '' }),
+    getNowTime: vi.fn().mockResolvedValue({ code: 1000, data: { nowTime: '' }, msg: '' })
   }
 }));
 

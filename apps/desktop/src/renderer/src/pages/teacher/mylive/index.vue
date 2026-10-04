@@ -288,7 +288,7 @@ async function getLiveList() {
       type: type.value === '' ? null : type.value,
       searchName: searchName.value
     });
-    const data = res.data.data as LiveListResult;
+    const data = res.data as LiveListResult;
     tableData.value = data.list;
     total.value = data.total;
   } catch (e) {

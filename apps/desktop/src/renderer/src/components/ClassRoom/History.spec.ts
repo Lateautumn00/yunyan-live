@@ -53,7 +53,7 @@ describe('ClassRoom History.vue', () => {
   });
 
   it('老师点击删除调用接口并触发 delList', async () => {
-    apiBackstageMocks.videoids_delete.mockResolvedValue({ data: { code: 1000 } });
+    apiBackstageMocks.videoids_delete.mockResolvedValue({ code: 1000 });
     const wrapper = mountHistory({ isTeacher: true });
     vmOf(wrapper).videoLists(true, { id: 'v1', duration: 60, createTime: new Date().getTime() });
     await wrapper.vm.$nextTick();

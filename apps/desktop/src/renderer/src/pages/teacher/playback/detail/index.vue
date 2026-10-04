@@ -291,7 +291,7 @@ async function submitDelete() {
   centerDialogVisible.value = false;
   try {
     const res = await Live.videoids_delete({ videoIds: videoIdList.value });
-    ElMessage.success(res.data.msg ?? '删除成功');
+    ElMessage.success(res.msg ?? '删除成功');
     void getVideoDetail();
   } catch (e) {
     console.error(e);
@@ -312,7 +312,7 @@ async function getVideoDetail() {
       startTime,
       endTime
     });
-    const data = res.data.data as VideoDetailResult;
+    const data = res.data as VideoDetailResult;
     console.log('[playback/index] getVideoDetail', data.list?.map(i => ({ id: i.id, recordType: i.recordType, filePath: i.filePath, address: i.address })));
     tableData.value = data.list;
     total.value = data.pageInfo.totalElements;

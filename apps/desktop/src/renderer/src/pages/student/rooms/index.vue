@@ -140,6 +140,7 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/store/user';
 import api from '@/api';
+import { ApiError } from '@yunyan-live/http';
 import { formatDate } from '@yunyan-live/utils';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import SettingsDialog from '@/components/SettingsDialog.vue';
@@ -197,10 +198,8 @@ async function loadRooms() {
       page: params.value.page,
       pageSize: params.value.pageSize
     });
-    if (res.data.code === 1000) {
-      rooms.value = res.data.data.list;
-      total.value = res.data.data.total;
-    }
+    rooms.value = res.data.list;
+    total.value = res.data.total;
   } catch (err) {
     console.error('加载直播间列表失败', err);
   } finally {
@@ -223,11 +222,9 @@ async function handleBatchDelete() {
     });
 
     const roomIds = multipleSelection.value.map(item => item.roomId);
-    const res = await api.batch_leave(roomIds);
-    if (res.data.code === 1000) {
-      ElMessage.success('删除成功');
-      void loadRooms();
-    }
+    await api.batch_leave(roomIds);
+    ElMessage.success('删除成功');
+    void loadRooms();
   } catch {
     // 取消操作
   } finally {
@@ -249,20 +246,17 @@ async function handleJoin() {
 
   joining.value = true;
   try {
-    const res = await api.join_live({
+    await api.join_live({
       joinCode: joinCode.value.trim(),
       nickName: userStore.userInfo.userName
     });
-
-    if (res.data.code === 1000) {
-      ElMessage.success('加入成功');
-      joinCode.value = '';
-      await loadRooms();
-    } else {
-      ElMessage.error(res.data.msg || '加入失败');
+    ElMessage.success('加入成功');
+    joinCode.value = '';
+    await loadRooms();
+  } catch (err) {
+    if (!(err instanceof ApiError)) {
+      ElMessage.error('加入失败，请检查直播码');
     }
-  } catch {
-    ElMessage.error('加入失败，请检查直播码');
   } finally {
     joining.value = false;
   }
@@ -282,16 +276,14 @@ async function enterRoom(room: RoomItem) {
 
     if (role === 'student') {
       try {
-        const res = await api.join_live({
+        await api.join_live({
           joinCode: room.joinCode,
           nickName: userStore.userInfo.userName
         });
-        if (res.data.code !== 1000) {
-          ElMessage.error(res.data.msg || '加入失败');
-          return;
+      } catch (err) {
+        if (!(err instanceof ApiError)) {
+          ElMessage.error('加入失败');
         }
-      } catch {
-        ElMessage.error('加入失败');
         return;
       }
     }
@@ -320,11 +312,9 @@ async function deleteRoom(room: RoomItem) {
       type: 'warning'
     });
 
-    const res = await api.batch_leave([room.roomId]);
-    if (res.data.code === 1000) {
-      ElMessage.success('删除成功');
-      await loadRooms();
-    }
+    await api.batch_leave([room.roomId]);
+    ElMessage.success('删除成功');
+    await loadRooms();
   } catch {
     // 取消操作
   } finally {

@@ -1,4 +1,4 @@
-﻿import { createHttpClient } from '@yunyan-live/http';
+﻿import { createHttpClient, type HttpClient } from '@yunyan-live/http';
 import { loadConfig } from '@yunyan-live/config';
 import { ElMessage } from 'element-plus';
 import { ApiCode, type ApiResult } from '@yunyan-live/types';
@@ -27,4 +27,4 @@ export const http = createHttpClient({
   onServerError: (msg) => {
     ElMessage({ message: msg, type: 'error', duration: 2000 });
   }
-});
+}) as unknown as HttpClient;

@@ -9,9 +9,9 @@ import { useUserStore } from '@/store/user';
 
 vi.mock('@/api', () => ({
   default: {
-    user_logout: () => Promise.resolve({ data: { code: 1000 } }),
-    user_login: () => Promise.resolve({ data: { code: 1000 } }),
-    user_msg: () => Promise.resolve({ data: { code: 1000 } })
+    user_logout: () => Promise.resolve({ code: 1000 }),
+    user_login: () => Promise.resolve({ code: 1000 }),
+    user_msg: () => Promise.resolve({ code: 1000 })
   }
 }));
 

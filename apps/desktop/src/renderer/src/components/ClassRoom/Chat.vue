@@ -283,10 +283,8 @@ async function updateForbid(status: number) {
     status
   };
   try {
-    const res = await api.updateForbid(data);
-    if (res.data.code === 1000) {
-      speechClose.value = status;
-    }
+    await api.updateForbid(data);
+    speechClose.value = status;
   } catch (e) {
     console.error(e);
   } finally {

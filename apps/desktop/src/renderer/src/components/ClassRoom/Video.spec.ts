@@ -229,7 +229,7 @@ describe('ClassRoom Video.vue', () => {
 
   it('onOpenLive 在开播时更新直播状态', async () => {
     const apiMocksResolve = apiMocks.changeLiveStatus.mockResolvedValue({
-      data: { code: 1000 }
+      code: 1000
     });
     const { wrapper } = mountVideo();
     vmOf(wrapper).openLive(true, 'hires', 'open', 0);
@@ -242,7 +242,7 @@ describe('ClassRoom Video.vue', () => {
   });
 
   it('openLive 停止直播时更新状态为4', async () => {
-    apiMocks.changeLiveStatus.mockResolvedValue({ data: { code: 1000 } });
+    apiMocks.changeLiveStatus.mockResolvedValue({ code: 1000 });
     const { wrapper } = mountVideo();
     vmOf(wrapper).openLive(false, 'hires', 'stop', 0);
     await vi.waitFor(() => {
@@ -259,7 +259,7 @@ describe('ClassRoom Video.vue', () => {
 
   it('recording 开始时获取服务器时间', async () => {
     apiMocks.getNowTime.mockResolvedValue({
-      data: { code: 1000, data: { nowTime: '20230101' } }
+      code: 1000, data: { nowTime: '20230101' }
     });
     const { wrapper } = mountVideo();
     await vmOf(wrapper).recording(true, 100);
@@ -319,7 +319,7 @@ describe('ClassRoom Video.vue', () => {
   });
 
   it('开播后显示话筒且默认禁言', async () => {
-    apiMocks.changeLiveStatus.mockResolvedValue({ data: { code: 1000 } });
+    apiMocks.changeLiveStatus.mockResolvedValue({ code: 1000 });
     const { wrapper } = mountVideo();
     vmOf(wrapper).openLive(true, 'hires', 'open', 0);
     await wrapper.vm.$nextTick();
@@ -329,7 +329,7 @@ describe('ClassRoom Video.vue', () => {
   });
 
   it('暂停后隐藏话筒', async () => {
-    apiMocks.changeLiveStatus.mockResolvedValue({ data: { code: 1000 } });
+    apiMocks.changeLiveStatus.mockResolvedValue({ code: 1000 });
     const { wrapper } = mountVideo();
     vmOf(wrapper).openLive(true, 'hires', 'open', 0);
     await wrapper.vm.$nextTick();
@@ -340,7 +340,7 @@ describe('ClassRoom Video.vue', () => {
   });
 
   it('暂停后清除本地摄像头预览', async () => {
-    apiMocks.changeLiveStatus.mockResolvedValue({ data: { code: 1000 } });
+    apiMocks.changeLiveStatus.mockResolvedValue({ code: 1000 });
     const { wrapper } = mountVideo();
     vmOf(wrapper).setInit();
     const initOptions = liveMocks.init.mock.calls[0]?.[0] as {
@@ -370,7 +370,7 @@ describe('ClassRoom Video.vue', () => {
   });
 
   it('暂停后恢复直播重新挂载本地预览', async () => {
-    apiMocks.changeLiveStatus.mockResolvedValue({ data: { code: 1000 } });
+    apiMocks.changeLiveStatus.mockResolvedValue({ code: 1000 });
     const { wrapper } = mountVideo();
     vmOf(wrapper).setInit();
     const initOptions = liveMocks.init.mock.calls[0]?.[0] as {
@@ -403,7 +403,7 @@ describe('ClassRoom Video.vue', () => {
   });
 
   it('未推流学生 stopApplication 不发送 offer', async () => {
-    apiMocks.changeLiveStatus.mockResolvedValue({ data: { code: 1000 } });
+    apiMocks.changeLiveStatus.mockResolvedValue({ code: 1000 });
     const { wrapper } = mountVideo({ isTeacher: false });
     vmOf(wrapper).setInit();
     const initOptions = liveMocks.init.mock.calls[0]?.[0] as {
@@ -419,7 +419,7 @@ describe('ClassRoom Video.vue', () => {
   });
 
   it('推流中学生 stopApplication 发送 stop offer', async () => {
-    apiMocks.changeLiveStatus.mockResolvedValue({ data: { code: 1000 } });
+    apiMocks.changeLiveStatus.mockResolvedValue({ code: 1000 });
     const { wrapper } = mountVideo({ isTeacher: false });
     vmOf(wrapper).setInit();
     const initOptions = liveMocks.init.mock.calls[0]?.[0] as {

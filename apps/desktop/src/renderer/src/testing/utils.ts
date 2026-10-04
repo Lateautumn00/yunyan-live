@@ -18,7 +18,7 @@ export interface MountPageOptions {
 }
 
 export function ok<T>(data: T) {
-  return { data: { code: 1000, msg: undefined, data } };
+  return { code: 1000, msg: undefined, data };
 }
 
 export async function mountPage(

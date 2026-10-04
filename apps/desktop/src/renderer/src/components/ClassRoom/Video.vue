@@ -1816,18 +1816,16 @@ async function savePlayBackUrl() {
   };
   try {
     const res = await api.save_play_back_url(params);
-    if (res.data.code === 1000) {
-      ElMessage.success(res.data.msg);
-      const videoData = { ...res.data.data, address: recordingId.value };
-      videoList(true, videoData);
-      sendData(
-        'public',
-        JSON.stringify({
-          type: 7,
-          data: videoData
-        })
-      );
-    }
+    ElMessage.success(res.msg);
+    const videoData = { ...res.data, address: recordingId.value };
+    videoList(true, videoData);
+    sendData(
+      'public',
+      JSON.stringify({
+        type: 7,
+        data: videoData
+      })
+    );
   } catch (e) {
     console.error(e);
   }
@@ -1899,9 +1897,7 @@ async function getServerTime() {
   let serverTime = '';
   try {
     const req = await api.getNowTime();
-    if (req.data.code === 1000) {
-      serverTime = req.data.data.nowTime;
-    }
+    serverTime = req.data.nowTime;
   } catch (e) {
     console.error(e);
   }

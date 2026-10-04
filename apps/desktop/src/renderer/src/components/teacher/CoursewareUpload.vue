@@ -103,7 +103,7 @@ async function refresh() {
   loadingList.value = true;
   try {
     const res = await Live.courseware_list(props.roomId);
-    items.value = res.data.data?.list ?? [];
+    items.value = res.data?.list ?? [];
   } catch (e) {
     console.error('课件列表加载失败', e);
     ElMessage.error('课件列表加载失败');

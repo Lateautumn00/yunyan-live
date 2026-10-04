@@ -206,7 +206,7 @@ async function deleteClips() {
   });
   try {
     const res = await Live.roomids_delete({ roomIds });
-    ElMessage.success(res.data.msg ?? '删除成功');
+    ElMessage.success(res.msg ?? '删除成功');
     void getVideoList();
   } catch (e) {
     console.error(e);
@@ -267,7 +267,7 @@ async function getVideoList() {
       type: type.value,
       searchName: searchName.value
     });
-    const data = res.data.data as VideoListResult;
+    const data = res.data as VideoListResult;
     tableData.value = data.list;
     total.value = data.pageInfo.totalElements;
   } catch (e) {

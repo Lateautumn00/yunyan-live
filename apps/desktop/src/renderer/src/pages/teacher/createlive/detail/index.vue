@@ -104,7 +104,7 @@ onMounted(() => {
 async function getRoomDetail() {
   try {
     const res = await Live.room_detail(roomId.value);
-    const data = res.data.data as LiveRoom;
+    const data = res.data as LiveRoom;
     roomDetail.value = data;
   } catch (e) {
     console.error(e);

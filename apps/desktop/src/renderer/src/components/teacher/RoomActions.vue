@@ -360,7 +360,7 @@ async function submitDelete() {
   deleteDialogVisible.value = false;
   try {
     const res = await Live.live_delete({ roomId: props.room.roomId });
-    ElMessage.success(res.data.msg ?? '删除成功');
+    ElMessage.success(res.msg ?? '删除成功');
     emit('deleted');
   } catch (e) {
     console.error(e);
@@ -377,7 +377,7 @@ async function submitTransfer() {
       roomId: props.room.roomId,
       transferCode: transferCode.value
     });
-    ElMessage.success(res.data.msg ?? '转移成功');
+    ElMessage.success(res.msg ?? '转移成功');
     transferDialogVisible.value = false;
     emit('transferred');
   } catch (e) {

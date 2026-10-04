@@ -225,7 +225,7 @@ vi.mock('konva', () => ({
 
 vi.mock('axios', () => ({
   default: {
-    post: vi.fn(() => Promise.resolve({ data: { code: 1000, data: { fileUrl: '' } } })),
+    post: vi.fn(() => Promise.resolve({ code: 1000, data: { fileUrl: '' } })),
     get: vi.fn(() => Promise.resolve({})),
   }
 }));
@@ -551,9 +551,9 @@ describe('WhiteBoard.vue PPT 课件', () => {
     // restoreAllMocks 不重置 vi.fn 调用历史，跨用例计数必须显式清理
     vi.clearAllMocks();
     vi.stubEnv('VITE_UPLOAD_PPT_URL', 'http://mock.test/ppt');
-    liveMocks.saveCourseware.mockResolvedValue({ data: { code: 1000, data: null } });
-    liveMocks.coursewareList.mockResolvedValue({ data: { code: 1000, data: { list: [], pageInfo: { totalElements: 0 } } } });
-    liveMocks.deleteCourseware.mockResolvedValue({ data: { code: 1000, data: null } });
+    liveMocks.saveCourseware.mockResolvedValue({ code: 1000, data: null });
+    liveMocks.coursewareList.mockResolvedValue({ code: 1000, data: { list: [], pageInfo: { totalElements: 0 } } });
+    liveMocks.deleteCourseware.mockResolvedValue({ code: 1000, data: null });
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -784,10 +784,8 @@ describe('WhiteBoard.vue PPT 课件', () => {
     );
     // delFile 按 fileurl 回查服务端列表定位记录 id
     liveMocks.coursewareList.mockResolvedValue({
-      data: {
-        code: 1000,
-        data: { list: [{ id: 'cw9', fileUrl: 'http://mock.test/ppt/deck.pdf' }], pageInfo: { totalElements: 1 } },
-      },
+      code: 1000,
+      data: { list: [{ id: 'cw9', fileUrl: 'http://mock.test/ppt/deck.pdf' }], pageInfo: { totalElements: 1 } },
     });
 
     await vm.delFile(0);
@@ -809,10 +807,8 @@ describe('WhiteBoard.vue PPT 课件', () => {
       { timeout: 3000 },
     );
     liveMocks.coursewareList.mockResolvedValue({
-      data: {
-        code: 1000,
-        data: { list: [{ id: 'cw9', fileUrl: 'http://mock.test/ppt/deck.pdf' }], pageInfo: { totalElements: 1 } },
-      },
+      code: 1000,
+      data: { list: [{ id: 'cw9', fileUrl: 'http://mock.test/ppt/deck.pdf' }], pageInfo: { totalElements: 1 } },
     });
     liveMocks.deleteCourseware.mockRejectedValue(new Error('network down'));
 
@@ -856,7 +852,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
 
     // 服务端记录已在「我的直播」对话框中被删除 → 列表为空
     liveMocks.coursewareList.mockResolvedValue({
-      data: { code: 1000, data: { list: [], pageInfo: { totalElements: 0 } } },
+      code: 1000, data: { list: [], pageInfo: { totalElements: 0 } },
     });
 
     await vm.importServerCoursewares();
@@ -1225,23 +1221,21 @@ describe('WhiteBoard.vue 进房导入服务端课件', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv('VITE_UPLOAD_PPT_URL', 'http://mock.test/ppt');
-    liveMocks.saveCourseware.mockResolvedValue({ data: { code: 1000, data: null } });
-    liveMocks.deleteCourseware.mockResolvedValue({ data: { code: 1000, data: null } });
+    liveMocks.saveCourseware.mockResolvedValue({ code: 1000, data: null });
+    liveMocks.deleteCourseware.mockResolvedValue({ code: 1000, data: null });
     liveMocks.coursewareList.mockResolvedValue({
+      code: 1000,
       data: {
-        code: 1000,
-        data: {
-          list: [
-            {
-              id: 'cw1',
-              filename: '课前预习',
-              filext: 'pptx',
-              filesize: 2048,
-              fileUrl: 'http://mock.test/ppt/deck.pdf',
-            },
-          ],
-          pageInfo: { totalElements: 1 },
-        },
+        list: [
+          {
+            id: 'cw1',
+            filename: '课前预习',
+            filext: 'pptx',
+            filesize: 2048,
+            fileUrl: 'http://mock.test/ppt/deck.pdf',
+          },
+        ],
+        pageInfo: { totalElements: 1 },
       },
     });
     vi.mocked(getPdfPageCount).mockResolvedValue(2);

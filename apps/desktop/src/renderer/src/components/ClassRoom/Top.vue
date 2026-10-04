@@ -612,9 +612,7 @@ async function getServerTime() {
   let serverTime = '';
   try {
     const req = await api.getNowTime();
-    if (req.data.code === 1000) {
-      serverTime = req.data.data.nowTime;
-    }
+    serverTime = req.data.nowTime;
   } catch (e) {
     console.error(e);
   }

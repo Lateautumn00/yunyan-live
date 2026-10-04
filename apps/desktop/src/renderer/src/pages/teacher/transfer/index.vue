@@ -66,7 +66,7 @@ async function generateCode() {
   generating.value = true;
   try {
     const res = await Live.generate_transfer_code({ roomId: roomId.value });
-    const data = res.data.data as { transfer_code: string; expires_at: string };
+    const data = res.data as { transfer_code: string; expires_at: string };
     transferCode.value = data.transfer_code;
     expireTime.value = new Date(data.expires_at).toLocaleString();
     ElMessage.success('转移码生成成功');

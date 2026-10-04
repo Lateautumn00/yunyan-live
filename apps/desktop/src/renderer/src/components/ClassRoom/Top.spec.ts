@@ -134,7 +134,7 @@ describe('ClassRoom Top.vue', () => {
 
   it('endClass 拉取结束信息并展示弹窗', async () => {
     apiMocks.liveEndInfo.mockResolvedValue({
-      data: { code: 1000, data: { totalWatchNum: 12 } }
+      code: 1000, data: { totalWatchNum: 12 }
     });
     const { wrapper } = mountTop();
     const vm = vmOf(wrapper);
@@ -149,7 +149,7 @@ describe('ClassRoom Top.vue', () => {
 
   it('setsTime 从服务器时间校准直播时长', async () => {
     apiMocks.getNowTime.mockResolvedValue({
-      data: { code: 1000, data: { nowTime: 2000000 } }
+      code: 1000, data: { nowTime: 2000000 }
     });
     const { wrapper } = mountTop();
     const vm = vmOf(wrapper);

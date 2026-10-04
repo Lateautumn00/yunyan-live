@@ -14,8 +14,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/api', () => ({
   default: {
     user_msg: () => mocks.userMsg(),
-    user_login: () => Promise.resolve({ data: { code: 1000 } }),
-    user_logout: () => Promise.resolve({ data: { code: 1000 } })
+    user_login: () => Promise.resolve({ code: 1000 }),
+    user_logout: () => Promise.resolve({ code: 1000 })
   }
 }));
 

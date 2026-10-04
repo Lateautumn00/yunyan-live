@@ -149,6 +149,7 @@ import Apply from '@/components/ClassRoom/Apply.vue';
 import VideoList from '@/components/ClassRoom/Small/VideoList.vue';
 import Pople from '@/components/ClassRoom/Pople.vue';
 import api from '@/api';
+import { ApiError } from '@yunyan-live/http';
 import WhiteBoard from '@/components/ClassRoom/WhiteBoard.vue';
 import TabBar from '@/components/ClassRoom/TabBar.vue';
 import FlexibleLayout from '@/components/ClassRoom/FlexibleLayout.vue';
@@ -341,22 +342,19 @@ export default defineComponent({
 
     async function getRoomInfo(retryCount = 0) {
       try {
-        const dataMessage = await api.show_room_info({ roomId });
-        const { code, data, msg } = dataMessage.data;
-        if (code === 1000) {
-          roomInfo.value = data;
-          if (data.status == 2) {
-            top.value?.setsTime(data.liveStartedAt || Date.now().toString());
-          }
-          video.value?.setInit();
-          chat.value?.createTutorSocket();
-        } else {
-          ElMessage.error(msg);
-          router.push('/');
+        const res = await api.show_room_info({ roomId });
+        const data = res.data;
+        roomInfo.value = data;
+        if (data.status == 2) {
+          top.value?.setsTime(data.liveStartedAt || Date.now().toString());
         }
+        video.value?.setInit();
+        chat.value?.createTutorSocket();
       } catch (e) {
         console.error('getRoomInfo failed:', e);
-        if (retryCount < 1) {
+        if (e instanceof ApiError) {
+          router.push('/');
+        } else if (retryCount < 1) {
           setTimeout(() => getRoomInfo(retryCount + 1), 2000);
         } else {
           ElMessage.error('获取房间信息失败，请检查网络连接');

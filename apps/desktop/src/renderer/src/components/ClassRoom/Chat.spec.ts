@@ -114,7 +114,7 @@ describe('ClassRoom Chat.vue', () => {
   });
 
   it('sendMes 发送成功后清空输入并上屏', async () => {
-    apiMocks.sendMessage.mockResolvedValue({ data: { code: 1000 } });
+    apiMocks.sendMessage.mockResolvedValue({ code: 1000 });
     const wrapper = mountChat();
     const vm = vmOf(wrapper);
     vm.createTutorSocket();

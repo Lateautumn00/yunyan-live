@@ -113,7 +113,7 @@ async function getWatchList() {
       pageSize: params.value.pageSize,
       roomId: route.query.roomId,
     });
-    const data = res.data.data as WatchListResult;
+    const data = res.data as WatchListResult;
     tableData.value = data.list;
     total.value = data.pageInfo.totalElements;
   } catch (e) {

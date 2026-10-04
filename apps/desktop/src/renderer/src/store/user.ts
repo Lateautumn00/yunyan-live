@@ -80,17 +80,12 @@ export const useUserStore = defineStore('user', {
     async login(params: { email: string; password: string }) {
       try {
         const res = await api.user_login(params);
-        if (res.data.code === 1000) {
-          const { token, guid, role } = res.data.data;
-          this.setToken(token);
-          this.setGuid(guid);
-          this.setUserInfo(res.data.data);
-          localStorage.setItem('role', String(role));
-          await this.user_msg();
-        } else {
-          this.delToken();
-          this.delGuid();
-        }
+        const { token, guid, role } = res.data;
+        this.setToken(token);
+        this.setGuid(guid);
+        this.setUserInfo(res.data);
+        localStorage.setItem('role', String(role));
+        await this.user_msg();
       } catch (err) {
         this.delToken();
         this.delGuid();
@@ -99,14 +94,12 @@ export const useUserStore = defineStore('user', {
     },
     async login_out(params: { token: string; guid: string }) {
       try {
-        const res = await api.user_logout(params);
-        if (res.data.code === 1000) {
-          this.delToken();
-          this.delGuid();
-          localStorage.removeItem('role');
-          if (localStorage.getItem('popup')) {
-            localStorage.removeItem('popup');
-          }
+        await api.user_logout(params);
+        this.delToken();
+        this.delGuid();
+        localStorage.removeItem('role');
+        if (localStorage.getItem('popup')) {
+          localStorage.removeItem('popup');
         }
       } catch (err) {
         this.delToken();
@@ -118,14 +111,10 @@ export const useUserStore = defineStore('user', {
     async user_msg() {
       try {
         const res = await api.user_msg();
-        if (res.data.code === 1000) {
-          const { token, guid } = res.data.data;
-          this.setToken(token);
-          this.setGuid(guid);
-          this.setUserInfo(res.data.data);
-        } else {
-          this.delToken();
-        }
+        const { token, guid } = res.data;
+        this.setToken(token);
+        this.setGuid(guid);
+        this.setUserInfo(res.data);
       } catch (err) {
         this.delToken();
         console.log('loginErr===>', err);
