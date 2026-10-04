@@ -132,10 +132,10 @@
               </el-icon><span>白板模式</span>
             </li>
             <li
-              :class="layoutNum === 3 ? 'not' : ''"
+              :class="layoutNum === 3 || layoutNum === 2 ? 'not' : ''"
               @click="setLayout(3)"
             >
-              <el-icon :class="layoutNum === 3 ? 'click-btn' : ''">
+              <el-icon :class="layoutNum === 3 || layoutNum === 2 ? 'click-btn' : ''">
                 <Platform />
               </el-icon><span>默认模式</span>
             </li>
