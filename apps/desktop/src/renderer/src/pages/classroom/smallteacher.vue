@@ -145,6 +145,7 @@ import VideoView from '@/components/ClassRoom/Video.vue';
 import Chat from '@/components/ClassRoom/Chat.vue';
 import Apply from '@/components/ClassRoom/Apply.vue';
 import VideoList from '@/components/ClassRoom/Small/VideoList.vue';
+import VideoPlayer from '@/components/ClassRoom/VideoPlayer.vue';
 import Pople from '@/components/ClassRoom/Pople.vue';
 import WhiteBoard from '@/components/ClassRoom/WhiteBoard.vue';
 import TabBar from '@/components/ClassRoom/TabBar.vue';
@@ -168,6 +169,7 @@ export default defineComponent({
     Pople,
     WhiteBoard,
     VideoList,
+    VideoPlayer,
     TabBar,
     FlexibleLayout,
     ClassNotification,

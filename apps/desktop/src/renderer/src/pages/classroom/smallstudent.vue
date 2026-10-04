@@ -157,6 +157,7 @@ import Pople from '@/components/ClassRoom/Pople.vue';
 import TabBar from '@/components/ClassRoom/TabBar.vue';
 import VideoList from '@/components/ClassRoom/Small/VideoList.vue';
 import HistoryVideoDialog from '@/components/ClassRoom/HistoryVideoDialog.vue';
+import VideoPlayer from '@/components/ClassRoom/VideoPlayer.vue';
 import FlexibleLayout from '@/components/ClassRoom/FlexibleLayout.vue';
 import ClassNotification from '@/components/ClassRoom/ClassNotification.vue';
 import { useClassroomNotifications } from '@/composables/useClassroomNotifications';
@@ -179,6 +180,7 @@ export default defineComponent({
     VideoList,
     TabBar,
     HistoryVideoDialog,
+    VideoPlayer,
     FlexibleLayout,
     ClassNotification,
   },
