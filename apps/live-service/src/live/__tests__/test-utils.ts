@@ -1,7 +1,6 @@
 import { expect, vi } from 'vitest';
 import { status as GrpcStatus } from '@grpc/grpc-js';
 import { RpcException } from '@nestjs/microservices';
-import { JanusService } from '../../janus/janus.service';
 import { LiveService } from '../live.service';
 
 export type QbResults = {
@@ -17,7 +16,9 @@ const CHAIN_METHODS = [
   'andWhere',
   'orderBy',
   'groupBy',
-  'innerJoin'
+  'innerJoin',
+  'skip',
+  'take'
 ] as const;
 
 type Mock = ReturnType<typeof vi.fn>;
@@ -33,6 +34,7 @@ export type QueryRunnerMock = {
   manager: ManagerMock;
 };
 export type RepoMock = { qb: MockQb; repo: Record<string, Mock> };
+export type JanusMock = { createRoom: Mock; destroyRoom: Mock };
 export type DataSourceMock = {
   manager: ManagerMock;
   queryRunner: QueryRunnerMock;
@@ -63,7 +65,10 @@ export function mockRepo(results: QbResults = {}): RepoMock {
     create: vi.fn((input: unknown) => input),
     save: vi.fn((input: unknown) => Promise.resolve(input)),
     update: vi.fn().mockResolvedValue(undefined),
-    delete: vi.fn().mockResolvedValue({ affected: 0 })
+    delete: vi.fn().mockResolvedValue({ affected: 0 }),
+    softDelete: vi.fn().mockResolvedValue(undefined),
+    findByIds: vi.fn().mockResolvedValue([]),
+    remove: vi.fn((input: unknown) => Promise.resolve(input))
   };
   return { qb, repo };
 }
@@ -93,6 +98,7 @@ export type LiveServiceHarness = {
   video: RepoMock;
   watchTime: RepoMock;
   courseware: RepoMock;
+  janus: JanusMock;
   manager: ManagerMock;
   queryRunner: QueryRunnerMock;
   dataSource: { createQueryRunner: Mock };
@@ -105,6 +111,7 @@ export function createLiveService(opts: {
   video?: RepoMock;
   watchTime?: RepoMock;
   courseware?: RepoMock;
+  janus?: JanusMock;
   database?: DataSourceMock;
 } = {}): LiveServiceHarness {
   const room = opts.room ?? mockRepo();
@@ -113,6 +120,7 @@ export function createLiveService(opts: {
   const video = opts.video ?? mockRepo();
   const watchTime = opts.watchTime ?? mockRepo();
   const courseware = opts.courseware ?? mockRepo();
+  const janus = opts.janus ?? { createRoom: vi.fn(), destroyRoom: vi.fn() };
   const database = opts.database ?? mockDataSource();
   const service = new LiveService(
     room.repo as never,
@@ -122,9 +130,9 @@ export function createLiveService(opts: {
     watchTime.repo as never,
     courseware.repo as never,
     database.dataSource as never,
-    new JanusService()
+    janus as never
   );
-  return { service, room, participant, transfer, video, watchTime, courseware, ...database };
+  return { service, room, participant, transfer, video, watchTime, courseware, janus, ...database };
 }
 
 export async function expectGrpcError(
