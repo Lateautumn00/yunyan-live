@@ -6,13 +6,11 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import Top from '@/components/ClassRoom/Top.vue';
 
 const apiMocks = vi.hoisted(() => ({
-  liveEndInfo: vi.fn(),
   getNowTime: vi.fn()
 }));
 
 vi.mock('@/api', () => ({
   default: {
-    live_end_info: (params: unknown) => apiMocks.liveEndInfo(params),
     getNowTime: () => apiMocks.getNowTime()
   }
 }));
@@ -58,7 +56,7 @@ function vmOf(wrapper: ReturnType<typeof mount>) {
     setIsDotNum: (num: number) => void;
     sendTime: (time: number) => void;
     onLookLive: (status: boolean) => Promise<void>;
-    endClass: (liveTimeLen: number) => Promise<void>;
+    endClass: (liveTimeLen: number, participantCount: number) => Promise<void>;
     setDiaBla: (status: boolean) => void;
     onOpenLive: (status: boolean, liveType: string, type: string) => void;
     setHires: () => void;
@@ -67,12 +65,12 @@ function vmOf(wrapper: ReturnType<typeof mount>) {
     setRecord: (status: boolean) => void;
     setLayout: (num: number) => void;
     openLives: (status: boolean, liveType: string, type: string) => void;
+    layoutNum: number;
   };
 }
 
 describe('ClassRoom Top.vue', () => {
   beforeEach(() => {
-    apiMocks.liveEndInfo.mockReset();
     apiMocks.getNowTime.mockReset();
     electronMocks.clipboardWriteText.mockReset();
     Object.assign(window, {
@@ -132,19 +130,14 @@ describe('ClassRoom Top.vue', () => {
     expect(electronMocks.clipboardWriteText).toHaveBeenCalledWith('CODE123');
   });
 
-  it('endClass 拉取结束信息并展示弹窗', async () => {
-    apiMocks.liveEndInfo.mockResolvedValue({
-      code: 1000, data: { totalWatchNum: 12 }
-    });
+  it('endClass 展示结束弹窗、时长与观看人次', async () => {
     const { wrapper } = mountTop();
     const vm = vmOf(wrapper);
-    await vm.endClass(125);
-    expect(apiMocks.liveEndInfo).toHaveBeenCalledWith({
-      params: { roomId: 'r1' }
-    });
+    await vm.endClass(125, 12);
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain('直播已结束');
-    expect(wrapper.text()).toContain('12');
+    const cons = wrapper.findAll('.visible1 .con');
+    expect(cons.map((c) => c.text())).toEqual(["02'05\"", '12']);
   });
 
   it('setsTime 从服务器时间校准直播时长', async () => {
@@ -186,14 +179,13 @@ describe('ClassRoom Top.vue', () => {
     expect(wrapper.text()).toContain('录制');
   });
 
-  it('小班课默认布局为全员互动模式', async () => {
+  it('小班课默认布局编号为 2 并可切到白板模式', async () => {
     const { wrapper } = mountTop({ isSmall: true, btn: true, liveType: 'hires' });
     const vm = vmOf(wrapper);
-    vm.setLayout(2);
+    expect(vm.layoutNum).toBe(2);
+    vm.setLayout(1);
     await wrapper.vm.$nextTick();
-    expect(wrapper.text()).toContain('默认模式');
-    const layoutIcons = wrapper.findAll('.layout .el-icon');
-    expect(layoutIcons.length).toBeGreaterThan(0);
+    expect(wrapper.emitted('setLayouts')?.[0]).toEqual([1]);
   });
 
   it('小班课学生互动时可共享桌面', () => {

@@ -48,7 +48,6 @@ describe('创建直播详情 createlive/detail/index.vue', () => {
     const { wrapper } = await mountPage();
     expect(wrapper.text()).toContain('直播概况');
     expect(wrapper.text()).toContain('数学课');
-    expect(wrapper.text()).toContain('张老师');
     expect(wrapper.text()).toContain('小班教学');
     expect(wrapper.text()).toContain(formatDate(1600000000000));
     expect(wrapper.text()).toContain('60min');

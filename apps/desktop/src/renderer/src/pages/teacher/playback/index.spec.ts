@@ -1,5 +1,6 @@
 ﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, type VueWrapper } from '@vue/test-utils';
+import { ElMessageBox } from 'element-plus';
 import type { ElectronApi } from '@yunyan-live/ipc';
 import { formatDate } from '@yunyan-live/utils';
 import { ok, mountPage as mountSharedPage } from '@/testing/utils';
@@ -70,7 +71,6 @@ describe('回放管理 playback/index.vue', () => {
   it('渲染列表并映射直播类型与录制时间', async () => {
     const { wrapper } = await mountPage();
     expect(wrapper.text()).toContain('数学课');
-    expect(wrapper.text()).toContain('张老师');
     expect(wrapper.text()).toContain('小班教学');
     expect(wrapper.text()).toContain(formatDate(1600000000000));
   });
@@ -91,18 +91,25 @@ describe('回放管理 playback/index.vue', () => {
     expect(router.currentRoute.value.query).toEqual({ roomId: 'R1', name: '数学课' });
   });
 
-  it('批量删除调用 roomids_delete 并刷新', async () => {
-    const { wrapper } = await mountPage();
-    vm(wrapper).handleSelectionChange([room, { ...room, roomId: 'R2' }]);
-    await flushPromises();
-    const buttons = wrapper.findAll('button');
-    const deleteBtn = buttons.find((b) => b.text().includes('批量删除'))!;
-    await deleteBtn.trigger('click');
-    await flushPromises();
-    expect(mocks.roomIdsDelete).toHaveBeenCalledWith({
-      data: { roomIds: ['R1', 'R2'] }
-    });
-    expect(document.body.textContent).toContain('删除成功');
+  it('批量删除确认后调用 roomids_delete 并刷新', async () => {
+    // ElMessageBox 是可调用对象，直接 spy 其 confirm 属性会走函数重载，需先收窄为普通对象类型
+    const boxed = ElMessageBox as unknown as { confirm: (message?: string) => Promise<unknown> };
+    const confirmSpy = vi.spyOn(boxed, 'confirm').mockResolvedValue('confirm');
+    try {
+      const { wrapper } = await mountPage();
+      vm(wrapper).handleSelectionChange([room, { ...room, roomId: 'R2' }]);
+      await flushPromises();
+      const buttons = wrapper.findAll('button');
+      const deleteBtn = buttons.find((b) => b.text().includes('批量删除'))!;
+      await deleteBtn.trigger('click');
+      await flushPromises();
+      expect(mocks.roomIdsDelete).toHaveBeenCalledWith({
+        roomIds: ['R1', 'R2']
+      });
+      expect(document.body.textContent).toContain('删除成功');
+    } finally {
+      confirmSpy.mockRestore();
+    }
   });
 
   it('未选择时批量删除按钮禁用', async () => {

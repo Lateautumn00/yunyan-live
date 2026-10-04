@@ -5,7 +5,6 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import Chat from '@/components/ClassRoom/Chat.vue';
 
 const apiMocks = vi.hoisted(() => ({
-  sendMessage: vi.fn(),
   updateForbid: vi.fn()
 }));
 
@@ -15,7 +14,6 @@ const storeMocks = vi.hoisted(() => ({
 
 vi.mock('@/api', () => ({
   default: {
-    sendMessage: (id: string, params: unknown) => apiMocks.sendMessage(id, params),
     updateForbid: (params: unknown) => apiMocks.updateForbid(params)
   },
   config: {
@@ -63,7 +61,6 @@ function vmOf(wrapper: ReturnType<typeof mount>) {
     createTutorSocket: () => void;
     setSocketSend: (data: string) => void;
     liveSocketClose: (e?: Event) => void;
-    over: (msg: string) => void;
     sendContent: string;
   };
 }
@@ -74,7 +71,6 @@ function closeEventWith(code: number): Event {
 
 describe('ClassRoom Chat.vue', () => {
   beforeEach(() => {
-    apiMocks.sendMessage.mockReset();
     apiMocks.updateForbid.mockReset();
     storeMocks.sessionInterrupted.mockReset();
     MockWebSocket.instances = [];
@@ -113,8 +109,7 @@ describe('ClassRoom Chat.vue', () => {
     expect(ws!.sent[0]).toContain('getwhiteBoard');
   });
 
-  it('sendMes 发送成功后清空输入并上屏', async () => {
-    apiMocks.sendMessage.mockResolvedValue({ code: 1000 });
+  it('sendMes 经 WebSocket 发送弹幕并清空输入', async () => {
     const wrapper = mountChat();
     const vm = vmOf(wrapper);
     vm.createTutorSocket();
@@ -126,8 +121,9 @@ describe('ClassRoom Chat.vue', () => {
     const sendOk = wrapper.findAll('[aria-label="发送"]')[0];
     await sendOk!.trigger('click');
     await flushPromises();
-    expect(apiMocks.sendMessage).toHaveBeenCalledWith('u1', expect.objectContaining({ type: 'bullet' }));
-    expect(wrapper.text()).toContain('大家好');
+    const last = ws.sent.at(-1)!;
+    expect(last).toContain('"type":"bullet"');
+    expect(last).toContain('大家好');
     expect(vm.sendContent).toBe('');
   });
 
@@ -157,14 +153,6 @@ describe('ClassRoom Chat.vue', () => {
     await wrapper.vm.$nextTick();
     const input = wrapper.find('input');
     expect(input.attributes('disabled')).toBeDefined();
-  });
-
-  it('over 发送直播结束消息', async () => {
-    const wrapper = mount(Chat, { props: baseProps(), global: { plugins: [ElementPlus] } });
-    vmOf(wrapper).createTutorSocket();
-    const ws = MockWebSocket.instances[0]!;
-    vmOf(wrapper).over('下课');
-    expect(ws.sent.at(-1)).toContain('"type": "over"');
   });
 
   it('关闭码 4002 触发被踢处理并停止重连', async () => {

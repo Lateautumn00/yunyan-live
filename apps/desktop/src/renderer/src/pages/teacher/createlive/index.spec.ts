@@ -55,6 +55,9 @@ vi.mock('@/vendor/live/live', () => {
     static init(opts: { debug: string; callback: () => void }) {
       vendorState.initCb = opts.callback;
     }
+    static useDefaultDependencies(): Record<string, unknown> {
+      return {};
+    }
     constructor(opts: { success: () => void; error: (e: unknown) => void }) {
       vendorState.ctorOpts = opts;
     }
@@ -72,7 +75,6 @@ vi.mock('@/vendor/live/live', () => {
 interface CreateVm {
   liveForm: {
     title: string;
-    speakerName: string;
     startTime: string | Date | null;
     type: number;
     roomId: string;
@@ -84,9 +86,9 @@ interface CreateVm {
     value: string,
     callback: (error?: Error) => void
   ) => void;
-  validateName: (
+  validateDuration: (
     rule: unknown,
-    value: string,
+    value: number,
     callback: (error?: Error) => void
   ) => void;
 }
@@ -132,7 +134,7 @@ describe('创建直播 createlive/index.vue', () => {
     expect(big.classes()).toContain('checked');
   });
 
-  it('校验器拒绝空直播名称并接受合法名称', async () => {
+  it('校验器拒绝空直播名称、空时长并接受合法值', async () => {
     const { wrapper } = await mountPage();
     const c = vm(wrapper);
     const errCb = vi.fn();
@@ -142,9 +144,13 @@ describe('创建直播 createlive/index.vue', () => {
     const okCb = vi.fn();
     c.validateTitle({}, '数学课', okCb);
     expect(okCb).toHaveBeenCalledWith();
-    const nameErrCb = vi.fn();
-    c.validateName({}, '', nameErrCb);
-    expect((nameErrCb.mock.calls[0]![0] as Error).message).toBe('请输入主讲人名称');
+    const durErrCb = vi.fn();
+    c.validateDuration({}, 0, durErrCb);
+    expect(durErrCb).toHaveBeenCalledTimes(1);
+    expect((durErrCb.mock.calls[0]![0] as Error).message).toBe('请输入直播时长');
+    const durOkCb = vi.fn();
+    c.validateDuration({}, 60, durOkCb);
+    expect(durOkCb).toHaveBeenCalledWith();
   });
 
   it('填写表单后创建 Janus 房间与白板并跳转详情', async () => {
@@ -160,8 +166,7 @@ describe('创建直播 createlive/index.vue', () => {
     await flushPromises();
 
     vm(wrapper).liveForm.title = '数学课';
-    vm(wrapper).liveForm.speakerName = '张老师';
-    vm(wrapper).liveForm.startTime = new Date(1600000000000);
+    vm(wrapper).liveForm.startTime = new Date(Date.now() + 3600_000);
     vm(wrapper).liveForm.duration = 60;
     await flushPromises();
 
@@ -190,7 +195,6 @@ describe('创建直播 createlive/index.vue', () => {
     expect(apiMocks.createLive).toHaveBeenCalledWith(
       expect.objectContaining({
         title: '数学课',
-        speakerName: '张老师',
         type: 0,
         roomId: expect.stringMatching(/^1600000000\d{2}$/)
       })
