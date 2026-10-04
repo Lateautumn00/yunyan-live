@@ -6,7 +6,8 @@
     "dev": "pnpm --filter @yunyan-live/nest-shared build && pnpm --filter @yunyan-live/shared build && nest start --watch",
     "build": "nest build",
     "start": "node dist/main",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
@@ -27,7 +28,8 @@
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
     "@types/node": "^22.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   },
   "license": "MIT"
 }
