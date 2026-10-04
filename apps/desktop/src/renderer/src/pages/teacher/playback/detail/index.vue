@@ -76,14 +76,14 @@
         >
           <template #default="scope">
             <el-button
-              type="text"
+              text
               size="small"
               @click="playClick(scope.row as VideoItem)"
             >
               播放
             </el-button>
             <el-button
-              type="text"
+              text
               size="small"
               :loading="downloading"
               @click="downloadClick(scope.row as VideoItem)"

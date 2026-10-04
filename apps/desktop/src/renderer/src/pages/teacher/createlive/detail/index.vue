@@ -176,10 +176,6 @@ function dateFormatter(startTime: string): string {
   grid-area: title;
 }
 
-.speaker {
-  grid-area: speaker;
-}
-
 .time {
   grid-area: time;
 
@@ -203,7 +199,6 @@ function dateFormatter(startTime: string): string {
 }
 
 .title,
-.speaker,
 .time,
 .type {
   min-width: 334px;

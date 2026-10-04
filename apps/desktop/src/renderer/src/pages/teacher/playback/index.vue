@@ -115,7 +115,7 @@
         >
           <template #default="scope">
             <el-button
-              type="text"
+              text
               size="small"
               @click="handleClick(scope.row as LiveRoom)"
             >
@@ -163,7 +163,6 @@ const router = useRouter();
 const activeKey = '3';
 const timerange = ref<DatePickerProps['modelValue']>([]);
 const searchName = ref('');
-const status = ref<number | null>(null);
 const type = ref<number | ''>('');
 const typeOptions = ref([
   { value: 0, label: '小班教学' },
@@ -194,7 +193,6 @@ const {
       pageSize: query.pageSize,
       startTime,
       endTime,
-      status: status.value,
       type: type.value,
       searchName: searchName.value
     });
