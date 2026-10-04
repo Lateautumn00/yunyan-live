@@ -6,6 +6,7 @@ import ElementPlus from 'element-plus';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import RoomActions from '@/components/teacher/RoomActions.vue';
 import { useUserStore } from '@/store/user';
+import { ok } from '@/testing/utils';
 import type { LiveRoom } from '@/types/pages/teacher/live';
 
 const mocks = vi.hoisted(() => ({
@@ -29,10 +30,6 @@ vi.mock('@/api/backstage', () => ({
     delete_courseware: (params: unknown) => mocks.deleteCourseware(params)
   }
 }));
-
-function ok<T>(data: T) {
-  return { data: { code: 1000, msg: undefined, data } };
-}
 
 const room: LiveRoom = {
   roomId: 'R1',
@@ -108,8 +105,6 @@ function emitted(wrapper: VueWrapper, name: string) {
 }
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.clearAllMocks();
   mocks.liveDelete.mockResolvedValue(ok(null));
   mocks.updateLive.mockResolvedValue(ok(null));
   mocks.executeTransfer.mockResolvedValue(ok(null));

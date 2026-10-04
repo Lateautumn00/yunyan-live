@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
-import { createMemoryHistory, createRouter } from 'vue-router';
-import { createPinia } from 'pinia';
-import ElementPlus from 'element-plus';
+import { ok, mountPage as mountSharedPage } from '@/testing/utils';
 import StudentRooms from '@/pages/student/rooms/index.vue';
 
 const mocks = vi.hoisted(() => ({
@@ -24,10 +21,6 @@ vi.mock('@/components/SettingsDialog.vue', () => ({
   }
 }));
 
-function ok<T>(data: T) {
-  return { data: { code: 1000, msg: undefined, data } };
-}
-
 const room = {
   id: '1',
   roomId: 'R1',
@@ -41,32 +34,20 @@ const room = {
   joinedAt: ''
 };
 
-async function mountPage() {
-  const pinia = createPinia();
-  const router = createRouter({
-    history: createMemoryHistory(),
+function mountPage() {
+  return mountSharedPage(StudentRooms, {
     routes: [
       { path: '/', component: { template: '<div class="route-home" />' } },
       { path: '/classroom/smallstudent', component: { template: '<div />' } },
       { path: '/classroom/largestudent', component: { template: '<div />' } },
       { path: '/classroom/smallteacher', component: { template: '<div />' } },
       { path: '/classroom/largeteacher', component: { template: '<div />' } }
-    ]
+    ],
+    initialRoute: '/'
   });
-  await router.push('/');
-  await router.isReady();
-  const wrapper: VueWrapper = mount(StudentRooms, {
-    global: {
-      plugins: [pinia, router, ElementPlus]
-    }
-  });
-  await flushPromises();
-  return { wrapper };
 }
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.clearAllMocks();
   mocks.studentRooms.mockResolvedValue(ok({ list: [room], total: 1 }));
 });
 

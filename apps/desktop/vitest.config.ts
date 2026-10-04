@@ -12,6 +12,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: ['src/renderer/**/*.spec.ts']
+    include: ['src/renderer/**/*.spec.ts'],
+    setupFiles: [resolve('src/renderer/src/testing/setup.ts')]
   }
 });

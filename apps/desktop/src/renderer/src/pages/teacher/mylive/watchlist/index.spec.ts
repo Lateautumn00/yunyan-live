@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPromises, mount } from '@vue/test-utils';
-import { createMemoryHistory, createRouter } from 'vue-router';
-import { createPinia } from 'pinia';
-import ElementPlus from 'element-plus';
-import * as ElementPlusIconsVue from '@element-plus/icons-vue';
+import { flushPromises } from '@vue/test-utils';
+import { ok, mountPage as mountSharedPage } from '@/testing/utils';
 import Watchlist from '@/pages/teacher/mylive/watchlist/index.vue';
 import type { WatchItem } from '@/types/pages/teacher/live';
 
@@ -24,39 +21,19 @@ vi.mock('@/layouts/sidebar.vue', () => ({
   }
 }));
 
-function ok<T>(data: T) {
-  return { data: { code: 1000, msg: 'ok', data } };
-}
-
 const items: WatchItem[] = [
   { userId: 'u1', nickName: '小明', watchTime: 300, joinedAt: '2026-09-01T10:00:00.000Z', leftAt: '2026-09-01T10:05:00.000Z' },
   { userId: 'u2', nickName: '小红', watchTime: 600, joinedAt: '2026-09-01T10:00:00.000Z', leftAt: '2026-09-01T10:10:00.000Z' }
 ];
 
-async function mountPage() {
-  const pinia = createPinia();
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: '/teacher/mylive/watchlist', component: { template: '<div />' } }]
+function mountPage() {
+  return mountSharedPage(Watchlist, {
+    routes: [{ path: '/teacher/mylive/watchlist', component: { template: '<div />' } }],
+    initialRoute: { path: '/teacher/mylive/watchlist', query: { roomId: 'R1', name: '数学课' } }
   });
-  await router.push({
-    path: '/teacher/mylive/watchlist',
-    query: { roomId: 'R1', name: '数学课' }
-  });
-  await router.isReady();
-  const wrapper = mount(Watchlist, {
-    global: {
-      plugins: [pinia, router, ElementPlus],
-      components: { ...ElementPlusIconsVue }
-    }
-  });
-  await flushPromises();
-  return { wrapper, router };
 }
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.clearAllMocks();
   mocks.watchTimeList.mockResolvedValue(
     ok({
       list: items,

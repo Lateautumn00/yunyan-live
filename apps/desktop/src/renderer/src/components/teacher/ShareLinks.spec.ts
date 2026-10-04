@@ -3,6 +3,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import ElementPlus from 'element-plus';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import type { ElectronApi } from '@yunyan-live/ipc';
+import { ok } from '@/testing/utils';
 import ShareLinks from '@/components/teacher/ShareLinks.vue';
 
 const mocks = vi.hoisted(() => ({
@@ -15,10 +16,6 @@ vi.mock('@/api/backstage', () => ({
     update_code: (params: unknown) => mocks.updateCode(params)
   }
 }));
-
-function ok<T>(data: T) {
-  return { data: { code: 1000, msg: undefined, data } };
-}
 
 async function mountLinks() {
   const wrapper = mount(ShareLinks, {
@@ -37,8 +34,6 @@ function findButton(wrapper: VueWrapper, text: string) {
 }
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.clearAllMocks();
   mocks.updateCode.mockResolvedValue(ok('NEW123'));
   Object.assign(window, {
     electronAPI: {

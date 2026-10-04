@@ -1,10 +1,6 @@
 ﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPromises, mount } from '@vue/test-utils';
-import { createMemoryHistory, createRouter } from 'vue-router';
-import { createPinia } from 'pinia';
-import ElementPlus from 'element-plus';
-import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import { formatDate } from '@yunyan-live/utils';
+import { ok, mountPage as mountSharedPage } from '@/testing/utils';
 import Detail from '@/pages/teacher/createlive/detail/index.vue';
 import RoomActions from '@/components/teacher/RoomActions.vue';
 import ShareLinks from '@/components/teacher/ShareLinks.vue';
@@ -27,10 +23,6 @@ vi.mock('@/layouts/sidebar.vue', () => ({
   }
 }));
 
-function ok<T>(data: T) {
-  return { data: { code: 1000, msg: undefined, data } };
-}
-
 const room: LiveRoom = {
   title: '数学课',
   speakerName: '张老师',
@@ -40,30 +32,14 @@ const room: LiveRoom = {
   joinCode: 'CODE001'
 };
 
-async function mountPage() {
-  const pinia = createPinia();
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: '/teacher/createlive/detail', component: { template: '<div />' } }]
+function mountPage() {
+  return mountSharedPage(Detail, {
+    routes: [{ path: '/teacher/createlive/detail', component: { template: '<div />' } }],
+    initialRoute: { path: '/teacher/createlive/detail', query: { roomId: 'R1' } }
   });
-  await router.push({
-    path: '/teacher/createlive/detail',
-    query: { roomId: 'R1' }
-  });
-  await router.isReady();
-  const wrapper = mount(Detail, {
-    global: {
-      plugins: [pinia, router, ElementPlus],
-      components: { ...ElementPlusIconsVue }
-    }
-  });
-  await flushPromises();
-  return { wrapper, router };
 }
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.clearAllMocks();
   mocks.roomDetail.mockResolvedValue(ok(room));
 });
 

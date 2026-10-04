@@ -1,10 +1,7 @@
 ﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
-import { createMemoryHistory, createRouter } from 'vue-router';
-import { createPinia } from 'pinia';
-import ElementPlus from 'element-plus';
-import * as ElementPlusIconsVue from '@element-plus/icons-vue';
+import { flushPromises, type VueWrapper } from '@vue/test-utils';
 import type { ElectronApi } from '@yunyan-live/ipc';
+import { ok, mountPage as mountSharedPage } from '@/testing/utils';
 import Createlive from '@/pages/teacher/createlive/index.vue';
 
 const apiMocks = vi.hoisted(() => ({
@@ -72,10 +69,6 @@ vi.mock('@/vendor/live/live', () => {
   return { default: MockLive };
 });
 
-function ok<T>(data: T) {
-  return { data: { code: 1000, msg: undefined, data } };
-}
-
 interface CreateVm {
   liveForm: {
     title: string;
@@ -102,30 +95,17 @@ function vm(wrapper: VueWrapper): CreateVm {
   return wrapper.vm as unknown as CreateVm;
 }
 
-async function mountPage() {
-  const pinia = createPinia();
-  const router = createRouter({
-    history: createMemoryHistory(),
+function mountPage() {
+  return mountSharedPage(Createlive, {
     routes: [
       { path: '/teacher/createlive', component: { template: '<div />' } },
       { path: '/teacher/createlive/detail', component: { template: '<div />' } }
-    ]
+    ],
+    initialRoute: '/teacher/createlive'
   });
-  await router.push('/teacher/createlive');
-  await router.isReady();
-  const wrapper = mount(Createlive, {
-    global: {
-      plugins: [pinia, router, ElementPlus],
-      components: { ...ElementPlusIconsVue }
-    }
-  });
-  await flushPromises();
-  return { wrapper, router };
 }
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.clearAllMocks();
   vendorState.initCb = undefined;
   vendorState.ctorOpts = undefined;
   vendorState.attachOpts = [];

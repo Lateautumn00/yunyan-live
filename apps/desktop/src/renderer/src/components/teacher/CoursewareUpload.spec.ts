@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { enableAutoUnmount, flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import ElementPlus, { ElMessageBox } from 'element-plus';
+import { ok } from '@/testing/utils';
 import CoursewareUpload from '@/components/teacher/CoursewareUpload.vue';
 
 enableAutoUnmount(afterEach);
@@ -26,10 +27,6 @@ vi.mock('@/components/ClassRoom/whiteboard/pptImport', () => ({
   uploadPptFile: (api: string, file: File) => mocks.uploadPptFile(api, file),
   loadPptMeta: (url: string) => mocks.loadPptMeta(url)
 }));
-
-function ok<T>(data: T) {
-  return { data: { code: 1000, msg: undefined, data } };
-}
 
 const listItem = {
   id: 'cw1',
@@ -70,7 +67,6 @@ function pickFile(name: string) {
 beforeEach(() => {
   // uploadPptApi 在 setup()（mount 时）求值，测试环境无 .env.test
   vi.stubEnv('VITE_UPLOAD_PPT_URL', 'http://mock.test/ppt');
-  vi.clearAllMocks();
   mocks.coursewareList.mockResolvedValue(ok({ list: [listItem], pageInfo: { totalElements: 1 } }));
   mocks.saveCourseware.mockResolvedValue(ok(null));
   mocks.deleteCourseware.mockResolvedValue(ok(null));

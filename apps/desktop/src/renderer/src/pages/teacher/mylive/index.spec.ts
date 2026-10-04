@@ -1,10 +1,7 @@
 ﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
-import { createMemoryHistory, createRouter } from 'vue-router';
-import { createPinia } from 'pinia';
-import ElementPlus from 'element-plus';
-import * as ElementPlusIconsVue from '@element-plus/icons-vue';
+import { flushPromises, type VueWrapper } from '@vue/test-utils';
 import { formatDate } from '@yunyan-live/utils';
+import { ok, mountPage as mountSharedPage } from '@/testing/utils';
 import Mylive from '@/pages/teacher/mylive/index.vue';
 import type { LiveRoom } from '@/types/pages/teacher/live';
 
@@ -25,10 +22,6 @@ vi.mock('@/layouts/sidebar.vue', () => ({
   }
 }));
 
-function ok<T>(data: T) {
-  return { data: { code: 1000, msg: undefined, data } };
-}
-
 const room: LiveRoom = {
   roomId: 'R1',
   title: '数学课',
@@ -48,36 +41,22 @@ function vm(wrapper: VueWrapper): MyliveVm {
   return wrapper.vm as unknown as MyliveVm;
 }
 
-async function mountPage() {
-  const pinia = createPinia();
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [
-      { path: '/', component: { template: '<div class="route-home" />' } },
-      { path: '/teacher/mylive/watchlist', component: { template: '<div />' } },
-      { path: '/teacher/playback/detail', component: { template: '<div />' } },
-      { path: '/teacher/mylive', component: { template: '<div />' } },
-      { path: '/classroom/smallstudent', component: { template: '<div />' } },
-      { path: '/classroom/largestudent', component: { template: '<div />' } },
-      { path: '/classroom/smallteacher', component: { template: '<div />' } },
-      { path: '/classroom/largeteacher', component: { template: '<div />' } }
-    ]
-  });
-  await router.push('/teacher/mylive');
-  await router.isReady();
-  const wrapper = mount(Mylive, {
-    global: {
-      plugins: [pinia, router, ElementPlus],
-      components: { ...ElementPlusIconsVue }
-    }
-  });
-  await flushPromises();
-  return { wrapper, router };
+const routes = [
+  { path: '/', component: { template: '<div class="route-home" />' } },
+  { path: '/teacher/mylive/watchlist', component: { template: '<div />' } },
+  { path: '/teacher/playback/detail', component: { template: '<div />' } },
+  { path: '/teacher/mylive', component: { template: '<div />' } },
+  { path: '/classroom/smallstudent', component: { template: '<div />' } },
+  { path: '/classroom/largestudent', component: { template: '<div />' } },
+  { path: '/classroom/smallteacher', component: { template: '<div />' } },
+  { path: '/classroom/largeteacher', component: { template: '<div />' } }
+];
+
+function mountPage() {
+  return mountSharedPage(Mylive, { routes, initialRoute: '/teacher/mylive' });
 }
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.clearAllMocks();
   mocks.liveList.mockResolvedValue(ok({ list: [room], total: 1 }));
 });
 

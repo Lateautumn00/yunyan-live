@@ -1,10 +1,7 @@
 ﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
-import { createMemoryHistory, createRouter } from 'vue-router';
-import { createPinia } from 'pinia';
-import ElementPlus from 'element-plus';
-import * as ElementPlusIconsVue from '@element-plus/icons-vue';
+import { flushPromises, type VueWrapper } from '@vue/test-utils';
 import type { ElectronApi } from '@yunyan-live/ipc';
+import { mountPage as mountSharedPage } from '@/testing/utils';
 import Statistics from '@/pages/teacher/statistics/index.vue';
 
 vi.mock('@/layouts/sidebar.vue', () => ({
@@ -23,26 +20,14 @@ function vm(wrapper: VueWrapper): StatisticsVm {
 }
 
 async function mountPage() {
-  const pinia = createPinia();
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: '/teacher/statistics', component: { template: '<div />' } }]
+  const { wrapper } = await mountSharedPage(Statistics, {
+    routes: [{ path: '/teacher/statistics', component: { template: '<div />' } }],
+    initialRoute: '/teacher/statistics'
   });
-  await router.push('/teacher/statistics');
-  await router.isReady();
-  const wrapper = mount(Statistics, {
-    global: {
-      plugins: [pinia, router, ElementPlus],
-      components: { ...ElementPlusIconsVue }
-    }
-  });
-  await flushPromises();
   return wrapper;
 }
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.clearAllMocks();
   Object.assign(window, {
     electronAPI: {
       onMessage: vi.fn(() => () => undefined)

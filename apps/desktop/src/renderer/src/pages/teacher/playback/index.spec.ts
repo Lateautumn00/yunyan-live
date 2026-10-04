@@ -1,11 +1,8 @@
 ﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
-import { createMemoryHistory, createRouter } from 'vue-router';
-import { createPinia } from 'pinia';
-import ElementPlus from 'element-plus';
-import * as ElementPlusIconsVue from '@element-plus/icons-vue';
+import { flushPromises, type VueWrapper } from '@vue/test-utils';
 import type { ElectronApi } from '@yunyan-live/ipc';
 import { formatDate } from '@yunyan-live/utils';
+import { ok, mountPage as mountSharedPage } from '@/testing/utils';
 import Playback from '@/pages/teacher/playback/index.vue';
 import type { LiveRoom } from '@/types/pages/teacher/live';
 
@@ -28,10 +25,6 @@ vi.mock('@/layouts/sidebar.vue', () => ({
   }
 }));
 
-function ok<T>(data: T) {
-  return { data: { code: 1000, msg: undefined, data } };
-}
-
 const room: LiveRoom = {
   roomId: 'R1',
   title: '数学课',
@@ -53,30 +46,17 @@ function vm(wrapper: VueWrapper): PlaybackVm {
   return wrapper.vm as unknown as PlaybackVm;
 }
 
-async function mountPage() {
-  const pinia = createPinia();
-  const router = createRouter({
-    history: createMemoryHistory(),
+function mountPage() {
+  return mountSharedPage(Playback, {
     routes: [
       { path: '/teacher/playback', component: { template: '<div />' } },
       { path: '/teacher/playback/detail', component: { template: '<div />' } }
-    ]
+    ],
+    initialRoute: '/teacher/playback'
   });
-  await router.push('/teacher/playback');
-  await router.isReady();
-  const wrapper = mount(Playback, {
-    global: {
-      plugins: [pinia, router, ElementPlus],
-      components: { ...ElementPlusIconsVue }
-    }
-  });
-  await flushPromises();
-  return { wrapper, router };
 }
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.clearAllMocks();
   Object.assign(window, {
     electronAPI: {
       onMessage: vi.fn(() => () => undefined)

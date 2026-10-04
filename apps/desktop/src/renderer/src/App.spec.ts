@@ -1,10 +1,8 @@
 ﻿import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPromises, mount } from '@vue/test-utils';
-import { createMemoryHistory, createRouter } from 'vue-router';
-import { createPinia, setActivePinia } from 'pinia';
-import ElementPlus from 'element-plus';
-import * as ElementPlusIconsVue from '@element-plus/icons-vue';
+import { flushPromises } from '@vue/test-utils';
+import { setActivePinia } from 'pinia';
 import type { ElectronApi } from '@yunyan-live/ipc';
+import { ok, mountPage } from '@/testing/utils';
 import App from '@/App.vue';
 
 const mocks = vi.hoisted(() => ({
@@ -21,10 +19,6 @@ vi.mock('@/api', () => ({
   }
 }));
 
-function ok<T>(data: T) {
-  return { data: { code: 1000, msg: 'ok', data } };
-}
-
 let messageCb: ((payload: { type: string; message?: unknown }) => void) | undefined;
 
 async function mountApp() {
@@ -34,27 +28,17 @@ async function mountApp() {
       return () => undefined;
     }
   );
-  const pinia = createPinia();
-  setActivePinia(pinia);
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: '/', component: { template: '<div class="root" />' } }]
-  });
-  await router.push('/');
-  await router.isReady();
-  const wrapper = mount(App, {
-    global: {
-      plugins: [pinia, router, ElementPlus],
-      components: { ...ElementPlusIconsVue }
+  const { wrapper } = await mountPage(App, {
+    routes: [{ path: '/', component: { template: '<div class="root" />' } }],
+    initialRoute: '/',
+    beforeMount: pinia => {
+      setActivePinia(pinia);
     }
   });
-  await flushPromises();
   return wrapper;
 }
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.clearAllMocks();
   messageCb = undefined;
   Object.assign(window, {
     electronAPI: {
