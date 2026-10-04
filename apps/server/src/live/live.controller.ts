@@ -233,11 +233,10 @@ export class LiveController implements OnModuleInit {
 
   @Post('cmsLiveList')
   @UseGuards(JwtAuthGuard)
-  async cmsList(@Body() body: { page?: number; pageSize?: number; status?: number; searchName?: string; startTime?: string; endTime?: string; type?: number }, @Request() req: { user: { userId: string } }) {
+  async cmsList(@Body() body: { page?: number; pageNum?: number; pageSize?: number; status?: number; searchName?: string; startTime?: string; endTime?: string; type?: number }, @Request() req: { user: { userId: string } }) {
     const metadata = userIdMetadata(req.user.userId);
     const result = await grpcCall(this.liveService.cmsList({
-      page: body.page,
-      page_size: body.pageSize,
+      ...toGrpcPage(normalizePageQuery({ page: body.page, pageNum: body.pageNum, pageSize: body.pageSize })),
       status: body.status,
       live_user_id: req.user.userId,
       search_name: body.searchName || '',
@@ -401,9 +400,9 @@ export class LiveController implements OnModuleInit {
 
   @Get('videoList')
   @UseGuards(JwtAuthGuard)
-  async getVideoList(@Query('page') page: string, @Query('pageSize') pageSize: string, @Query('searchName') searchName: string, @Query('startTime') startTime: string, @Query('endTime') endTime: string, @Query('type') type: string, @Request() req: { user: { userId: string } }) {
+  async getVideoList(@Query('page') page: string, @Query('pageNum') pageNum: string, @Query('pageSize') pageSize: string, @Query('searchName') searchName: string, @Query('startTime') startTime: string, @Query('endTime') endTime: string, @Query('type') type: string, @Request() req: { user: { userId: string } }) {
     const result = await grpcCall(this.liveService.getVideoList({
-      ...toGrpcPage(normalizePageQuery({ page, pageSize })),
+      ...toGrpcPage(normalizePageQuery({ page, pageNum, pageSize })),
       live_user_id: req.user.userId,
       search_name: searchName || '',
       start_time: startTime || '',
