@@ -1817,8 +1817,8 @@ async function savePlayBackUrl() {
   };
   try {
     const res = await api.save_play_back_url(params);
-    ElMessage.success(res.msg);
-    const videoData = { ...res.data, address: recordingId.value };
+    ElMessage.success('回放地址已保存');
+    const videoData = { ...res.data.data, address: recordingId.value };
     videoList(true, videoData);
     sendData(
       'public',

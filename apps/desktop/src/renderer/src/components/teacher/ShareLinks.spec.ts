@@ -34,7 +34,7 @@ function findButton(wrapper: VueWrapper, text: string) {
 }
 
 beforeEach(() => {
-  mocks.updateCode.mockResolvedValue(ok('NEW123'));
+  mocks.updateCode.mockResolvedValue({ data: ok('NEW123') });
   Object.assign(window, {
     electronAPI: {
       clipboardWriteText: mocks.clipboardWriteText

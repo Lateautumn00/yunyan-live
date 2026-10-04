@@ -355,8 +355,8 @@ function goLiveRoom(identity: number) {
 const { loading: deleting, run: submitDelete } = useAsyncAction(
   async () => {
     deleteDialogVisible.value = false;
-    const res = await Live.live_delete({ roomId: props.room.roomId });
-    ElMessage.success(res.msg ?? '删除成功');
+    await Live.live_delete({ roomId: props.room.roomId });
+    ElMessage.success('删除成功');
     emit('deleted');
   },
   { onError: (e) => console.error(e) }

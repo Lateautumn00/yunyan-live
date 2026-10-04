@@ -295,7 +295,7 @@ export class LiveController implements OnModuleInit {
   @UseGuards(JwtAuthGuard)
   async delete(@Body('roomId') roomId: string) {
     await grpcCall(this.liveService.deleteLive({ room_id: roomId }));
-    return { msg: '閸掔娀娅庨幋鎰' };
+    return { msg: '删除成功' };
   }
 
   @Put('updateLiveCode')
@@ -509,14 +509,7 @@ export class LiveController implements OnModuleInit {
       record_type: 2,
       teacher_name: '',
     }));
-    return {
-      code: 1000,
-      msg: '娣囨繂鐡ㄩ幋鎰',
-      data: {
-        roomId: body.roomId,
-        playBackUrl: body.playBackUrl,
-      },
-    };
+    return { roomId: body.roomId, playBackUrl: body.playBackUrl };
   }
 
   @Get('liveEndInfo')
@@ -524,21 +517,9 @@ export class LiveController implements OnModuleInit {
   async liveEndInfo(@Query('roomId') roomId: string) {
     try {
       const result = await grpcCall(this.liveService.getParticipants({ room_id: roomId })) as { data?: { total?: number } };
-      return {
-        code: 1000,
-        msg: 'success',
-        data: {
-          totalWatchNum: result?.data?.total || 0,
-        },
-      };
+      return { totalWatchNum: result?.data?.total || 0 };
     } catch {
-      return {
-        code: 1000,
-        msg: 'success',
-        data: {
-          totalWatchNum: 0,
-        },
-      };
+      return { totalWatchNum: 0 };
     }
   }
 

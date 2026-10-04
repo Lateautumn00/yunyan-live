@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { ref } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import ElementPlus from 'element-plus';
@@ -104,6 +104,8 @@ type VideoVM = {
   stopApplication: () => Promise<void>;
   isTalking: (type: string, userType: string, isTeacherMess?: boolean) => void;
   setCameraStudent: (status: boolean, isSpeak: boolean) => void;
+  savePlayBackUrl: () => Promise<void>;
+  recordingId: string;
 };
 
 function vmOf(wrapper: ReturnType<typeof mount>) {
@@ -264,6 +266,27 @@ describe('ClassRoom Video.vue', () => {
     const { wrapper } = mountVideo();
     await vmOf(wrapper).recording(true, 100);
     expect(apiMocks.getNowTime).toHaveBeenCalledTimes(1);
+  });
+
+  it('savePlayBackUrl 解包 AxiosResponse 信封并广播扁平回放数据', async () => {
+    const { wrapper } = mountVideo();
+    const vm = vmOf(wrapper);
+    vm.recordingId = 'REC-77';
+    apiMocks.savePlayBackUrl.mockResolvedValue({
+      data: { code: 1000, msg: 'success', data: { roomId: '1001', playBackUrl: 'REC-77' } }
+    });
+    void vm.savePlayBackUrl();
+    await flushPromises();
+    expect(apiMocks.savePlayBackUrl).toHaveBeenCalledWith({
+      roomId: '1001',
+      playBackUrl: 'REC-77',
+      duration: 0
+    });
+    expect(wrapper.emitted('videoList')?.[0]).toEqual([
+      true,
+      { roomId: '1001', playBackUrl: 'REC-77', address: 'REC-77' }
+    ]);
+    expect(document.body.textContent).toContain('回放地址已保存');
   });
 
   it('delList 与 endClassSpeakAll 调用不抛错', () => {

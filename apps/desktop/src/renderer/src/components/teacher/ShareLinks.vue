@@ -66,10 +66,10 @@ watch(
 const { loading: updating, run: updateCode } = useAsyncAction(
   async () => {
     const res = await Live.update_code({ roomId: props.roomId });
-    const data = res.data as string;
+    const data = res.data.data as string;
     localCode.value = data;
     emit('updated', data);
-    ElMessage.success(res.msg ?? '更新成功');
+    ElMessage.success('更新成功');
   },
   { onError: (e) => console.error(e) }
 );
