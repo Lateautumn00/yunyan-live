@@ -6,7 +6,7 @@
 
 ## 状态说明
 
-`status`（房间状态）：0=未开播（已创建），1=直播中，2=已结束。`type`：直播类型。`record_type`（录制类型）：1=直播录制，2=回放链接。
+`status`（房间状态）：1=未开播（已创建），2=直播中，3=已结束，4=暂停。`type`：直播类型。`record_type`（录制类型）：1=直播录制，2=回放链接。
 
 ## 1. 创建直播间
 
@@ -21,7 +21,7 @@
 | title     | string | 是   | 长度 1-200                              |
 | type      | number | 否   | 直播类型，默认 0                        |
 | startTime | string | 是   | Unix 毫秒时间戳字符串，不能早于当前时间 |
-| duration  | number | 否   | 时长（秒），默认 0                      |
+| duration  | number | 否   | 时长（分钟），默认 0                    |
 | roomId    | string | 否   | 复用已存在房间 ID（默认新建）           |
 
 **响应 data：** 房间信息（见下方「房间数据结构」）。
@@ -40,7 +40,7 @@
 | title     | string | 否   | 长度 1-200            |
 | type      | number | 否   | 直播类型              |
 | startTime | string | 否   | Unix 毫秒时间戳字符串 |
-| duration  | number | 否   | 时长（秒）            |
+| duration  | number | 否   | 时长（分钟）          |
 
 ## 3. 加入直播（参加码）
 
@@ -72,7 +72,7 @@
 | speakerName   | string | 主播用户名（从 auth-service 解析） |
 | liveUserId    | string | 主播用户 ID                        |
 | joinCode      | string | 参加码                             |
-| status        | number | 0/1/2                              |
+| status        | number | 1/2/3/4                            |
 | type          | number | 直播类型                           |
 | videoList     | array  | 当前恒为 `[]`                      |
 | liveStartedAt | string | 开播时间（缺省为当前时间戳）       |
@@ -88,7 +88,7 @@
 | 字段   | 类型   | 必填 | 校验    |
 | ------ | ------ | ---- | ------- |
 | roomId | string | 是   | 房间 ID |
-| status | number | 是   | 0/1/2   |
+| status | number | 是   | 1/2/3/4 |
 
 ## 6. 直播间列表（CMS / 老师视角）
 
@@ -412,7 +412,7 @@
   "title": "string",
   "speaker_name": "string",
   "join_code": "string",
-  "status": 0,
+  "status": 1,
   "type": 0,
   "start_time": "string",
   "teacher_code": "string",

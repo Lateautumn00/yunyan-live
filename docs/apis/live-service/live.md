@@ -13,20 +13,20 @@
 
 ### RoomData
 
-| 字段            | 类型   | 说明                         |
-| --------------- | ------ | ---------------------------- |
-| room_id         | string | 房间 ID                      |
-| title           | string | 标题                         |
-| speaker_name    | string | 主播名                       |
-| join_code       | string | 参加码                       |
-| status          | int32  | 0=未开播，1=直播中，2=已结束 |
-| type            | int32  | 直播类型                     |
-| start_time      | string | 开始时间                     |
-| teacher_code    | string | 老师码                       |
-| student_code    | string | 学生码                       |
-| duration        | int32  | 时长（秒）                   |
-| live_started_at | string | 开播时间                     |
-| live_user_id    | string | 主播用户 ID                  |
+| 字段            | 类型   | 说明                                 |
+| --------------- | ------ | ------------------------------------ |
+| room_id         | string | 房间 ID                              |
+| title           | string | 标题                                 |
+| speaker_name    | string | 主播名                               |
+| join_code       | string | 参加码                               |
+| status          | int32  | 1=未开播，2=直播中，3=已结束，4=暂停 |
+| type            | int32  | 直播类型                             |
+| start_time      | string | 开始时间                             |
+| teacher_code    | string | 老师码                               |
+| student_code    | string | 学生码                               |
+| duration        | int32  | 时长（分钟）                         |
+| live_started_at | string | 开播时间                             |
+| live_user_id    | string | 主播用户 ID                          |
 
 ### LiveResponse / RoomResponse
 
@@ -103,12 +103,12 @@
 
 ### VideoDetailResponse
 
-| 字段       | 类型                     | 说明                                                                                            |
-| ---------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
-| code       | string                   | `"0"`                                                                                           |
-| msg        | string                   | 提示信息                                                                                        |
-| data.items | repeated VideoDetailItem | `id, room_id, file_path, file_name, file_size, duration, record_type, teacher_name, created_at` |
-| data.total | int32                    | 总条数                                                                                          |
+| 字段       | 类型                     | 说明                                                                                                |
+| ---------- | ------------------------ | --------------------------------------------------------------------------------------------------- |
+| code       | string                   | `"0"`                                                                                               |
+| msg        | string                   | 提示信息                                                                                            |
+| data.items | repeated VideoDetailItem | `id, room_id, file_path, file_name, file_size, duration(秒), record_type, teacher_name, created_at` |
+| data.total | int32                    | 总条数                                                                                              |
 
 ### WatchTimeListData
 
@@ -132,7 +132,7 @@
 | ------------ | ------ | ------------------------- |
 | title        | string | 标题                      |
 | type         | int32  | 直播类型                  |
-| duration     | int32  | 时长（秒）                |
+| duration     | int32  | 时长（分钟）              |
 | live_user_id | string | 主播用户 ID               |
 | start_time   | string | 开始时间                  |
 | room_id      | string | 复用房间 ID（空串则新建） |
@@ -165,7 +165,7 @@
 | 字段    | 类型   | 说明    |
 | ------- | ------ | ------- |
 | room_id | string | 房间 ID |
-| status  | int32  | 0/1/2   |
+| status  | int32  | 1/2/3/4 |
 
 ### 5. CmsList
 
@@ -210,13 +210,13 @@
 
 **请求：**
 
-| 字段       | 类型   | 说明       |
-| ---------- | ------ | ---------- |
-| room_id    | string | 房间 ID    |
-| title      | string | 标题       |
-| type       | int32  | 直播类型   |
-| start_time | string | 开始时间   |
-| duration   | int32  | 时长（秒） |
+| 字段       | 类型   | 说明         |
+| ---------- | ------ | ------------ |
+| room_id    | string | 房间 ID      |
+| title      | string | 标题         |
+| type       | int32  | 直播类型     |
+| start_time | string | 开始时间     |
+| duration   | int32  | 时长（分钟） |
 
 ### 10. GetStudentRooms
 
