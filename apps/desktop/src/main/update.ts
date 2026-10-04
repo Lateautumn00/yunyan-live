@@ -1,11 +1,11 @@
 ﻿import { BrowserWindow, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
-import { IpcChannels } from '@yunyan-live/ipc';
+import { IpcChannels, type UpdateMessage } from '@yunyan-live/ipc';
 
 export function initUpdater(window: BrowserWindow, feedUrl: string): void {
   autoUpdater.setFeedURL({ provider: 'generic', url: feedUrl });
 
-  const send = (type: string, message?: unknown): void => {
+  const send = (type: UpdateMessage, message?: unknown): void => {
     window.webContents.send(IpcChannels.message, { type, message });
   };
 

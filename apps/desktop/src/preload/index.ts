@@ -5,7 +5,13 @@ import {
   ElectronApi,
   IpcChannels,
   SystemInfo,
-  UpdateMessage
+  UpdateMessage,
+  type RecordingChoosePathResult,
+  type RecordingSaveBlobArgs,
+  type RecordingSaveBlobResult,
+  type RecordingSaveFileArgs,
+  type RecordingSaveToPathArgs,
+  type RecordingWriteResult
 } from '@yunyan-live/ipc';
 
 const api: ElectronApi = {
@@ -38,20 +44,20 @@ const api: ElectronApi = {
   getSystemInfo: () => {
     return ipcRenderer.invoke(IpcChannels.getSystemInfo) as Promise<SystemInfo>;
   },
-  recordingSaveFile: (data: { buffer: ArrayBuffer; fileName: string }) => {
-    return ipcRenderer.invoke(IpcChannels.recordingSaveFile, data) as Promise<{ success: boolean; filePath?: string; fileSize?: number; error?: string }>;
+  recordingSaveFile: (data: RecordingSaveFileArgs) => {
+    return ipcRenderer.invoke(IpcChannels.recordingSaveFile, data) as Promise<RecordingWriteResult>;
   },
   recordingChooseSavePath: (defaultName: string) => {
-    return ipcRenderer.invoke(IpcChannels.recordingChooseSavePath, defaultName) as Promise<{ success: boolean; filePath?: string }>;
+    return ipcRenderer.invoke(IpcChannels.recordingChooseSavePath, defaultName) as Promise<RecordingChoosePathResult>;
   },
-  recordingSaveToPath: (data: { buffer: ArrayBuffer; filePath: string }) => {
-    return ipcRenderer.invoke(IpcChannels.recordingSaveToPath, data) as Promise<{ success: boolean; filePath?: string; fileSize?: number; error?: string }>;
+  recordingSaveToPath: (data: RecordingSaveToPathArgs) => {
+    return ipcRenderer.invoke(IpcChannels.recordingSaveToPath, data) as Promise<RecordingWriteResult>;
   },
   recordingGetFileUrl: (filePath: string) => {
     return ipcRenderer.invoke(IpcChannels.recordingGetFileUrl, filePath) as Promise<string>;
   },
-  recordingSaveBlob: (data: { buffer: ArrayBuffer; defaultName: string }) => {
-    return ipcRenderer.invoke(IpcChannels.recordingSaveBlob, data) as Promise<{ success: boolean; filePath?: string; error?: string }>;
+  recordingSaveBlob: (data: RecordingSaveBlobArgs) => {
+    return ipcRenderer.invoke(IpcChannels.recordingSaveBlob, data) as Promise<RecordingSaveBlobResult>;
   },
 };
 

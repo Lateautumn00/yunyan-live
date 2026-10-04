@@ -4,6 +4,7 @@ import log from 'electron-log';
 import { loadConfig } from '@yunyan-live/config';
 import { registerIpcHandlers } from './ipc';
 import { initUpdater } from './update';
+import { isHttpUrl, PROTOCOL_SCHEME } from './constants';
 
 const config = loadConfig(import.meta.env as unknown as Record<string, string | undefined>);
 
@@ -43,7 +44,7 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    if (details.url.startsWith('http:') || details.url.startsWith('https:')) {
+    if (isHttpUrl(details.url)) {
       shell.openExternal(details.url);
     }
     return { action: 'deny' };
@@ -83,8 +84,8 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     log.info('App ready, creating window');
-    protocol.registerFileProtocol('atom', (request, callback) => {
-      const filePath = decodeURIComponent(request.url.replace('atom://', ''));
+    protocol.registerFileProtocol(PROTOCOL_SCHEME, (request, callback) => {
+      const filePath = decodeURIComponent(request.url.replace(`${PROTOCOL_SCHEME}://`, ''));
       callback({ path: filePath });
     });
     createWindow();

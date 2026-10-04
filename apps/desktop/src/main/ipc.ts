@@ -1,6 +1,7 @@
 ﻿import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, shell } from 'electron';
 import { DesktopSource, IpcChannels, SystemInfo } from '@yunyan-live/ipc';
 import { registerRecordingHandlers } from './recording';
+import { isHttpUrl } from './constants';
 
 type GetWindow = () => BrowserWindow | null;
 
@@ -23,7 +24,7 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
   });
 
   ipcMain.handle(IpcChannels.openExternal, (_event, url: string) => {
-    if (url.startsWith('http:') || url.startsWith('https:')) {
+    if (isHttpUrl(url)) {
       return shell.openExternal(url);
     }
     return Promise.resolve();
