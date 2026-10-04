@@ -7,7 +7,7 @@ import {
   readForbid,
   subscribeForbid,
   writeForbid
-} from '@yunyan-live/nest-shared';
+} from '../index';
 
 type FakeSubscriber = EventEmitter & { subscribe: (channel: string) => Promise<void> };
 
