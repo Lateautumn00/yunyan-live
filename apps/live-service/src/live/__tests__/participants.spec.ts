@@ -63,11 +63,12 @@ describe('LiveService.leaveRoom', () => {
     });
   });
 
-  it('关闭在线时长并递减 liveNums', async () => {
+  it('关闭在线时长并按在线数重算 liveNums', async () => {
     const { service, watchTime, room } = createLiveService();
     const wt = { userId: 'u1', roomId: 'r1', leftAt: null as Date | null };
     const roomRow = { roomId: 'r1', liveNums: 3 };
     watchTime.repo.findOne.mockResolvedValue(wt);
+    watchTime.repo.count.mockResolvedValue(2);
     room.repo.findOne.mockResolvedValue(roomRow);
     await expect(service.leaveRoom('u1', 'r1')).resolves.toEqual({ success: true });
     expect(wt.leftAt).toBeInstanceOf(Date);
@@ -76,7 +77,17 @@ describe('LiveService.leaveRoom', () => {
     expect(room.repo.save).toHaveBeenCalledWith(roomRow);
   });
 
-  it('liveNums 已为 0 时不写房间，避免负数', async () => {
+  it('liveNums 与在线数不一致时按在线数纠正（自愈）', async () => {
+    const { service, watchTime, room } = createLiveService();
+    const wt = { userId: 'u1', roomId: 'r1', leftAt: null as Date | null };
+    watchTime.repo.findOne.mockResolvedValue(wt);
+    watchTime.repo.count.mockResolvedValue(3);
+    room.repo.findOne.mockResolvedValue({ roomId: 'r1', liveNums: 0 });
+    await service.leaveRoom('u1', 'r1');
+    expect(room.repo.save).toHaveBeenCalledWith({ roomId: 'r1', liveNums: 3 });
+  });
+
+  it('liveNums 与在线数一致时不重复写房间', async () => {
     const { service, watchTime, room } = createLiveService();
     const wt = { userId: 'u1', roomId: 'r1', leftAt: null as Date | null };
     watchTime.repo.findOne.mockResolvedValue(wt);
@@ -120,7 +131,7 @@ describe('LiveService.batchLeave', () => {
     expect(participant.repo.remove).toHaveBeenCalledWith(list);
   });
 
-  it('逐房间关闭时长并递减各自 liveNums', async () => {
+  it('逐房间关闭时长并按各自在线数重算 liveNums', async () => {
     const { service, participant, watchTime, room } = createLiveService();
     participant.repo.find.mockResolvedValue([]);
     const wt1 = { userId: 'u1', roomId: 'r1', leftAt: null as Date | null };
@@ -128,6 +139,9 @@ describe('LiveService.batchLeave', () => {
     watchTime.repo.findOne
       .mockResolvedValueOnce(wt1)
       .mockResolvedValueOnce(wt2);
+    watchTime.repo.count
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
     const room1 = { roomId: 'r1', liveNums: 2 };
     const room2 = { roomId: 'r2', liveNums: 1 };
     room.repo.findOne

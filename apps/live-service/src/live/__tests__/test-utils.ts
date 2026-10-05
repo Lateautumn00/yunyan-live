@@ -62,6 +62,7 @@ export function mockRepo(results: QbResults = {}): RepoMock {
     createQueryBuilder: vi.fn(() => qb),
     findOne: vi.fn(),
     find: vi.fn(),
+    count: vi.fn().mockResolvedValue(0),
     create: vi.fn((input: unknown) => input),
     save: vi.fn((input: unknown) => Promise.resolve(input)),
     update: vi.fn().mockResolvedValue(undefined),
@@ -76,6 +77,7 @@ export function mockRepo(results: QbResults = {}): RepoMock {
 export function mockDataSource(): DataSourceMock {
   const manager: ManagerMock = {
     findOne: vi.fn(),
+    count: vi.fn().mockResolvedValue(0),
     save: vi.fn((input: unknown) => Promise.resolve(input))
   };
   const queryRunner: QueryRunnerMock = {

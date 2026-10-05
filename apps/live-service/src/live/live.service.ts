@@ -135,8 +135,13 @@ export class LiveService {
             joinedAt: new Date(),
           });
           await queryRunner.manager.save(wt);
-          room.liveNums += 1;
-          await queryRunner.manager.save(room);
+          const online = await queryRunner.manager.count(UserWatchTime, {
+            where: { roomId: room.roomId, leftAt: null },
+          });
+          if (room.liveNums !== online) {
+            room.liveNums = online;
+            await queryRunner.manager.save(room);
+          }
         }
       }
 
@@ -283,14 +288,20 @@ export class LiveService {
     if (wt) {
       wt.leftAt = new Date();
       await this.watchTimeRepo.save(wt);
-      const room = await this.repo.findOne({ where: { roomId } });
-      if (room && room.liveNums > 0) {
-        room.liveNums -= 1;
-        await this.repo.save(room);
-      }
+      await this.syncLiveNums(roomId);
     }
 
     return { success: true };
+  }
+
+  private async syncLiveNums(roomId: string) {
+    const room = await this.repo.findOne({ where: { roomId } });
+    if (!room) return;
+    const online = await this.watchTimeRepo.count({ where: { roomId, leftAt: null } });
+    if (room.liveNums !== online) {
+      room.liveNums = online;
+      await this.repo.save(room);
+    }
   }
 
   async batchLeave(userId: string, roomIds: string[]) {
@@ -307,11 +318,7 @@ export class LiveService {
       if (wt) {
         wt.leftAt = new Date();
         await this.watchTimeRepo.save(wt);
-        const room = await this.repo.findOne({ where: { roomId } });
-        if (room && room.liveNums > 0) {
-          room.liveNums -= 1;
-          await this.repo.save(room);
-        }
+        await this.syncLiveNums(roomId);
       }
     }
     return { success: true };

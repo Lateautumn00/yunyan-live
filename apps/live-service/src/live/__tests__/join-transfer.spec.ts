@@ -13,13 +13,14 @@ describe('LiveService.join', () => {
     expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
   });
 
-  it('学生首次进入：登记参与者、开启在线时长并累加 liveNums', async () => {
+  it('学生首次进入：登记参与者、开启在线时长并按在线数重算 liveNums', async () => {
     const { service, manager, queryRunner } = createLiveService();
     const room = { roomId: 'r1', joinCode: 'SA1', liveUserId: 't1', type: 0, status: 2, liveNums: 0 };
     manager.findOne
       .mockResolvedValueOnce(room)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null);
+    manager.count.mockResolvedValueOnce(1);
     const res = await service.join({ joinCode: 'SA1', liveUserId: 'u1' });
     expect(res).toEqual({
       liveUserId: 'u1',
@@ -36,6 +37,19 @@ describe('LiveService.join', () => {
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();
     expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
+  });
+
+  it('join 时按在线时长重算修正漂移的 liveNums', async () => {
+    const { service, manager } = createLiveService();
+    const room = { roomId: 'r1', joinCode: 'SA3', liveUserId: 't1', type: 0, status: 2, liveNums: 9 };
+    manager.findOne
+      .mockResolvedValueOnce(room)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    manager.count.mockResolvedValueOnce(1);
+    await service.join({ joinCode: 'SA3', liveUserId: 'u1' });
+    expect(room.liveNums).toBe(1);
+    expect(manager.count).toHaveBeenCalled();
   });
 
   it('老师重复进入：已有参与者与在线记录时不重复写入', async () => {
