@@ -82,6 +82,29 @@ describe('createResponseInterceptor', () => {
 
     await expect(interceptor(response)).rejects.toThrow('Error');
   });
+
+  it('raw: true returns the AxiosResponse untouched without envelope checks', () => {
+    const onMessageError = vi.fn();
+    const interceptor = createResponseInterceptor({ onMessageError });
+    const response = {
+      data: { code: 2002, msg: '转码中，请稍后' },
+      config: { raw: true }
+    } as unknown as AxiosResponse;
+
+    expect(interceptor(response)).toBe(response);
+    expect(onMessageError).not.toHaveBeenCalled();
+  });
+
+  it('raw: true passes through even when data is a Blob without code', () => {
+    const interceptor = createResponseInterceptor();
+    const blob = new Blob(['x']);
+    const response = {
+      data: blob,
+      config: { raw: true }
+    } as unknown as AxiosResponse;
+
+    expect(interceptor(response)).toBe(response);
+  });
 });
 
 describe('createResponseErrorInterceptor', () => {

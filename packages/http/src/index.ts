@@ -8,6 +8,7 @@ export {
 export type {
   HttpClient,
   HttpClientOptions,
+  RawRequestConfig,
   RequestInterceptorOptions,
   ResponseInterceptorOptions,
   ResponseErrorInterceptorOptions,

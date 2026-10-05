@@ -36,6 +36,10 @@ export interface ResponseErrorInterceptorOptions {
   onServerError?: (msg: string) => void;
 }
 
+export interface RawRequestConfig extends AxiosRequestConfig {
+  raw?: true;
+}
+
 export interface HttpClientOptions extends RequestInterceptorOptions, ResponseInterceptorOptions {
   baseURL: string;
   timeout?: number;
@@ -54,6 +58,7 @@ export type HttpClient = Omit<
   AxiosInstance,
   'get' | 'post' | 'put' | 'delete' | 'patch' | 'request'
 > & {
+  get<T = any>(url: string, config: RawRequestConfig & { raw: true }): Promise<AxiosResponse<T>>;
   get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResult<T>>;
   post<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResult<T>>;
   put<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<ApiResult<T>>;
@@ -77,7 +82,10 @@ export function createRequestInterceptor(opts: RequestInterceptorOptions = {}) {
 }
 
 export function createResponseInterceptor(opts: ResponseInterceptorOptions = {}) {
-  return (response: AxiosResponse<ApiResult>): ApiResult | Promise<never> => {
+  return (response: AxiosResponse<ApiResult>): ApiResult | AxiosResponse | Promise<never> => {
+    if ((response.config as RawRequestConfig | undefined)?.raw) {
+      return response;
+    }
     const res = response.data;
     if (res.code !== 1000) {
       opts.onMessageError?.(res.msg || 'Error');
