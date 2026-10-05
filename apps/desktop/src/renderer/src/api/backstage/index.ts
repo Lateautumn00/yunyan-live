@@ -1,13 +1,9 @@
 import type { LiveForm } from '@/types/pages/teacher/live';
-import axios from 'axios';
 import { http, config } from '../instance';
 
-function fetchRecording(url: string, responseType?: 'blob') {
-  const token = localStorage.getItem('token');
-  return axios.get(url, {
-    ...(responseType ? { responseType } : {}),
-    headers: { Authorization: `Bearer ${token}` }
-  });
+interface RecordingStatusBody {
+  code: number;
+  msg?: string;
 }
 
 export default {
@@ -62,9 +58,16 @@ export default {
     return http.delete(`${config.liveApi}/liveInfo/deleteCourseware`, { data: { id } });
   },
   download_recording(id: string) {
-    return fetchRecording(`${config.liveApi}/liveInfo/downloadRecording/${id}`);
+    return http.get<RecordingStatusBody>(`${config.liveApi}/liveInfo/downloadRecording/${id}`, {
+      raw: true,
+      timeout: 0
+    });
   },
   download_recording_file(id: string) {
-    return fetchRecording(`${config.liveApi}/liveInfo/downloadRecording/${id}?download=true`, 'blob');
+    return http.get<Blob>(`${config.liveApi}/liveInfo/downloadRecording/${id}?download=true`, {
+      responseType: 'blob',
+      raw: true,
+      timeout: 0
+    });
   }
 };
