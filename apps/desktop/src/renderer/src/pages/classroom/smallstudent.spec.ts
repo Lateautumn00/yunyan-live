@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import ElementPlus from 'element-plus';
-import SmallStudent from '@/pages/classroom/smallstudent.vue';
+import Classroom from '@/pages/classroom/Classroom.vue';
 
 const stubs = {
   Top: { template: '<div class="top-stub" />', props: ['isTeacher', 'isInteraction', 'roomInfo', 'roomId', 'btn', 'liveType'] },
@@ -27,15 +27,15 @@ function createWrapper() {
     history: createMemoryHistory(),
     routes: [{ path: '/classroom/smallstudent', component: { template: '<div />' } }]
   });
-  return mount(SmallStudent, {
-    props: { roomId: 'room1', nickName: 'test' },
+  return mount(Classroom, {
+    props: { role: 'student', size: 'small' },
     global: { plugins: [router, ElementPlus], components: stubs }
   });
 }
 
 beforeEach(() => { vi.clearAllMocks(); });
 
-describe('classroom/smallstudent.vue', () => {
+describe('Classroom small-student', () => {
   it('renders without throwing', async () => {
     const wrapper = createWrapper();
     await flushPromises();

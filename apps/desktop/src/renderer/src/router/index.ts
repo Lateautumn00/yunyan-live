@@ -72,22 +72,26 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/classroom/largeteacher',
     name: 'classroom.large-teacher',
-    component: () => import('@/pages/classroom/largeteacher.vue')
+    component: () => import('@/pages/classroom/Classroom.vue'),
+    props: { role: 'teacher', size: 'large' }
   },
   {
     path: '/classroom/largestudent',
     name: 'classroom.large-student',
-    component: () => import('@/pages/classroom/largestudent.vue')
+    component: () => import('@/pages/classroom/Classroom.vue'),
+    props: { role: 'student', size: 'large' }
   },
   {
     path: '/classroom/smallteacher',
     name: 'classroom.small-teacher',
-    component: () => import('@/pages/classroom/smallteacher.vue')
+    component: () => import('@/pages/classroom/Classroom.vue'),
+    props: { role: 'teacher', size: 'small' }
   },
   {
     path: '/classroom/smallstudent',
     name: 'classroom.small-student',
-    component: () => import('@/pages/classroom/smallstudent.vue')
+    component: () => import('@/pages/classroom/Classroom.vue'),
+    props: { role: 'student', size: 'small' }
   }
 ];
 
