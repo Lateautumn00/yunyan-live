@@ -15,8 +15,7 @@ async function mountNavMenu(activeKey: string) {
       { path: '/teacher/mylive', component: { template: '<div />' } },
       { path: '/teacher/playback', component: { template: '<div />' } },
       { path: '/teacher/transfer', component: { template: '<div />' } },
-      { path: '/teacher/statistics', component: { template: '<div />' } },
-      { path: '/teacher/account', component: { template: '<div />' } }
+      { path: '/teacher/statistics', component: { template: '<div />' } }
     ]
   });
   await router.push('/');

@@ -223,20 +223,6 @@ vi.mock('konva', () => ({
   }
 }));
 
-vi.mock('axios', () => ({
-  default: {
-    post: vi.fn(() => Promise.resolve({ code: 1000, data: { fileUrl: '' } })),
-    get: vi.fn(() => Promise.resolve({})),
-  }
-}));
-
-vi.mock('@/api', () => ({
-  config: {
-    uploadImageUrl: 'https://test.com/upload',
-    uploadPptUrl: 'https://test.com/ppt',
-  }
-}));
-
 // 房内上传后登记课件表 + 进房自动导入课件的 API；测试中不得打真实网络
 const liveMocks = vi.hoisted(() => ({
   saveCourseware: vi.fn(),
