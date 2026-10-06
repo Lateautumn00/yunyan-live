@@ -6,6 +6,9 @@
     <div class="con">
       <ul ref="dialogueList" @scroll="fetchData">
         <li v-for="(item, index) in tanmuMessage" :key="index">
+          <div v-if="item.showTime" class="msg-time">
+            {{ formatChatTime(item.time) }}
+          </div>
           <div v-if="!item.liveUser" :class="item.isMe ? 'user end' : 'user'">
             <div class="name">
               {{ item.userName }}
@@ -19,8 +22,18 @@
               <el-icon><UserFilled /></el-icon> 我
             </div>
           </div>
-          <div :class="item.isMe ? 'message message-me' : 'message'">
-            {{ item.message }}
+          <div
+            :class="[
+              item.isMe ? 'message message-me' : 'message',
+              item.mentionMe ? 'mention-me' : ''
+            ]"
+          >
+            <template v-for="(seg, si) in item.segments" :key="si">
+              <span v-if="seg.mention" class="mention">{{ seg.text }}</span>
+              <template v-else>
+                {{ seg.text }}
+              </template>
+            </template>
           </div>
         </li>
       </ul>
@@ -90,10 +103,16 @@
           </el-icon>
         </div>
       </el-tooltip>
-      <el-input
+      <EmojiPicker @select="insertEmoji" />
+      <el-mention
+        ref="mentionRef"
         v-model="sendContent"
-        placeholder="请输入内容"
+        :options="mentionOptions"
+        :maxlength="CHAT_LIMITS.MAX_MESSAGE_LENGTH"
         :disabled="isTeacher ? false : speechClose == 1 ? false : true"
+        placeholder="请输入内容"
+        @select="onMentionSelect"
+        @keydown.enter.exact="onEnter"
       />
       <el-icon
         v-if="sendContent.length"
@@ -112,23 +131,34 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, onUpdated, ref } from 'vue';
-import { ElMessage } from 'element-plus';
+import { onUnmounted, onUpdated, ref } from 'vue';
+import { ElMessage, type MentionInstance } from 'element-plus';
 import { Top as RaiseHand } from '@element-plus/icons-vue';
-import { WsClose } from '@yunyan-live/types';
+import { ChatMessageItem, WsClose, type MentionTarget } from '@yunyan-live/types';
 import api from '@/api';
 import { config } from '@/api';
 import { useUserStore } from '@/store/user';
 import { useAsyncAction } from '@/composables/useAsyncAction';
+import { useChatInput } from '@/composables/useChatInput';
+import EmojiPicker from './EmojiPicker.vue';
+import {
+  CHAT_LIMITS,
+  extractMentions,
+  formatChatTime,
+  segmentMessage,
+  type MessageSegment
+} from '@/utils/chatFormat';
 
-interface TanmuItem {
-  userName?: string;
-  message?: string;
-  isMe?: boolean;
-  isTeacher?: boolean;
-  liveUserId?: string;
-  liveUser?: boolean;
-}
+type DisplayMessage = ChatMessageItem & {
+  segments: MessageSegment[];
+  mentionMe: boolean;
+  showTime: boolean;
+};
+
+/** Redis 禁言极性：0=禁言 1=可发言（与服务端 FORBID_FORBIDDEN/FORBID_ALLOWED 一致） */
+const FORBID_FORBIDDEN = 0;
+/** 分组时间间隔：超过该间隔的新消息重新显示时间 */
+const TIME_GAP_MS = 5 * 60 * 1000;
 
 const props = withDefaults(
   defineProps<{
@@ -186,8 +216,15 @@ const sockets = ref<{
   endTime: 0
 });
 const sendContent = ref('');
-const tanmuMessage = ref<TanmuItem[]>([]);
+const tanmuMessage = ref<DisplayMessage[]>([]);
 const dialogueList = ref<HTMLElement | null>(null);
+const mentionRef = ref<MentionInstance | null>(null);
+const { mentionTargets, mentionOptions, onMentionSelect, insertEmoji, onEnter } = useChatInput({
+  sendContent,
+  mentionRef,
+  isTeacher: () => props.isTeacher,
+  onEnterSend: () => void sendMes(1)
+});
 
 function fetchData(e: Event) {
   const target = e.target as HTMLElement;
@@ -219,15 +256,7 @@ function handleScrollToBottom() {
   if (ele) ele.scrollTop = ele.scrollHeight;
 }
 
-onMounted(() => {
-  const onKeydown = (e: KeyboardEvent) => {
-    if (e.keyCode === 13 && sendContent.value.length) sendMes(1);
-  };
-  document.onkeydown = onKeydown;
-});
-
 onUnmounted(() => {
-  document.onkeydown = null;
   stopReconnect();
   clearLiveSocket();
 });
@@ -256,7 +285,8 @@ function createTutorSocket() {
   }
   const token = props.useToken ? localStorage.getItem('token') || '' : '';
   const tokenParam = token ? `&token=${token}` : '';
-  const url = `${sockets.value.socketUrl}?roomId=${props.roomId ?? ''}&liveUserId=${props.liveUserId ?? ''}${tokenParam}`;
+  const nickParam = `&nickName=${encodeURIComponent(props.userName ?? '')}`;
+  const url = `${sockets.value.socketUrl}?roomId=${props.roomId ?? ''}&liveUserId=${props.liveUserId ?? ''}${tokenParam}${nickParam}`;
   sockets.value.liveSocket = new WebSocket(url);
   sockets.value.liveSocket.onopen = liveSocketOpen;
   sockets.value.liveSocket.onerror = liveSocketError;
@@ -322,7 +352,17 @@ function liveSocketMessage(e: MessageEvent) {
         infoList(redata.data);
       }
       break;
-    case 'msg':
+    case 'msg': {
+      // 连接期/轮询下发的房间禁言态（0=禁言 1=可发言）：修复中途进场学生假可输入
+      const forbid = redata.data?.liveMsg?.forbid;
+      if (forbid !== undefined) speechClose.value = Number(forbid);
+      break;
+    }
+    case 'bullet_rejected':
+      if (redata.reason === 'forbidden') ElMessage.warning('当前处于禁言状态，无法发言');
+      else if (redata.reason === 'too_long')
+        ElMessage.warning(`消息超过${CHAT_LIMITS.MAX_MESSAGE_LENGTH}字`);
+      else ElMessage.error('消息发送失败');
       break;
     case 'error':
       if (redata.data.cause && redata.data.cause === '被占用') {
@@ -393,28 +433,45 @@ function reconnect() {
 }
 
 function infoList(data: {
-  liveMsg?: { info?: { host?: string }; msg?: string; name?: string };
+  liveMsg?: {
+    info?: { host?: string };
+    msg?: string;
+    name?: string;
+    time?: number;
+    mentions?: MentionTarget[];
+  };
   info?: { liveUserId?: string; isTeacher?: boolean };
 }) {
   const { liveMsg } = data;
   if (liveMsg && liveMsg.info && liveMsg.info.host) {
     return;
   }
-  const { msg } = data.liveMsg ?? {};
-  let liveUser = false;
+  const msg = liveMsg?.msg ?? '';
+  const mentions = Array.isArray(liveMsg?.mentions) ? liveMsg.mentions : [];
+  const isMe = data.info?.liveUserId === props.liveUserId;
+  // 渲染/徽标事实源 = 载荷 mentions（与成员名单解耦，离线成员同样高亮）
+  const mentionMe =
+    !isMe && mentions.some(m => m.userId === props.liveUserId || m.userId === 'all');
   const len = tanmuMessage.value.length;
-  if (len > 0 && data.info?.liveUserId == tanmuMessage.value[len - 1]?.liveUserId) {
-    liveUser = true;
-  }
+  const prev = len > 0 ? tanmuMessage.value[len - 1] : undefined;
+  const liveUser = !!prev && data.info?.liveUserId == prev.liveUserId;
+  const time = typeof liveMsg?.time === 'number' ? liveMsg.time : Date.now();
+  const showTime = !prev || !liveUser || time - (prev.time ?? 0) > TIME_GAP_MS;
   tanmuMessage.value.push({
-    userName: data.liveMsg?.name,
+    userName: liveMsg?.name,
     message: msg,
-    isMe: data.info?.liveUserId === props.liveUserId,
+    isMe,
     isTeacher: data.info?.isTeacher,
     liveUserId: data.info?.liveUserId,
-    liveUser
+    liveUser,
+    time,
+    mentions: mentions.length ? mentions : undefined,
+    segments: segmentMessage(msg, mentions),
+    mentionMe,
+    showTime
   });
   updateNum(true, 1, 'chat');
+  if (mentionMe) emit('updateNum', true, 1, 'chat-mention');
 }
 
 function updateNum(status: boolean, num: number, type: string) {
@@ -484,17 +541,30 @@ async function sendMes(type: number) {
     ElMessage.error('聊天网络异常，发送失败！');
     return;
   }
+  if (!props.isTeacher && speechClose.value === FORBID_FORBIDDEN) {
+    ElMessage.warning('当前处于禁言状态，无法发言');
+    return;
+  }
   if (!sendContent.value) {
     ElMessage.warning('消息不能为空！');
     return;
   }
+  let content = sendContent.value;
+  if (content.length > CHAT_LIMITS.MAX_MESSAGE_LENGTH) {
+    ElMessage.warning(
+      `消息超长（${content.length}字），已截断至${CHAT_LIMITS.MAX_MESSAGE_LENGTH}字`
+    );
+    content = content.slice(0, CHAT_LIMITS.MAX_MESSAGE_LENGTH);
+  }
+  const mentions = extractMentions(content, mentionTargets.value);
   const mess = {
     type: 'bullet',
     data: {
       liveMsg: {
-        msg: sendContent.value,
+        msg: content,
         roomId: props.roomId,
-        name: props.userName
+        name: props.userName,
+        ...(mentions.length ? { mentions } : {})
       },
       info: {
         type,
@@ -508,7 +578,7 @@ async function sendMes(type: number) {
   sendContent.value = '';
 }
 
-defineExpose({ createTutorSocket, liveSocketClose, setSocketSend });
+defineExpose({ createTutorSocket, liveSocketClose, setSocketSend, sendMes });
 </script>
 
 <style lang="less" scoped>
@@ -539,6 +609,22 @@ defineExpose({ createTutorSocket, liveSocketClose, setSocketSend });
         color: #323232;
         margin-top: 4px;
         padding: 0px 12px;
+        .msg-time {
+          text-align: center;
+          color: #9ca3af;
+          font-size: 12px;
+          margin: 6px 0 2px;
+        }
+        .mention {
+          color: #1989fa;
+          font-weight: 600;
+        }
+        .mention-me {
+          background: #fff2cc;
+        }
+        .message-me .mention {
+          color: #fff7b1;
+        }
         .end {
           justify-content: flex-end;
         }
@@ -599,6 +685,10 @@ defineExpose({ createTutorSocket, liveSocketClose, setSocketSend });
     height: 44px;
     background: #efeff4;
     .flex();
+    .el-mention {
+      flex: 1;
+      min-width: 0;
+    }
     .hand {
       cursor: pointer;
     }

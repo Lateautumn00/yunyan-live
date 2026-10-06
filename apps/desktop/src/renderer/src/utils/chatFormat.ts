@@ -115,3 +115,38 @@ export function insertAtCursor(
     caret: from + insert.length
   };
 }
+
+/** 聊天面板 Unicode 表情调色板 */
+export const EMOJI_LIST = [
+  '😀',
+  '😂',
+  '🤣',
+  '😊',
+  '😍',
+  '😜',
+  '🤔',
+  '😎',
+  '😭',
+  '😢',
+  '😡',
+  '👍',
+  '👎',
+  '👏',
+  '🙏',
+  '💪',
+  '🎉',
+  '🔥',
+  '❤️',
+  '💔',
+  '🌹',
+  '☕',
+  '🌞',
+  '🌙'
+];
+
+/** 消息时间展示（本地时区 HH:mm；时间事实源为服务端 time，缺失回退接收时刻） */
+export function formatChatTime(ts = Date.now()): string {
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

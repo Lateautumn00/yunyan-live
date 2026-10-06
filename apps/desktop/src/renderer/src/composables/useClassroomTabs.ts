@@ -29,12 +29,12 @@ export function useClassroomTabs(options: ClassroomTabsOptions) {
   function updateNum(status: boolean, numArg: number, typeStr: string) {
     if (dotTop && layoutNum.value === 1) dotTop.value?.setIsDotNum(1);
     // @提及徽标归属聊天页签：聊天可见时同样走早退（防可见仍亮标）
-    const earlyKey = typeStr === 'chatMention' ? 'chat' : typeStr;
+    const earlyKey = typeStr === 'chat-mention' ? 'chat' : typeStr;
     if (activeName.value === earlyKey) return;
     if (status) {
       if (typeStr === badgeKey) badgeNum.value += numArg;
       if (typeStr === 'chat') chatNum.value += numArg;
-      if (typeStr === 'chatMention') chatMentionNum.value += numArg;
+      if (typeStr === 'chat-mention') chatMentionNum.value += numArg;
     } else {
       if (numArg === 0) {
         if (typeStr === badgeKey) badgeNum.value = 0;
@@ -42,11 +42,11 @@ export function useClassroomTabs(options: ClassroomTabsOptions) {
           chatNum.value = 0;
           chatMentionNum.value = 0;
         }
-        if (typeStr === 'chatMention') chatMentionNum.value = 0;
+        if (typeStr === 'chat-mention') chatMentionNum.value = 0;
       } else {
         if (typeStr === badgeKey) badgeNum.value -= numArg;
         if (typeStr === 'chat') chatNum.value -= numArg;
-        if (typeStr === 'chatMention') chatMentionNum.value -= numArg;
+        if (typeStr === 'chat-mention') chatMentionNum.value -= numArg;
       }
     }
   }
