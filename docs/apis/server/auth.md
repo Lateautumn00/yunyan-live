@@ -138,18 +138,3 @@
 | 字段     | 类型   | 必填 | 校验      |
 | -------- | ------ | ---- | --------- |
 | userName | string | 是   | 长度 2-50 |
-
-## 8. 按 ID 查询用户
-
-`GET /user/user/getUserById?userId=xxx`
-
-需要 JWT。
-
-**查询参数：** `userId`（string，必填）
-
-**响应 data：**
-
-| 字段     | 类型   | 说明    |
-| -------- | ------ | ------- |
-| userId   | string | 用户 ID |
-| userName | string | 用户名  |

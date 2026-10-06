@@ -99,7 +99,6 @@ interface LiveServiceClient {
   getStudentRooms(data: { page?: number; page_size?: number }, metadata?: Metadata): Observable<StudentRoomsResponse>;
   leaveRoom(data: { room_id: string }, metadata?: Metadata): Observable<LiveResponse>;
   batchLeave(data: { room_ids: string[] }, metadata?: Metadata): Observable<LiveResponse>;
-  getParticipants(data: { room_id: string }): Observable<unknown>;
   generateTransferCode(data: { room_id: string; target_user_id: string }): Observable<{ code: string; msg: string; transfer_code: string; expires_at: string }>;
   executeTransfer(data: { room_id: string; transfer_code: string; from_user_id: string }): Observable<{ code: string; msg: string }>;
   saveVideoRecording(data: { room_id: string; file_path: string; file_name: string; file_size: number; duration: number; record_type: number; teacher_name: string }): Observable<{ code: string; msg: string }>;
@@ -345,12 +344,6 @@ export class LiveController implements OnModuleInit {
     return grpcCall(this.liveService.batchLeave({ room_ids: roomIds }, metadata));
   }
 
-  @Get('participants')
-  @UseGuards(JwtAuthGuard)
-  getParticipants(@Query('roomId') roomId: string) {
-    return grpcCall(this.liveService.getParticipants({ room_id: roomId }));
-  }
-
   @Post('generateTransferCode')
   @UseGuards(JwtAuthGuard)
   generateTransferCode(@Body() body: { roomId: string }, @Request() req: { user: { userId: string } }) {
@@ -374,28 +367,6 @@ export class LiveController implements OnModuleInit {
   @UseGuards(JwtAuthGuard)
   searchTeachers(@Query('keyword') keyword: string) {
     return grpcCall(this.authService.searchTeachers({ keyword: keyword || '' }));
-  }
-
-  @Post('saveVideoRecording')
-  @UseGuards(JwtAuthGuard)
-  saveVideoRecording(@Body() body: {
-    roomId: string;
-    filePath: string;
-    fileName: string;
-    fileSize: number;
-    duration: number;
-    recordType: number;
-    teacherName?: string;
-  }, @Request() req: { user: { userId: string } }) {
-    return grpcCall(this.liveService.saveVideoRecording({
-      room_id: body.roomId,
-      file_path: body.filePath,
-      file_name: body.fileName,
-      file_size: body.fileSize,
-      duration: body.duration,
-      record_type: body.recordType,
-      teacher_name: body.teacherName || req.user.userId,
-    }));
   }
 
   @Get('videoList')
@@ -510,17 +481,6 @@ export class LiveController implements OnModuleInit {
       teacher_name: '',
     }));
     return { roomId: body.roomId, playBackUrl: body.playBackUrl };
-  }
-
-  @Get('liveEndInfo')
-  @UseGuards(JwtAuthGuard)
-  async liveEndInfo(@Query('roomId') roomId: string) {
-    try {
-      const result = await grpcCall(this.liveService.getParticipants({ room_id: roomId })) as { data?: { total?: number } };
-      return { totalWatchNum: result?.data?.total || 0 };
-    } catch {
-      return { totalWatchNum: 0 };
-    }
   }
 
   @Post("getUserWatchTimeList")

@@ -264,17 +264,3 @@ describe('AuthController.getMe', () => {
     ).rejects.toThrow('未登录');
   });
 });
-
-describe('AuthController.getUserById', () => {
-  it('只返回 userId 与 userName 两个字段', async () => {
-    const { controller } = createController();
-    const res = await controller.getUserById('u1');
-    expect(res).toEqual({ userId: 'u1', userName: '乌同学' });
-  });
-
-  it('上游缺 data 时抛错（锁定现状非空断言）', async () => {
-    const { controller, authService } = createController();
-    authService.getUser.mockReturnValueOnce(of({ code: '0', msg: 'ok' }));
-    await expect(controller.getUserById('u1')).rejects.toThrow(TypeError);
-  });
-});

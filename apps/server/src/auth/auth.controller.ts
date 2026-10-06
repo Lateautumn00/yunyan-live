@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, UseGuards, Request, Inject, OnModuleInit } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, Request, Inject, OnModuleInit } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { JwtService } from '@nestjs/jwt';
 import { Metadata } from '@grpc/grpc-js';
@@ -139,16 +139,5 @@ export class AuthController implements OnModuleInit {
       user_id: req.user.userId,
       username: dto.userName,
     }));
-  }
-
-  @Get('getUserById')
-  @UseGuards(JwtAuthGuard)
-  async getUserById(@Query('userId') userId: string) {
-    const result = await grpcCall(this.authService.getUser({ user_id: userId }));
-    const userData = result.data!;
-    return {
-      userId: userData.id,
-      userName: userData.username,
-    };
   }
 }

@@ -183,14 +183,6 @@
 | ------- | -------- | ---- | ------------ |
 | roomIds | string[] | 是   | 房间 ID 数组 |
 
-## 13. 获取房间参与者
-
-`GET /live/liveInfo/participants?roomId=xxx`
-
-需要 JWT。
-
-**响应 data：** gRPC `ParticipantsResponse.data`：`items`（每项 `user_id, username, joined_at`）+ `total`。
-
 ## 14. 生成房间转移码
 
 `POST /live/liveInfo/generateTransferCode`
@@ -221,24 +213,6 @@
 需要 JWT。转发到 auth-service 的 `SearchTeachers`。
 
 **响应 data：** 用户数组（`id, username, email, role`）。
-
-## 17. 保存直播录制
-
-`POST /live/liveInfo/saveVideoRecording`
-
-需要 JWT。
-
-**请求体：**
-
-| 字段        | 类型   | 必填 | 说明                        |
-| ----------- | ------ | ---- | --------------------------- |
-| roomId      | string | 是   | 房间 ID                     |
-| filePath    | string | 是   | 录制文件路径                |
-| fileName    | string | 是   | 文件名                      |
-| fileSize    | number | 是   | 文件大小（字节）            |
-| duration    | number | 是   | 时长（秒）                  |
-| recordType  | number | 是   | 1=直播录制，2=回放          |
-| teacherName | string | 否   | 老师名（缺省用当前用户 ID） |
 
 ## 18. 录制列表（回放）
 
@@ -316,14 +290,6 @@
 | duration    | number | 否   | 时长（秒），默认 0 |
 
 **响应 data：** `{ roomId, playBackUrl }`。
-
-## 23. 直播结束信息
-
-`GET /live/liveInfo/liveEndInfo?roomId=xxx`
-
-需要 JWT。
-
-**响应 data：** `{ totalWatchNum }`（总观看人数，取自参与者总数，失败时返回 0）。
 
 ## 24. 观看时长统计
 

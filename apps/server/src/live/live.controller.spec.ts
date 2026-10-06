@@ -37,7 +37,6 @@ function createController() {
     getStudentRooms: vi.fn(() => of(studentRoomsPayload())),
     leaveRoom: vi.fn(() => of({ code: '0', msg: 'ok' })),
     batchLeave: vi.fn(() => of({ code: '0', msg: 'ok' })),
-    getParticipants: vi.fn(() => of({ code: '0', msg: 'ok', data: { total: 7 } })),
     generateTransferCode: vi.fn(() =>
       of({ code: '0', msg: 'ok', transfer_code: 'T1', expires_at: 'x' })
     ),
@@ -494,7 +493,7 @@ describe('LiveController cmsList / getStudentRooms', () => {
   });
 });
 
-describe('LiveController delete / updateCode / leave / participants', () => {
+describe('LiveController delete / updateCode / leave', () => {
   it('delete 返回文档约定的中文 msg', async () => {
     const { controller, liveService } = createController();
     const res = await controller.delete('r1');
@@ -519,16 +518,9 @@ describe('LiveController delete / updateCode / leave / participants', () => {
       expect.any(Metadata)
     );
   });
-
-  it('getParticipants 透传 room_id', async () => {
-    const { controller, liveService } = createController();
-    const res = await controller.getParticipants('r1');
-    expect(liveService.getParticipants).toHaveBeenCalledWith({ room_id: 'r1' });
-    expect(res).toEqual({ code: '0', msg: 'ok', data: { total: 7 } });
-  });
 });
 
-describe('LiveController transfer / searchTeachers / saveVideoRecording', () => {
+describe('LiveController transfer / searchTeachers', () => {
   it('generateTransferCode 的 target_user_id 是当前调用者', async () => {
     const { controller, liveService } = createController();
     const res = await controller.generateTransferCode({ roomId: 'r1' }, req('u9'));
@@ -555,42 +547,6 @@ describe('LiveController transfer / searchTeachers / saveVideoRecording', () => 
     expect(authService.searchTeachers).toHaveBeenCalledWith({ keyword: '' });
     await controller.searchTeachers('张');
     expect(authService.searchTeachers).toHaveBeenCalledWith({ keyword: '张' });
-  });
-
-  it('saveVideoRecording snake_case 映射，teacherName 缺省取当前用户', async () => {
-    const { controller, liveService } = createController();
-    await controller.saveVideoRecording(
-      { roomId: 'r1', filePath: '/a.mp4', fileName: 'a.mp4', fileSize: 10, duration: 60, recordType: 1 },
-      req('u7')
-    );
-    expect(liveService.saveVideoRecording).toHaveBeenCalledWith({
-      room_id: 'r1',
-      file_path: '/a.mp4',
-      file_name: 'a.mp4',
-      file_size: 10,
-      duration: 60,
-      record_type: 1,
-      teacher_name: 'u7'
-    });
-  });
-
-  it('saveVideoRecording 显式 teacherName 优先', async () => {
-    const { controller, liveService } = createController();
-    await controller.saveVideoRecording(
-      {
-        roomId: 'r1',
-        filePath: '/a.mp4',
-        fileName: 'a.mp4',
-        fileSize: 10,
-        duration: 60,
-        recordType: 1,
-        teacherName: '张老师'
-      },
-      req('u7')
-    );
-    expect(liveService.saveVideoRecording).toHaveBeenCalledWith(
-      expect.objectContaining({ teacher_name: '张老师' })
-    );
   });
 });
 
@@ -734,7 +690,7 @@ describe('LiveController courseware', () => {
   });
 });
 
-describe('LiveController savePlayBackUrl / liveEndInfo / getUserWatchTimeList', () => {
+describe('LiveController savePlayBackUrl / getUserWatchTimeList', () => {
   it('savePlayBackUrl 复用录像保存（record_type=2）并返回扁平对象', async () => {
     const { controller, liveService } = createController();
     const res = await controller.savePlayBackUrl({
@@ -760,16 +716,6 @@ describe('LiveController savePlayBackUrl / liveEndInfo / getUserWatchTimeList', 
     expect(liveService.saveVideoRecording).toHaveBeenCalledWith(
       expect.objectContaining({ duration: 0 })
     );
-  });
-
-  it('liveEndInfo 成功取总人数，失败兜底 0（不再双层信封）', async () => {
-    const { controller, liveService } = createController();
-    const res = await controller.liveEndInfo('r1');
-    expect(liveService.getParticipants).toHaveBeenCalledWith({ room_id: 'r1' });
-    expect(res).toEqual({ totalWatchNum: 7 });
-    liveService.getParticipants.mockReturnValueOnce(throwError(() => ({ code: 13, details: 'x' })));
-    const fallback = await controller.liveEndInfo('r1');
-    expect(fallback).toEqual({ totalWatchNum: 0 });
   });
 
   it('getUserWatchTimeList 映射分页与昵称（查不到时回退原始 id）', async () => {
