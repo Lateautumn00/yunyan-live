@@ -98,8 +98,7 @@
         >
           <ul class="layout">
             <li :class="layoutNum === 1 ? 'not' : ''" @click="setLayout(1)">
-              <el-icon :class="layoutNum === 1 ? 'click-btn' : ''">
-                <Grid /> </el-icon
+              <el-icon :class="layoutNum === 1 ? 'click-btn' : ''"> <Grid /> </el-icon
               ><span>白板模式</span>
             </li>
             <li :class="layoutNum === 3 || layoutNum === 2 ? 'not' : ''" @click="setLayout(3)">
@@ -156,9 +155,7 @@
         </el-popover>
 
         <div class="top-left content">
-          <el-icon :size="18">
-            <Timer /> </el-icon
-          ><span>{{ formatStopwatch(liveTimeLen) }}</span>
+          <el-icon :size="18"> <Timer /> </el-icon><span>{{ formatStopwatch(liveTimeLen) }}</span>
         </div>
       </div>
       <div class="right">
@@ -167,59 +164,45 @@
           class="top-right content"
           @click="openLives(true, 'hires', 'open')"
         >
-          <el-icon :size="16">
-            <VideoPlay /> </el-icon
-          ><span>开始直播</span>
+          <el-icon :size="16"> <VideoPlay /> </el-icon><span>开始直播</span>
         </div>
         <div
           v-if="!btn && isTeacher && type === 'stop'"
           class="top-right content"
           @click="openLives(true, 'hires', 'open')"
         >
-          <el-icon :size="16">
-            <VideoPlay /> </el-icon
-          ><span>继续直播</span>
+          <el-icon :size="16"> <VideoPlay /> </el-icon><span>继续直播</span>
         </div>
         <div v-if="!btn && isTeacher" class="top-right content" @click="lookLive(false)">
-          <el-icon :size="16">
-            <CircleClose /> </el-icon
-          ><span>退出</span>
+          <el-icon :size="16"> <CircleClose /> </el-icon><span>退出</span>
         </div>
         <div
           v-if="btn && isTeacher"
           class="top-right content"
           @click="openLives(false, '', 'stop')"
         >
-          <el-icon :size="16">
-            <VideoPause /> </el-icon
-          ><span>暂停直播</span>
+          <el-icon :size="16"> <VideoPause /> </el-icon><span>暂停直播</span>
         </div>
         <div
           v-if="btn && (isTeacher || isInteraction === 2) && liveType === 'hires'"
           class="top-right content"
           @click="openLives(true, 'screen', 'update')"
         >
-          <el-icon :size="16">
-            <Monitor /> </el-icon
-          ><span>共享桌面</span>
+          <el-icon :size="16"> <Monitor /> </el-icon><span>共享桌面</span>
         </div>
         <div
           v-if="btn && (isTeacher || isInteraction === 2) && liveType === 'screen'"
           class="top-right content"
           @click="openLives(true, 'hires', 'update')"
         >
-          <el-icon :size="16">
-            <Monitor /> </el-icon
-          ><span>结束共享</span>
+          <el-icon :size="16"> <Monitor /> </el-icon><span>结束共享</span>
         </div>
         <div
           v-if="!recordType && btn && isTeacher"
           class="top-right content"
           @click="record(true, recordTimeLen)"
         >
-          <el-icon :size="16">
-            <VideoCamera /> </el-icon
-          ><span>录制</span>
+          <el-icon :size="16"> <VideoCamera /> </el-icon><span>录制</span>
         </div>
         <div
           v-if="recordType && btn && isTeacher"
@@ -228,20 +211,15 @@
           @mouseover="recordMouse(true)"
           @mouseleave="recordMouse(false)"
         >
-          <el-icon :size="16" color="#e0383e" aria-label="录制中">
-            <VideoCameraFilled /> </el-icon
+          <el-icon :size="16" color="#e0383e" aria-label="录制中"> <VideoCameraFilled /> </el-icon
           ><span v-show="!recordMouseType">{{ formatStopwatch(recordTimeLen) }}</span
           ><span v-show="recordMouseType">停止录制</span>
         </div>
         <div v-if="btn && isTeacher" class="top-right content closebgcolor" @click="end()">
-          <el-icon :size="16">
-            <CircleClose /> </el-icon
-          ><span>结束</span>
+          <el-icon :size="16"> <CircleClose /> </el-icon><span>结束</span>
         </div>
         <div v-if="!isTeacher" class="top-right content closebgcolor" @click="lookLive(false)">
-          <el-icon :size="16">
-            <CircleClose /> </el-icon
-          ><span>退出</span>
+          <el-icon :size="16"> <CircleClose /> </el-icon><span>退出</span>
         </div>
       </div>
     </div>
