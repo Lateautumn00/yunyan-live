@@ -15,11 +15,14 @@ interface AuthUser {
 /** Bearer JWT 策略：校验签发合法性并叠加 Redis 会话状态（被顶下线/过期） */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(config: ConfigService, private readonly sessionService: SessionService) {
+  constructor(
+    config: ConfigService,
+    private readonly sessionService: SessionService
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: config.get('JWT_SECRET'),
+      secretOrKey: config.get('JWT_SECRET')
     });
   }
 
@@ -35,7 +38,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       userId: payload.sub,
       email: payload.email,
       role: payload.role,
-      sid: payload.sid,
+      sid: payload.sid
     };
   }
 }

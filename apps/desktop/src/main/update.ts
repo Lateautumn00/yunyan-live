@@ -12,11 +12,11 @@ export function initUpdater(getWindow: () => BrowserWindow | null, feedUrl: stri
     }
   };
 
-  autoUpdater.on('error', (error) => send('error', String(error)));
+  autoUpdater.on('error', error => send('error', String(error)));
   autoUpdater.on('checking-for-update', () => send('checking'));
   autoUpdater.on('update-available', () => send('update-available'));
   autoUpdater.on('update-not-available', () => send('update-not-available'));
-  autoUpdater.on('download-progress', (progress) => send('download-progress', progress.percent));
+  autoUpdater.on('download-progress', progress => send('download-progress', progress.percent));
   autoUpdater.on('update-downloaded', () => {
     send('update-downloaded');
     setImmediate(() => autoUpdater.quitAndInstall());

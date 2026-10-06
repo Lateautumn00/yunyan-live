@@ -1,12 +1,10 @@
 export interface JanusSession {
-  attach: (
-    opts: {
-      plugin: string;
-      success?: (handle: JanusPluginHandle) => void;
-      error?: (error: string) => void;
-      consentDialog?: (on: boolean) => void;
-    }
-  ) => void;
+  attach: (opts: {
+    plugin: string;
+    success?: (handle: JanusPluginHandle) => void;
+    error?: (error: string) => void;
+    consentDialog?: (on: boolean) => void;
+  }) => void;
   destroy: () => void;
   getServer: () => string;
   getId: () => number;

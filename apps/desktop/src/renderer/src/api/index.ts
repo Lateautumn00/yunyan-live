@@ -22,7 +22,13 @@ export default {
   updateForbid(params: { roomId: string; liveUserId: string; status: number }) {
     return http.post(`${config.liveApi}/push/updateForbid`, params);
   },
-  async register(params: { email: string; userName: string; password: string; role?: number; code: string }) {
+  async register(params: {
+    email: string;
+    userName: string;
+    password: string;
+    role?: number;
+    code: string;
+  }) {
     return http.post(`${config.userApi}/user/register`, {
       ...params,
       password: await encryptPassword(params.password)

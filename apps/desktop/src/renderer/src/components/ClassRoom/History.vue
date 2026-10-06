@@ -1,10 +1,7 @@
 <template>
   <div class="classroom-history">
     <ul>
-      <li
-        v-for="(item, index) in videoList"
-        :key="index"
-      >
+      <li v-for="(item, index) in videoList" :key="index">
         <div
           class="top"
           @click="palyHistoryVideo(item.address || item.playBackUrl, `回放${item.title}`)"
@@ -84,7 +81,7 @@ function delVideoList(id: string | undefined, index: number) {
     .then(() => {
       delList(id, index);
     })
-    .catch((e) => {
+    .catch(e => {
       console.error(e);
       ElMessage.error('删除录像出异常');
     })

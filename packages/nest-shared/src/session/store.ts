@@ -8,7 +8,7 @@ import {
   SESSION_KICK_CHANNEL,
   SESSION_TTL_SECONDS,
   SessionState,
-  sessionKey,
+  sessionKey
 } from './constants';
 
 @Injectable()
@@ -37,8 +37,8 @@ export class SessionService {
   }
 
   async validateSid(guid: string, sid: string | undefined): Promise<SessionState> {
-    return validateSession(this.redis, guid, sid, (err) =>
-      this.logger.error(`validateSid fail-open for guid=${guid}: ${String(err)}`),
+    return validateSession(this.redis, guid, sid, err =>
+      this.logger.error(`validateSid fail-open for guid=${guid}: ${String(err)}`)
     );
   }
 

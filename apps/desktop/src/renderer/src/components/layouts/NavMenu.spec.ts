@@ -46,7 +46,7 @@ describe('NavMenu.vue', () => {
     const { wrapper } = await mountNavMenu('1');
     expect(wrapper.text()).toContain('云砚直播');
     const items = wrapper.findAll('.el-menu-item');
-    expect(items.map((i) => i.text())).toEqual([
+    expect(items.map(i => i.text())).toEqual([
       '创建直播',
       '我的直播',
       '回放管理',

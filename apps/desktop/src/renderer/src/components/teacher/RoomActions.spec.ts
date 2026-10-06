@@ -175,7 +175,7 @@ describe('components/teacher/RoomActions.vue', () => {
     vm(wrapper).onCommand('gotoroom');
     await flushPromises();
     expect(wrapper.find('.el-overlay').exists()).toBe(false);
-    const inBody = Array.from(document.body.querySelectorAll('.el-dialog')).some((el) =>
+    const inBody = Array.from(document.body.querySelectorAll('.el-dialog')).some(el =>
       (el.textContent ?? '').includes('请选择进入直播间身份')
     );
     expect(inBody).toBe(true);

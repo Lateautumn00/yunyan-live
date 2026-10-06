@@ -5,6 +5,6 @@ import { GatewayClientsModule } from '../gateway/clients.module';
 
 @Module({
   imports: [GatewayClientsModule],
-  controllers: [LiveController, PushController],
+  controllers: [LiveController, PushController]
 })
 export class LiveModule {}

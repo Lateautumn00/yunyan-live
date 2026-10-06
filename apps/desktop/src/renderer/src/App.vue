@@ -19,7 +19,7 @@ const strokeWidth = 200;
 const timeOut = ref<number | null>(null);
 
 onMounted(() => {
-  window.electronAPI?.onMessage((payload) => {
+  window.electronAPI?.onMessage(payload => {
     const { type, message } = payload as unknown as UpdatePayload;
     if (type === 'update-available') {
       dialogVisible.value = true;

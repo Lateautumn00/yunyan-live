@@ -8,14 +8,14 @@ function getPrivateKey(): KeyObject {
   if (!raw) {
     throw grpcError(
       status.INTERNAL,
-      '服务端未配置 PASSWORD_PRIVATE_KEY（运行 pnpm gen:keys --write-env 生成）',
+      '服务端未配置 PASSWORD_PRIVATE_KEY（运行 pnpm gen:keys --write-env 生成）'
     );
   }
   try {
     return createPrivateKey({
       key: Buffer.from(raw.trim(), 'base64'),
       format: 'der',
-      type: 'pkcs8',
+      type: 'pkcs8'
     });
   } catch {
     throw grpcError(status.INTERNAL, 'PASSWORD_PRIVATE_KEY 格式无效，需为 PKCS8 DER base64');
@@ -35,7 +35,7 @@ export function decryptPassword(cipherBase64: string): string {
     // WebCrypto RSA-OAEP 使用 SHA-256（OAEP 与 MGF1 同 hash），Node 默认 SHA-1 不兼容
     plaintext = privateDecrypt(
       { key: getPrivateKey(), padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
-      Buffer.from(cipherBase64, 'base64'),
+      Buffer.from(cipherBase64, 'base64')
     );
   } catch (err) {
     if (err instanceof RpcException) throw err;

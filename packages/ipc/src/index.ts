@@ -4,7 +4,7 @@ export const IpcChannels = {
   getSources: 'desktop-capturer:get-sources',
   clipboardWrite: 'clipboard:write-text',
   recordingGetFileUrl: 'recording:get-file-url',
-  recordingSaveBlob: 'recording:save-blob',
+  recordingSaveBlob: 'recording:save-blob'
 } as const;
 
 export interface DesktopSource {

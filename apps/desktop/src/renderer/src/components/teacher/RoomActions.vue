@@ -1,41 +1,21 @@
 <template>
   <div class="room-actions">
-    <el-dropdown
-      v-if="isDropdown"
-      @command="onCommand"
-    >
+    <el-dropdown v-if="isDropdown" @command="onCommand">
       <span class="el-dropdown-link">
         <el-icon><MoreFilled /></el-icon>
       </span>
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item
-            v-for="item in menuItems"
-            :key="item.command"
-            :command="item.command"
-          >
+          <el-dropdown-item v-for="item in menuItems" :key="item.command" :command="item.command">
             {{ item.label }}
           </el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>
 
-    <div
-      v-else
-      class="action-buttons"
-    >
-      <el-button
-        type="primary"
-        @click="roomDialogVisible = true"
-      >
-        进入房间
-      </el-button>
-      <el-button
-        v-if="(room.status ?? 0) > 2"
-        @click="nav.goplayback(room)"
-      >
-        回放
-      </el-button>
+    <div v-else class="action-buttons">
+      <el-button type="primary" @click="roomDialogVisible = true"> 进入房间 </el-button>
+      <el-button v-if="(room.status ?? 0) > 2" @click="nav.goplayback(room)"> 回放 </el-button>
       <el-dropdown @command="onCommand">
         <el-button>
           更多
@@ -45,11 +25,7 @@
         </el-button>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item
-              v-for="item in menuItems"
-              :key="item.command"
-              :command="item.command"
-            >
+            <el-dropdown-item v-for="item in menuItems" :key="item.command" :command="item.command">
               {{ item.label }}
             </el-dropdown-item>
           </el-dropdown-menu>
@@ -64,21 +40,14 @@
       width="min(480px, 90vw)"
       align-center
     >
-      <el-icon
-        class="jinggao"
-        aria-label="警告"
-      >
+      <el-icon class="jinggao" aria-label="警告">
         <WarningFilled />
       </el-icon>
       <span>删除后，将无法恢复，确定删除么？</span>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="deleteDialogVisible = false">取 消</el-button>
-          <el-button
-            type="primary"
-            :loading="deleting"
-            @click="submitDelete"
-          >确 定</el-button>
+          <el-button type="primary" :loading="deleting" @click="submitDelete">确 定</el-button>
         </span>
       </template>
     </el-dialog>
@@ -90,19 +59,13 @@
       width="min(480px, 90vw)"
     >
       <div class="room-entrance">
-        <div
-          class="go-live-room"
-          @click="goLiveRoom(0)"
-        >
+        <div class="go-live-room" @click="goLiveRoom(0)">
           <div :class="isHostRoom ? 'guest' : 'guest-chosen'">
             <p>以听众身份进入</p>
             <p>我爱知识与自由</p>
           </div>
         </div>
-        <div
-          class="go-live-room"
-          @click="goLiveRoom(1)"
-        >
+        <div class="go-live-room" @click="goLiveRoom(1)">
           <div :class="!isHostRoom ? 'host' : 'host-chosen'">
             <p>以老师身份进入</p>
             <p>争做新时代的好讲师</p>
@@ -119,10 +82,7 @@
       width="min(480px, 90vw)"
       align-center
     >
-      <ShareLinks
-        :room-id="room.roomId ?? ''"
-        :join-code="room.joinCode"
-      />
+      <ShareLinks :room-id="room.roomId ?? ''" :join-code="room.joinCode" />
     </el-dialog>
 
     <el-dialog
@@ -154,7 +114,8 @@
             :disabled="!transferCode"
             :loading="transferring"
             @click="submitTransfer"
-          >确 定</el-button>
+            >确 定</el-button
+          >
         </span>
       </template>
     </el-dialog>
@@ -166,22 +127,11 @@
       width="min(600px, 90vw)"
       align-center
     >
-      <el-form
-        ref="editFormRef"
-        :model="editForm"
-        :rules="editRules"
-        label-width="100px"
-      >
-        <el-form-item
-          label="直播名称"
-          prop="title"
-        >
+      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="100px">
+        <el-form-item label="直播名称" prop="title">
           <el-input v-model="editForm.title" />
         </el-form-item>
-        <el-form-item
-          label="直播类型"
-          prop="type"
-        >
+        <el-form-item label="直播类型" prop="type">
           <div class="live-type">
             <div
               class="type-option"
@@ -199,10 +149,7 @@
             </div>
           </div>
         </el-form-item>
-        <el-form-item
-          label="开始时间"
-          prop="startTime"
-        >
+        <el-form-item label="开始时间" prop="startTime">
           <el-date-picker
             v-model="editForm.startTime"
             type="datetime"
@@ -210,33 +157,19 @@
             placeholder="选择日期时间"
           />
         </el-form-item>
-        <el-form-item
-          label="直播时长"
-          prop="duration"
-        >
-          <el-input-number
-            v-model="editForm.duration"
-            :min="10"
-            :max="1000"
-          />
+        <el-form-item label="直播时长" prop="duration">
+          <el-input-number v-model="editForm.duration" :min="10" :max="1000" />
         </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="editDialogVisible = false">取 消</el-button>
-          <el-button
-            type="primary"
-            :loading="editing"
-            @click="submitEdit"
-          >确认修改</el-button>
+          <el-button type="primary" :loading="editing" @click="submitEdit">确认修改</el-button>
         </span>
       </template>
     </el-dialog>
 
-    <CoursewareUpload
-      v-model="coursewareDialogVisible"
-      :room-id="room.roomId ?? ''"
-    />
+    <CoursewareUpload v-model="coursewareDialogVisible" :room-id="room.roomId ?? ''" />
   </div>
 </template>
 
@@ -359,7 +292,7 @@ const { loading: deleting, run: submitDelete } = useAsyncAction(
     ElMessage.success('删除成功');
     emit('deleted');
   },
-  { onError: (e) => console.error(e) }
+  { onError: e => console.error(e) }
 );
 
 const { loading: transferring, run: submitTransfer } = useAsyncAction(

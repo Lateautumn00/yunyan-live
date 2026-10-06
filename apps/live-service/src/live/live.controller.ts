@@ -12,30 +12,36 @@ export class LiveController {
   constructor(private readonly liveService: LiveService) {}
 
   @GrpcMethod('LiveService', 'CreateLive')
-  async createLive(data: {
-    title: string;
-    type?: number;
-    start_time: string;
-    duration?: number;
-    room_id?: string;
-  }, metadata: Metadata) {
+  async createLive(
+    data: {
+      title: string;
+      type?: number;
+      start_time: string;
+      duration?: number;
+      room_id?: string;
+    },
+    metadata: Metadata
+  ) {
     const userId = userIdFromMetadata(metadata);
     this.logger.log(`gRPC CreateLive: ${data.title} by ${userId}`);
-    const room = await this.liveService.create({
-      title: data.title,
-      type: data.type,
-      startTime: data.start_time,
-      duration: data.duration,
-      roomId: data.room_id,
-    }, userId);
+    const room = await this.liveService.create(
+      {
+        title: data.title,
+        type: data.type,
+        startTime: data.start_time,
+        duration: data.duration,
+        roomId: data.room_id
+      },
+      userId
+    );
     return ok({
       data: {
         room_id: room.roomId,
         title: room.title,
         speaker_name: '',
         join_code: room.joinCode,
-        status: room.status,
-      },
+        status: room.status
+      }
     });
   }
 
@@ -44,7 +50,7 @@ export class LiveController {
     this.logger.log(`gRPC JoinLive: ${data.join_code}`);
     const result = await this.liveService.join({
       joinCode: data.join_code,
-      liveUserId: data.live_user_id,
+      liveUserId: data.live_user_id
     });
     return ok({
       data: {
@@ -53,8 +59,8 @@ export class LiveController {
         role_name: result.roleName,
         join_code: result.joinCode,
         live_type: result.liveType,
-        status: result.status,
-      },
+        status: result.status
+      }
     });
   }
 
@@ -71,8 +77,8 @@ export class LiveController {
         status: room.status,
         type: room.type,
         live_started_at: room.liveStartedAt?.getTime().toString() || '',
-        live_user_id: room.liveUserId,
-      },
+        live_user_id: room.liveUserId
+      }
     });
   }
 
@@ -86,20 +92,26 @@ export class LiveController {
         title: room.title,
         speaker_name: '',
         join_code: room.joinCode,
-        status: room.status,
-      },
+        status: room.status
+      }
     });
   }
 
   @GrpcMethod('LiveService', 'UpdateLive')
-  async updateLive(data: { room_id: string; title?: string; type?: number; start_time?: string; duration?: number }) {
+  async updateLive(data: {
+    room_id: string;
+    title?: string;
+    type?: number;
+    start_time?: string;
+    duration?: number;
+  }) {
     this.logger.log(`gRPC UpdateLive: ${data.room_id}`);
     const room = await this.liveService.update({
       roomId: data.room_id,
       title: data.title,
       type: data.type,
       startTime: data.start_time,
-      duration: data.duration,
+      duration: data.duration
     });
     return ok({
       data: {
@@ -109,17 +121,41 @@ export class LiveController {
         join_code: room.joinCode,
         status: room.status,
         type: room.type,
-        start_time: room.startTime instanceof Date ? room.startTime.getTime().toString() : String(room.startTime || ''),
-        duration: room.duration,
-      },
+        start_time:
+          room.startTime instanceof Date
+            ? room.startTime.getTime().toString()
+            : String(room.startTime || ''),
+        duration: room.duration
+      }
     });
   }
 
   @GrpcMethod('LiveService', 'CmsList')
-  async cmsList(data: { page?: number; page_size?: number; status?: number; live_user_id?: string; search_name?: string; start_time?: string; end_time?: string; type?: number }, metadata: Metadata) {
+  async cmsList(
+    data: {
+      page?: number;
+      page_size?: number;
+      status?: number;
+      live_user_id?: string;
+      search_name?: string;
+      start_time?: string;
+      end_time?: string;
+      type?: number;
+    },
+    metadata: Metadata
+  ) {
     const userId = userIdFromMetadata(metadata);
     this.logger.log(`gRPC CmsList: page=${data.page}`);
-    const result = await this.liveService.cmsList(data.page, data.page_size, data.status, userId, data.search_name, data.start_time, data.end_time, data.type);
+    const result = await this.liveService.cmsList(
+      data.page,
+      data.page_size,
+      data.status,
+      userId,
+      data.search_name,
+      data.start_time,
+      data.end_time,
+      data.type
+    );
     return ok({
       data: {
         items: result.list.map(item => ({
@@ -130,13 +166,16 @@ export class LiveController {
           join_code: item.joinCode,
           status: item.status,
           type: item.type,
-          start_time: item.startTime instanceof Date ? item.startTime.getTime().toString() : String(item.startTime || ''),
+          start_time:
+            item.startTime instanceof Date
+              ? item.startTime.getTime().toString()
+              : String(item.startTime || ''),
           teacher_code: item.teacherCode,
           student_code: item.studentCode,
-          duration: item.duration,
+          duration: item.duration
         })),
-        total: result.total,
-      },
+        total: result.total
+      }
     });
   }
 
@@ -152,11 +191,14 @@ export class LiveController {
         join_code: room.joinCode,
         status: room.status,
         type: room.type,
-        start_time: room.startTime instanceof Date ? room.startTime.getTime().toString() : String(room.startTime),
+        start_time:
+          room.startTime instanceof Date
+            ? room.startTime.getTime().toString()
+            : String(room.startTime),
         duration: room.duration,
         teacher_code: room.joinCode,
-        student_code: room.joinCode,
-      },
+        student_code: room.joinCode
+      }
     });
   }
 
@@ -178,7 +220,11 @@ export class LiveController {
   async getStudentRooms(data: { page?: number; page_size?: number }, metadata: Metadata) {
     const userId = userIdFromMetadata(metadata);
     this.logger.log(`gRPC GetStudentRooms: ${userId}`);
-    const { items, total } = await this.liveService.getStudentRooms(userId, data.page, data.page_size);
+    const { items, total } = await this.liveService.getStudentRooms(
+      userId,
+      data.page,
+      data.page_size
+    );
     return ok({
       data: {
         items: items.map(r => ({
@@ -188,11 +234,14 @@ export class LiveController {
           live_user_id: r.liveUserId,
           join_code: r.joinCode,
           status: r.status,
-          start_time: r.startTime instanceof Date ? r.startTime.getTime().toString() : String(r.startTime || ''),
-          type: r.type,
+          start_time:
+            r.startTime instanceof Date
+              ? r.startTime.getTime().toString()
+              : String(r.startTime || ''),
+          type: r.type
         })),
-        total,
-      },
+        total
+      }
     });
   }
 
@@ -221,20 +270,25 @@ export class LiveController {
         items: participants.map(p => ({
           user_id: p.userId,
           username: p.userId,
-          joined_at: p.joinedAt.toISOString(),
+          joined_at: p.joinedAt.toISOString()
         })),
-        total: participants.length,
-      },
+        total: participants.length
+      }
     });
   }
 
   @GrpcMethod('LiveService', 'GenerateTransferCode')
   async generateTransferCode(data: { room_id: string; target_user_id: string }) {
-    this.logger.log(`gRPC GenerateTransferCode: room=${data.room_id} target=${data.target_user_id}`);
-    const result = await this.liveService.generateRoomTransferCode(data.room_id, data.target_user_id);
+    this.logger.log(
+      `gRPC GenerateTransferCode: room=${data.room_id} target=${data.target_user_id}`
+    );
+    const result = await this.liveService.generateRoomTransferCode(
+      data.room_id,
+      data.target_user_id
+    );
     return ok({
       transfer_code: result.code,
-      expires_at: result.expiresAt,
+      expires_at: result.expiresAt
     });
   }
 
@@ -263,7 +317,7 @@ export class LiveController {
       fileSize: data.file_size,
       duration: data.duration,
       recordType: data.record_type,
-      teacherName: data.teacher_name,
+      teacherName: data.teacher_name
     });
     return ok();
   }
@@ -286,7 +340,7 @@ export class LiveController {
       searchName: data.search_name,
       startTime: data.start_time,
       endTime: data.end_time,
-      type: data.type,
+      type: data.type
     });
     return ok({
       data: {
@@ -296,10 +350,10 @@ export class LiveController {
           teacher_name: item.teacherName,
           type: item.type,
           start_time: item.startTime,
-          count: item.count,
+          count: item.count
         })),
-        total: result.total,
-      },
+        total: result.total
+      }
     });
   }
 
@@ -309,7 +363,7 @@ export class LiveController {
     const result = await this.liveService.getVideoDetail({
       roomId: data.room_id,
       startTime: data.start_time,
-      endTime: data.end_time,
+      endTime: data.end_time
     });
     return ok({
       data: {
@@ -322,10 +376,10 @@ export class LiveController {
           duration: item.duration,
           record_type: item.recordType,
           teacher_name: item.teacherName,
-          created_at: item.createdAt,
+          created_at: item.createdAt
         })),
-        total: result.total,
-      },
+        total: result.total
+      }
     });
   }
 
@@ -359,7 +413,7 @@ export class LiveController {
       filext: data.filext,
       filesize: Number(data.filesize) || 0,
       fileurl: data.fileurl,
-      createUserId: data.create_user_id,
+      createUserId: data.create_user_id
     });
     return ok();
   }
@@ -377,10 +431,10 @@ export class LiveController {
           filext: item.filext,
           filesize: item.filesize,
           fileurl: item.fileurl,
-          created_at: item.createdAt,
+          created_at: item.createdAt
         })),
-        total: result.total,
-      },
+        total: result.total
+      }
     });
   }
 
@@ -390,7 +444,6 @@ export class LiveController {
     await this.liveService.deleteCourseware(data.id);
     return ok();
   }
-
 
   @GrpcMethod('LiveService', 'GetUserWatchTimeList')
   async getUserWatchTimeList(data: {
@@ -404,7 +457,7 @@ export class LiveController {
       page: data.page,
       pageSize: data.page_size,
       roomId: data.room_id,
-      searchName: data.search_name,
+      searchName: data.search_name
     });
     return ok({
       data: {
@@ -416,11 +469,11 @@ export class LiveController {
             : Math.floor((Date.now() - item.joinedAt.getTime()) / 1000),
           joined_at: item.joinedAt.toISOString(),
           left_at: item.leftAt ? item.leftAt.toISOString() : '',
-          is_online: item.isOnline,
+          is_online: item.isOnline
         })),
         total: result.total,
-        total_time_by_room: result.totalTime,
-      },
+        total_time_by_room: result.totalTime
+      }
     });
   }
 }

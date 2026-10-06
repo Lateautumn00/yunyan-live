@@ -66,11 +66,11 @@ describe('ClassRoom Apply.vue', () => {
     vmOf(wrapper).setAudioAll(['id', 'name', '王五', 'on']);
     await wrapper.vm.$nextTick();
     const buttons = wrapper.findAll('span');
-    const muted = buttons.find((b) => b.text() === '禁麦');
+    const muted = buttons.find(b => b.text() === '禁麦');
     expect(muted).toBeTruthy();
     await muted!.trigger('click');
     expect(wrapper.emitted('isTalking')?.[0]).toEqual(['off']);
-    const exit = buttons.find((b) => b.text() === '退出');
+    const exit = buttons.find(b => b.text() === '退出');
     await exit!.trigger('click');
     expect(wrapper.emitted('stopApplication')).toHaveLength(1);
   });

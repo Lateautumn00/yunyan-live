@@ -31,16 +31,13 @@ const desktopCapturer = {
 };
 Live.sessions = {};
 
-Live.isExtensionEnabled = function() {
+Live.isExtensionEnabled = function () {
   if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
     // No need for the extension, getDisplayMedia is supported
     return true;
   }
   if (window.navigator.userAgent.match('Chrome')) {
-    var chromever = parseInt(
-      window.navigator.userAgent.match(/Chrome\/(.*) /)[1],
-      10
-    );
+    var chromever = parseInt(window.navigator.userAgent.match(/Chrome\/(.*) /)[1], 10);
     var maxver = 33;
     if (window.navigator.userAgent.match('Linux')) maxver = 35; // "known" crash in chrome 34 and 35 on linux
     if (chromever >= 26 && chromever <= maxver) {
@@ -57,11 +54,11 @@ Live.isExtensionEnabled = function() {
 var defaultExtension = {
   // Screensharing Chrome Extension ID
   extensionId: 'hapfgfdkleiggjjpfpenajgdnfckjpaj',
-  isInstalled: function() {
+  isInstalled: function () {
     return document.querySelector('#janus-extension-installed') !== null;
   },
-  getScreen: function(callback) {
-    var pending = window.setTimeout(function() {
+  getScreen: function (callback) {
+    var pending = window.setTimeout(function () {
       var error = new Error('NavigatorUserMediaError');
       error.name =
         'The required Chrome extension is not installed: click <a href="#">here</a> to install it. (NOTE: this will need you to refresh the page)';
@@ -76,11 +73,11 @@ var defaultExtension = {
       '*'
     );
   },
-  init: function() {
+  init: function () {
     var cache = {};
     this.cache = cache;
     // Wait for events from the Chrome Extension
-    window.addEventListener('message', function(event) {
+    window.addEventListener('message', function (event) {
       if (event.origin != window.location.origin) return;
       if (event.data.type == 'janusGotScreen' && cache[event.data.id]) {
         var callback = cache[event.data.id];
@@ -102,21 +99,21 @@ var defaultExtension = {
   }
 };
 
-Live.useDefaultDependencies = function(deps) {
+Live.useDefaultDependencies = function (deps) {
   var f = (deps && deps.fetch) || fetch;
   var p = (deps && deps.Promise) || Promise;
   var socketCls = (deps && deps.WebSocket) || WebSocket;
 
   return {
-    newWebSocket: function(server, proto) {
+    newWebSocket: function (server, proto) {
       return new socketCls(server, proto);
     },
     extension: (deps && deps.extension) || defaultExtension,
-    isArray: function(arr) {
+    isArray: function (arr) {
       return Array.isArray(arr);
     },
     webRTCAdapter: (deps && deps.adapter) || adapter,
-    httpAPICall: function(url, options) {
+    httpAPICall: function (url, options) {
       var fetchOptions = {
         method: options.verb,
         headers: {
@@ -132,14 +129,14 @@ Live.useDefaultDependencies = function(deps) {
           options.withCredentials === true
             ? 'include'
             : options.withCredentials
-            ? options.withCredentials
-            : 'omit';
+              ? options.withCredentials
+              : 'omit';
       }
       if (options.body) {
         fetchOptions.body = JSON.stringify(options.body);
       }
 
-      var fetching = f(url, fetchOptions).catch(function(error) {
+      var fetching = f(url, fetchOptions).catch(function (error) {
         return p.reject({
           message: 'Probably a network error, is the server down?',
           error: error
@@ -152,8 +149,8 @@ Live.useDefaultDependencies = function(deps) {
        */
 
       if (options.timeout) {
-        var timeout = new p(function(resolve, reject) {
-          var timerId = setTimeout(function() {
+        var timeout = new p(function (resolve, reject) {
+          var timerId = setTimeout(function () {
             clearTimeout(timerId);
             return reject({
               message: 'Request timed out',
@@ -165,15 +162,15 @@ Live.useDefaultDependencies = function(deps) {
       }
 
       fetching
-        .then(function(response) {
+        .then(function (response) {
           if (response.ok) {
             if (typeof options.success === typeof Live.noop) {
               return response
                 .json()
-                .then(function(parsed) {
+                .then(function (parsed) {
                   options.success(parsed);
                 })
-                .catch(function(error) {
+                .catch(function (error) {
                   return p.reject({
                     message: 'Failed to parse response body',
                     error: error,
@@ -188,7 +185,7 @@ Live.useDefaultDependencies = function(deps) {
             });
           }
         })
-        .catch(function(error) {
+        .catch(function (error) {
           if (typeof options.error === typeof Live.noop) {
             options.error(error.message || '<< internal error >>', error);
           }
@@ -199,19 +196,19 @@ Live.useDefaultDependencies = function(deps) {
   };
 };
 
-Live.useOldDependencies = function(deps) {
+Live.useOldDependencies = function (deps) {
   var jq = (deps && deps.jQuery) || jQuery;
   var socketCls = (deps && deps.WebSocket) || WebSocket;
   return {
-    newWebSocket: function(server, proto) {
+    newWebSocket: function (server, proto) {
       return new socketCls(server, proto);
     },
-    isArray: function(arr) {
+    isArray: function (arr) {
       return jq.isArray(arr);
     },
     extension: (deps && deps.extension) || defaultExtension,
     webRTCAdapter: (deps && deps.adapter) || adapter,
-    httpAPICall: function(url, options) {
+    httpAPICall: function (url, options) {
       var payload =
         options.body !== undefined
           ? {
@@ -236,12 +233,12 @@ Live.useOldDependencies = function(deps) {
           dataType: 'json',
           async: options.async,
           timeout: options.timeout,
-          success: function(result) {
+          success: function (result) {
             if (typeof options.success === typeof Live.noop) {
               options.success(result);
             }
           },
-          error: function(xhr, status, err) {
+          error: function (xhr, status, err) {
             if (typeof options.error === typeof Live.noop) {
               options.error(status, err);
             }
@@ -252,7 +249,7 @@ Live.useOldDependencies = function(deps) {
   };
 };
 
-Live.noop = function() {};
+Live.noop = function () {};
 
 Live.dataChanDefaultLabel = 'LiveDataChannel';
 
@@ -261,17 +258,16 @@ Live.dataChanDefaultLabel = 'LiveDataChannel';
 Live.endOfCandidates = null;
 
 // Initialization
-Live.init = function(options) {
+Live.init = function (options) {
   options = options || {};
-  options.callback =
-    typeof options.callback == 'function' ? options.callback : Live.noop;
+  options.callback = typeof options.callback == 'function' ? options.callback : Live.noop;
   if (Live.initDone) {
     // Already initialized
     options.callback();
   } else {
     if (typeof console == 'undefined' || typeof console.log == 'undefined') {
       console = {
-        log: function() {}
+        log: function () {}
       };
     }
     // Console logging (all debugging disabled by default)
@@ -322,8 +318,7 @@ Live.init = function(options) {
     }
     Live.log('Initializing library');
 
-    var usedDependencies =
-      options.dependencies || Live.useDefaultDependencies();
+    var usedDependencies = options.dependencies || Live.useDefaultDependencies();
     Live.isArray = usedDependencies.isArray;
     Live.webRTCAdapter = usedDependencies.webRTCAdapter;
     Live.httpAPICall = usedDependencies.httpAPICall;
@@ -332,7 +327,7 @@ Live.init = function(options) {
     Live.extension.init();
 
     // Helper method to enumerate devices
-    Live.listDevices = function(callback, config) {
+    Live.listDevices = function (callback, config) {
       callback = typeof callback == 'function' ? callback : Live.noop;
       if (config == null)
         config = {
@@ -342,8 +337,8 @@ Live.init = function(options) {
       if (Live.isGetUserMediaAvailable()) {
         navigator.mediaDevices
           .getUserMedia(config)
-          .then(function(stream) {
-            navigator.mediaDevices.enumerateDevices().then(function(devices) {
+          .then(function (stream) {
+            navigator.mediaDevices.enumerateDevices().then(function (devices) {
               Live.debug(devices);
               callback(devices);
               // Get rid of the now useless stream
@@ -355,7 +350,7 @@ Live.init = function(options) {
               } catch (e) {}
             });
           })
-          .catch(function(err) {
+          .catch(function (err) {
             Live.error(err);
             callback([]);
           });
@@ -365,7 +360,7 @@ Live.init = function(options) {
       }
     };
     // Helper methods to attach/reattach a stream to a video element (previously part of adapter.js)
-    Live.attachMediaStream = function(element, stream) {
+    Live.attachMediaStream = function (element, stream) {
       try {
         element.srcObject = stream;
       } catch (e) {
@@ -376,7 +371,7 @@ Live.init = function(options) {
         }
       }
     };
-    Live.reattachMediaStream = function(to, from) {
+    Live.reattachMediaStream = function (to, from) {
       try {
         to.srcObject = from.srcObject;
       } catch (e) {
@@ -393,7 +388,7 @@ Live.init = function(options) {
     var iOS = ['iPad', 'iPhone', 'iPod'].indexOf(navigator.platform) >= 0;
     var eventName = iOS ? 'pagehide' : 'beforeunload';
     var oldOBF = window['on' + eventName];
-    window.addEventListener(eventName, function(event) {
+    window.addEventListener(eventName, function (event) {
       Live.log('Closing window');
       for (var s in Live.sessions) {
         if (Live.sessions[s] && Live.sessions[s].destroyOnUnload) {
@@ -423,11 +418,7 @@ Live.init = function(options) {
         RTCRtpSender.getCapabilities('video').codecs.length
       ) {
         for (var codec of RTCRtpSender.getCapabilities('video').codecs) {
-          if (
-            codec &&
-            codec.mimeType &&
-            codec.mimeType.toLowerCase() === 'video/vp8'
-          ) {
+          if (codec && codec.mimeType && codec.mimeType.toLowerCase() === 'video/vp8') {
             Live.safariVp8 = true;
             break;
           }
@@ -448,7 +439,7 @@ Live.init = function(options) {
           .createOffer({
             offerToReceiveVideo: true
           })
-          .then(function(offer) {
+          .then(function (offer) {
             Live.safariVp8 = offer.sdp.indexOf('VP8') !== -1;
             if (Live.safariVp8) {
               Live.log('This version of Safari supports VP8');
@@ -478,10 +469,7 @@ Live.init = function(options) {
     ) {
       // Chrome does, but it's only usable from version 72 on
       Live.unifiedPlan = false;
-    } else if (
-      !window.RTCRtpTransceiver ||
-      !('currentDirection' in RTCRtpTransceiver.prototype)
-    ) {
+    } else if (!window.RTCRtpTransceiver || !('currentDirection' in RTCRtpTransceiver.prototype)) {
       // Safari supports addTransceiver() but not Unified Plan when
       // currentDirection is not defined (see codepen above).
       Live.unifiedPlan = false;
@@ -500,18 +488,17 @@ Live.init = function(options) {
 };
 
 // Helper method to check whether WebRTC is supported by this browser
-Live.isWebrtcSupported = function() {
+Live.isWebrtcSupported = function () {
   return !!window.RTCPeerConnection;
 };
 // Helper method to check whether devices can be accessed by this browser (e.g., not possible via plain HTTP)
-Live.isGetUserMediaAvailable = function() {
+Live.isGetUserMediaAvailable = function () {
   return navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
 };
 
 // Helper method to create random identifiers (e.g., transaction)
-Live.randomString = function(len) {
-  var charSet =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+Live.randomString = function (len) {
+  var charSet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   var randomString = '';
   for (var i = 0; i < len; i++) {
     var randomPoz = Math.floor(Math.random() * charSet.length);
@@ -523,17 +510,11 @@ Live.randomString = function(len) {
 function Live(gatewayCallbacks) {
   gatewayCallbacks = gatewayCallbacks || {};
   gatewayCallbacks.success =
-    typeof gatewayCallbacks.success == 'function'
-      ? gatewayCallbacks.success
-      : Live.noop;
+    typeof gatewayCallbacks.success == 'function' ? gatewayCallbacks.success : Live.noop;
   gatewayCallbacks.error =
-    typeof gatewayCallbacks.error == 'function'
-      ? gatewayCallbacks.error
-      : Live.noop;
+    typeof gatewayCallbacks.error == 'function' ? gatewayCallbacks.error : Live.noop;
   gatewayCallbacks.destroyed =
-    typeof gatewayCallbacks.destroyed == 'function'
-      ? gatewayCallbacks.destroyed
-      : Live.noop;
+    typeof gatewayCallbacks.destroyed == 'function' ? gatewayCallbacks.destroyed : Live.noop;
   if (!Live.initDone) {
     gatewayCallbacks.error('Library not initialized');
     return {};
@@ -555,11 +536,7 @@ function Live(gatewayCallbacks) {
   var serversIndex = 0;
   var server = gatewayCallbacks.server;
   if (Live.isArray(server)) {
-    Live.log(
-      'Multiple servers provided (' +
-        server.length +
-        '), will use the first that works'
-    );
+    Live.log('Multiple servers provided (' + server.length + '), will use the first that works');
     server = null;
     servers = gatewayCallbacks.server;
     Live.debug(servers);
@@ -585,17 +562,11 @@ function Live(gatewayCallbacks) {
   var ipv6Support = gatewayCallbacks.ipv6 === true;
   // Whether we should enable the withCredentials flag for XHR requests
   var withCredentials = false;
-  if (
-    gatewayCallbacks.withCredentials !== undefined &&
-    gatewayCallbacks.withCredentials !== null
-  )
+  if (gatewayCallbacks.withCredentials !== undefined && gatewayCallbacks.withCredentials !== null)
     withCredentials = gatewayCallbacks.withCredentials === true;
   // Optional max events
   var maxev = 10;
-  if (
-    gatewayCallbacks.max_poll_events !== undefined &&
-    gatewayCallbacks.max_poll_events !== null
-  )
+  if (gatewayCallbacks.max_poll_events !== undefined && gatewayCallbacks.max_poll_events !== null)
     maxev = gatewayCallbacks.max_poll_events;
   if (maxev < 1) maxev = 1;
   // Token to use (only if the token based authentication mechanism is enabled)
@@ -604,31 +575,19 @@ function Live(gatewayCallbacks) {
     token = gatewayCallbacks.token;
   // API secret to use (only if the shared API secret is enabled)
   var apisecret = null;
-  if (
-    gatewayCallbacks.apisecret !== undefined &&
-    gatewayCallbacks.apisecret !== null
-  )
+  if (gatewayCallbacks.apisecret !== undefined && gatewayCallbacks.apisecret !== null)
     apisecret = gatewayCallbacks.apisecret;
   // Whether we should destroy this session when onbeforeunload is called
   this.destroyOnUnload = true;
-  if (
-    gatewayCallbacks.destroyOnUnload !== undefined &&
-    gatewayCallbacks.destroyOnUnload !== null
-  )
+  if (gatewayCallbacks.destroyOnUnload !== undefined && gatewayCallbacks.destroyOnUnload !== null)
     this.destroyOnUnload = gatewayCallbacks.destroyOnUnload === true;
   // Some timeout-related values
   var keepAlivePeriod = 25000;
-  if (
-    gatewayCallbacks.keepAlivePeriod !== undefined &&
-    gatewayCallbacks.keepAlivePeriod !== null
-  )
+  if (gatewayCallbacks.keepAlivePeriod !== undefined && gatewayCallbacks.keepAlivePeriod !== null)
     keepAlivePeriod = gatewayCallbacks.keepAlivePeriod;
   if (isNaN(keepAlivePeriod)) keepAlivePeriod = 25000;
   var longPollTimeout = 60000;
-  if (
-    gatewayCallbacks.longPollTimeout !== undefined &&
-    gatewayCallbacks.longPollTimeout !== null
-  )
+  if (gatewayCallbacks.longPollTimeout !== undefined && gatewayCallbacks.longPollTimeout !== null)
     longPollTimeout = gatewayCallbacks.longPollTimeout;
   if (isNaN(longPollTimeout)) longPollTimeout = 60000;
 
@@ -641,10 +600,8 @@ function Live(gatewayCallbacks) {
     };
 
     if (simulcastMaxBitrates !== undefined && simulcastMaxBitrates !== null) {
-      if (simulcastMaxBitrates.high)
-        maxBitrates.high = simulcastMaxBitrates.high;
-      if (simulcastMaxBitrates.medium)
-        maxBitrates.medium = simulcastMaxBitrates.medium;
+      if (simulcastMaxBitrates.high) maxBitrates.high = simulcastMaxBitrates.high;
+      if (simulcastMaxBitrates.medium) maxBitrates.medium = simulcastMaxBitrates.medium;
       if (simulcastMaxBitrates.low) maxBitrates.low = simulcastMaxBitrates.low;
     }
 
@@ -660,28 +617,26 @@ function Live(gatewayCallbacks) {
   createSession(gatewayCallbacks);
 
   // Public methods
-  this.getServer = function() {
+  this.getServer = function () {
     return server;
   };
-  this.isConnected = function() {
+  this.isConnected = function () {
     return connected;
   };
-  this.reconnect = function(callbacks) {
+  this.reconnect = function (callbacks) {
     callbacks = callbacks || {};
-    callbacks.success =
-      typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
-    callbacks.error =
-      typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
+    callbacks.success = typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
+    callbacks.error = typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
     callbacks['reconnect'] = true;
     createSession(callbacks);
   };
-  this.getSessionId = function() {
+  this.getSessionId = function () {
     return sessionId;
   };
-  this.destroy = function(callbacks) {
+  this.destroy = function (callbacks) {
     destroySession(callbacks);
   };
-  this.attach = function(callbacks) {
+  this.attach = function (callbacks) {
     createHandle(callbacks);
   };
 
@@ -695,14 +650,13 @@ function Live(gatewayCallbacks) {
     var longpoll = server + '/' + sessionId + '?rid=' + new Date().getTime();
     if (maxev) longpoll = longpoll + '&maxev=' + maxev;
     if (token) longpoll = longpoll + '&token=' + encodeURIComponent(token);
-    if (apisecret)
-      longpoll = longpoll + '&apisecret=' + encodeURIComponent(apisecret);
+    if (apisecret) longpoll = longpoll + '&apisecret=' + encodeURIComponent(apisecret);
     Live.httpAPICall(longpoll, {
       verb: 'GET',
       withCredentials: withCredentials,
       success: handleEvent,
       timeout: longPollTimeout,
-      error: function(textStatus, errorThrown) {
+      error: function (textStatus, errorThrown) {
         Live.error(textStatus + ':', errorThrown);
         retries++;
         if (retries > 3) {
@@ -719,12 +673,7 @@ function Live(gatewayCallbacks) {
   // Private event handler: this will trigger plugin callbacks, if set
   function handleEvent(json, skipTimeout) {
     retries = 0;
-    if (
-      !websockets &&
-      sessionId !== undefined &&
-      sessionId !== null &&
-      skipTimeout !== true
-    )
+    if (!websockets && sessionId !== undefined && sessionId !== null && skipTimeout !== true)
       eventHandler();
     if (!websockets && Live.isArray(json)) {
       // We got an array: it means we passed a maxev > 1, iterate on all objects
@@ -899,13 +848,7 @@ function Live(gatewayCallbacks) {
         Live.warn('Missing plugindata...');
         return;
       }
-      Live.debug(
-        '  -- Event is coming from ' +
-          sender +
-          ' (' +
-          plugindata['plugin'] +
-          ')'
-      );
+      Live.debug('  -- Event is coming from ' + sender + ' (' + plugindata['plugin'] + ')');
       var data = plugindata['data'];
       Live.debug(data);
       var pluginHandle = pluginHandles[sender];
@@ -935,9 +878,7 @@ function Live(gatewayCallbacks) {
       }
       return;
     } else {
-      Live.warn(
-        "Unknown message/event  '" + json['janus'] + "' on session " + sessionId
-      );
+      Live.warn("Unknown message/event  '" + json['janus'] + "' on session " + sessionId);
       Live.debug(json);
     }
   }
@@ -987,30 +928,20 @@ function Live(gatewayCallbacks) {
       if (server.indexOf('ws') === 0) {
         websockets = true;
         Live.log(
-          'Server #' +
-            (serversIndex + 1) +
-            ': trying WebSockets to contact Live (' +
-            server +
-            ')'
+          'Server #' + (serversIndex + 1) + ': trying WebSockets to contact Live (' + server + ')'
         );
       } else {
         websockets = false;
         Live.log(
-          'Server #' +
-            (serversIndex + 1) +
-            ': trying REST API to contact Live (' +
-            server +
-            ')'
+          'Server #' + (serversIndex + 1) + ': trying REST API to contact Live (' + server + ')'
         );
       }
     }
     if (websockets) {
       ws = Live.newWebSocket(server, 'janus-protocol');
       wsHandlers = {
-        error: function() {
-          Live.error(
-            'Error connecting to the Live WebSockets server... ' + server
-          );
+        error: function () {
+          Live.error('Error connecting to the Live WebSockets server... ' + server);
           if (Live.isArray(servers) && !callbacks['reconnect']) {
             serversIndex++;
             if (serversIndex === servers.length) {
@@ -1022,32 +953,26 @@ function Live(gatewayCallbacks) {
             }
             // Let's try the next server
             server = null;
-            setTimeout(function() {
+            setTimeout(function () {
               createSession(callbacks);
             }, 200);
             return;
           }
-          callbacks.error(
-            'Error connecting to the Live WebSockets server: Is the server down?'
-          );
+          callbacks.error('Error connecting to the Live WebSockets server: Is the server down?');
         },
 
-        open: function() {
+        open: function () {
           // We need to be notified about the success
-          transactions[transaction] = function(json) {
+          transactions[transaction] = function (json) {
             Live.debug(json);
             if (json['janus'] !== 'success') {
-              Live.error(
-                'Ooops: ' + json['error'].code + ' ' + json['error'].reason
-              ); // FIXME
+              Live.error('Ooops: ' + json['error'].code + ' ' + json['error'].reason); // FIXME
               callbacks.error(json['error'].reason);
               return;
             }
             wsKeepaliveTimeoutId = setTimeout(keepAlive, keepAlivePeriod);
             connected = true;
-            sessionId = json['session_id']
-              ? json['session_id']
-              : json.data['id'];
+            sessionId = json['session_id'] ? json['session_id'] : json.data['id'];
             if (callbacks['reconnect']) {
               Live.log('Claimed session: ' + sessionId);
             } else {
@@ -1059,11 +984,11 @@ function Live(gatewayCallbacks) {
           ws.send(JSON.stringify(request));
         },
 
-        message: function(event) {
+        message: function (event) {
           handleEvent(JSON.parse(event.data));
         },
 
-        close: function() {
+        close: function () {
           if (!server || !connected) {
             return;
           }
@@ -1083,12 +1008,10 @@ function Live(gatewayCallbacks) {
       verb: 'POST',
       withCredentials: withCredentials,
       body: request,
-      success: function(json) {
+      success: function (json) {
         Live.debug(json);
         if (json['janus'] !== 'success') {
-          Live.error(
-            'Ooops: ' + json['error'].code + ' ' + json['error'].reason
-          ); // FIXME
+          Live.error('Ooops: ' + json['error'].code + ' ' + json['error'].reason); // FIXME
           callbacks.error(json['error'].reason);
           return;
         }
@@ -1103,7 +1026,7 @@ function Live(gatewayCallbacks) {
         eventHandler();
         callbacks.success();
       },
-      error: function(textStatus, errorThrown) {
+      error: function (textStatus, errorThrown) {
         Live.error(textStatus + ':', errorThrown); // FIXME
         if (Live.isArray(servers) && !callbacks['reconnect']) {
           serversIndex++;
@@ -1116,13 +1039,12 @@ function Live(gatewayCallbacks) {
           }
           // Let's try the next server
           server = null;
-          setTimeout(function() {
+          setTimeout(function () {
             createSession(callbacks);
           }, 200);
           return;
         }
-        if (errorThrown === '')
-          callbacks.error(textStatus + ': Is the server down?');
+        if (errorThrown === '') callbacks.error(textStatus + ': Is the server down?');
         else callbacks.error(textStatus + ': ' + errorThrown);
       }
     });
@@ -1132,16 +1054,11 @@ function Live(gatewayCallbacks) {
   function destroySession(callbacks) {
     callbacks = callbacks || {};
     // FIXME This method triggers a success even when we fail
-    callbacks.success =
-      typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
-    callbacks.error =
-      typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
+    callbacks.success = typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
+    callbacks.error = typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
     var unload = callbacks.unload === true;
     var notifyDestroyed = true;
-    if (
-      callbacks.notifyDestroyed !== undefined &&
-      callbacks.notifyDestroyed !== null
-    )
+    if (callbacks.notifyDestroyed !== undefined && callbacks.notifyDestroyed !== null)
       notifyDestroyed = callbacks.notifyDestroyed === true;
     var cleanupHandles = callbacks.cleanupHandles === true;
     Live.log('Destroying session ' + sessionId + ' (unload=' + unload + ')');
@@ -1190,7 +1107,7 @@ function Live(gatewayCallbacks) {
     if (websockets) {
       request['session_id'] = sessionId;
 
-      var unbindWebSocket = function() {
+      var unbindWebSocket = function () {
         for (var eventName in wsHandlers) {
           ws.removeEventListener(eventName, wsHandlers[eventName]);
         }
@@ -1202,18 +1119,15 @@ function Live(gatewayCallbacks) {
         ws.close();
       };
 
-      var onUnbindMessage = function(event) {
+      var onUnbindMessage = function (event) {
         var data = JSON.parse(event.data);
-        if (
-          data.session_id == request.session_id &&
-          data.transaction == request.transaction
-        ) {
+        if (data.session_id == request.session_id && data.transaction == request.transaction) {
           unbindWebSocket();
           callbacks.success();
           if (notifyDestroyed) gatewayCallbacks.destroyed();
         }
       };
-      var onUnbindError = function(event) {
+      var onUnbindError = function (event) {
         unbindWebSocket();
         callbacks.error('Failed to destroy the server: Is the server down?');
         if (notifyDestroyed) gatewayCallbacks.destroyed();
@@ -1229,20 +1143,18 @@ function Live(gatewayCallbacks) {
       verb: 'POST',
       withCredentials: withCredentials,
       body: request,
-      success: function(json) {
+      success: function (json) {
         Live.log('Destroyed session:');
         Live.debug(json);
         sessionId = null;
         connected = false;
         if (json['janus'] !== 'success') {
-          Live.error(
-            'Ooops: ' + json['error'].code + ' ' + json['error'].reason
-          ); // FIXME
+          Live.error('Ooops: ' + json['error'].code + ' ' + json['error'].reason); // FIXME
         }
         callbacks.success();
         if (notifyDestroyed) gatewayCallbacks.destroyed();
       },
-      error: function(textStatus, errorThrown) {
+      error: function (textStatus, errorThrown) {
         Live.error(textStatus + ':', errorThrown); // FIXME
         // Reset everything anyway
         sessionId = null;
@@ -1256,52 +1168,29 @@ function Live(gatewayCallbacks) {
   // Private method to create a plugin handle
   function createHandle(callbacks) {
     callbacks = callbacks || {};
-    callbacks.success =
-      typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
-    callbacks.error =
-      typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
+    callbacks.success = typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
+    callbacks.error = typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
     callbacks.consentDialog =
-      typeof callbacks.consentDialog == 'function'
-        ? callbacks.consentDialog
-        : Live.noop;
-    callbacks.iceState =
-      typeof callbacks.iceState == 'function' ? callbacks.iceState : Live.noop;
+      typeof callbacks.consentDialog == 'function' ? callbacks.consentDialog : Live.noop;
+    callbacks.iceState = typeof callbacks.iceState == 'function' ? callbacks.iceState : Live.noop;
     callbacks.mediaState =
-      typeof callbacks.mediaState == 'function'
-        ? callbacks.mediaState
-        : Live.noop;
+      typeof callbacks.mediaState == 'function' ? callbacks.mediaState : Live.noop;
     callbacks.webrtcState =
-      typeof callbacks.webrtcState == 'function'
-        ? callbacks.webrtcState
-        : Live.noop;
-    callbacks.slowLink =
-      typeof callbacks.slowLink == 'function' ? callbacks.slowLink : Live.noop;
+      typeof callbacks.webrtcState == 'function' ? callbacks.webrtcState : Live.noop;
+    callbacks.slowLink = typeof callbacks.slowLink == 'function' ? callbacks.slowLink : Live.noop;
     callbacks.onmessage =
-      typeof callbacks.onmessage == 'function'
-        ? callbacks.onmessage
-        : Live.noop;
+      typeof callbacks.onmessage == 'function' ? callbacks.onmessage : Live.noop;
     callbacks.onlocalstream =
-      typeof callbacks.onlocalstream == 'function'
-        ? callbacks.onlocalstream
-        : Live.noop;
+      typeof callbacks.onlocalstream == 'function' ? callbacks.onlocalstream : Live.noop;
     callbacks.onremotestream =
-      typeof callbacks.onremotestream == 'function'
-        ? callbacks.onremotestream
-        : Live.noop;
-    callbacks.ondata =
-      typeof callbacks.ondata == 'function' ? callbacks.ondata : Live.noop;
+      typeof callbacks.onremotestream == 'function' ? callbacks.onremotestream : Live.noop;
+    callbacks.ondata = typeof callbacks.ondata == 'function' ? callbacks.ondata : Live.noop;
     callbacks.ondataopen =
-      typeof callbacks.ondataopen == 'function'
-        ? callbacks.ondataopen
-        : Live.noop;
+      typeof callbacks.ondataopen == 'function' ? callbacks.ondataopen : Live.noop;
     callbacks.oncleanup =
-      typeof callbacks.oncleanup == 'function'
-        ? callbacks.oncleanup
-        : Live.noop;
+      typeof callbacks.oncleanup == 'function' ? callbacks.oncleanup : Live.noop;
     callbacks.ondetached =
-      typeof callbacks.ondetached == 'function'
-        ? callbacks.ondetached
-        : Live.noop;
+      typeof callbacks.ondetached == 'function' ? callbacks.ondetached : Live.noop;
     if (!connected) {
       Live.warn('Is the server down? (connected=false)');
       callbacks.error('Is the server down? (connected=false)');
@@ -1325,15 +1214,11 @@ function Live(gatewayCallbacks) {
     if (handleToken) request['token'] = handleToken;
     if (apisecret) request['apisecret'] = apisecret;
     if (websockets) {
-      transactions[transaction] = function(json) {
+      transactions[transaction] = function (json) {
         Live.debug(json);
         if (json['janus'] !== 'success') {
-          Live.error(
-            'Ooops: ' + json['error'].code + ' ' + json['error'].reason
-          ); // FIXME
-          callbacks.error(
-            'Ooops: ' + json['error'].code + ' ' + json['error'].reason
-          );
+          Live.error('Ooops: ' + json['error'].code + ' ' + json['error'].reason); // FIXME
+          callbacks.error('Ooops: ' + json['error'].code + ' ' + json['error'].reason);
           return;
         }
         var handleId = json.data['id'];
@@ -1369,49 +1254,49 @@ function Live(gatewayCallbacks) {
               timer: null
             }
           },
-          getId: function() {
+          getId: function () {
             return handleId;
           },
-          getPlugin: function() {
+          getPlugin: function () {
             return plugin;
           },
-          getVolume: function() {
+          getVolume: function () {
             return getVolume(handleId, true);
           },
-          getRemoteVolume: function() {
+          getRemoteVolume: function () {
             return getVolume(handleId, true);
           },
-          getLocalVolume: function() {
+          getLocalVolume: function () {
             return getVolume(handleId, false);
           },
-          isAudioMuted: function() {
+          isAudioMuted: function () {
             return isMuted(handleId, false);
           },
-          muteAudio: function() {
+          muteAudio: function () {
             return mute(handleId, false, true);
           },
-          unmuteAudio: function() {
+          unmuteAudio: function () {
             return mute(handleId, false, false);
           },
-          isVideoMuted: function() {
+          isVideoMuted: function () {
             return isMuted(handleId, true);
           },
-          muteVideo: function() {
+          muteVideo: function () {
             return mute(handleId, true, true);
           },
-          unmuteVideo: function() {
+          unmuteVideo: function () {
             return mute(handleId, true, false);
           },
-          getBitrate: function() {
+          getBitrate: function () {
             return getBitrate(handleId);
           },
-          send: function(callbacks) {
+          send: function (callbacks) {
             sendMessage(handleId, callbacks);
           },
-          data: function(callbacks) {
+          data: function (callbacks) {
             sendData(handleId, callbacks);
           },
-          dtmf: function(callbacks) {
+          dtmf: function (callbacks) {
             sendDtmf(handleId, callbacks);
           },
           consentDialog: callbacks.consentDialog,
@@ -1420,13 +1305,13 @@ function Live(gatewayCallbacks) {
           webrtcState: callbacks.webrtcState,
           slowLink: callbacks.slowLink,
           onmessage: callbacks.onmessage,
-          createOffer: function(callbacks) {
+          createOffer: function (callbacks) {
             prepareWebrtc(handleId, true, callbacks);
           },
-          createAnswer: function(callbacks) {
+          createAnswer: function (callbacks) {
             prepareWebrtc(handleId, false, callbacks);
           },
-          handleRemoteJsep: function(callbacks) {
+          handleRemoteJsep: function (callbacks) {
             prepareWebrtcPeer(handleId, callbacks);
           },
           onlocalstream: callbacks.onlocalstream,
@@ -1435,10 +1320,10 @@ function Live(gatewayCallbacks) {
           ondataopen: callbacks.ondataopen,
           oncleanup: callbacks.oncleanup,
           ondetached: callbacks.ondetached,
-          hangup: function(sendRequest) {
+          hangup: function (sendRequest) {
             cleanupWebrtc(handleId, sendRequest === true);
           },
-          detach: function(callbacks) {
+          detach: function (callbacks) {
             destroyHandle(handleId, callbacks);
           }
         };
@@ -1453,15 +1338,11 @@ function Live(gatewayCallbacks) {
       verb: 'POST',
       withCredentials: withCredentials,
       body: request,
-      success: function(json) {
+      success: function (json) {
         Live.debug(json);
         if (json['janus'] !== 'success') {
-          Live.error(
-            'Ooops: ' + json['error'].code + ' ' + json['error'].reason
-          ); // FIXME
-          callbacks.error(
-            'Ooops: ' + json['error'].code + ' ' + json['error'].reason
-          );
+          Live.error('Ooops: ' + json['error'].code + ' ' + json['error'].reason); // FIXME
+          callbacks.error('Ooops: ' + json['error'].code + ' ' + json['error'].reason);
           return;
         }
         var handleId = json.data['id'];
@@ -1497,49 +1378,49 @@ function Live(gatewayCallbacks) {
               timer: null
             }
           },
-          getId: function() {
+          getId: function () {
             return handleId;
           },
-          getPlugin: function() {
+          getPlugin: function () {
             return plugin;
           },
-          getVolume: function() {
+          getVolume: function () {
             return getVolume(handleId, true);
           },
-          getRemoteVolume: function() {
+          getRemoteVolume: function () {
             return getVolume(handleId, true);
           },
-          getLocalVolume: function() {
+          getLocalVolume: function () {
             return getVolume(handleId, false);
           },
-          isAudioMuted: function() {
+          isAudioMuted: function () {
             return isMuted(handleId, false);
           },
-          muteAudio: function() {
+          muteAudio: function () {
             return mute(handleId, false, true);
           },
-          unmuteAudio: function() {
+          unmuteAudio: function () {
             return mute(handleId, false, false);
           },
-          isVideoMuted: function() {
+          isVideoMuted: function () {
             return isMuted(handleId, true);
           },
-          muteVideo: function() {
+          muteVideo: function () {
             return mute(handleId, true, true);
           },
-          unmuteVideo: function() {
+          unmuteVideo: function () {
             return mute(handleId, true, false);
           },
-          getBitrate: function() {
+          getBitrate: function () {
             return getBitrate(handleId);
           },
-          send: function(callbacks) {
+          send: function (callbacks) {
             sendMessage(handleId, callbacks);
           },
-          data: function(callbacks) {
+          data: function (callbacks) {
             sendData(handleId, callbacks);
           },
-          dtmf: function(callbacks) {
+          dtmf: function (callbacks) {
             sendDtmf(handleId, callbacks);
           },
           consentDialog: callbacks.consentDialog,
@@ -1548,13 +1429,13 @@ function Live(gatewayCallbacks) {
           webrtcState: callbacks.webrtcState,
           slowLink: callbacks.slowLink,
           onmessage: callbacks.onmessage,
-          createOffer: function(callbacks) {
+          createOffer: function (callbacks) {
             prepareWebrtc(handleId, true, callbacks);
           },
-          createAnswer: function(callbacks) {
+          createAnswer: function (callbacks) {
             prepareWebrtc(handleId, false, callbacks);
           },
-          handleRemoteJsep: function(callbacks) {
+          handleRemoteJsep: function (callbacks) {
             prepareWebrtcPeer(handleId, callbacks);
           },
           onlocalstream: callbacks.onlocalstream,
@@ -1563,20 +1444,19 @@ function Live(gatewayCallbacks) {
           ondataopen: callbacks.ondataopen,
           oncleanup: callbacks.oncleanup,
           ondetached: callbacks.ondetached,
-          hangup: function(sendRequest) {
+          hangup: function (sendRequest) {
             cleanupWebrtc(handleId, sendRequest === true);
           },
-          detach: function(callbacks) {
+          detach: function (callbacks) {
             destroyHandle(handleId, callbacks);
           }
         };
         pluginHandles[handleId] = pluginHandle;
         callbacks.success(pluginHandle);
       },
-      error: function(textStatus, errorThrown) {
+      error: function (textStatus, errorThrown) {
         Live.error(textStatus + ':', errorThrown); // FIXME
-        if (errorThrown === '')
-          callbacks.error(textStatus + ': Is the server down?');
+        if (errorThrown === '') callbacks.error(textStatus + ': Is the server down?');
         else callbacks.error(textStatus + ': ' + errorThrown);
       }
     });
@@ -1585,10 +1465,8 @@ function Live(gatewayCallbacks) {
   // Private method to send a message
   function sendMessage(handleId, callbacks) {
     callbacks = callbacks || {};
-    callbacks.success =
-      typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
-    callbacks.error =
-      typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
+    callbacks.success = typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
+    callbacks.error = typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
     if (!connected) {
       Live.warn('Is the server down? (connected=false)');
       callbacks.error('Is the server down? (connected=false)');
@@ -1616,7 +1494,7 @@ function Live(gatewayCallbacks) {
     if (websockets) {
       request['session_id'] = sessionId;
       request['handle_id'] = handleId;
-      transactions[transaction] = function(json) {
+      transactions[transaction] = function (json) {
         Live.debug('Message sent!');
         Live.debug(json);
         if (json['janus'] === 'success') {
@@ -1627,9 +1505,7 @@ function Live(gatewayCallbacks) {
             callbacks.success();
             return;
           }
-          Live.log(
-            'Synchronous transaction successful (' + plugindata['plugin'] + ')'
-          );
+          Live.log('Synchronous transaction successful (' + plugindata['plugin'] + ')');
           var data = plugindata['data'];
           Live.debug(data);
           callbacks.success(data);
@@ -1637,9 +1513,7 @@ function Live(gatewayCallbacks) {
         } else if (json['janus'] !== 'ack') {
           // Not a success and not an ack, must be an error
           if (json['error']) {
-            Live.error(
-              'Ooops: ' + json['error'].code + ' ' + json['error'].reason
-            ); // FIXME
+            Live.error('Ooops: ' + json['error'].code + ' ' + json['error'].reason); // FIXME
             callbacks.error(json['error'].code + ' ' + json['error'].reason);
           } else {
             Live.error('Unknown error'); // FIXME
@@ -1657,7 +1531,7 @@ function Live(gatewayCallbacks) {
       verb: 'POST',
       withCredentials: withCredentials,
       body: request,
-      success: function(json) {
+      success: function (json) {
         Live.debug('Message sent!');
         Live.debug(json);
         if (json['janus'] === 'success') {
@@ -1668,9 +1542,7 @@ function Live(gatewayCallbacks) {
             callbacks.success();
             return;
           }
-          Live.log(
-            'Synchronous transaction successful (' + plugindata['plugin'] + ')'
-          );
+          Live.log('Synchronous transaction successful (' + plugindata['plugin'] + ')');
           var data = plugindata['data'];
           Live.debug(data);
           callbacks.success(data);
@@ -1678,9 +1550,7 @@ function Live(gatewayCallbacks) {
         } else if (json['janus'] !== 'ack') {
           // Not a success and not an ack, must be an error
           if (json['error']) {
-            Live.error(
-              'Ooops: ' + json['error'].code + ' ' + json['error'].reason
-            ); // FIXME
+            Live.error('Ooops: ' + json['error'].code + ' ' + json['error'].reason); // FIXME
             callbacks.error(json['error'].code + ' ' + json['error'].reason);
           } else {
             Live.error('Unknown error'); // FIXME
@@ -1691,7 +1561,7 @@ function Live(gatewayCallbacks) {
         // If we got here, the plugin decided to handle the request asynchronously
         callbacks.success();
       },
-      error: function(textStatus, errorThrown) {
+      error: function (textStatus, errorThrown) {
         Live.error(textStatus + ':', errorThrown); // FIXME
         callbacks.error(textStatus + ': ' + errorThrown);
       }
@@ -1728,55 +1598,42 @@ function Live(gatewayCallbacks) {
       verb: 'POST',
       withCredentials: withCredentials,
       body: request,
-      success: function(json) {
+      success: function (json) {
         Live.vdebug('Candidate sent!');
         Live.vdebug(json);
         if (json['janus'] !== 'ack') {
-          Live.error(
-            'Ooops: ' + json['error'].code + ' ' + json['error'].reason
-          ); // FIXME
+          Live.error('Ooops: ' + json['error'].code + ' ' + json['error'].reason); // FIXME
           return;
         }
       },
-      error: function(textStatus, errorThrown) {
+      error: function (textStatus, errorThrown) {
         Live.error(textStatus + ':', errorThrown); // FIXME
       }
     });
   }
 
   // Private method to create a data channel
-  function createDataChannel(
-    handleId,
-    dclabel,
-    dcprotocol,
-    incoming,
-    pendingData
-  ) {
+  function createDataChannel(handleId, dclabel, dcprotocol, incoming, pendingData) {
     var pluginHandle = pluginHandles[handleId];
     if (!pluginHandle || !pluginHandle.webrtcStuff) {
       Live.warn('Invalid handle');
       return;
     }
     var config = pluginHandle.webrtcStuff;
-    var onDataChannelMessage = function(event) {
+    var onDataChannelMessage = function (event) {
       Live.log('Received message on data channel:', event);
       var label = event.target.label;
       pluginHandle.ondata(event.data, label);
     };
-    var onDataChannelStateChange = function(event) {
+    var onDataChannelStateChange = function (event) {
       Live.log('Received state change on data channel:', event);
       var label = event.target.label;
       var protocol = event.target.protocol;
-      var dcState = config.dataChannel[label]
-        ? config.dataChannel[label].readyState
-        : 'null';
+      var dcState = config.dataChannel[label] ? config.dataChannel[label].readyState : 'null';
       Live.log('State change on <' + label + '> data channel: ' + dcState);
       if (dcState === 'open') {
         // Any pending messages to send?
-        if (
-          config.dataChannel[label].pending &&
-          config.dataChannel[label].pending.length > 0
-        ) {
+        if (config.dataChannel[label].pending && config.dataChannel[label].pending.length > 0) {
           Live.log(
             'Sending pending messages on <' + label + '>:',
             config.dataChannel[label].pending.length
@@ -1792,7 +1649,7 @@ function Live(gatewayCallbacks) {
         pluginHandle.ondataopen(label, protocol);
       }
     };
-    var onDataChannelError = function(error) {
+    var onDataChannelError = function (error) {
       Live.error('Got error on data channel:', error);
       // TODO
     };
@@ -1802,10 +1659,7 @@ function Live(gatewayCallbacks) {
         ordered: true
       };
       if (dcprotocol) dcoptions.protocol = dcprotocol;
-      config.dataChannel[dclabel] = config.pc.createDataChannel(
-        dclabel,
-        dcoptions
-      );
+      config.dataChannel[dclabel] = config.pc.createDataChannel(dclabel, dcoptions);
     } else {
       // The channel was created by Live
       config.dataChannel[dclabel] = incoming;
@@ -1821,10 +1675,8 @@ function Live(gatewayCallbacks) {
   // Private method to send a data channel message
   function sendData(handleId, callbacks) {
     callbacks = callbacks || {};
-    callbacks.success =
-      typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
-    callbacks.error =
-      typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
+    callbacks.success = typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
+    callbacks.error = typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
     var pluginHandle = pluginHandles[handleId];
     if (!pluginHandle || !pluginHandle.webrtcStuff) {
       Live.warn('Invalid handle');
@@ -1841,14 +1693,7 @@ function Live(gatewayCallbacks) {
     var label = callbacks.label ? callbacks.label : Live.dataChanDefaultLabel;
     if (!config.dataChannel[label]) {
       // Create new data channel and wait for it to open
-      createDataChannel(
-        handleId,
-        label,
-        callbacks.protocol,
-        false,
-        data,
-        callbacks.protocol
-      );
+      createDataChannel(handleId, label, callbacks.protocol, false, data, callbacks.protocol);
       callbacks.success();
       return;
     }
@@ -1866,10 +1711,8 @@ function Live(gatewayCallbacks) {
   // Private method to send a DTMF tone
   function sendDtmf(handleId, callbacks) {
     callbacks = callbacks || {};
-    callbacks.success =
-      typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
-    callbacks.error =
-      typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
+    callbacks.success = typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
+    callbacks.error = typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
     var pluginHandle = pluginHandles[handleId];
     if (!pluginHandle || !pluginHandle.webrtcStuff) {
       Live.warn('Invalid handle');
@@ -1881,7 +1724,7 @@ function Live(gatewayCallbacks) {
       // Create the DTMF sender the proper way, if possible
       if (config.pc) {
         var senders = config.pc.getSenders();
-        var audioSender = senders.find(function(sender) {
+        var audioSender = senders.find(function (sender) {
           return sender.track && sender.track.kind === 'audio';
         });
         if (!audioSender) {
@@ -1892,7 +1735,7 @@ function Live(gatewayCallbacks) {
         config.dtmfSender = audioSender.dtmf;
         if (config.dtmfSender) {
           Live.log('Created DTMF Sender');
-          config.dtmfSender.ontonechange = function(tone) {
+          config.dtmfSender.ontonechange = function (tone) {
             Live.debug('Sent DTMF tone: ' + tone.tone);
           };
         }
@@ -1918,13 +1761,7 @@ function Live(gatewayCallbacks) {
     var duration = typeof dtmf.duration === 'number' ? dtmf.duration : 500; // We choose 500ms as the default duration for a tone
     var gap = typeof dtmf.gap === 'number' ? dtmf.gap : 50; // We choose 50ms as the default gap between tones
     Live.debug(
-      'Sending DTMF string ' +
-        tones +
-        ' (duration ' +
-        duration +
-        'ms, gap ' +
-        gap +
-        'ms)'
+      'Sending DTMF string ' + tones + ' (duration ' + duration + 'ms, gap ' + gap + 'ms)'
     );
     config.dtmfSender.insertDTMF(tones, duration, gap);
     callbacks.success();
@@ -1933,14 +1770,10 @@ function Live(gatewayCallbacks) {
   // Private method to destroy a plugin handle
   function destroyHandle(handleId, callbacks) {
     callbacks = callbacks || {};
-    callbacks.success =
-      typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
-    callbacks.error =
-      typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
+    callbacks.success = typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
+    callbacks.error = typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
     var noRequest = callbacks.noRequest === true;
-    Live.log(
-      'Destroying handle ' + handleId + ' (only-locally=' + noRequest + ')'
-    );
+    Live.log('Destroying handle ' + handleId + ' (only-locally=' + noRequest + ')');
     cleanupWebrtc(handleId);
     var pluginHandle = pluginHandles[handleId];
     if (!pluginHandle || pluginHandle.detached) {
@@ -1978,18 +1811,16 @@ function Live(gatewayCallbacks) {
       verb: 'POST',
       withCredentials: withCredentials,
       body: request,
-      success: function(json) {
+      success: function (json) {
         Live.log('Destroyed handle:');
         Live.debug(json);
         if (json['janus'] !== 'success') {
-          Live.error(
-            'Ooops: ' + json['error'].code + ' ' + json['error'].reason
-          ); // FIXME
+          Live.error('Ooops: ' + json['error'].code + ' ' + json['error'].reason); // FIXME
         }
         delete pluginHandles[handleId];
         callbacks.success();
       },
-      error: function(textStatus, errorThrown) {
+      error: function (textStatus, errorThrown) {
         Live.error(textStatus + ':', errorThrown); // FIXME
         // We cleanup anyway
         delete pluginHandles[handleId];
@@ -2037,12 +1868,8 @@ function Live(gatewayCallbacks) {
           if (transceivers && transceivers.length > 0) {
             for (var t of transceivers) {
               if (
-                (t.sender &&
-                  t.sender.track &&
-                  t.sender.track.kind === 'audio') ||
-                (t.receiver &&
-                  t.receiver.track &&
-                  t.receiver.track.kind === 'audio')
+                (t.sender && t.sender.track && t.sender.track.kind === 'audio') ||
+                (t.receiver && t.receiver.track && t.receiver.track.kind === 'audio')
               ) {
                 audioTransceiver = t;
                 break;
@@ -2080,12 +1907,8 @@ function Live(gatewayCallbacks) {
           if (transceivers && transceivers.length > 0) {
             for (var t of transceivers) {
               if (
-                (t.sender &&
-                  t.sender.track &&
-                  t.sender.track.kind === 'video') ||
-                (t.receiver &&
-                  t.receiver.track &&
-                  t.receiver.track.kind === 'video')
+                (t.sender && t.sender.track && t.sender.track.kind === 'video') ||
+                (t.receiver && t.receiver.track && t.receiver.track.kind === 'video')
               ) {
                 videoTransceiver = t;
                 break;
@@ -2116,9 +1939,7 @@ function Live(gatewayCallbacks) {
       if (Live.webRTCAdapter.browserDetails.browser === 'chrome') {
         // For Chrome versions before 72, we force a plan-b semantic, and unified-plan otherwise
         pc_config['sdpSemantics'] =
-          Live.webRTCAdapter.browserDetails.version < 72
-            ? 'plan-b'
-            : 'unified-plan';
+          Live.webRTCAdapter.browserDetails.version < 72 ? 'plan-b' : 'unified-plan';
       }
       var pc_constraints = {
         optional: [
@@ -2133,14 +1954,8 @@ function Live(gatewayCallbacks) {
         });
       }
       // Any custom constraint to add?
-      if (
-        callbacks.rtcConstraints &&
-        typeof callbacks.rtcConstraints === 'object'
-      ) {
-        Live.debug(
-          'Adding custom PeerConnection constraints:',
-          callbacks.rtcConstraints
-        );
+      if (callbacks.rtcConstraints && typeof callbacks.rtcConstraints === 'object') {
+        Live.debug('Adding custom PeerConnection constraints:', callbacks.rtcConstraints);
         for (var i in callbacks.rtcConstraints) {
           pc_constraints.optional.push(callbacks.rtcConstraints[i]);
         }
@@ -2158,15 +1973,11 @@ function Live(gatewayCallbacks) {
         config.volume = {};
         config.bitrate.value = '0 kbits/sec';
       }
-      Live.log(
-        'Preparing local SDP and gathering candidates (trickle=' +
-          config.trickle +
-          ')'
-      );
-      config.pc.oniceconnectionstatechange = function(e) {
+      Live.log('Preparing local SDP and gathering candidates (trickle=' + config.trickle + ')');
+      config.pc.oniceconnectionstatechange = function (e) {
         if (config.pc) pluginHandle.iceState(config.pc.iceConnectionState);
       };
-      config.pc.onicecandidate = function(event) {
+      config.pc.onicecandidate = function (event) {
         if (
           !event.candidate ||
           (Live.webRTCAdapter.browserDetails.browser === 'edge' &&
@@ -2197,7 +2008,7 @@ function Live(gatewayCallbacks) {
           }
         }
       };
-      config.pc.ontrack = function(event) {
+      config.pc.ontrack = function (event) {
         Live.log('Handling Remote Track');
         Live.debug(event);
         if (!event.streams) return;
@@ -2206,7 +2017,7 @@ function Live(gatewayCallbacks) {
         if (event.track.onended) return;
         var trackMutedTimeoutId = null;
         Live.log('Adding onended callback to track:', event.track);
-        event.track.onended = function(ev) {
+        event.track.onended = function (ev) {
           Live.log('Remote track removed:', ev);
           if (config.remoteStream) {
             clearTimeout(trackMutedTimeoutId);
@@ -2214,10 +2025,10 @@ function Live(gatewayCallbacks) {
             pluginHandle.onremotestream(config.remoteStream);
           }
         };
-        event.track.onmute = function(ev) {
+        event.track.onmute = function (ev) {
           Live.log('Remote track muted:', ev);
           if (config.remoteStream && trackMutedTimeoutId == null) {
-            trackMutedTimeoutId = setTimeout(function() {
+            trackMutedTimeoutId = setTimeout(function () {
               Live.log('Removing remote track');
               config.remoteStream.removeTrack(ev.target);
               pluginHandle.onremotestream(config.remoteStream);
@@ -2227,7 +2038,7 @@ function Live(gatewayCallbacks) {
             }, 3 * 840);
           }
         };
-        event.track.onunmute = function(ev) {
+        event.track.onunmute = function (ev) {
           Live.log('Remote track flowing again:', ev);
           if (trackMutedTimeoutId != null) {
             clearTimeout(trackMutedTimeoutId);
@@ -2246,7 +2057,7 @@ function Live(gatewayCallbacks) {
     if (addTracks && stream) {
       Live.log('Adding local stream');
       var simulcast2 = callbacks.simulcast2 === true;
-      stream.getTracks().forEach(function(track) {
+      stream.getTracks().forEach(function (track) {
         Live.log('Adding local track:', track);
         if (!simulcast2) {
           config.pc.addTrack(track, stream);
@@ -2284,20 +2095,12 @@ function Live(gatewayCallbacks) {
       });
     }
     // Any data channel to create?
-    if (
-      isDataEnabled(media) &&
-      !config.dataChannel[Live.dataChanDefaultLabel]
-    ) {
+    if (isDataEnabled(media) && !config.dataChannel[Live.dataChanDefaultLabel]) {
       Live.log('Creating default data channel');
       createDataChannel(handleId, Live.dataChanDefaultLabel, null, false);
-      config.pc.ondatachannel = function(event) {
+      config.pc.ondatachannel = function (event) {
         Live.log('Data channel created by Live:', event);
-        createDataChannel(
-          handleId,
-          event.channel.label,
-          event.channel.protocol,
-          event.channel
-        );
+        createDataChannel(handleId, event.channel.label, event.channel.protocol, event.channel);
       };
     }
     // If there's a new local stream, let's notify the application
@@ -2308,7 +2111,7 @@ function Live(gatewayCallbacks) {
     if (!jsep) {
       createOffer(handleId, media, callbacks);
     } else {
-      config.pc.setRemoteDescription(jsep).then(function() {
+      config.pc.setRemoteDescription(jsep).then(function () {
         Live.log('Remote description accepted!');
         config.remoteSdp = jsep.sdp;
         // Any trickle candidate we cached?
@@ -2334,10 +2137,8 @@ function Live(gatewayCallbacks) {
 
   function prepareWebrtc(handleId, offer, callbacks) {
     callbacks = callbacks || {};
-    callbacks.success =
-      typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
-    callbacks.error =
-      typeof callbacks.error == 'function' ? callbacks.error : webrtcError;
+    callbacks.success = typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
+    callbacks.error = typeof callbacks.error == 'function' ? callbacks.error : webrtcError;
     var jsep = callbacks.jsep;
     if (offer && jsep) {
       Live.error('Provided a JSEP to a createOffer');
@@ -2421,10 +2222,7 @@ function Live(gatewayCallbacks) {
             media.addAudio = true;
           }
         } else {
-          if (
-            !config.myStream.getAudioTracks() ||
-            config.myStream.getAudioTracks().length === 0
-          ) {
+          if (!config.myStream.getAudioTracks() || config.myStream.getAudioTracks().length === 0) {
             // No audio track: if we were asked to replace, it's actually an "add"
             if (media.replaceAudio) {
               media.keepAudio = false;
@@ -2438,11 +2236,7 @@ function Live(gatewayCallbacks) {
             }
           } else {
             // We have an audio track: should we keep it as it is?
-            if (
-              isAudioSendEnabled(media) &&
-              !media.removeAudio &&
-              !media.replaceAudio
-            ) {
+            if (isAudioSendEnabled(media) && !media.removeAudio && !media.replaceAudio) {
               media.keepAudio = true;
             }
           }
@@ -2486,10 +2280,7 @@ function Live(gatewayCallbacks) {
             media.addVideo = true;
           }
         } else {
-          if (
-            !config.myStream.getVideoTracks() ||
-            config.myStream.getVideoTracks().length === 0
-          ) {
+          if (!config.myStream.getVideoTracks() || config.myStream.getVideoTracks().length === 0) {
             // No video track: if we were asked to replace, it's actually an "add"
             if (media.replaceVideo) {
               media.keepVideo = false;
@@ -2503,11 +2294,7 @@ function Live(gatewayCallbacks) {
             }
           } else {
             // We have a video track: should we keep it as it is?
-            if (
-              isVideoSendEnabled(media) &&
-              !media.removeVideo &&
-              !media.replaceVideo
-            ) {
+            if (isVideoSendEnabled(media) && !media.removeVideo && !media.replaceVideo) {
               media.keepVideo = true;
             }
           }
@@ -2597,11 +2384,7 @@ function Live(gatewayCallbacks) {
       Live.debug(stream);
       // If this is an update, let's check if we need to release the previous stream
       if (media.update) {
-        if (
-          config.myStream &&
-          config.myStream !== callbacks.stream &&
-          !config.streamExternal
-        ) {
+        if (config.myStream && config.myStream !== callbacks.stream && !config.streamExternal) {
           // We're replacing a stream we captured ourselves with an external one
           try {
             // Try a MediaStreamTrack.stop() for each track
@@ -2633,14 +2416,12 @@ function Live(gatewayCallbacks) {
       };
       pluginHandle.consentDialog(true);
       var audioSupport = isAudioSendEnabled(media);
-      if (audioSupport && media && typeof media.audio === 'object')
-        audioSupport = media.audio;
+      if (audioSupport && media && typeof media.audio === 'object') audioSupport = media.audio;
       var videoSupport = isVideoSendEnabled(media);
       if (videoSupport && media) {
         var simulcast = callbacks.simulcast === true;
         var simulcast2 = callbacks.simulcast2 === true;
-        if ((simulcast || simulcast2) && !jsep && !media.video)
-          media.video = 'hires';
+        if ((simulcast || simulcast2) && !jsep && !media.video) media.video = 'hires';
         if (media.video && media.video != 'screen' && media.video != 'window') {
           if (typeof media.video === 'object') {
             videoSupport = media.video;
@@ -2705,10 +2486,7 @@ function Live(gatewayCallbacks) {
             Live.log('Adding video constraint:', videoSupport);
           }
         } else if (media.video === 'screen' || media.video === 'window') {
-          if (
-            navigator.mediaDevices &&
-            navigator.mediaDevices.getDisplayMedia
-          ) {
+          if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
             // The new experimental getDisplayMedia API is available, let's use that
             // https://groups.google.com/forum/#!topic/discuss-webrtc/Uf0SrR4uxzk
             // https://webrtchacks.com/chrome-screensharing-getdisplaymedia/
@@ -2729,9 +2507,7 @@ function Live(gatewayCallbacks) {
               })
               .then(async sources => {
                 //const source = sources.find(item => item.name === '云砚直播');
-                const source = sources.find(
-                  item => item.name.indexOf('云砚直播') > -1
-                );
+                const source = sources.find(item => item.name.indexOf('云砚直播') > -1);
                 try {
                   let video1 = {};
                   let playId = media.playId ? media.playId : source.id;
@@ -2794,14 +2570,14 @@ function Live(gatewayCallbacks) {
             Live.debug(constraints);
             navigator.mediaDevices
               .getUserMedia(constraints)
-              .then(function(stream) {
+              .then(function (stream) {
                 if (useAudio) {
                   navigator.mediaDevices
                     .getUserMedia({
                       audio: true,
                       video: false
                     })
-                    .then(function(audioStream) {
+                    .then(function (audioStream) {
                       stream.addTrack(audioStream.getAudioTracks()[0]);
                       gsmCallback(null, stream);
                     });
@@ -2809,7 +2585,7 @@ function Live(gatewayCallbacks) {
                   gsmCallback(null, stream);
                 }
               })
-              .catch(function(error) {
+              .catch(function (error) {
                 pluginHandle.consentDialog(false);
                 gsmCallback(error);
               });
@@ -2836,7 +2612,7 @@ function Live(gatewayCallbacks) {
               getScreenMedia(constraints, callbackUserMedia);
             } else {
               // Chrome 34+ requires an extension
-              Live.extension.getScreen(function(error, sourceId) {
+              Live.extension.getScreen(function (error, sourceId) {
                 if (error) {
                   pluginHandle.consentDialog(false);
                   return callbacks.error(error);
@@ -2879,12 +2655,12 @@ function Live(gatewayCallbacks) {
                 },
                 audio: isAudioSendEnabled(media) && !media.keepAudio
               };
-              getScreenMedia(constraints, function(err, stream) {
+              getScreenMedia(constraints, function (err, stream) {
                 callbackUserMedia(err, stream);
                 // Workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=1045810
                 if (!err) {
                   var lastTime = stream.currentTime;
-                  var polly = window.setInterval(function() {
+                  var polly = window.setInterval(function () {
                     if (!stream) window.clearInterval(polly);
                     if (stream.currentTime == lastTime) {
                       window.clearInterval(polly);
@@ -2913,13 +2689,13 @@ function Live(gatewayCallbacks) {
         // Check whether all media sources are actually available or not
         navigator.mediaDevices
           .enumerateDevices()
-          .then(function(devices) {
-            var audioExist = devices.some(function(device) {
+          .then(function (devices) {
+            var audioExist = devices.some(function (device) {
                 return device.kind === 'audioinput';
               }),
               videoExist =
                 isScreenSendEnabled(media) ||
-                devices.some(function(device) {
+                devices.some(function (device) {
                   return device.kind === 'videoinput';
                 });
 
@@ -2939,15 +2715,11 @@ function Live(gatewayCallbacks) {
                 return false;
               } else if (!haveAudioDevice && needAudioDevice) {
                 pluginHandle.consentDialog(false);
-                callbacks.error(
-                  'Audio capture is required, but no capture device found'
-                );
+                callbacks.error('Audio capture is required, but no capture device found');
                 return false;
               } else if (!haveVideoDevice && needVideoDevice) {
                 pluginHandle.consentDialog(false);
-                callbacks.error(
-                  'Video capture is required, but no capture device found'
-                );
+                callbacks.error('Video capture is required, but no capture device found');
                 return false;
               }
             }
@@ -2962,11 +2734,11 @@ function Live(gatewayCallbacks) {
             } else {
               navigator.mediaDevices
                 .getUserMedia(gumConstraints)
-                .then(function(stream) {
+                .then(function (stream) {
                   pluginHandle.consentDialog(false);
                   streamsDone(handleId, jsep, media, callbacks, stream);
                 })
-                .catch(function(error) {
+                .catch(function (error) {
                   pluginHandle.consentDialog(false);
                   callbacks.error({
                     code: error.code,
@@ -2976,7 +2748,7 @@ function Live(gatewayCallbacks) {
                 });
             }
           })
-          .catch(function(error) {
+          .catch(function (error) {
             pluginHandle.consentDialog(false);
             callbacks.error('enumerateDevices error', error);
           });
@@ -2989,10 +2761,8 @@ function Live(gatewayCallbacks) {
 
   function prepareWebrtcPeer(handleId, callbacks) {
     callbacks = callbacks || {};
-    callbacks.success =
-      typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
-    callbacks.error =
-      typeof callbacks.error == 'function' ? callbacks.error : webrtcError;
+    callbacks.success = typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
+    callbacks.error = typeof callbacks.error == 'function' ? callbacks.error : webrtcError;
     var jsep = callbacks.jsep;
     var pluginHandle = pluginHandles[handleId];
     if (!pluginHandle || !pluginHandle.webrtcStuff) {
@@ -3011,7 +2781,7 @@ function Live(gatewayCallbacks) {
         );
         return;
       }
-      config.pc.setRemoteDescription(jsep).then(function() {
+      config.pc.setRemoteDescription(jsep).then(function () {
         Live.log('Remote description accepted!');
         config.remoteSdp = jsep.sdp;
         // Any trickle candidate we cached?
@@ -3039,14 +2809,10 @@ function Live(gatewayCallbacks) {
 
   function createOffer(handleId, media, callbacks) {
     callbacks = callbacks || {};
-    callbacks.success =
-      typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
-    callbacks.error =
-      typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
+    callbacks.success = typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
+    callbacks.error = typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
     callbacks.customizeSdp =
-      typeof callbacks.customizeSdp == 'function'
-        ? callbacks.customizeSdp
-        : Live.noop;
+      typeof callbacks.customizeSdp == 'function' ? callbacks.customizeSdp : Live.noop;
     var pluginHandle = pluginHandles[handleId];
     if (!pluginHandle || !pluginHandle.webrtcStuff) {
       Live.warn('Invalid handle');
@@ -3058,13 +2824,7 @@ function Live(gatewayCallbacks) {
     if (!simulcast) {
       Live.log('Creating offer (iceDone=' + config.iceDone + ')');
     } else {
-      Live.log(
-        'Creating offer (iceDone=' +
-          config.iceDone +
-          ', simulcast=' +
-          simulcast +
-          ')'
-      );
+      Live.log('Creating offer (iceDone=' + config.iceDone + ', simulcast=' + simulcast + ')');
     }
     // https://code.google.com/p/webrtc/issues/detail?id=3508
     var mediaConstraints = {};
@@ -3077,9 +2837,7 @@ function Live(gatewayCallbacks) {
         for (var t of transceivers) {
           if (
             (t.sender && t.sender.track && t.sender.track.kind === 'audio') ||
-            (t.receiver &&
-              t.receiver.track &&
-              t.receiver.track.kind === 'audio')
+            (t.receiver && t.receiver.track && t.receiver.track.kind === 'audio')
           ) {
             if (!audioTransceiver) {
               audioTransceiver = t;
@@ -3088,9 +2846,7 @@ function Live(gatewayCallbacks) {
           }
           if (
             (t.sender && t.sender.track && t.sender.track.kind === 'video') ||
-            (t.receiver &&
-              t.receiver.track &&
-              t.receiver.track.kind === 'video')
+            (t.receiver && t.receiver.track && t.receiver.track.kind === 'video')
           ) {
             if (!videoTransceiver) {
               videoTransceiver = t;
@@ -3121,10 +2877,7 @@ function Live(gatewayCallbacks) {
             } else {
               audioTransceiver.direction = 'sendrecv';
             }
-            Live.log(
-              'Setting audio transceiver to sendrecv:',
-              audioTransceiver
-            );
+            Live.log('Setting audio transceiver to sendrecv:', audioTransceiver);
           }
         } else if (audioSend && !audioRecv) {
           if (audioTransceiver) {
@@ -3133,10 +2886,7 @@ function Live(gatewayCallbacks) {
             } else {
               audioTransceiver.direction = 'sendonly';
             }
-            Live.log(
-              'Setting audio transceiver to sendonly:',
-              audioTransceiver
-            );
+            Live.log('Setting audio transceiver to sendonly:', audioTransceiver);
           }
         } else if (!audioSend && audioRecv) {
           if (audioTransceiver) {
@@ -3145,10 +2895,7 @@ function Live(gatewayCallbacks) {
             } else {
               audioTransceiver.direction = 'recvonly';
             }
-            Live.log(
-              'Setting audio transceiver to recvonly:',
-              audioTransceiver
-            );
+            Live.log('Setting audio transceiver to recvonly:', audioTransceiver);
           } else {
             // In theory, this is the only case where we might not have a transceiver yet
             audioTransceiver = config.pc.addTransceiver('audio', {
@@ -3180,10 +2927,7 @@ function Live(gatewayCallbacks) {
             } else {
               videoTransceiver.direction = 'sendrecv';
             }
-            Live.log(
-              'Setting video transceiver to sendrecv:',
-              videoTransceiver
-            );
+            Live.log('Setting video transceiver to sendrecv:', videoTransceiver);
           }
         } else if (videoSend && !videoRecv) {
           if (videoTransceiver) {
@@ -3192,10 +2936,7 @@ function Live(gatewayCallbacks) {
             } else {
               videoTransceiver.direction = 'sendonly';
             }
-            Live.log(
-              'Setting video transceiver to sendonly:',
-              videoTransceiver
-            );
+            Live.log('Setting video transceiver to sendonly:', videoTransceiver);
           }
         } else if (!videoSend && videoRecv) {
           if (videoTransceiver) {
@@ -3204,10 +2945,7 @@ function Live(gatewayCallbacks) {
             } else {
               videoTransceiver.direction = 'recvonly';
             }
-            Live.log(
-              'Setting video transceiver to recvonly:',
-              videoTransceiver
-            );
+            Live.log('Setting video transceiver to recvonly:', videoTransceiver);
           } else {
             // In theory, this is the only case where we might not have a transceiver yet
             videoTransceiver = config.pc.addTransceiver('video', {
@@ -3228,14 +2966,10 @@ function Live(gatewayCallbacks) {
     Live.debug(mediaConstraints);
     // Check if this is Firefox and we've been asked to do simulcasting
     var sendVideo = isVideoSendEnabled(media);
-    if (
-      sendVideo &&
-      simulcast &&
-      Live.webRTCAdapter.browserDetails.browser === 'firefox'
-    ) {
+    if (sendVideo && simulcast && Live.webRTCAdapter.browserDetails.browser === 'firefox') {
       // FIXME Based on https://gist.github.com/voluntas/088bc3cc62094730647b
       Live.log('Enabling Simulcasting for Firefox (RID)');
-      var sender = config.pc.getSenders().find(function(s) {
+      var sender = config.pc.getSenders().find(function (s) {
         return s.track.kind === 'video';
       });
       if (sender) {
@@ -3266,7 +3000,7 @@ function Live(gatewayCallbacks) {
         sender.setParameters(parameters);
       }
     }
-    config.pc.createOffer(mediaConstraints).then(function(offer) {
+    config.pc.createOffer(mediaConstraints).then(function (offer) {
       Live.debug(offer);
       // JSON.stringify doesn't work on some WebRTC objects anymore
       // See https://code.google.com/p/chromium/issues/detail?id=467366
@@ -3286,9 +3020,7 @@ function Live(gatewayCallbacks) {
           Live.log('Enabling Simulcasting for Chrome (SDP munging)');
           offer.sdp = mungeSdpForSimulcasting(offer.sdp);
         } else if (Live.webRTCAdapter.browserDetails.browser !== 'firefox') {
-          Live.warn(
-            'simulcast=true, but this is not Chrome nor Firefox, ignoring'
-          );
+          Live.warn('simulcast=true, but this is not Chrome nor Firefox, ignoring');
         }
       }
       config.mySdp = offer.sdp;
@@ -3307,14 +3039,10 @@ function Live(gatewayCallbacks) {
 
   function createAnswer(handleId, media, callbacks) {
     callbacks = callbacks || {};
-    callbacks.success =
-      typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
-    callbacks.error =
-      typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
+    callbacks.success = typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
+    callbacks.error = typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
     callbacks.customizeSdp =
-      typeof callbacks.customizeSdp == 'function'
-        ? callbacks.customizeSdp
-        : Live.noop;
+      typeof callbacks.customizeSdp == 'function' ? callbacks.customizeSdp : Live.noop;
     var pluginHandle = pluginHandles[handleId];
     if (!pluginHandle || !pluginHandle.webrtcStuff) {
       Live.warn('Invalid handle');
@@ -3326,13 +3054,7 @@ function Live(gatewayCallbacks) {
     if (!simulcast) {
       Live.log('Creating answer (iceDone=' + config.iceDone + ')');
     } else {
-      Live.log(
-        'Creating answer (iceDone=' +
-          config.iceDone +
-          ', simulcast=' +
-          simulcast +
-          ')'
-      );
+      Live.log('Creating answer (iceDone=' + config.iceDone + ', simulcast=' + simulcast + ')');
     }
     var mediaConstraints = null;
     if (Live.unifiedPlan) {
@@ -3345,18 +3067,14 @@ function Live(gatewayCallbacks) {
         for (var t of transceivers) {
           if (
             (t.sender && t.sender.track && t.sender.track.kind === 'audio') ||
-            (t.receiver &&
-              t.receiver.track &&
-              t.receiver.track.kind === 'audio')
+            (t.receiver && t.receiver.track && t.receiver.track.kind === 'audio')
           ) {
             if (!audioTransceiver) audioTransceiver = t;
             continue;
           }
           if (
             (t.sender && t.sender.track && t.sender.track.kind === 'video') ||
-            (t.receiver &&
-              t.receiver.track &&
-              t.receiver.track.kind === 'video')
+            (t.receiver && t.receiver.track && t.receiver.track.kind === 'video')
           ) {
             if (!videoTransceiver) videoTransceiver = t;
             continue;
@@ -3375,10 +3093,7 @@ function Live(gatewayCallbacks) {
             } else {
               audioTransceiver.direction = 'inactive';
             }
-            Live.log(
-              'Setting audio transceiver to inactive:',
-              audioTransceiver
-            );
+            Live.log('Setting audio transceiver to inactive:', audioTransceiver);
           } catch (e) {
             Live.error(e);
           }
@@ -3393,10 +3108,7 @@ function Live(gatewayCallbacks) {
               } else {
                 audioTransceiver.direction = 'sendrecv';
               }
-              Live.log(
-                'Setting audio transceiver to sendrecv:',
-                audioTransceiver
-              );
+              Live.log('Setting audio transceiver to sendrecv:', audioTransceiver);
             } catch (e) {
               Live.error(e);
             }
@@ -3409,10 +3121,7 @@ function Live(gatewayCallbacks) {
               } else {
                 audioTransceiver.direction = 'sendonly';
               }
-              Live.log(
-                'Setting audio transceiver to sendonly:',
-                audioTransceiver
-              );
+              Live.log('Setting audio transceiver to sendonly:', audioTransceiver);
             }
           } catch (e) {
             Live.error(e);
@@ -3425,10 +3134,7 @@ function Live(gatewayCallbacks) {
               } else {
                 audioTransceiver.direction = 'recvonly';
               }
-              Live.log(
-                'Setting audio transceiver to recvonly:',
-                audioTransceiver
-              );
+              Live.log('Setting audio transceiver to recvonly:', audioTransceiver);
             } catch (e) {
               Live.error(e);
             }
@@ -3453,10 +3159,7 @@ function Live(gatewayCallbacks) {
             } else {
               videoTransceiver.direction = 'inactive';
             }
-            Live.log(
-              'Setting video transceiver to inactive:',
-              videoTransceiver
-            );
+            Live.log('Setting video transceiver to inactive:', videoTransceiver);
           } catch (e) {
             Live.error(e);
           }
@@ -3471,10 +3174,7 @@ function Live(gatewayCallbacks) {
               } else {
                 videoTransceiver.direction = 'sendrecv';
               }
-              Live.log(
-                'Setting video transceiver to sendrecv:',
-                videoTransceiver
-              );
+              Live.log('Setting video transceiver to sendrecv:', videoTransceiver);
             } catch (e) {
               Live.error(e);
             }
@@ -3487,10 +3187,7 @@ function Live(gatewayCallbacks) {
               } else {
                 videoTransceiver.direction = 'sendonly';
               }
-              Live.log(
-                'Setting video transceiver to sendonly:',
-                videoTransceiver
-              );
+              Live.log('Setting video transceiver to sendonly:', videoTransceiver);
             } catch (e) {
               Live.error(e);
             }
@@ -3503,10 +3200,7 @@ function Live(gatewayCallbacks) {
               } else {
                 videoTransceiver.direction = 'recvonly';
               }
-              Live.log(
-                'Setting video transceiver to recvonly:',
-                videoTransceiver
-              );
+              Live.log('Setting video transceiver to recvonly:', videoTransceiver);
             } catch (e) {
               Live.error(e);
             }
@@ -3540,11 +3234,7 @@ function Live(gatewayCallbacks) {
     Live.debug(mediaConstraints);
     // Check if this is Firefox and we've been asked to do simulcasting
     var sendVideo = isVideoSendEnabled(media);
-    if (
-      sendVideo &&
-      simulcast &&
-      Live.webRTCAdapter.browserDetails.browser === 'firefox'
-    ) {
+    if (sendVideo && simulcast && Live.webRTCAdapter.browserDetails.browser === 'firefox') {
       // FIXME Based on https://gist.github.com/voluntas/088bc3cc62094730647b
       Live.log('Enabling Simulcasting for Firefox (RID)');
       var sender = config.pc.getSenders()[1];
@@ -3576,7 +3266,7 @@ function Live(gatewayCallbacks) {
         ]
       });
     }
-    config.pc.createAnswer(mediaConstraints).then(function(answer) {
+    config.pc.createAnswer(mediaConstraints).then(function (answer) {
       Live.debug(answer);
       // JSON.stringify doesn't work on some WebRTC objects anymore
       // See https://code.google.com/p/chromium/issues/detail?id=467366
@@ -3597,9 +3287,7 @@ function Live(gatewayCallbacks) {
             'simulcast=true, but this is an answer, and video breaks in Chrome if we enable it'
           );
         } else if (Live.webRTCAdapter.browserDetails.browser !== 'firefox') {
-          Live.warn(
-            'simulcast=true, but this is not Chrome nor Firefox, ignoring'
-          );
+          Live.warn('simulcast=true, but this is not Chrome nor Firefox, ignoring');
         }
       }
       config.mySdp = answer.sdp;
@@ -3616,10 +3304,8 @@ function Live(gatewayCallbacks) {
 
   function sendSDP(handleId, callbacks) {
     callbacks = callbacks || {};
-    callbacks.success =
-      typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
-    callbacks.error =
-      typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
+    callbacks.success = typeof callbacks.success == 'function' ? callbacks.success : Live.noop;
+    callbacks.error = typeof callbacks.error == 'function' ? callbacks.error : Live.noop;
     var pluginHandle = pluginHandles[handleId];
     if (!pluginHandle || !pluginHandle.webrtcStuff) {
       Live.warn('Invalid handle, not sending anything');
@@ -3669,15 +3355,11 @@ function Live(gatewayCallbacks) {
       }
       if (!config.volume[stream].timer) {
         Live.log('Starting ' + stream + ' volume monitor');
-        config.volume[stream].timer = setInterval(function() {
-          config.pc.getStats().then(function(stats) {
-            stats.forEach(function(res) {
+        config.volume[stream].timer = setInterval(function () {
+          config.pc.getStats().then(function (stats) {
+            stats.forEach(function (res) {
               if (!res || res.kind !== 'audio') return;
-              if (
-                (remote && !res.remoteSource) ||
-                (!remote && res.type !== 'media-source')
-              )
-                return;
+              if ((remote && !res.remoteSource) || (!remote && res.type !== 'media-source')) return;
               config.volume[stream].value = res.audioLevel ? res.audioLevel : 0;
             });
           });
@@ -3710,20 +3392,14 @@ function Live(gatewayCallbacks) {
     }
     if (video) {
       // Check video track
-      if (
-        !config.myStream.getVideoTracks() ||
-        config.myStream.getVideoTracks().length === 0
-      ) {
+      if (!config.myStream.getVideoTracks() || config.myStream.getVideoTracks().length === 0) {
         Live.warn('No video track');
         return true;
       }
       return !config.myStream.getVideoTracks()[0].enabled;
     } else {
       // Check audio track
-      if (
-        !config.myStream.getAudioTracks() ||
-        config.myStream.getAudioTracks().length === 0
-      ) {
+      if (!config.myStream.getAudioTracks() || config.myStream.getAudioTracks().length === 0) {
         Live.warn('No audio track');
         return true;
       }
@@ -3748,10 +3424,7 @@ function Live(gatewayCallbacks) {
     }
     if (video) {
       // Mute/unmute video track
-      if (
-        !config.myStream.getVideoTracks() ||
-        config.myStream.getVideoTracks().length === 0
-      ) {
+      if (!config.myStream.getVideoTracks() || config.myStream.getVideoTracks().length === 0) {
         Live.warn('No video track');
         return false;
       }
@@ -3759,10 +3432,7 @@ function Live(gatewayCallbacks) {
       return true;
     } else {
       // Mute/unmute audio track
-      if (
-        !config.myStream.getAudioTracks() ||
-        config.myStream.getAudioTracks().length === 0
-      ) {
+      if (!config.myStream.getAudioTracks() || config.myStream.getAudioTracks().length === 0) {
         Live.warn('No audio track');
         return false;
       }
@@ -3783,15 +3453,14 @@ function Live(gatewayCallbacks) {
     if (config.pc.getStats) {
       if (!config.bitrate.timer) {
         Live.log('Starting bitrate timer (via getStats)');
-        config.bitrate.timer = setInterval(function() {
-          config.pc.getStats().then(function(stats) {
-            stats.forEach(function(res) {
+        config.bitrate.timer = setInterval(function () {
+          config.pc.getStats().then(function (stats) {
+            stats.forEach(function (res) {
               if (!res) return;
               var inStats = false;
               // Check if these are statistics on incoming media
               if (
-                (res.mediaType === 'video' ||
-                  res.id.toLowerCase().indexOf('video') > -1) &&
+                (res.mediaType === 'video' || res.id.toLowerCase().indexOf('video') > -1) &&
                 res.type === 'inbound-rtp' &&
                 res.id.indexOf('rtcp') < 0
               ) {
@@ -3809,22 +3478,17 @@ function Live(gatewayCallbacks) {
               if (inStats) {
                 config.bitrate.bsnow = res.bytesReceived;
                 config.bitrate.tsnow = res.timestamp;
-                if (
-                  config.bitrate.bsbefore === null ||
-                  config.bitrate.tsbefore === null
-                ) {
+                if (config.bitrate.bsbefore === null || config.bitrate.tsbefore === null) {
                   // Skip this round
                   config.bitrate.bsbefore = config.bitrate.bsnow;
                   config.bitrate.tsbefore = config.bitrate.tsnow;
                 } else {
                   // Calculate bitrate
-                  var timePassed =
-                    config.bitrate.tsnow - config.bitrate.tsbefore;
+                  var timePassed = config.bitrate.tsnow - config.bitrate.tsbefore;
                   if (Live.webRTCAdapter.browserDetails.browser === 'safari')
                     timePassed = timePassed / 1000; // Apparently the timestamp is in microseconds, in Safari
                   var bitRate = Math.round(
-                    ((config.bitrate.bsnow - config.bitrate.bsbefore) * 8) /
-                      timePassed
+                    ((config.bitrate.bsnow - config.bitrate.bsbefore) * 8) / timePassed
                   );
                   if (Live.webRTCAdapter.browserDetails.browser === 'safari')
                     bitRate = parseInt(bitRate / 1000);
@@ -4122,11 +3786,7 @@ function Live(gatewayCallbacks) {
         insertAt++;
       }
       if (mslabel) {
-        lines.splice(
-          insertAt,
-          0,
-          'a=ssrc:' + ssrc_fid[i] + ' mslabel:' + mslabel
-        );
+        lines.splice(insertAt, 0, 'a=ssrc:' + ssrc_fid[i] + ' mslabel:' + mslabel);
         insertAt++;
       }
       if (label) {
@@ -4134,26 +3794,10 @@ function Live(gatewayCallbacks) {
         insertAt++;
       }
     }
-    lines.splice(
-      insertAt,
-      0,
-      'a=ssrc-group:FID ' + ssrc[2] + ' ' + ssrc_fid[2]
-    );
-    lines.splice(
-      insertAt,
-      0,
-      'a=ssrc-group:FID ' + ssrc[1] + ' ' + ssrc_fid[1]
-    );
-    lines.splice(
-      insertAt,
-      0,
-      'a=ssrc-group:FID ' + ssrc[0] + ' ' + ssrc_fid[0]
-    );
-    lines.splice(
-      insertAt,
-      0,
-      'a=ssrc-group:SIM ' + ssrc[0] + ' ' + ssrc[1] + ' ' + ssrc[2]
-    );
+    lines.splice(insertAt, 0, 'a=ssrc-group:FID ' + ssrc[2] + ' ' + ssrc_fid[2]);
+    lines.splice(insertAt, 0, 'a=ssrc-group:FID ' + ssrc[1] + ' ' + ssrc_fid[1]);
+    lines.splice(insertAt, 0, 'a=ssrc-group:FID ' + ssrc[0] + ' ' + ssrc_fid[0]);
+    lines.splice(insertAt, 0, 'a=ssrc-group:SIM ' + ssrc[0] + ' ' + ssrc[1] + ' ' + ssrc[2]);
     sdp = lines.join('\r\n');
     if (!sdp.endsWith('\r\n')) sdp += '\r\n';
     return sdp;
@@ -4172,8 +3816,7 @@ function Live(gatewayCallbacks) {
     Live.debug('isAudioSendRequired:', media);
     if (!media) return false; // Default
     if (media.audio === false || media.audioSend === false) return false; // If we're not asking to capture audio, it's not required
-    if (media.failIfNoAudio === undefined || media.failIfNoAudio === null)
-      return false; // Default
+    if (media.failIfNoAudio === undefined || media.failIfNoAudio === null) return false; // Default
     return media.failIfNoAudio === true;
   }
 
@@ -4197,8 +3840,7 @@ function Live(gatewayCallbacks) {
     Live.debug('isVideoSendRequired:', media);
     if (!media) return false; // Default
     if (media.video === false || media.videoSend === false) return false; // If we're not asking to capture video, it's not required
-    if (media.failIfNoVideo === undefined || media.failIfNoVideo === null)
-      return false; // Default
+    if (media.failIfNoVideo === undefined || media.failIfNoVideo === null) return false; // Default
     return media.failIfNoVideo === true;
   }
 
@@ -4213,27 +3855,16 @@ function Live(gatewayCallbacks) {
   function isScreenSendEnabled(media) {
     Live.debug('isScreenSendEnabled:', media);
     if (!media) return false;
-    if (
-      typeof media.video !== 'object' ||
-      typeof media.video.mandatory !== 'object'
-    )
-      return false;
+    if (typeof media.video !== 'object' || typeof media.video.mandatory !== 'object') return false;
     var constraints = media.video.mandatory;
     if (constraints.chromeMediaSource)
       return (
-        constraints.chromeMediaSource === 'desktop' ||
-        constraints.chromeMediaSource === 'screen'
+        constraints.chromeMediaSource === 'desktop' || constraints.chromeMediaSource === 'screen'
       );
     else if (constraints.mozMediaSource)
-      return (
-        constraints.mozMediaSource === 'window' ||
-        constraints.mozMediaSource === 'screen'
-      );
+      return constraints.mozMediaSource === 'window' || constraints.mozMediaSource === 'screen';
     else if (constraints.mediaSource)
-      return (
-        constraints.mediaSource === 'window' ||
-        constraints.mediaSource === 'screen'
-      );
+      return constraints.mediaSource === 'window' || constraints.mediaSource === 'screen';
     return false;
   }
 

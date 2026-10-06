@@ -39,9 +39,7 @@ describe('LiveService.create', () => {
 
   it('joinCode 撞库时重试直到取到空闲码', async () => {
     const { service, room } = createLiveService();
-    room.repo.findOne
-      .mockResolvedValueOnce({ joinCode: 'SEXIST01' })
-      .mockResolvedValueOnce(null);
+    room.repo.findOne.mockResolvedValueOnce({ joinCode: 'SEXIST01' }).mockResolvedValueOnce(null);
     const created = await service.create({ title: 'A', startTime: '1' }, 't1');
     expect(room.repo.findOne).toHaveBeenCalledTimes(2);
     expect(created.joinCode).toMatch(/^S[A-Z0-9]+$/);
@@ -52,9 +50,9 @@ describe('LiveService.create', () => {
     const { service, room, queryRunner, janus } = createLiveService();
     room.repo.findOne.mockResolvedValue(null);
     janus.createRoom.mockRejectedValueOnce(new Error('janus down'));
-    await expect(
-      service.create({ title: 'A', startTime: '1' }, 't1')
-    ).rejects.toThrow('janus down');
+    await expect(service.create({ title: 'A', startTime: '1' }, 't1')).rejects.toThrow(
+      'janus down'
+    );
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
     expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();
@@ -64,9 +62,7 @@ describe('LiveService.create', () => {
     const { service, room, manager, queryRunner, janus } = createLiveService();
     room.repo.findOne.mockResolvedValue(null);
     manager.save.mockRejectedValueOnce(new Error('db down'));
-    await expect(
-      service.create({ title: 'A', startTime: '1' }, 't1')
-    ).rejects.toThrow('db down');
+    await expect(service.create({ title: 'A', startTime: '1' }, 't1')).rejects.toThrow('db down');
     expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();
     expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
@@ -157,9 +153,7 @@ describe('LiveService.changeStatus', () => {
   it('房间不存在抛 NotFound', async () => {
     const { service, room } = createLiveService();
     room.repo.findOne.mockResolvedValue(null);
-    await expect(service.changeStatus({ roomId: 'rx', status: 2 })).rejects.toThrow(
-      '房间不存在'
-    );
+    await expect(service.changeStatus({ roomId: 'rx', status: 2 })).rejects.toThrow('房间不存在');
   });
 
   it('status=2 开播时记录 liveStartedAt', async () => {
@@ -190,16 +184,7 @@ describe('LiveService.cmsList', () => {
       [{ roomId: 'r1', title: 'A', joinCode: 'SA1', liveUserId: 't1' }],
       1
     ]);
-    const res = await service.cmsList(
-      2,
-      5,
-      2,
-      't1',
-      '数学',
-      '1704000000000',
-      '1704999999000',
-      0
-    );
+    const res = await service.cmsList(2, 5, 2, 't1', '数学', '1704000000000', '1704999999000', 0);
     expect(chainCalls(qb, 'andWhere')).toEqual([
       ['live.status = :status', { status: 2 }],
       ['live.liveUserId = :liveUserId', { liveUserId: 't1' }],
@@ -234,9 +219,7 @@ describe('LiveService.cmsList', () => {
     const hasStatus = chainCalls(room.qb, 'andWhere').some(
       args => args[0] === 'live.status = :status'
     );
-    const hasType = chainCalls(room.qb, 'andWhere').some(
-      args => args[0] === 'live.type = :type'
-    );
+    const hasType = chainCalls(room.qb, 'andWhere').some(args => args[0] === 'live.type = :type');
     expect(hasStatus).toBe(false);
     expect(hasType).toBe(false);
     expect(chainCalls(room.qb, 'skip')).toContainEqual([0]);
@@ -267,9 +250,7 @@ describe('LiveService.delete / updateCode', () => {
   it('updateCode 重新生成空闲码并保存', async () => {
     const { service, room } = createLiveService();
     const row = { roomId: 'r1', type: 0, joinCode: 'SOLDOLD1' };
-    room.repo.findOne
-      .mockResolvedValueOnce(row)
-      .mockResolvedValueOnce(null);
+    room.repo.findOne.mockResolvedValueOnce(row).mockResolvedValueOnce(null);
     const code = await service.updateCode('r1');
     expect(code).toMatch(/^S[A-Z0-9]+$/);
     expect(code).not.toBe('SOLDOLD1');

@@ -41,11 +41,7 @@ function createController() {
     removeSession: vi.fn(async () => undefined),
     touchSession: vi.fn(async () => undefined)
   };
-  const controller = new AuthController(
-    authClient as never,
-    jwt as never,
-    session as never
-  );
+  const controller = new AuthController(authClient as never, jwt as never, session as never);
   controller.onModuleInit();
   return { controller, authService, authClient, jwt, session };
 }
@@ -115,16 +111,12 @@ describe('AuthController.login', () => {
 
     await controller.login(loginDto());
 
-    expect(jwt.sign).toHaveBeenCalledWith(
-      expect.objectContaining({ sub: 'g1', role: 5 })
-    );
+    expect(jwt.sign).toHaveBeenCalledWith(expect.objectContaining({ sub: 'g1', role: 5 }));
   });
 
   it('gRPC 登录失败时不创建会话', async () => {
     const { controller, authService, session } = createController();
-    authService.login.mockReturnValueOnce(
-      throwError(() => ({ code: 5, details: '用户不存在' }))
-    );
+    authService.login.mockReturnValueOnce(throwError(() => ({ code: 5, details: '用户不存在' })));
     await expect(controller.login(loginDto())).rejects.toThrow('用户不存在');
     expect(session.createSession).not.toHaveBeenCalled();
   });
@@ -256,9 +248,7 @@ describe('AuthController.getMe', () => {
 
   it('上游 gRPC 失败时错误经 grpcCall 映射', async () => {
     const { controller, authService } = createController();
-    authService.getUser.mockReturnValueOnce(
-      throwError(() => ({ code: 16, details: '未登录' }))
-    );
+    authService.getUser.mockReturnValueOnce(throwError(() => ({ code: 16, details: '未登录' })));
     await expect(
       controller.getMe({ user: { userId: 'u1', email: 'a@b.com', role: 1 } })
     ).rejects.toThrow('未登录');

@@ -1,54 +1,26 @@
 <template>
-  <div
-    class="classroom-apply"
-    :class="isTeacher ? 'set-height' : ''"
-  >
+  <div class="classroom-apply" :class="isTeacher ? 'set-height' : ''">
     <ul v-if="isTeacher && isInteraction == 0">
-      <li
-        v-for="(item, index) in userList"
-        :key="index"
-      >
+      <li v-for="(item, index) in userList" :key="index">
         <div class="name">
           {{ item.userName }}
         </div>
         <div class="span">
-          <span
-            class="no"
-            @click="agree(false, item.display, index, 5)"
-          >拒绝</span><span
-            class="ok"
-            @click="agree(true, item.display, index, 4)"
-          >同意</span>
+          <span class="no" @click="agree(false, item.display, index, 5)">拒绝</span
+          ><span class="ok" @click="agree(true, item.display, index, 4)">同意</span>
         </div>
       </li>
     </ul>
     <ul v-if="!isSmall && (isInteraction == 2 || isInteraction == 3)">
       <li class="hands-up">
         <div class="name">
-          {{ audioUserName }}<span
-            v-if="isSpeak"
-            class="open"
-          >发言中...</span><span
-            v-else
-            class="stop"
-          >已禁麦</span>
+          {{ audioUserName }}<span v-if="isSpeak" class="open">发言中...</span
+          ><span v-else class="stop">已禁麦</span>
         </div>
-        <div
-          v-if="isTeacher || isInteraction == 2"
-          class="span"
-        >
-          <span
-            v-if="isSpeak"
-            class="ismuted"
-            @click="isTalking('off')"
-          >禁麦</span><span
-            v-else
-            class="ismuted"
-            @click="isTalking('on')"
-          >开麦</span><span
-            class="canel"
-            @click="stopApplication"
-          >退出</span>
+        <div v-if="isTeacher || isInteraction == 2" class="span">
+          <span v-if="isSpeak" class="ismuted" @click="isTalking('off')">禁麦</span
+          ><span v-else class="ismuted" @click="isTalking('on')">开麦</span
+          ><span class="canel" @click="stopApplication">退出</span>
         </div>
       </li>
     </ul>
@@ -64,15 +36,18 @@ interface ApplyUser {
   display?: string;
 }
 
-withDefaults(defineProps<{
-  isInteraction?: number;
-  isTeacher?: boolean;
-  isSmall?: boolean;
-}>(), {
-  isInteraction: 0,
-  isTeacher: false,
-  isSmall: false,
-});
+withDefaults(
+  defineProps<{
+    isInteraction?: number;
+    isTeacher?: boolean;
+    isSmall?: boolean;
+  }>(),
+  {
+    isInteraction: 0,
+    isTeacher: false,
+    isSmall: false
+  }
+);
 
 const emit = defineEmits<{
   (e: 'isTalking', type: string): void;
@@ -96,7 +71,7 @@ function applyList(status: boolean, data: ApplyUser) {
   if (status) {
     userList.value.unshift(data);
   } else {
-    const index = userList.value.findIndex((item) => item.opaqueId === data.opaqueId);
+    const index = userList.value.findIndex(item => item.opaqueId === data.opaqueId);
     if (index >= 0) userList.value.splice(index, 1);
   }
 }

@@ -22,7 +22,10 @@ function toBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-export async function encryptPassword(plain: string, publicKeyPem: string = PASSWORD_PUBLIC_KEY_PEM): Promise<string> {
+export async function encryptPassword(
+  plain: string,
+  publicKeyPem: string = PASSWORD_PUBLIC_KEY_PEM
+): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) {
     throw new Error('当前环境不支持 WebCrypto (crypto.subtle)，无法加密密码');
@@ -31,9 +34,13 @@ export async function encryptPassword(plain: string, publicKeyPem: string = PASS
   if (plaintext.length > MAX_PLAINTEXT_BYTES) {
     throw new Error(`密码过长，无法加密（上限 ${MAX_PLAINTEXT_BYTES} 字节）`);
   }
-  const key = await subtle.importKey('spki', pemToDer(publicKeyPem), { name: 'RSA-OAEP', hash: 'SHA-256' }, false, [
-    'encrypt'
-  ]);
+  const key = await subtle.importKey(
+    'spki',
+    pemToDer(publicKeyPem),
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    false,
+    ['encrypt']
+  );
   const encrypted = await subtle.encrypt({ name: 'RSA-OAEP' }, key, plaintext);
   return toBase64(encrypted);
 }

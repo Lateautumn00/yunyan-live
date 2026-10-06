@@ -1,10 +1,5 @@
 import Redis from 'ioredis';
-import {
-  FORBID_ALLOWED,
-  FORBID_CHANNEL,
-  ForbidPayload,
-  forbidKey
-} from './constants';
+import { FORBID_ALLOWED, FORBID_CHANNEL, ForbidPayload, forbidKey } from './constants';
 
 /**
  * 读取教室禁言状态：无记录视为可发言（FORBID_ALLOWED）；Redis 故障 fail-open 放行。

@@ -4,13 +4,13 @@ import { MailService } from './mail.service';
 
 function createService() {
   const mailer = { sendMail: vi.fn().mockResolvedValue(undefined) };
-  const redis = { setex: vi.fn().mockResolvedValue('OK'), get: vi.fn(), del: vi.fn().mockResolvedValue(1) };
+  const redis = {
+    setex: vi.fn().mockResolvedValue('OK'),
+    get: vi.fn(),
+    del: vi.fn().mockResolvedValue(1)
+  };
   const config = {};
-  const service = new MailService(
-    mailer as never,
-    config as never,
-    redis as unknown as Redis
-  );
+  const service = new MailService(mailer as never, config as never, redis as unknown as Redis);
   return { service, mailer, redis };
 }
 

@@ -10,50 +10,32 @@
       </el-breadcrumb>
 
       <div style="overflow-x: auto">
-        <el-table
-          :data="tableData"
-          style="width: 100%"
-          border
-          stripe
-        >
-          <el-table-column
-            prop="nickName"
-            label="昵称"
-            min-width="193"
-          />
-          <el-table-column
-            prop="watchTime"
-            label="观看时长"
-            min-width="193"
-          >
+        <el-table :data="tableData" style="width: 100%" border stripe>
+          <el-table-column prop="nickName" label="昵称" min-width="193" />
+          <el-table-column prop="watchTime" label="观看时长" min-width="193">
             <template #default="scope">
               <span>{{ formatDurationCn(scope.row.watchTime) }}</span>
             </template>
           </el-table-column>
-          <el-table-column
-            prop="joinedAt"
-            label="进入时间"
-            min-width="193"
-          >
+          <el-table-column prop="joinedAt" label="进入时间" min-width="193">
             <template #default="scope">
               <span>{{ formatTime(scope.row.joinedAt) }}</span>
             </template>
           </el-table-column>
-          <el-table-column
-            prop="leftAt"
-            label="离开时间"
-            min-width="193"
-          >
+          <el-table-column prop="leftAt" label="离开时间" min-width="193">
             <template #default="scope">
-              <span>{{ scope.row.leftAt ? formatTime(scope.row.leftAt) : (scope.row.isOnline ? '在线' : '已离开') }}</span>
+              <span>{{
+                scope.row.leftAt
+                  ? formatTime(scope.row.leftAt)
+                  : scope.row.isOnline
+                    ? '在线'
+                    : '已离开'
+              }}</span>
             </template>
           </el-table-column>
         </el-table>
       </div>
-      <div
-        v-show="total !== 0"
-        class="tc-page"
-      >
+      <div v-show="total !== 0" class="tc-page">
         <el-pagination
           background
           :current-page="params.pageNum"
@@ -96,11 +78,11 @@ const {
   handleCurrentChange
 } = usePagedList<WatchItem>({
   pageSize: 6,
-  fetchPage: async (query) => {
+  fetchPage: async query => {
     const res = await Live.watchtime_list({
       pageNum: query.pageNum,
       pageSize: query.pageSize,
-      roomId: route.query.roomId,
+      roomId: route.query.roomId
     });
     const data = res.data as WatchListResult;
     return { list: data.list, total: data.pageInfo.totalElements };

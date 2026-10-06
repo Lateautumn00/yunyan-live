@@ -6,12 +6,8 @@ import { AuthController } from './auth.controller';
 import { GatewayClientsModule } from '../gateway/clients.module';
 
 @Module({
-  imports: [
-    GatewayClientsModule,
-    PassportModule,
-    JwtModule.registerAsync(jwtModuleAsyncOptions()),
-  ],
+  imports: [GatewayClientsModule, PassportModule, JwtModule.registerAsync(jwtModuleAsyncOptions())],
   controllers: [AuthController],
-  providers: [JwtStrategy, SessionService],
+  providers: [JwtStrategy, SessionService]
 })
 export class AuthModule {}

@@ -8,14 +8,11 @@
         width="26"
         height="26"
         style="border-radius: 50%"
-      >
+      />
       云砚直播
     </div>
 
-    <el-menu
-      :default-active="activeKey"
-      @select="handleSelect"
-    >
+    <el-menu :default-active="activeKey" @select="handleSelect">
       <el-menu-item index="1">
         <el-icon :size="18">
           <Plus />
@@ -48,10 +45,7 @@
       </el-menu-item>
     </el-menu>
 
-    <img
-      src="~@/assets/imgs/backstage/side-menu.png"
-      alt="image"
-    >
+    <img src="~@/assets/imgs/backstage/side-menu.png" alt="image" />
   </div>
 </template>
 
@@ -91,7 +85,7 @@ const navTreeData = [
 ];
 
 function handleSelect(key: string) {
-  const target = navTreeData.find((item) => String(item.index) === key);
+  const target = navTreeData.find(item => String(item.index) === key);
   if (target) {
     void router.push(target.link);
   }

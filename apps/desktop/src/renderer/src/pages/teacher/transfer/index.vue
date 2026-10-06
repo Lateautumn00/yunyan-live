@@ -6,39 +6,21 @@
       <div class="transfer-form">
         <div class="form-row">
           <label>直播间ID</label>
-          <el-input
-            v-model="roomId"
-            placeholder="请输入要接收的直播间ID"
-            style="width: 300px"
-          />
+          <el-input v-model="roomId" placeholder="请输入要接收的直播间ID" style="width: 300px" />
         </div>
-        <el-button
-          type="primary"
-          :disabled="!roomId"
-          :loading="generating"
-          @click="generateCode"
-        >
+        <el-button type="primary" :disabled="!roomId" :loading="generating" @click="generateCode">
           生成转移码
         </el-button>
       </div>
-      <div
-        v-if="transferCode"
-        class="code-result"
-      >
+      <div v-if="transferCode" class="code-result">
         <div class="code-info">
           <span class="label">转移码：</span>
           <span class="code">{{ transferCode }}</span>
-          <el-icon
-            class="copy"
-            aria-label="复制"
-            @click="copyCode"
-          >
+          <el-icon class="copy" aria-label="复制" @click="copyCode">
             <CopyDocument />
           </el-icon>
         </div>
-        <div class="expire-info">
-          有效期至：{{ expireTime }}
-        </div>
+        <div class="expire-info">有效期至：{{ expireTime }}</div>
         <div class="tip">
           请将此码和直播间ID告诉对方，对方在「我的直播」→「转移」中输入即可完成转移
         </div>

@@ -1,67 +1,42 @@
 <template>
   <div class="equip-panel">
-    <div
-      v-if="active === 0"
-      class="pre-check"
-    >
+    <div v-if="active === 0" class="pre-check">
       <h3>准备检测</h3>
       <p>
-        为了保证更好的直播效果,请务必完成设备检测~<br>
+        为了保证更好的直播效果,请务必完成设备检测~<br />
         同时为了提升声音质量以及避免啸叫噪音,推荐您佩戴使用有线耳机.
       </p>
-      <p class="ready-hint">
-        设备网络连接正常,可以开始检测.
-      </p>
-      <el-button @click="active = 1">
-        开始检测
-      </el-button>
+      <p class="ready-hint">设备网络连接正常,可以开始检测.</p>
+      <el-button @click="active = 1"> 开始检测 </el-button>
       <p>自检通过后不会再出现此提醒</p>
     </div>
 
-    <div
-      v-if="active !== 5 && active !== 0"
-      class="check"
-    >
+    <div v-if="active !== 5 && active !== 0" class="check">
       <el-steps :active="active">
         <el-step title="">
           <template #icon>
-            <el-icon
-              :size="20"
-              class="equip-icon is-full"
-            >
+            <el-icon :size="20" class="equip-icon is-full">
               <VideoCameraFilled />
             </el-icon>
           </template>
         </el-step>
         <el-step title="">
           <template #icon>
-            <el-icon
-              :size="20"
-              class="equip-icon"
-              :class="{ 'is-done': active >= 2 }"
-            >
+            <el-icon :size="20" class="equip-icon" :class="{ 'is-done': active >= 2 }">
               <Headset />
             </el-icon>
           </template>
         </el-step>
         <el-step title="">
           <template #icon>
-            <el-icon
-              :size="20"
-              class="equip-icon"
-              :class="{ 'is-done': active >= 3 }"
-            >
+            <el-icon :size="20" class="equip-icon" :class="{ 'is-done': active >= 3 }">
               <Microphone />
             </el-icon>
           </template>
         </el-step>
         <el-step title="">
           <template #icon>
-            <el-icon
-              :size="20"
-              class="equip-icon"
-              :class="{ 'is-done': active >= 4 }"
-            >
+            <el-icon :size="20" class="equip-icon" :class="{ 'is-done': active >= 4 }">
               <Monitor />
             </el-icon>
           </template>
@@ -69,70 +44,43 @@
       </el-steps>
       <div class="check-line">
         <span class="check-dot">
-          <el-icon
-            v-if="videoWork && active > 1"
-            color="#61ba47"
-          >
+          <el-icon v-if="videoWork && active > 1" color="#61ba47">
             <CircleCheckFilled />
           </el-icon>
-          <el-icon
-            v-else-if="!videoWork && active > 1"
-            color="#E0383E"
-          >
+          <el-icon v-else-if="!videoWork && active > 1" color="#E0383E">
             <CircleFilled />
           </el-icon>
         </span>
 
         <span class="check-dot">
-          <el-icon
-            v-if="soundWork && active > 2"
-            color="#61ba47"
-          >
+          <el-icon v-if="soundWork && active > 2" color="#61ba47">
             <CircleCheckFilled />
           </el-icon>
-          <el-icon
-            v-else-if="!soundWork && active > 2"
-            color="#E0383E"
-          >
+          <el-icon v-else-if="!soundWork && active > 2" color="#E0383E">
             <CircleFilled />
           </el-icon>
         </span>
 
         <span class="check-dot">
-          <el-icon
-            v-if="mikeWork && active > 3"
-            color="#61ba47"
-          >
+          <el-icon v-if="mikeWork && active > 3" color="#61ba47">
             <CircleCheckFilled />
           </el-icon>
-          <el-icon
-            v-else-if="!mikeWork && active > 3"
-            color="#E0383E"
-          >
+          <el-icon v-else-if="!mikeWork && active > 3" color="#E0383E">
             <CircleFilled />
           </el-icon>
         </span>
 
         <span class="check-dot">
-          <el-icon
-            v-if="netWork && active >= 4"
-            color="#61ba47"
-          >
+          <el-icon v-if="netWork && active >= 4" color="#61ba47">
             <CircleCheckFilled />
           </el-icon>
-          <el-icon
-            v-else-if="!netWork && active > 4"
-            color="#E0383E"
-          >
+          <el-icon v-else-if="!netWork && active > 4" color="#E0383E">
             <CircleFilled />
           </el-icon>
         </span>
       </div>
       <!-- 摄像头 -->
-      <div
-        v-if="active === 1"
-        class="camera"
-      >
+      <div v-if="active === 1" class="camera">
         <div class="camera-select">
           <span>选择摄像头</span>
           <el-select v-model="videoTrack">
@@ -147,56 +95,31 @@
 
         <div class="camera-window">
           <video src="" />
-          <el-tooltip
-            class="item"
-            effect="dark"
-            placement="top-end"
-          >
+          <el-tooltip class="item" effect="dark" placement="top-end">
             <template #content>
               <div>
-                1.若杀毒软件弹出提示，请选择"允许"<br>
-                2.检查摄像头设备是否正确连接并开启<br>
-                3.检查摄像头设备是否被其他程序占用<br>
-                4.尝试重新拔插摄像头或更换插口<br>
+                1.若杀毒软件弹出提示，请选择"允许"<br />
+                2.检查摄像头设备是否正确连接并开启<br />
+                3.检查摄像头设备是否被其他程序占用<br />
+                4.尝试重新拔插摄像头或更换插口<br />
                 5.尝试重启电脑后再次检测
               </div>
             </template>
             <p>看不见视频?</p>
           </el-tooltip>
         </div>
-        <p
-          v-if="videoWork"
-          class="camera-note"
-        >
-          通过摄像头是否可以清晰的看到自己?
-        </p>
-        <p
-          v-if="redVideo"
-          class="red-camera-note"
-        >
+        <p v-if="videoWork" class="camera-note">通过摄像头是否可以清晰的看到自己?</p>
+        <p v-if="redVideo" class="red-camera-note">
           检测到摄像头正常连接,确定无法通过摄像头看到自己吗?
         </p>
         <div class="camera-buttons">
-          <el-button
-            :disabled="!cameraTrack"
-            @click="canNotSee()"
-          >
-            看不到
-          </el-button>
-          <el-button
-            :disabled="!cameraTrack"
-            @click="seeVideo()"
-          >
-            能看到
-          </el-button>
+          <el-button :disabled="!cameraTrack" @click="canNotSee()"> 看不到 </el-button>
+          <el-button :disabled="!cameraTrack" @click="seeVideo()"> 能看到 </el-button>
         </div>
       </div>
 
       <!-- 扬声器 -->
-      <div
-        v-if="active === 2"
-        class="sound"
-      >
+      <div v-if="active === 2" class="sound">
         <div class="sound-select">
           <span>选择扬声器</span>
           <el-select v-model="audioTrack">
@@ -209,10 +132,7 @@
           </el-select>
         </div>
         <div class="sound-window">
-          <div
-            class="sound-click"
-            @click="playAudio"
-          >
+          <div class="sound-click" @click="playAudio">
             <audio :src="audioUrl" />
             <el-icon :size="16">
               <Headset />
@@ -226,20 +146,16 @@
             type="range"
             min="0"
             max="100"
-          >
+          />
           <div class="sound-score">
             <p>输出音量 {{ soundScore }} %</p>
-            <el-tooltip
-              class="item"
-              effect="dark"
-              placement="top-end"
-            >
+            <el-tooltip class="item" effect="dark" placement="top-end">
               <template #content>
                 <div>
-                  1.若杀毒软件弹出提示，请选择"允许"<br>
-                  2.检查音频设备是否正确连接并开启<br>
-                  3.检查音频设备是否被其他程序占用<br>
-                  4.尝试重新拔插音频设备或更换插口<br>
+                  1.若杀毒软件弹出提示，请选择"允许"<br />
+                  2.检查音频设备是否正确连接并开启<br />
+                  3.检查音频设备是否被其他程序占用<br />
+                  4.尝试重新拔插音频设备或更换插口<br />
                   5.尝试重启电脑后再次检测
                 </div>
               </template>
@@ -247,33 +163,18 @@
             </el-tooltip>
           </div>
         </div>
-        <p
-          v-if="soundWork"
-          class="sound-note"
-        >
-          通过扬声器是否可以清晰的听到声音?
-        </p>
-        <p
-          v-if="redSound"
-          class="red-sound-note"
-        >
+        <p v-if="soundWork" class="sound-note">通过扬声器是否可以清晰的听到声音?</p>
+        <p v-if="redSound" class="red-sound-note">
           检测到扬声器已正常连接，确定无法通过扬声器听到声音吗？
         </p>
         <div class="sound-buttons">
-          <el-button @click="canNotHear()">
-            听不到
-          </el-button>
-          <el-button @click="hearSound()">
-            能听到
-          </el-button>
+          <el-button @click="canNotHear()"> 听不到 </el-button>
+          <el-button @click="hearSound()"> 能听到 </el-button>
         </div>
       </div>
 
       <!-- 麦克风 -->
-      <div
-        v-if="active === 3"
-        class="mike"
-      >
+      <div v-if="active === 3" class="mike">
         <div class="mike-select">
           <span>选择麦克风</span>
           <el-select v-model="audioTrack">
@@ -287,11 +188,7 @@
         </div>
         <div class="mike-window">
           <p>试试对着麦克风从1数到10,并观察音量跳动</p>
-          <canvas
-            id="canvas"
-            width="266"
-            height="20"
-          />
+          <canvas id="canvas" width="266" height="20" />
           <input
             id="mike-input"
             class="mike-range"
@@ -299,20 +196,16 @@
             type="range"
             min="0"
             max="100"
-          >
+          />
           <div class="mike-score">
             <p>输出音量 {{ mikeScore }} %</p>
-            <el-tooltip
-              class="item"
-              effect="dark"
-              placement="top-end"
-            >
+            <el-tooltip class="item" effect="dark" placement="top-end">
               <template #content>
                 <div>
-                  1.若杀毒软件弹出提示，请选择"允许"<br>
-                  2.检查音频设备是否正确连接并开启<br>
-                  3.检查音频设备是否被其他程序占用<br>
-                  4.尝试重新拔插音频设备或更换插口<br>
+                  1.若杀毒软件弹出提示，请选择"允许"<br />
+                  2.检查音频设备是否正确连接并开启<br />
+                  3.检查音频设备是否被其他程序占用<br />
+                  4.尝试重新拔插音频设备或更换插口<br />
                   5.尝试重启电脑后再次检测
                 </div>
               </template>
@@ -320,33 +213,18 @@
             </el-tooltip>
           </div>
         </div>
-        <p
-          v-if="mikeWork"
-          class="mike-note"
-        >
-          通过耳机是否可以听到声音并看到音量跳动?
-        </p>
-        <p
-          v-if="redMike"
-          class="red-mike-note"
-        >
+        <p v-if="mikeWork" class="mike-note">通过耳机是否可以听到声音并看到音量跳动?</p>
+        <p v-if="redMike" class="red-mike-note">
           检测到麦克风已正常连接，确定无法听到声音或看不到音量跳动效果吗？
         </p>
         <div class="mike-buttons">
-          <el-button @click="canNotSeeNorHear()">
-            听不到
-          </el-button>
-          <el-button @click="hearAndSeeMike()">
-            能听到
-          </el-button>
+          <el-button @click="canNotSeeNorHear()"> 听不到 </el-button>
+          <el-button @click="hearAndSeeMike()"> 能听到 </el-button>
         </div>
       </div>
 
       <!-- 网络 -->
-      <div
-        v-if="active === 4"
-        class="network"
-      >
+      <div v-if="active === 4" class="network">
         <div class="net-window">
           <div>
             <p>操作系统</p>
@@ -366,15 +244,11 @@
           </div>
           <div>
             <p />
-            <el-tooltip
-              class="item"
-              effect="dark"
-              placement="top-end"
-            >
+            <el-tooltip class="item" effect="dark" placement="top-end">
               <template #content>
                 <div>
-                  1.建议使用网线连接<br>
-                  2.网络高峰时段会产生较大网络波动<br>
+                  1.建议使用网线连接<br />
+                  2.网络高峰时段会产生较大网络波动<br />
                   3.尝试切换网络再次检测
                 </div>
               </template>
@@ -382,41 +256,26 @@
             </el-tooltip>
           </div>
         </div>
-        <p class="net-note">
-          所有检测完成
-        </p>
+        <p class="net-note">所有检测完成</p>
         <div class="net-buttons">
-          <el-button @click="recheckNetwork">
-            重新测速
-          </el-button>
-          <el-button @click="viewReport()">
-            查看报告
-          </el-button>
+          <el-button @click="recheckNetwork"> 重新测速 </el-button>
+          <el-button @click="viewReport()"> 查看报告 </el-button>
         </div>
       </div>
     </div>
 
     <!-- 完成检测 -->
-    <div
-      v-if="active === 5"
-      class="result"
-    >
+    <div v-if="active === 5" class="result">
       <h3>检测结果</h3>
       <div class="result-window">
         <div>
           <p>摄像头</p>
-          <p
-            v-if="videoWork"
-            class="success"
-          >
+          <p v-if="videoWork" class="success">
             能看见<el-icon color="#61ba47">
               <CircleCheckFilled />
             </el-icon>
           </p>
-          <p
-            v-else
-            class="error"
-          >
+          <p v-else class="error">
             能看见<el-icon color="#E0383E">
               <CircleFilled />
             </el-icon>
@@ -424,18 +283,12 @@
         </div>
         <div>
           <p>扬声器/听筒</p>
-          <p
-            v-if="soundWork"
-            class="success"
-          >
+          <p v-if="soundWork" class="success">
             能看见<el-icon color="#61ba47">
               <CircleCheckFilled />
             </el-icon>
           </p>
-          <p
-            v-else
-            class="error"
-          >
+          <p v-else class="error">
             能看见<el-icon color="#E0383E">
               <CircleFilled />
             </el-icon>
@@ -443,18 +296,12 @@
         </div>
         <div>
           <p>麦克风</p>
-          <p
-            v-if="mikeWork"
-            class="success"
-          >
+          <p v-if="mikeWork" class="success">
             能听到和看到<el-icon color="#61ba47">
               <CircleCheckFilled />
             </el-icon>
           </p>
-          <p
-            v-else
-            class="error"
-          >
+          <p v-else class="error">
             能听到和看到<el-icon color="#E0383E">
               <CircleFilled />
             </el-icon>
@@ -462,18 +309,12 @@
         </div>
         <div>
           <p>网络</p>
-          <p
-            v-if="netWork"
-            class="success"
-          >
+          <p v-if="netWork" class="success">
             1Mb/S<el-icon color="#61ba47">
               <CircleCheckFilled />
             </el-icon>
           </p>
-          <p
-            v-else
-            class="error"
-          >
+          <p v-else class="error">
             1Mb/S<el-icon color="#E0383E">
               <CircleFilled />
             </el-icon>
@@ -488,31 +329,16 @@
       >
         <Sunny />
       </el-icon>
-      <el-icon
-        v-else
-        :size="59"
-        color="#e0383e"
-        class="result-face"
-      >
+      <el-icon v-else :size="59" color="#e0383e" class="result-face">
         <Failed />
       </el-icon>
-      <p
-        v-if="videoWork && soundWork && mikeWork && netWork"
-        class="result-note"
-      >
+      <p v-if="videoWork && soundWork && mikeWork && netWork" class="result-note">
         恭喜所有检测达标,可以进入直播
       </p>
-      <p
-        v-else
-        class="result-note"
-      >
-        检测未达标,请检查设备稍后再试
-      </p>
+      <p v-else class="result-note">检测未达标,请检查设备稍后再试</p>
 
       <div class="result-buttons">
-        <el-button @click="recheckAll()">
-          重新检测
-        </el-button>
+        <el-button @click="recheckAll()"> 重新检测 </el-button>
       </div>
     </div>
   </div>
@@ -594,7 +420,7 @@ watch(active, (val: number, oldVal?: number) => {
   if (val === 1) {
     navigator.mediaDevices
       .getUserMedia({ video: { width: 256, height: 144 } })
-      .then((stream) => {
+      .then(stream => {
         cameraStream.value = stream;
         tracks.value = stream.getTracks();
         if (tracks.value.length > 0) {
@@ -620,17 +446,15 @@ watch(active, (val: number, oldVal?: number) => {
   } else if (val === 2) {
     navigator.mediaDevices
       .getUserMedia({ audio: true })
-      .then((stream) => {
+      .then(stream => {
         audioStream.value = stream;
         tracks.value = stream.getTracks();
         if (tracks.value.length > 0) {
           styleInputRange('sound-input');
-          const volumeInputSoundNode = document.getElementById(
-            'sound-input'
-          ) as HTMLInputElement;
+          const volumeInputSoundNode = document.getElementById('sound-input') as HTMLInputElement;
           volumeInputSoundNode.value = soundScore.value as unknown as string;
 
-          volumeInputSoundNode.oninput = (e) => {
+          volumeInputSoundNode.oninput = e => {
             styleInputRange('sound-input');
             soundScore.value = Number((e.target as HTMLInputElement).value);
             lastSoundVolume.value = (e.target as HTMLInputElement).value;
@@ -646,7 +470,7 @@ watch(active, (val: number, oldVal?: number) => {
   } else if (val === 3) {
     navigator.mediaDevices
       .getUserMedia({ audio: true })
-      .then((stream) => {
+      .then(stream => {
         mikeStream.value = stream;
         const analyser = audioCtx.createAnalyser();
         analyser.minDecibels = -90;
@@ -661,9 +485,7 @@ watch(active, (val: number, oldVal?: number) => {
         biquadFilter.frequency.setTargetAtTime(1000, audioCtx.currentTime, 0);
 
         styleInputRange('mike-input');
-        const volumeInputMikeNode = document.getElementById(
-          'mike-input'
-        ) as HTMLInputElement;
+        const volumeInputMikeNode = document.getElementById('mike-input') as HTMLInputElement;
         volumeInputMikeNode.value = mikeScore.value as unknown as string;
 
         const gainConnection = () => {
@@ -715,8 +537,7 @@ watch(active, (val: number, oldVal?: number) => {
           }
 
           const barWidth = (WIDTH / bufferLengthAlt) * 2.5 * 2;
-          const barLocation =
-            Math.round(((maxValue - 100) / 20) * (mikeScore.value / 10)) - 2;
+          const barLocation = Math.round(((maxValue - 100) / 20) * (mikeScore.value / 10)) - 2;
           let x = 0;
           const y = 0;
 
@@ -746,8 +567,7 @@ watch(active, (val: number, oldVal?: number) => {
       });
   } else if (val === 4) {
     cancelAnimation();
-    const connection = (navigator as Navigator & { connection?: { downlink?: number } })
-      .connection;
+    const connection = (navigator as Navigator & { connection?: { downlink?: number } }).connection;
     downlink.value = `${connection ? connection.downlink : ''}Kb/S`;
     uplink.value = '2Mb/S';
 
@@ -771,9 +591,7 @@ function playAudio() {
   const audioNode = document.querySelector('audio') as HTMLAudioElement;
   if (!audioNode) return;
 
-  const volumeInputNode = document.querySelector(
-    'input.sound-range'
-  ) as HTMLInputElement;
+  const volumeInputNode = document.querySelector('input.sound-range') as HTMLInputElement;
 
   audioNode.volume = soundScore.value / 100;
 
@@ -818,8 +636,7 @@ function recheckNetwork() {
   uplink.value = '';
   netWork.value = false;
 
-  const connection = (navigator as Navigator & { connection?: { downlink?: number } })
-    .connection;
+  const connection = (navigator as Navigator & { connection?: { downlink?: number } }).connection;
   downlink.value = `${connection ? connection.downlink : ''}Kb/S`;
   uplink.value = '2Mb/S';
   netWork.value = true;

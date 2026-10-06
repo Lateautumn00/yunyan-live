@@ -22,9 +22,9 @@ import { UsersModule } from '../users/users.module';
           url: process.env.MAIL_GRPC_URL || 'localhost:50053'
         })
       }
-    ]),
+    ])
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService]
 })
 export class AuthModule {}

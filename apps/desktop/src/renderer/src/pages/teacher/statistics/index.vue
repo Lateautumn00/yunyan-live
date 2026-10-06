@@ -11,12 +11,8 @@
       <h3>整体数据</h3>
       <div class="charts">
         <el-radio-group v-model="type">
-          <el-radio-button value="分钟概括">
-            分钟概括
-          </el-radio-button>
-          <el-radio-button value="人次概括">
-            人次概括
-          </el-radio-button>
+          <el-radio-button value="分钟概括"> 分钟概括 </el-radio-button>
+          <el-radio-button value="人次概括"> 人次概括 </el-radio-button>
           <el-date-picker
             v-model="timerange"
             type="datetimerange"

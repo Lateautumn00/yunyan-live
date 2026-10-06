@@ -32,11 +32,7 @@ type VideoListVM = {
   setCameraStudent: (status: boolean, isSpeak: boolean) => void;
   setAudioAll: (user: string[]) => void;
   ensureSelfTile: (id: string, display: string[]) => Promise<void>;
-  studentMediaStream: (
-    stream: MediaStream,
-    display: string[],
-    id: string
-  ) => Promise<void>;
+  studentMediaStream: (stream: MediaStream, display: string[], id: string) => Promise<void>;
   delUserList: (id: string) => Promise<void>;
 };
 

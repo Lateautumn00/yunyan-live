@@ -8,7 +8,7 @@
           width="40"
           height="40"
           style="border-radius: 50%"
-        >
+        />
         <h2>云砚直播</h2>
       </div>
 
@@ -21,26 +21,11 @@
         class="session-alert"
       />
 
-      <el-tabs
-        v-model="activeTab"
-        class="login-tabs"
-      >
-        <el-tab-pane
-          label="登录"
-          name="login"
-        >
-          <el-form
-            ref="loginFormRef"
-            :model="loginForm"
-            :rules="loginRules"
-            label-width="0"
-          >
+      <el-tabs v-model="activeTab" class="login-tabs">
+        <el-tab-pane label="登录" name="login">
+          <el-form ref="loginFormRef" :model="loginForm" :rules="loginRules" label-width="0">
             <el-form-item prop="email">
-              <el-input
-                v-model="loginForm.email"
-                placeholder="请输入邮箱"
-                prefix-icon="Message"
-              />
+              <el-input v-model="loginForm.email" placeholder="请输入邮箱" prefix-icon="Message" />
             </el-form-item>
             <el-form-item prop="password">
               <el-input
@@ -58,12 +43,7 @@
                   >
                     <View />
                   </el-icon>
-                  <el-icon
-                    v-else
-                    :size="16"
-                    style="cursor: pointer"
-                    @click="showPass = true"
-                  >
+                  <el-icon v-else :size="16" style="cursor: pointer" @click="showPass = true">
                     <Hide />
                   </el-icon>
                 </template>
@@ -71,14 +51,8 @@
             </el-form-item>
             <el-form-item>
               <div style="display: flex; justify-content: space-between; width: 100%">
-                <el-checkbox v-model="rememberMe">
-                  记住我
-                </el-checkbox>
-                <el-link
-                  type="primary"
-                  :underline="false"
-                  @click="activeTab = 'forgot'"
-                >
+                <el-checkbox v-model="rememberMe"> 记住我 </el-checkbox>
+                <el-link type="primary" :underline="false" @click="activeTab = 'forgot'">
                   忘记密码?
                 </el-link>
               </div>
@@ -96,10 +70,7 @@
           </el-form>
         </el-tab-pane>
 
-        <el-tab-pane
-          label="注册"
-          name="register"
-        >
+        <el-tab-pane label="注册" name="register">
           <el-form
             ref="registerFormRef"
             :model="registerForm"
@@ -122,14 +93,8 @@
             </el-form-item>
             <el-form-item prop="code">
               <div class="code-input">
-                <el-input
-                  v-model="registerForm.code"
-                  placeholder="请输入验证码"
-                />
-                <el-button
-                  :disabled="codeCountdown > 0"
-                  @click="sendCode"
-                >
+                <el-input v-model="registerForm.code" placeholder="请输入验证码" />
+                <el-button :disabled="codeCountdown > 0" @click="sendCode">
                   {{ codeCountdown > 0 ? `${codeCountdown}s` : '获取验证码' }}
                 </el-button>
               </div>
@@ -150,20 +115,12 @@
                   >
                     <View />
                   </el-icon>
-                  <el-icon
-                    v-else
-                    :size="16"
-                    style="cursor: pointer"
-                    @click="showRegPass = true"
-                  >
+                  <el-icon v-else :size="16" style="cursor: pointer" @click="showRegPass = true">
                     <Hide />
                   </el-icon>
                 </template>
               </el-input>
-              <div
-                v-if="registerForm.password"
-                class="password-strength"
-              >
+              <div v-if="registerForm.password" class="password-strength">
                 <div class="strength-bar">
                   <div
                     class="strength-fill"
@@ -189,12 +146,7 @@
                   >
                     <View />
                   </el-icon>
-                  <el-icon
-                    v-else
-                    :size="16"
-                    style="cursor: pointer"
-                    @click="showRegRePass = true"
-                  >
+                  <el-icon v-else :size="16" style="cursor: pointer" @click="showRegRePass = true">
                     <Hide />
                   </el-icon>
                 </template>
@@ -202,12 +154,8 @@
             </el-form-item>
             <el-form-item prop="role">
               <el-radio-group v-model="registerForm.role">
-                <el-radio :value="1">
-                  老师
-                </el-radio>
-                <el-radio :value="2">
-                  学生
-                </el-radio>
+                <el-radio :value="1"> 老师 </el-radio>
+                <el-radio :value="2"> 学生 </el-radio>
               </el-radio-group>
             </el-form-item>
             <el-form-item>
@@ -224,24 +172,11 @@
         </el-tab-pane>
       </el-tabs>
 
-      <div
-        v-if="activeTab === 'forgot'"
-        class="forgot-form"
-      >
-        <el-link
-          type="primary"
-          :underline="false"
-          class="back-link"
-          @click="activeTab = 'login'"
-        >
+      <div v-if="activeTab === 'forgot'" class="forgot-form">
+        <el-link type="primary" :underline="false" class="back-link" @click="activeTab = 'login'">
           ← 返回登录
         </el-link>
-        <el-form
-          ref="forgotFormRef"
-          :model="forgotForm"
-          :rules="forgotRules"
-          label-width="0"
-        >
+        <el-form ref="forgotFormRef" :model="forgotForm" :rules="forgotRules" label-width="0">
           <el-form-item prop="email">
             <el-input
               v-model="forgotForm.email"
@@ -251,14 +186,8 @@
           </el-form-item>
           <el-form-item prop="code">
             <div class="code-input">
-              <el-input
-                v-model="forgotForm.code"
-                placeholder="请输入验证码"
-              />
-              <el-button
-                :disabled="forgotCountdown > 0"
-                @click="sendForgotCode"
-              >
+              <el-input v-model="forgotForm.code" placeholder="请输入验证码" />
+              <el-button :disabled="forgotCountdown > 0" @click="sendForgotCode">
                 {{ forgotCountdown > 0 ? `${forgotCountdown}s` : '获取验证码' }}
               </el-button>
             </div>
@@ -279,20 +208,12 @@
                 >
                   <View />
                 </el-icon>
-                <el-icon
-                  v-else
-                  :size="16"
-                  style="cursor: pointer"
-                  @click="showForgotPass = true"
-                >
+                <el-icon v-else :size="16" style="cursor: pointer" @click="showForgotPass = true">
                   <Hide />
                 </el-icon>
               </template>
             </el-input>
-            <div
-              v-if="forgotForm.password"
-              class="password-strength"
-            >
+            <div v-if="forgotForm.password" class="password-strength">
               <div class="strength-bar">
                 <div
                   class="strength-fill"
@@ -318,12 +239,7 @@
                 >
                   <View />
                 </el-icon>
-                <el-icon
-                  v-else
-                  :size="16"
-                  style="cursor: pointer"
-                  @click="showForgotRePass = true"
-                >
+                <el-icon v-else :size="16" style="cursor: pointer" @click="showForgotRePass = true">
                   <Hide />
                 </el-icon>
               </template>

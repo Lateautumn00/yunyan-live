@@ -7,7 +7,7 @@ import { User } from '@yunyan-live/shared';
 export class UsersService {
   constructor(
     @InjectRepository(User)
-    private repo: Repository<User>,
+    private repo: Repository<User>
   ) {}
 
   async findById(id: string): Promise<User | null> {
@@ -41,7 +41,8 @@ export class UsersService {
   }
 
   async searchTeachers(keyword: string): Promise<User[]> {
-    return this.repo.createQueryBuilder('user')
+    return this.repo
+      .createQueryBuilder('user')
       .where('user.role = :role AND user.username LIKE :kw', { role: 1, kw: `%${keyword}%` })
       .limit(20)
       .getMany();

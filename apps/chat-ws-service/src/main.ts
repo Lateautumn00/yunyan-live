@@ -11,7 +11,7 @@ import {
   subscribeKick,
   readForbid,
   validateSession,
-  verifyToken,
+  verifyToken
 } from '@yunyan-live/nest-shared';
 
 dotenv.config();
@@ -40,7 +40,7 @@ const redis = new Redis({
   host: process.env.REDIS_HOST || '127.0.0.1',
   port: Number(process.env.REDIS_PORT) || 6379,
   enableOfflineQueue: false,
-  maxRetriesPerRequest: 1,
+  maxRetriesPerRequest: 1
 });
 redis.on('error', (err: unknown) => {
   console.error('[ChatWS] Redis error:', err instanceof Error ? err.message : String(err));
@@ -49,7 +49,11 @@ redis.on('error', (err: unknown) => {
 function kickSessionClients(guid: string, oldSid: string) {
   for (const [rid, clients] of rooms) {
     for (const [cid, client] of clients) {
-      if (client.authUserId === guid && client.sid === oldSid && client.ws.readyState === WebSocket.OPEN) {
+      if (
+        client.authUserId === guid &&
+        client.sid === oldSid &&
+        client.ws.readyState === WebSocket.OPEN
+      ) {
         client.ws.close(WsClose.SESSION_KICKED, 'Session replaced by another login');
         console.log(`[ChatWS] Kicked: roomId=${rid}, id=${cid}`);
       }
@@ -62,13 +66,19 @@ subscribeKick(
   (guid, oldSid) => kickSessionClients(guid, oldSid),
   (err, stage) => {
     if (stage === 'connection') {
-      console.error('[ChatWS] Redis subscriber error:', err instanceof Error ? err.message : String(err));
+      console.error(
+        '[ChatWS] Redis subscriber error:',
+        err instanceof Error ? err.message : String(err)
+      );
     } else if (stage === 'subscribe') {
-      console.error('[ChatWS] subscribe failed, retrying:', err instanceof Error ? err.message : String(err));
+      console.error(
+        '[ChatWS] subscribe failed, retrying:',
+        err instanceof Error ? err.message : String(err)
+      );
     } else {
       console.error('[ChatWS] bad kick payload:', err);
     }
-  },
+  }
 );
 
 // 禁言状态变更（网关 live/push/updateForbid 写入并 publish）→ 广播给房间内所有客户端
@@ -79,7 +89,7 @@ subscribeForbid(
   },
   (err, stage) => {
     console.error(`[ChatWS] forbid ${stage}:`, err instanceof Error ? err.message : String(err));
-  },
+  }
 );
 
 function sendTo(client: WebSocket, data: LiveMessage) {
@@ -104,7 +114,7 @@ function registerClient(
   userId: string,
   nickName: string,
   authUserId?: string,
-  sid?: string,
+  sid?: string
 ): string {
   const clientId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   clientIds.set(client, clientId);
@@ -134,10 +144,10 @@ function handleMessage(client: WebSocket, raw: string) {
         sendTo(client, { type: 'pong' });
         break;
       case 'msg':
-        void readForbid(redis, roomId).then((forbid) => {
+        void readForbid(redis, roomId).then(forbid => {
           sendTo(client, {
             type: 'msg',
-            data: { liveMsg: { liveNums: rooms.get(roomId)?.size ?? 0, forbid } },
+            data: { liveMsg: { liveNums: rooms.get(roomId)?.size ?? 0, forbid } }
           });
         });
         break;
@@ -156,7 +166,7 @@ function handleMessage(client: WebSocket, raw: string) {
         const storedMsg = whiteboardStates.get(roomId) || null;
         sendTo(client, {
           type: 'getWhiteBoard',
-          data: { liveMsg: { msg: storedMsg } },
+          data: { liveMsg: { msg: storedMsg } }
         });
         break;
       }
@@ -198,11 +208,11 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
     handleMessage(connection, text);
   });
 
-  const sessionState = await validateSession(
-    redis,
-    payload.sub,
-    payload.sid,
-    (err) => console.error('[ChatWS] session check fail-open:', err instanceof Error ? err.message : String(err)),
+  const sessionState = await validateSession(redis, payload.sub, payload.sid, err =>
+    console.error(
+      '[ChatWS] session check fail-open:',
+      err instanceof Error ? err.message : String(err)
+    )
   );
   if (sessionState === 'kicked') {
     connection.close(WsClose.SESSION_KICKED, 'Session replaced by another login');
@@ -224,7 +234,7 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
   const forbid = await readForbid(redis, roomId);
   sendTo(connection, {
     type: 'msg',
-    data: { liveMsg: { liveNums: rooms.get(roomId)!.size, forbid } },
+    data: { liveMsg: { liveNums: rooms.get(roomId)!.size, forbid } }
   });
 
   console.log(`[ChatWS] Connected: roomId=${roomId}, userId=${userId}, id=${clientId}`);
@@ -252,7 +262,7 @@ const app = new Koa();
 const server = http.createServer(app.callback());
 const wss = new WebSocketServer({ server });
 
-app.use(async (ctx) => {
+app.use(async ctx => {
   ctx.body = { status: 'ok', service: 'chat-ws' };
 });
 
@@ -267,6 +277,6 @@ server.listen(port, '0.0.0.0', () => {
 
 process.on('SIGTERM', () => {
   console.log('[ChatWS] Shutting down...');
-  wss.clients.forEach((client) => client.close(1001, 'Server shutting down'));
+  wss.clients.forEach(client => client.close(1001, 'Server shutting down'));
   server.close(() => process.exit(0));
 });

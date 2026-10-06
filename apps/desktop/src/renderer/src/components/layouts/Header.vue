@@ -6,12 +6,7 @@
       </li>
       <li>欢迎您</li>
       <li>
-        <el-button
-          text
-          @click="settingsVisible = true"
-        >
-          设置
-        </el-button>
+        <el-button text @click="settingsVisible = true"> 设置 </el-button>
         <SettingsDialog v-model="settingsVisible" />
       </li>
     </ul>

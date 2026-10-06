@@ -28,10 +28,7 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export async function saveBinaryFile(
-  buffer: ArrayBuffer,
-  defaultName: string
-): Promise<boolean> {
+export async function saveBinaryFile(buffer: ArrayBuffer, defaultName: string): Promise<boolean> {
   const api = window.electronAPI;
   if (api?.recordingSaveBlob) {
     const result = await api.recordingSaveBlob({ buffer, defaultName });

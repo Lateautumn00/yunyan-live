@@ -13,44 +13,20 @@
         accept=".ppt,.pptx"
         style="display: none"
         @change="takeFile"
-      >
+      />
       <div class="upload-row">
-        <el-button
-          type="primary"
-          :loading="uploading"
-          @click="fileInputRef?.click()"
-        >
+        <el-button type="primary" :loading="uploading" @click="fileInputRef?.click()">
           选择 PPT 文件
         </el-button>
         <span class="tip">上传后进入直播间将自动导入白板</span>
       </div>
 
-      <div
-        v-loading="loadingList"
-        class="courseware-list"
-      >
-        <div
-          v-if="items.length === 0 && !loadingList"
-          class="empty"
-        >
-          暂无课件
-        </div>
-        <div
-          v-for="item in items"
-          :key="item.id"
-          class="courseware-item"
-        >
-          <span
-            class="name"
-            :title="item.filename"
-          >{{ item.filename }}</span>
+      <div v-loading="loadingList" class="courseware-list">
+        <div v-if="items.length === 0 && !loadingList" class="empty">暂无课件</div>
+        <div v-for="item in items" :key="item.id" class="courseware-item">
+          <span class="name" :title="item.filename">{{ item.filename }}</span>
           <span class="size">{{ formatFileSize(item.filesize) }}</span>
-          <el-button
-            link
-            type="danger"
-            :loading="deletingId === item.id"
-            @click="removeItem(item)"
-          >
+          <el-button link type="danger" :loading="deletingId === item.id" @click="removeItem(item)">
             删除
           </el-button>
         </div>
@@ -96,7 +72,7 @@ const { loading: loadingList, run: runRefresh } = useAsyncAction(
     items.value = res.data?.list ?? [];
   },
   {
-    onError: (e) => {
+    onError: e => {
       console.error('课件列表加载失败', e);
       ElMessage.error('课件列表加载失败');
     }
@@ -133,7 +109,7 @@ const { loading: uploading, run: runUpload } = useAsyncAction(
     ElMessage.success('课件已上传，进入直播间后自动导入');
     await refresh();
   },
-  { onError: (err) => ElMessage.error((err as Error).message || '课件上传失败') }
+  { onError: err => ElMessage.error((err as Error).message || '课件上传失败') }
 );
 
 async function takeFile(e: Event) {
@@ -151,12 +127,12 @@ async function takeFile(e: Event) {
 }
 
 const { ask, perform } = useConfirmDelete<CoursewareItem>({
-  message: (item) => `确定删除课件「${item.filename}」？删除后直播间将不再自动导入它。`,
+  message: item => `确定删除课件「${item.filename}」？删除后直播间将不再自动导入它。`,
   boxTitle: '删除课件',
-  action: (item) => Live.delete_courseware(item.id),
+  action: item => Live.delete_courseware(item.id),
   successMessage: () => '已删除',
   refresh: () => refresh(),
-  onError: (e) => {
+  onError: e => {
     console.error('课件删除失败', e);
     ElMessage.error('删除失败');
   }

@@ -50,7 +50,7 @@ export class YjsProvider {
       // 关闭 lib0 BroadcastChannel 跨端同步：服务端 WS 已是唯一同步源，
       // bc 会在同进程内让同 roomId 的 provider 互相灌数据（测试互相污染）
       disableBc: true,
-      params: { roomId, token },
+      params: { roomId, token }
     });
 
     // y-websocket only emits `closed` for terminal close codes (4400-4499):
@@ -63,30 +63,30 @@ export class YjsProvider {
       }
     });
 
-  // After sync completes, if pages is still empty (student joined before teacher),
-  // create a default page. This avoids creating a local page that conflicts with
-  // the teacher's synced page (different Y.Map IDs cause duplicate pages).
-  this.provider.once('synced', () => {
-    if (!this.readOnly && this.pages.length === 0) {
-      this.doc.transact(() => {
-        const page = new Y.Map();
-        page.set('id', uid('page_'));
-        page.set('name', 'Page 1');
-        page.set('visible', true);
-        page.set('elements', new Y.Array());
-        this.pages.push([page]);
-        this.currentPageIndex.set('index', 0);
-      });
-    }
-  });
+    // After sync completes, if pages is still empty (student joined before teacher),
+    // create a default page. This avoids creating a local page that conflicts with
+    // the teacher's synced page (different Y.Map IDs cause duplicate pages).
+    this.provider.once('synced', () => {
+      if (!this.readOnly && this.pages.length === 0) {
+        this.doc.transact(() => {
+          const page = new Y.Map();
+          page.set('id', uid('page_'));
+          page.set('name', 'Page 1');
+          page.set('visible', true);
+          page.set('elements', new Y.Array());
+          this.pages.push([page]);
+          this.currentPageIndex.set('index', 0);
+        });
+      }
+    });
 
-  this.awareness = this.provider.awareness;
-  this.awareness.setLocalStateField('user', { id: userId, name: userName, color: userColor });
-}
+    this.awareness = this.provider.awareness;
+    this.awareness.setLocalStateField('user', { id: userId, name: userName, color: userColor });
+  }
 
-onSynced(cb: () => void) {
-  this.provider.on('synced', cb);
-}
+  onSynced(cb: () => void) {
+    this.provider.on('synced', cb);
+  }
 
   getCurrentPageIndex(): number {
     return this.currentPageIndex.get('index') || 0;
@@ -213,7 +213,7 @@ onSynced(cb: () => void) {
       color: (this.toolState.get('color') as string) || '#000000',
       lineWidth: (this.toolState.get('lineWidth') as number) || 1,
       fontSize: (this.toolState.get('fontSize') as number) || 14,
-      opacity: (this.toolState.get('opacity') as number) ?? 1,
+      opacity: (this.toolState.get('opacity') as number) ?? 1
     };
   }
 
@@ -223,7 +223,9 @@ onSynced(cb: () => void) {
     if (elements) {
       const map = new Y.Map();
       Object.entries(shapeData).forEach(([k, v]) => map.set(k, v));
-      this.doc.transact(() => { elements.push([map]); });
+      this.doc.transact(() => {
+        elements.push([map]);
+      });
     }
   }
 
@@ -231,7 +233,9 @@ onSynced(cb: () => void) {
     if (this.readOnly) return false;
     const elements = this.getActiveElements();
     if (!elements || elements.length === 0) return false;
-    this.doc.transact(() => { elements.delete(elements.length - 1, 1); });
+    this.doc.transact(() => {
+      elements.delete(elements.length - 1, 1);
+    });
     return true;
   }
 
@@ -259,7 +263,9 @@ onSynced(cb: () => void) {
     if (idx < 0) return false;
     const map = this.getActiveElements()!.get(idx);
     this.doc.transact(() => {
-      keys.forEach(k => { if (map.has(k)) map.delete(k); });
+      keys.forEach(k => {
+        if (map.has(k)) map.delete(k);
+      });
     });
     return true;
   }
@@ -268,7 +274,9 @@ onSynced(cb: () => void) {
     if (this.readOnly) return -1;
     const idx = this.findElementIndex(id);
     if (idx < 0) return -1;
-    this.doc.transact(() => { this.getActiveElements()!.delete(idx, 1); });
+    this.doc.transact(() => {
+      this.getActiveElements()!.delete(idx, 1);
+    });
     return idx;
   }
 
@@ -292,7 +300,9 @@ onSynced(cb: () => void) {
     map.set('filesize', item.filesize);
     map.set('fileid', item.fileid);
     if (item.fileurl) map.set('fileurl', item.fileurl);
-    this.doc.transact(() => { this.fileList.push([map]); });
+    this.doc.transact(() => {
+      this.fileList.push([map]);
+    });
   }
 
   removeFileItem(index: number) {
@@ -318,7 +328,7 @@ onSynced(cb: () => void) {
       filext: m.get('filext'),
       filesize: m.get('filesize'),
       fileid: m.get('fileid') || '',
-      fileurl: m.get('fileurl') || '',
+      fileurl: m.get('fileurl') || ''
     }));
   }
 

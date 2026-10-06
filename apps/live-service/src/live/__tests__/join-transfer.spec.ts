@@ -15,7 +15,14 @@ describe('LiveService.join', () => {
 
   it('学生首次进入：登记参与者、开启在线时长并按在线数重算 liveNums', async () => {
     const { service, manager, queryRunner } = createLiveService();
-    const room = { roomId: 'r1', joinCode: 'SA1', liveUserId: 't1', type: 0, status: 2, liveNums: 0 };
+    const room = {
+      roomId: 'r1',
+      joinCode: 'SA1',
+      liveUserId: 't1',
+      type: 0,
+      status: 2,
+      liveNums: 0
+    };
     manager.findOne
       .mockResolvedValueOnce(room)
       .mockResolvedValueOnce(null)
@@ -41,7 +48,14 @@ describe('LiveService.join', () => {
 
   it('join 时按在线时长重算修正漂移的 liveNums', async () => {
     const { service, manager } = createLiveService();
-    const room = { roomId: 'r1', joinCode: 'SA3', liveUserId: 't1', type: 0, status: 2, liveNums: 9 };
+    const room = {
+      roomId: 'r1',
+      joinCode: 'SA3',
+      liveUserId: 't1',
+      type: 0,
+      status: 2,
+      liveNums: 9
+    };
     manager.findOne
       .mockResolvedValueOnce(room)
       .mockResolvedValueOnce(null)
@@ -54,7 +68,14 @@ describe('LiveService.join', () => {
 
   it('老师重复进入：已有参与者与在线记录时不重复写入', async () => {
     const { service, manager, queryRunner } = createLiveService();
-    const room = { roomId: 'r1', joinCode: 'SL1', liveUserId: 't1', type: 1, status: 2, liveNums: 5 };
+    const room = {
+      roomId: 'r1',
+      joinCode: 'SL1',
+      liveUserId: 't1',
+      type: 1,
+      status: 2,
+      liveNums: 5
+    };
     manager.findOne
       .mockResolvedValueOnce(room)
       .mockResolvedValueOnce({ id: 'p1' })
@@ -75,7 +96,14 @@ describe('LiveService.join', () => {
 
   it('未带 liveUserId 时只提交事务，不登记参与者', async () => {
     const { service, manager } = createLiveService();
-    const room = { roomId: 'r1', joinCode: 'SA2', liveUserId: 't1', type: 0, status: 2, liveNums: 2 };
+    const room = {
+      roomId: 'r1',
+      joinCode: 'SA2',
+      liveUserId: 't1',
+      type: 0,
+      status: 2,
+      liveNums: 2
+    };
     manager.findOne.mockResolvedValueOnce(room);
     const res = await service.join({ joinCode: 'SA2' });
     expect(res.roleName).toBe('student');

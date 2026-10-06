@@ -8,189 +8,90 @@
       />
 
       <!-- 左侧工具面板 -->
-      <div
-        v-if="isTeacher && isDisplay"
-        class="tools"
-      >
+      <div v-if="isTeacher && isDisplay" class="tools">
         <el-tooltip
           content="选择器 · 拖动移动，拉手柄缩放（Shift 等比，Delete 删除）"
           placement="right"
         >
-          <div
-            :class="['cur', { on: mode === 'cur' }]"
-            @click="tool('cur')"
-          >
+          <div :class="['cur', { on: mode === 'cur' }]" @click="tool('cur')">
             <el-icon><Pointer /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="画笔工具"
-          placement="right"
-        >
-          <div
-            :class="['brush', { on: mode === 'brush' }]"
-            @click="tool('brush')"
-          >
+        <el-tooltip content="画笔工具" placement="right">
+          <div :class="['brush', { on: mode === 'brush' }]" @click="tool('brush')">
             <el-icon><EditPen /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="文本工具"
-          placement="right"
-        >
-          <div
-            :class="['text', { on: mode === 'text' }]"
-            @click="tool('text')"
-          >
+        <el-tooltip content="文本工具" placement="right">
+          <div :class="['text', { on: mode === 'text' }]" @click="tool('text')">
             <el-icon><Edit /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="圆形工具 · 拖拽画椭圆，按住 Shift 画正圆"
-          placement="right"
-        >
-          <div
-            :class="['circle', { on: mode === 'circle' }]"
-            @click="tool('circle')"
-          />
+        <el-tooltip content="圆形工具 · 拖拽画椭圆，按住 Shift 画正圆" placement="right">
+          <div :class="['circle', { on: mode === 'circle' }]" @click="tool('circle')" />
         </el-tooltip>
-        <el-tooltip
-          content="矩形工具"
-          placement="right"
-        >
-          <div
-            :class="['rectangle', { on: mode === 'rectangle' }]"
-            @click="tool('rectangle')"
-          />
+        <el-tooltip content="矩形工具" placement="right">
+          <div :class="['rectangle', { on: mode === 'rectangle' }]" @click="tool('rectangle')" />
         </el-tooltip>
-        <el-tooltip
-          content="箭头工具"
-          placement="right"
-        >
-          <div
-            :class="['arrows', { on: mode === 'arrows' }]"
-            @click="tool('arrows')"
-          >
+        <el-tooltip content="箭头工具" placement="right">
+          <div :class="['arrows', { on: mode === 'arrows' }]" @click="tool('arrows')">
             <el-icon><Promotion /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="直线工具 · 按住 Shift 锁定水平/垂直"
-          placement="right"
-        >
-          <div
-            :class="['line', { on: mode === 'line' }]"
-            @click="tool('line')"
-          >
+        <el-tooltip content="直线工具 · 按住 Shift 锁定水平/垂直" placement="right">
+          <div :class="['line', { on: mode === 'line' }]" @click="tool('line')">
             <el-icon><Minus /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="橡皮擦"
-          placement="right"
-        >
-          <div
-            :class="['eraser', { on: mode === 'eraser' }]"
-            @click="tool('eraser')"
-          />
+        <el-tooltip content="橡皮擦" placement="right">
+          <div :class="['eraser', { on: mode === 'eraser' }]" @click="tool('eraser')" />
         </el-tooltip>
-        <el-tooltip
-          content="拖动工具"
-          placement="right"
-        >
-          <div
-            :class="['move', { on: mode === 'move' }]"
-            @click="tool('move')"
-          />
+        <el-tooltip content="拖动工具" placement="right">
+          <div :class="['move', { on: mode === 'move' }]" @click="tool('move')" />
         </el-tooltip>
-        <el-tooltip
-          content="激光笔 · 红点跟指，切换工具或 Esc 熄灭"
-          placement="right"
-        >
-          <div
-            :class="['laser', { on: mode === 'laser' }]"
-            @click="toggleLaser"
-          >
+        <el-tooltip content="激光笔 · 红点跟指，切换工具或 Esc 熄灭" placement="right">
+          <div :class="['laser', { on: mode === 'laser' }]" @click="toggleLaser">
             <el-icon><Aim /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="上传图片 · 贴到当前页"
-          placement="right"
-        >
+        <el-tooltip content="上传图片 · 贴到当前页" placement="right">
           <div class="picture">
             <el-icon><Picture /></el-icon>
             <input
               type="file"
               accept="image/x-png,image/gif,image/jpeg,image/jpg,image/bmp"
               @change="takeFile"
-            >
+            />
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="我的课件"
-          placement="right"
-        >
-          <div
-            :class="['file', { on: mode === 'file' }]"
-            @click="toggleFileList"
-          >
+        <el-tooltip content="我的课件" placement="right">
+          <div :class="['file', { on: mode === 'file' }]" @click="toggleFileList">
             <el-icon><FolderOpened /></el-icon>
           </div>
         </el-tooltip>
       </div>
 
       <!-- 底部控制栏（仅教师：撤销/清空/缩放均写入或影响共享白板） -->
-      <div
-        v-if="isTeacher"
-        class="ctrl-tools"
-      >
-        <el-tooltip
-          content="撤回上一步"
-          placement="top"
-        >
-          <div
-            class="pre"
-            @click="revocation('pre')"
-          >
+      <div v-if="isTeacher" class="ctrl-tools">
+        <el-tooltip content="撤回上一步" placement="top">
+          <div class="pre" @click="revocation('pre')">
             <el-icon><RefreshLeft /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="返回下一步"
-          placement="top"
-        >
-          <div
-            class="next"
-            @click="revocation('next')"
-          >
+        <el-tooltip content="返回下一步" placement="top">
+          <div class="next" @click="revocation('next')">
             <el-icon><RefreshRight /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="清空当前画布"
-          placement="top"
-        >
-          <div
-            class="clear"
-            @click="layerClear"
-          />
+        <el-tooltip content="清空当前画布" placement="top">
+          <div class="clear" @click="layerClear" />
         </el-tooltip>
-        <el-tooltip
-          content="缩小画布"
-          placement="top"
-        >
-          <div
-            class="sub"
-            @click="layerZoomChange('sub')"
-          >
+        <el-tooltip content="缩小画布" placement="top">
+          <div class="sub" @click="layerZoomChange('sub')">
             <el-icon><ZoomOut /></el-icon>
           </div>
         </el-tooltip>
-        <div
-          class="num"
-          @click="editZoom"
-        >
+        <div class="num" @click="editZoom">
           {{ zoomLevel }}%
           <input
             v-show="showZoomInput"
@@ -202,103 +103,50 @@
             :max="200"
             @blur="importZoom"
             @keyup.enter="importZoom"
-          >
+          />
         </div>
-        <el-tooltip
-          content="放大画布"
-          placement="top"
-        >
-          <div
-            class="add"
-            @click="layerZoomChange('add')"
-          >
+        <el-tooltip content="放大画布" placement="top">
+          <div class="add" @click="layerZoomChange('add')">
             <el-icon><ZoomIn /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="画布全览"
-          placement="top"
-        >
-          <div
-            class="all"
-            @click="layerZoomChange('all')"
-          >
+        <el-tooltip content="画布全览" placement="top">
+          <div class="all" @click="layerZoomChange('all')">
             <el-icon><FullScreen /></el-icon>
           </div>
         </el-tooltip>
       </div>
 
       <!-- 底部页面栏（仅教师：增删页/翻页写入共享文档并强制其他端跟随） -->
-      <div
-        v-if="isTeacher"
-        class="page-tools"
-      >
-        <el-tooltip
-          content="删除画布"
-          placement="top"
-        >
-          <div
-            class="del"
-            @click="delLayer(curLayerIndex)"
-          >
+      <div v-if="isTeacher" class="page-tools">
+        <el-tooltip content="删除画布" placement="top">
+          <div class="del" @click="delLayer(curLayerIndex)">
             <el-icon><Delete /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="首个画布"
-          placement="top"
-        >
-          <div
-            class="first"
-            @click="showLayer(1)"
-          >
+        <el-tooltip content="首个画布" placement="top">
+          <div class="first" @click="showLayer(1)">
             <el-icon><DArrowLeft /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="上一画布"
-          placement="top"
-        >
-          <div
-            class="pre"
-            @click="showLayer(curLayerIndex - 1)"
-          >
+        <el-tooltip content="上一画布" placement="top">
+          <div class="pre" @click="showLayer(curLayerIndex - 1)">
             <el-icon><ArrowLeft /></el-icon>
           </div>
         </el-tooltip>
-        <div class="num">
-          {{ curLayerIndex }}/{{ layerIndex }}
-        </div>
-        <el-tooltip
-          content="下一画布"
-          placement="top"
-        >
-          <div
-            class="next"
-            @click="showLayer(curLayerIndex + 1)"
-          >
+        <div class="num">{{ curLayerIndex }}/{{ layerIndex }}</div>
+        <el-tooltip content="下一画布" placement="top">
+          <div class="next" @click="showLayer(curLayerIndex + 1)">
             <el-icon><ArrowRight /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="末尾画布"
-          placement="top"
-        >
-          <div
-            class="last"
-            @click="showLayer(layerIndex)"
-          >
+        <el-tooltip content="末尾画布" placement="top">
+          <div class="last" @click="showLayer(layerIndex)">
             <el-icon><DArrowRight /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="新增画布"
-          placement="top"
-        >
-          <div
-            class="add"
-            @click="addLayer"
-          >
+        <el-tooltip content="新增画布" placement="top">
+          <div class="add" @click="addLayer">
             <el-icon><Plus /></el-icon>
           </div>
         </el-tooltip>
@@ -308,14 +156,14 @@
       <div
         v-show="showEditer && !colorPanelCollapsed"
         class="color-panel"
-        :style="{ transform: `translate(${colorPanelX}px, ${colorPanelY}px)`, opacity: panelOpacity }"
+        :style="{
+          transform: `translate(${colorPanelX}px, ${colorPanelY}px)`,
+          opacity: panelOpacity
+        }"
         @mouseenter="cancelCloseColorPanel"
         @mouseleave="startCloseColorPanel"
       >
-        <div
-          class="color-panel-drag"
-          @mousedown="onColorPanelDragStart"
-        />
+        <div class="color-panel-drag" @mousedown="onColorPanelDragStart" />
         <div class="edit-size">
           <div class="size-title">
             <div>{{ sizeTargetsText() ? '小' : '细' }}</div>
@@ -328,10 +176,7 @@
             @mouseup="editSizeEnd"
             @mouseleave="editLeave"
           >
-            <div
-              class="strip-btn"
-              :style="{ left: sizeBtnLeft + 'px' }"
-            />
+            <div class="strip-btn" :style="{ left: sizeBtnLeft + 'px' }" />
           </div>
         </div>
         <div class="edit-color">
@@ -342,32 +187,16 @@
             :style="{ background: c }"
             @click="selectColor(c)"
           />
-          <div
-            class="item colours"
-            @click="showPallet = !showPallet"
-          />
+          <div class="item colours" @click="showPallet = !showPallet" />
         </div>
-        <div
-          v-if="showFillToggle"
-          class="fill-bar"
-        >
+        <div v-if="showFillToggle" class="fill-bar">
           <span class="fill-label">填充</span>
-          <div
-            :class="['fill-toggle', { on: fillEnabled }]"
-            @click="toggleFillPalette"
-          >
-            <span
-              v-if="fillEnabled"
-              class="fill-swatch"
-              :style="{ background: fillColor }"
-            />
+          <div :class="['fill-toggle', { on: fillEnabled }]" @click="toggleFillPalette">
+            <span v-if="fillEnabled" class="fill-swatch" :style="{ background: fillColor }" />
             {{ fillEnabled ? '已填充' : '无填充' }}
           </div>
           <Transition name="wb-pop">
-            <div
-              v-if="showFillPalette"
-              class="fill-palette pallet-box"
-            >
+            <div v-if="showFillPalette" class="fill-palette pallet-box">
               <div class="fp-row">
                 <div
                   v-for="c in presetColors"
@@ -376,12 +205,7 @@
                   :style="{ background: c }"
                   @click="pickFillColor(c)"
                 />
-                <div
-                  class="fp-none"
-                  @click="clearFillColor"
-                >
-                  无颜色
-                </div>
+                <div class="fp-none" @click="clearFillColor">无颜色</div>
               </div>
               <div class="pal-color fpal-color">
                 <canvas
@@ -399,10 +223,7 @@
           </Transition>
         </div>
         <Transition name="wb-pop">
-          <div
-            v-show="showPallet"
-            class="pallet-box"
-          >
+          <div v-show="showPallet" class="pallet-box">
             <div class="pal-color">
               <canvas
                 ref="strokeWheelRef"
@@ -410,10 +231,7 @@
                 height="150"
                 @mousedown="startWheelPick($event, 'stroke')"
               />
-              <div
-                class="pal-btn"
-                :style="{ left: palBtnLeft + 'px', top: palBtnTop + 'px' }"
-              />
+              <div class="pal-btn" :style="{ left: palBtnLeft + 'px', top: palBtnTop + 'px' }" />
             </div>
             <div class="endSelectColor">
               <div
@@ -437,7 +255,7 @@
             class="opacity-slider"
             @input="onOpacityInput"
             @change="onOpacityChange"
-          >
+          />
           <span class="opacity-val">{{ Math.round(currentOpacity * 100) }}%</span>
         </div>
         <div class="opacity-bar">
@@ -450,7 +268,7 @@
             :value="panelOpacity"
             class="opacity-slider"
             @input="onPanelOpacityInput"
-          >
+          />
           <span class="opacity-val">{{ Math.round(panelOpacity * 100) }}%</span>
         </div>
       </div>
@@ -463,35 +281,18 @@
         @mouseenter="openColorPanel"
         @mouseleave="startCloseColorPanel"
       >
-        <div
-          class="color-dot"
-          :style="{ background: currentColor }"
-        />
+        <div class="color-dot" :style="{ background: currentColor }" />
       </div>
 
       <!-- 课件列表 -->
-      <div
-        v-show="showFileList"
-        class="fileList"
-      >
+      <div v-show="showFileList" class="fileList">
         <div class="file-upload">
           <el-icon><Upload /></el-icon>
           <span>上传PPT课件</span>
-          <input
-            type="file"
-            accept=".ppt,.pptx"
-            @change="takeFile"
-          >
+          <input type="file" accept=".ppt,.pptx" @change="takeFile" />
         </div>
-        <div
-          v-for="(item, i) in fileList"
-          :key="i"
-          class="file-item"
-        >
-          <div
-            class="file-name"
-            @click="openCourseware(item, i)"
-          >
+        <div v-for="(item, i) in fileList" :key="i" class="file-item">
+          <div class="file-name" @click="openCourseware(item, i)">
             <span v-if="editFileIndex !== i">{{ item.filename }}.{{ item.filext }}</span>
             <input
               v-else
@@ -499,16 +300,12 @@
               class="file-name-input"
               @keyup.enter="alterFName(i, $event)"
               @blur="alterFName(i, $event)"
-            >
+            />
           </div>
           <div class="file-size">
             {{ formatFileSize(item.filesize) }}
           </div>
-          <el-icon
-            class="file-del"
-            aria-label="删除"
-            @click.stop="delFile(i)"
-          >
+          <el-icon class="file-del" aria-label="删除" @click.stop="delFile(i)">
             <Delete />
           </el-icon>
         </div>
@@ -518,24 +315,14 @@
       </div>
 
       <!-- Loading -->
-      <div
-        v-show="loading"
-        class="loading-div"
-        @click.stop
-      >
-        <el-icon
-          class="loading-gif is-loading"
-          :size="48"
-        >
+      <div v-show="loading" class="loading-div" @click.stop>
+        <el-icon class="loading-gif is-loading" :size="48">
           <Loading />
         </el-icon>
       </div>
 
       <!-- Toast -->
-      <div
-        v-show="toastMsg"
-        class="alert"
-      >
+      <div v-show="toastMsg" class="alert">
         {{ toastMsg }}
       </div>
     </div>
@@ -578,10 +365,10 @@ function serializeStage(): Record<string, unknown> | null {
       x: stage.x(),
       y: stage.y(),
       scaleX: stage.scaleX(),
-      scaleY: stage.scaleY(),
+      scaleY: stage.scaleY()
     },
     className: 'Stage',
-    children: [] as unknown[],
+    children: [] as unknown[]
   };
   for (const child of stage.getChildren()) {
     if (child.className === 'Layer') {
@@ -595,11 +382,11 @@ function serializeStage(): Record<string, unknown> | null {
           scaleX: child.scaleX(),
           scaleY: child.scaleY(),
           offsetX: child.offsetX(),
-          offsetY: child.offsetY(),
+          offsetY: child.offsetY()
         },
         className: 'Layer',
         id: (child as any)._id,
-        children: [] as unknown[],
+        children: [] as unknown[]
       };
       for (const node of child.getChildren()) {
         const visible = node.visible !== undefined ? node.visible() : true;
@@ -610,13 +397,15 @@ function serializeStage(): Record<string, unknown> | null {
             attrs: node.getAttrs(),
             className,
             zIndex: node.zIndex(),
-            id: (node as any)._id,
+            id: (node as any)._id
           };
           if (className === 'Image') {
             try {
               const imgAttr = node.getAttrs('image');
               if (imgAttr?.image?.src) nodeObj.imagesrc = imgAttr.image.src;
-            } catch { /* skip */ }
+            } catch {
+              /* skip */
+            }
           }
           layerObj.children.push(nodeObj);
         }
@@ -705,7 +494,9 @@ function bindElementsObserver(elements: any) {
   // 直接 observe 只收结构增删（画笔/删除能同步、选择器拖动/缩放不同步），必须用深观察
   elements.observeDeep(onElementsChanged);
   currentElementsObserved = elements;
-  currentElementsObserver = () => { elements.unobserveDeep(onElementsChanged); };
+  currentElementsObserver = () => {
+    elements.unobserveDeep(onElementsChanged);
+  };
 }
 let sizeDragging = false;
 let toastTimer: any = null;
@@ -713,13 +504,22 @@ let toastTimer: any = null;
 function toast(msg: string) {
   toastMsg.value = msg;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toastMsg.value = ''; }, 2000);
+  toastTimer = setTimeout(() => {
+    toastMsg.value = '';
+  }, 2000);
 }
 
 onMounted(() => {
-  provider = new YjsProvider(props.roomId, userId, displayName, userColor, (kind) => {
-    useUserStore().sessionInterrupted(kind);
-  }, !props.isTeacher);
+  provider = new YjsProvider(
+    props.roomId,
+    userId,
+    displayName,
+    userColor,
+    kind => {
+      useUserStore().sessionInterrupted(kind);
+    },
+    !props.isTeacher
+  );
   renderer = new KonvaRenderer(document.getElementById(containerId.value)!);
   renderer.onShapeClick = selectShape;
   renderer.onShapeDblClick = editTextShape;
@@ -843,10 +643,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   currentElementsObserver?.();
-    window.removeEventListener('resize', onResize);
-    broadcastViewport.cancel();
-    document.removeEventListener('keydown', onSelectionKeydown);
-    document.removeEventListener('mousemove', throttledWheelMove);
+  window.removeEventListener('resize', onResize);
+  broadcastViewport.cancel();
+  document.removeEventListener('keydown', onSelectionKeydown);
+  document.removeEventListener('mousemove', throttledWheelMove);
   document.removeEventListener('mouseup', onWheelUp);
   provider?.awareness.off('change', onAwarenessLaser);
   renderer?.destroy();
@@ -925,7 +725,9 @@ function onAwarenessLaser() {
 
 function tool(type: string) {
   setMode(type);
-  showEditer.value = ['brush', 'eraser', 'text', 'circle', 'rectangle', 'arrows', 'line'].includes(type);
+  showEditer.value = ['brush', 'eraser', 'text', 'circle', 'rectangle', 'arrows', 'line'].includes(
+    type
+  );
   showFillToggle.value = false;
   showFillPalette.value = false;
   showFileList.value = type === 'file';
@@ -958,7 +760,10 @@ function selectShape(id: string) {
   if (!props.isTeacher || mode.value !== 'cur' || !renderer) return;
   renderer.selectNode(id);
   // 选中即打开属性面板并回填该图形当前值（仅本地显示，不广播 toolState）
-  const m = provider?.getActiveElements()?.toArray().find(x => x.get('id') === id);
+  const m = provider
+    ?.getActiveElements()
+    ?.toArray()
+    .find(x => x.get('id') === id);
   if (!m) return;
   const type = String(m.get('type'));
   if (type === 'image' || type === 'ppt-image') {
@@ -1000,7 +805,10 @@ let editingTextId: string | null = null;
 function editTextShape(id: string) {
   if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
   if (editingTextId) return;
-  const m = provider.getActiveElements()?.toArray().find(x => x.get('id') === id);
+  const m = provider
+    .getActiveElements()
+    ?.toArray()
+    .find(x => x.get('id') === id);
   if (!m || m.get('type') !== 'text') return;
 
   const layer = renderer.layer;
@@ -1034,9 +842,12 @@ function editTextShape(id: string) {
     refreshLayer();
     redoStack.value = [];
     undoStack.value.push({
-      type: 'updateShape', pageId: provider!.getCurrentPageId(),
-      pageIndex: renderer!.getCurrentPageIndex(), shapeId: id,
-      before, after: { text: val },
+      type: 'updateShape',
+      pageId: provider!.getCurrentPageId(),
+      pageIndex: renderer!.getCurrentPageIndex(),
+      shapeId: id,
+      before,
+      after: { text: val }
     });
     emitPaintLog();
   };
@@ -1077,14 +888,18 @@ function commitShapeMove(id: string, x: number, y: number) {
     pageIndex: renderer.getCurrentPageIndex(),
     shapeId: id,
     before,
-    after: { x, y },
+    after: { x, y }
   });
   emitPaintLog();
 }
 
 // 写入目标键并清理「对侧」独有的旧形态字段（圆↔椭圆的 radius/radiusX 互斥），
 // 提交/撤销/重做三处共用，保持 Yjs 字段规范（createNode 按 radiusX 优先判定椭圆）
-function applyShapeUpdate(id: string, target: Record<string, any>, other: Record<string, any>): boolean {
+function applyShapeUpdate(
+  id: string,
+  target: Record<string, any>,
+  other: Record<string, any>
+): boolean {
   if (!provider || !provider.updateElement(id, target)) return false;
   const stale = Object.keys(other).filter(k => !(k in target));
   if (stale.length) provider.deleteElementKeys(id, stale);
@@ -1107,9 +922,12 @@ function commitSelectedStyle(patch: Record<string, any>, snapshotKeys?: string[]
   refreshLayer();
   redoStack.value = [];
   undoStack.value.push({
-    type: 'updateShape', pageId: provider.getCurrentPageId(),
-    pageIndex: renderer.getCurrentPageIndex(), shapeId: id,
-    before, after: { ...patch },
+    type: 'updateShape',
+    pageId: provider.getCurrentPageId(),
+    pageIndex: renderer.getCurrentPageIndex(),
+    shapeId: id,
+    before,
+    after: { ...patch }
   });
   emitPaintLog();
 }
@@ -1120,7 +938,13 @@ function sizeTargetsText(): boolean {
   if (mode.value !== 'cur') return false;
   const id = renderer?.getSelectedId();
   if (!id) return false;
-  return provider?.getActiveElements()?.toArray().find(x => x.get('id') === id)?.get('type') === 'text';
+  return (
+    provider
+      ?.getActiveElements()
+      ?.toArray()
+      .find(x => x.get('id') === id)
+      ?.get('type') === 'text'
+  );
 }
 
 function commitShapeTransform(id: string, attrs: Record<string, any>) {
@@ -1143,7 +967,7 @@ function commitShapeTransform(id: string, attrs: Record<string, any>) {
     pageIndex: renderer.getCurrentPageIndex(),
     shapeId: id,
     before,
-    after: { ...attrs },
+    after: { ...attrs }
   });
   emitPaintLog();
 }
@@ -1156,7 +980,9 @@ function deleteSelected() {
   const m = els?.toArray().find((x: any) => x.get('id') === id);
   if (!m) return;
   const shapeData: Record<string, any> = {};
-  m.forEach((v: any, k: string) => { shapeData[k] = v; });
+  m.forEach((v: any, k: string) => {
+    shapeData[k] = v;
+  });
   const index = provider.removeElement(id);
   if (index < 0) return;
   clearSelection();
@@ -1167,7 +993,7 @@ function deleteSelected() {
     pageId: provider.getCurrentPageId(),
     pageIndex: renderer.getCurrentPageIndex(),
     shapeData,
-    index,
+    index
   });
   emitPaintLog();
 }
@@ -1182,7 +1008,11 @@ let lastLaserKey = '';
 
 function onSelectionKeydown(e: KeyboardEvent) {
   const ae = document.activeElement;
-  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || (ae as HTMLElement).isContentEditable)) return;
+  if (
+    ae &&
+    (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || (ae as HTMLElement).isContentEditable)
+  )
+    return;
 
   const mod = e.ctrlKey || e.metaKey;
   const key = e.key.toLowerCase();
@@ -1239,21 +1069,37 @@ function onPointerDown(e: any) {
           const layerPos = toLayerCoords(pos);
           const shapeData: Record<string, any> = {
             id: uid(),
-            type: 'text', x: layerPos.x, y: layerPos.y, text: val, fontSize: textSize.value, color: currentColor.value,
-            opacity: currentOpacity.value,
+            type: 'text',
+            x: layerPos.x,
+            y: layerPos.y,
+            text: val,
+            fontSize: textSize.value,
+            color: currentColor.value,
+            opacity: currentOpacity.value
           };
           provider?.addShape(shapeData);
           refreshLayer();
           redoStack.value = [];
-          undoStack.value.push({ type: 'addShape', pageId: provider!.getCurrentPageId(), pageIndex: renderer!.getCurrentPageIndex(), shapeData });
+          undoStack.value.push({
+            type: 'addShape',
+            pageId: provider!.getCurrentPageId(),
+            pageIndex: renderer!.getCurrentPageIndex(),
+            shapeData
+          });
         }
         textarea.remove();
         emitPaintLog();
       };
       textarea.addEventListener('blur', commitText);
-      textarea.addEventListener('keydown', (ke) => {
-        if (ke.key === 'Enter' && !ke.shiftKey) { ke.preventDefault(); textarea.blur(); }
-        if (ke.key === 'Escape') { textarea.value = ''; textarea.blur(); }
+      textarea.addEventListener('keydown', ke => {
+        if (ke.key === 'Enter' && !ke.shiftKey) {
+          ke.preventDefault();
+          textarea.blur();
+        }
+        if (ke.key === 'Escape') {
+          textarea.value = '';
+          textarea.blur();
+        }
       });
     }, 0);
   } else if (m === 'move') {
@@ -1262,7 +1108,13 @@ function onPointerDown(e: any) {
   } else if (m === 'cur') {
     // 点击空白处取消选中（点中图形由节点 click 处理器选中）
     const target = e.target;
-    if (!target || target === renderer?.getStage() || target === renderer?.layer || target === renderer?.previewLayer || target === renderer?.tempLayer) {
+    if (
+      !target ||
+      target === renderer?.getStage() ||
+      target === renderer?.layer ||
+      target === renderer?.previewLayer ||
+      target === renderer?.tempLayer
+    ) {
       clearSelection();
     }
   }
@@ -1301,7 +1153,9 @@ function onPointerMove(e: any) {
       points: layerPath,
       stroke: m === 'eraser' ? '#ffffff' : currentColor.value,
       strokeWidth: currentSize.value * (m === 'eraser' ? ERASER_WIDTH_MULT : 1),
-      lineCap: 'round', lineJoin: 'round', tension: 0.5,
+      lineCap: 'round',
+      lineJoin: 'round',
+      tension: 0.5
     });
     renderer!.previewLayer.add(line);
     renderer!.previewLayer.batchDraw();
@@ -1333,7 +1187,11 @@ function onPointerUp(e: any) {
 
   if (m !== 'move') redoStack.value = [];
   // 同步尚未完成时 pages 可能未播种，否则 addShape 静默丢弃；与图片添加一致先兜底建页
-  if (provider && !provider.getActiveElements() && ['brush', 'eraser', 'circle', 'rectangle', 'arrows', 'line'].includes(m)) {
+  if (
+    provider &&
+    !provider.getActiveElements() &&
+    ['brush', 'eraser', 'circle', 'rectangle', 'arrows', 'line'].includes(m)
+  ) {
     provider.addPage();
   }
 
@@ -1345,14 +1203,22 @@ function onPointerUp(e: any) {
     }
     const shapeData: Record<string, any> = {
       id: uid(),
-      type: m, points: layerPath, color: currentColor.value, lineWidth: currentSize.value,
+      type: m,
+      points: layerPath,
+      color: currentColor.value,
+      lineWidth: currentSize.value,
       // 橡皮是白盖而非笔迹：强制不透明，否则透明度滑杆会让被擦内容透回来
-      opacity: m === 'eraser' ? 1 : currentOpacity.value,
+      opacity: m === 'eraser' ? 1 : currentOpacity.value
     };
     provider?.addShape(shapeData);
     currentPath = [];
     refreshLayer();
-    undoStack.value.push({ type: 'addShape', pageId: provider!.getCurrentPageId(), pageIndex: renderer!.getCurrentPageIndex(), shapeData });
+    undoStack.value.push({
+      type: 'addShape',
+      pageId: provider!.getCurrentPageId(),
+      pageIndex: renderer!.getCurrentPageIndex(),
+      shapeData
+    });
   } else if (m === 'circle' && startPos && pos) {
     const layerStart = toLayerCoords(startPos);
     const layerEnd = toLayerCoords(pos);
@@ -1366,15 +1232,23 @@ function onPointerUp(e: any) {
     if (Math.max(rx, ry) > 2) {
       const shapeData: Record<string, any> = {
         id: uid(),
-        type: 'circle', x: layerStart.x, y: layerStart.y,
-        color: currentColor.value, lineWidth: currentSize.value,
+        type: 'circle',
+        x: layerStart.x,
+        y: layerStart.y,
+        color: currentColor.value,
+        lineWidth: currentSize.value,
         opacity: currentOpacity.value,
         ...(fillEnabled.value ? { fill: fillColor.value || currentColor.value } : {}),
-        ...(shift ? { radius } : { radiusX: rx, radiusY: ry }),
+        ...(shift ? { radius } : { radiusX: rx, radiusY: ry })
       };
       provider?.addShape(shapeData);
       refreshLayer();
-      undoStack.value.push({ type: 'addShape', pageId: provider!.getCurrentPageId(), pageIndex: renderer!.getCurrentPageIndex(), shapeData });
+      undoStack.value.push({
+        type: 'addShape',
+        pageId: provider!.getCurrentPageId(),
+        pageIndex: renderer!.getCurrentPageIndex(),
+        shapeData
+      });
     }
   } else if (m === 'line' && startPos && pos) {
     const layerStart = toLayerCoords(startPos);
@@ -1392,12 +1266,18 @@ function onPointerUp(e: any) {
         id: uid(),
         type: 'line',
         points: [layerStart.x, layerStart.y, layerStart.x + dx, layerStart.y + dy],
-        color: currentColor.value, lineWidth: currentSize.value,
-        opacity: currentOpacity.value,
+        color: currentColor.value,
+        lineWidth: currentSize.value,
+        opacity: currentOpacity.value
       };
       provider?.addShape(shapeData);
       refreshLayer();
-      undoStack.value.push({ type: 'addShape', pageId: provider!.getCurrentPageId(), pageIndex: renderer!.getCurrentPageIndex(), shapeData });
+      undoStack.value.push({
+        type: 'addShape',
+        pageId: provider!.getCurrentPageId(),
+        pageIndex: renderer!.getCurrentPageIndex(),
+        shapeData
+      });
     }
   } else if (m === 'rectangle' && startPos && pos) {
     const layerStart = toLayerCoords(startPos);
@@ -1407,14 +1287,24 @@ function onPointerUp(e: any) {
     if (w > 2 && h > 2) {
       const shapeData: Record<string, any> = {
         id: uid(),
-        type: 'rect', x: Math.min(layerStart.x, layerEnd.x), y: Math.min(layerStart.y, layerEnd.y),
-        width: w, height: h, color: currentColor.value, lineWidth: currentSize.value,
+        type: 'rect',
+        x: Math.min(layerStart.x, layerEnd.x),
+        y: Math.min(layerStart.y, layerEnd.y),
+        width: w,
+        height: h,
+        color: currentColor.value,
+        lineWidth: currentSize.value,
         opacity: currentOpacity.value,
-        ...(fillEnabled.value ? { fill: fillColor.value || currentColor.value } : {}),
+        ...(fillEnabled.value ? { fill: fillColor.value || currentColor.value } : {})
       };
       provider?.addShape(shapeData);
       refreshLayer();
-      undoStack.value.push({ type: 'addShape', pageId: provider!.getCurrentPageId(), pageIndex: renderer!.getCurrentPageIndex(), shapeData });
+      undoStack.value.push({
+        type: 'addShape',
+        pageId: provider!.getCurrentPageId(),
+        pageIndex: renderer!.getCurrentPageIndex(),
+        shapeData
+      });
     }
   } else if (m === 'arrows' && startPos && pos) {
     const layerStart = toLayerCoords(startPos);
@@ -1424,12 +1314,20 @@ function onPointerUp(e: any) {
     if (Math.sqrt(dx * dx + dy * dy) > 5) {
       const shapeData: Record<string, any> = {
         id: uid(),
-        type: 'arrow', points: [layerStart.x, layerStart.y, layerEnd.x, layerEnd.y], color: currentColor.value, lineWidth: currentSize.value,
-        opacity: currentOpacity.value,
+        type: 'arrow',
+        points: [layerStart.x, layerStart.y, layerEnd.x, layerEnd.y],
+        color: currentColor.value,
+        lineWidth: currentSize.value,
+        opacity: currentOpacity.value
       };
       provider?.addShape(shapeData);
       refreshLayer();
-      undoStack.value.push({ type: 'addShape', pageId: provider!.getCurrentPageId(), pageIndex: renderer!.getCurrentPageIndex(), shapeData });
+      undoStack.value.push({
+        type: 'addShape',
+        pageId: provider!.getCurrentPageId(),
+        pageIndex: renderer!.getCurrentPageIndex(),
+        shapeData
+      });
     }
   }
   startPos = null;
@@ -1444,27 +1342,45 @@ function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
   const le = toLayerCoords(pos);
 
   if (m === 'rectangle') {
-    renderer.previewLayer.add(new Konva.Rect({
-      x: Math.min(ls.x, le.x), y: Math.min(ls.y, le.y),
-      width: Math.abs(le.x - ls.x), height: Math.abs(le.y - ls.y),
-      stroke: currentColor.value, strokeWidth: currentSize.value,
-      fill: fillEnabled.value ? fillColor.value || currentColor.value : undefined,
-    }));
+    renderer.previewLayer.add(
+      new Konva.Rect({
+        x: Math.min(ls.x, le.x),
+        y: Math.min(ls.y, le.y),
+        width: Math.abs(le.x - ls.x),
+        height: Math.abs(le.y - ls.y),
+        stroke: currentColor.value,
+        strokeWidth: currentSize.value,
+        fill: fillEnabled.value ? fillColor.value || currentColor.value : undefined
+      })
+    );
   } else if (m === 'circle') {
     const dx = le.x - ls.x;
     const dy = le.y - ls.y;
     const fill = fillEnabled.value ? fillColor.value || currentColor.value : undefined;
     if (shift) {
       // Shift 约束为正圆（取较大值），与 Konva Transformer 的 Shift 行为一致
-      renderer.previewLayer.add(new Konva.Circle({
-        x: ls.x, y: ls.y, radius: Math.max(Math.abs(dx), Math.abs(dy)),
-        stroke: currentColor.value, strokeWidth: currentSize.value, fill,
-      }));
+      renderer.previewLayer.add(
+        new Konva.Circle({
+          x: ls.x,
+          y: ls.y,
+          radius: Math.max(Math.abs(dx), Math.abs(dy)),
+          stroke: currentColor.value,
+          strokeWidth: currentSize.value,
+          fill
+        })
+      );
     } else {
-      renderer.previewLayer.add(new Konva.Ellipse({
-        x: ls.x, y: ls.y, radiusX: Math.abs(dx), radiusY: Math.abs(dy),
-        stroke: currentColor.value, strokeWidth: currentSize.value, fill,
-      }));
+      renderer.previewLayer.add(
+        new Konva.Ellipse({
+          x: ls.x,
+          y: ls.y,
+          radiusX: Math.abs(dx),
+          radiusY: Math.abs(dy),
+          stroke: currentColor.value,
+          strokeWidth: currentSize.value,
+          fill
+        })
+      );
     }
   } else if (m === 'line') {
     let dx = le.x - ls.x;
@@ -1473,16 +1389,24 @@ function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
       if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
       else dx = 0;
     }
-    renderer.previewLayer.add(new Konva.Line({
-      points: [ls.x, ls.y, ls.x + dx, ls.y + dy],
-      stroke: currentColor.value, strokeWidth: currentSize.value,
-      lineCap: 'round', lineJoin: 'round',
-    }));
+    renderer.previewLayer.add(
+      new Konva.Line({
+        points: [ls.x, ls.y, ls.x + dx, ls.y + dy],
+        stroke: currentColor.value,
+        strokeWidth: currentSize.value,
+        lineCap: 'round',
+        lineJoin: 'round'
+      })
+    );
   } else if (m === 'arrows') {
-    renderer.previewLayer.add(new Konva.Arrow({
-      points: [ls.x, ls.y, le.x, le.y],
-      stroke: currentColor.value, strokeWidth: currentSize.value, fill: currentColor.value,
-    }));
+    renderer.previewLayer.add(
+      new Konva.Arrow({
+        points: [ls.x, ls.y, le.x, le.y],
+        stroke: currentColor.value,
+        strokeWidth: currentSize.value,
+        fill: currentColor.value
+      })
+    );
   }
 }
 
@@ -1530,7 +1454,10 @@ function revocation(type: string) {
   if (!renderer) return;
   if (type === 'pre') {
     const action = undoStack.value.pop();
-    if (!action) { toast('没有更多撤销'); return; }
+    if (!action) {
+      toast('没有更多撤销');
+      return;
+    }
     if (action.type === 'addShape') {
       ensurePageIndex(action.pageIndex);
       provider?.removeLastElement();
@@ -1553,7 +1480,10 @@ function revocation(type: string) {
     redoStack.value.push(action);
   } else {
     const action = redoStack.value.pop();
-    if (!action) { toast('没有更多重做'); return; }
+    if (!action) {
+      toast('没有更多重做');
+      return;
+    }
     if (action.type === 'addShape') {
       ensurePageIndex(action.pageIndex);
       provider?.addShape(action.shapeData!);
@@ -1618,7 +1548,10 @@ function layerZoomChange(type: string) {
   if (!renderer) return;
   if (type === 'sub') zoomLevel.value = renderer.zoomOut();
   else if (type === 'add') zoomLevel.value = renderer.zoomIn();
-  else if (type === 'all') { renderer.zoomFitAll(); zoomLevel.value = renderer.getZoom(); }
+  else if (type === 'all') {
+    renderer.zoomFitAll();
+    zoomLevel.value = renderer.getZoom();
+  }
   syncViewportToYjs();
   emitPaintLog();
 }
@@ -1682,7 +1615,10 @@ function delLayer(index: number) {
     emitPaintLog();
     return;
   }
-  if (renderer.getPageCount() <= 1) { layerClear(); return; }
+  if (renderer.getPageCount() <= 1) {
+    layerClear();
+    return;
+  }
   provider?.removePage(index - 1);
   toast('已删除画布');
   emitPaintLog();
@@ -1708,12 +1644,25 @@ function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
   let r = 0;
   let g = 0;
   let b = 0;
-  if (hp < 1) { r = c; g = x; }
-  else if (hp < 2) { r = x; g = c; }
-  else if (hp < 3) { g = c; b = x; }
-  else if (hp < 4) { g = x; b = c; }
-  else if (hp < 5) { r = x; b = c; }
-  else { r = c; b = x; }
+  if (hp < 1) {
+    r = c;
+    g = x;
+  } else if (hp < 2) {
+    r = x;
+    g = c;
+  } else if (hp < 3) {
+    g = c;
+    b = x;
+  } else if (hp < 4) {
+    g = x;
+    b = c;
+  } else if (hp < 5) {
+    r = x;
+    b = c;
+  } else {
+    r = c;
+    b = x;
+  }
   const m = v - c;
   return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
 }
@@ -1766,8 +1715,8 @@ function sampleWheelAt(canvas: HTMLCanvasElement, clientX: number, clientY: numb
     1,
     1
   ).data;
-  const hex = '#' + [pixel[0], pixel[1], pixel[2]]
-    .map(v => v.toString(16).padStart(2, '0')).join('');
+  const hex =
+    '#' + [pixel[0], pixel[1], pixel[2]].map(v => v.toString(16).padStart(2, '0')).join('');
   const size = Math.min(cssW, cssH);
   return {
     hex,
@@ -1901,7 +1850,10 @@ function onColorPanelDragEnd() {
   document.removeEventListener('mouseup', onColorPanelDragEnd);
 }
 function openColorPanel() {
-  if (colorPanelTimer) { clearTimeout(colorPanelTimer); colorPanelTimer = null; }
+  if (colorPanelTimer) {
+    clearTimeout(colorPanelTimer);
+    colorPanelTimer = null;
+  }
   colorPanelCollapsed.value = false;
 }
 function startCloseColorPanel() {
@@ -1912,7 +1864,10 @@ function startCloseColorPanel() {
   }, 300);
 }
 function cancelCloseColorPanel() {
-  if (colorPanelTimer) { clearTimeout(colorPanelTimer); colorPanelTimer = null; }
+  if (colorPanelTimer) {
+    clearTimeout(colorPanelTimer);
+    colorPanelTimer = null;
+  }
 }
 // 透明度广播防抖：滑杆拖动期间本地预览即时，工具状态在 80ms 静默后才同步 Yjs
 const broadcastOpacity = debounce((opacity: number) => {
@@ -1989,7 +1944,10 @@ function loadImageEl(url: string): Promise<HTMLImageElement> {
 }
 
 async function uploadImage(file: File) {
-  if (!uploadImageApi) { toast('未配置图片上传接口'); return; }
+  if (!uploadImageApi) {
+    toast('未配置图片上传接口');
+    return;
+  }
   loading.value = true;
   try {
     const fd = new FormData();
@@ -2028,7 +1986,7 @@ async function uploadImage(file: File) {
         y: 50,
         width: w,
         height: h,
-        opacity: currentOpacity.value,
+        opacity: currentOpacity.value
       };
       // 同步尚未完成时 pages 可能未播种，getActiveElements() 为 null 会让 addShape 静默丢弃；先兜底建页
       if (!provider?.getActiveElements()) {
@@ -2037,20 +1995,30 @@ async function uploadImage(file: File) {
       provider?.addShape(shapeData);
       refreshLayer();
       redoStack.value = [];
-      undoStack.value.push({ type: 'addShape', pageId: provider!.getCurrentPageId(), pageIndex: renderer!.getCurrentPageIndex(), shapeData });
+      undoStack.value.push({
+        type: 'addShape',
+        pageId: provider!.getCurrentPageId(),
+        pageIndex: renderer!.getCurrentPageIndex(),
+        shapeData
+      });
       emitPaintLog();
       toast('图片已添加');
     } else {
       toast('上传失败');
     }
-  } catch (e) { toast(`上传出错: ${(e as Error).message}`); }
+  } catch (e) {
+    toast(`上传出错: ${(e as Error).message}`);
+  }
   loading.value = false;
 }
 
 // 预载全部页尺寸（阶段1）已抽至 whiteboard/pptImport.ts:loadPptMeta
 
 async function uploadPPT(file: File): Promise<boolean> {
-  if (!uploadPptApi) { toast('未配置PPT上传接口'); return false; }
+  if (!uploadPptApi) {
+    toast('未配置PPT上传接口');
+    return false;
+  }
   loading.value = true;
   try {
     let fileUrl: string;
@@ -2079,15 +2047,18 @@ async function uploadPPT(file: File): Promise<boolean> {
       filename: baseName,
       filext: ext,
       filesize: file.size,
-      fileUrl,
+      fileUrl
     });
     if (!registered) {
       toast('课件登记服务端失败，请重试');
       return false;
     }
     provider?.addFileItem({
-      filename: baseName, filext: ext, filesize: file.size, fileid: '',
-      fileurl: fileUrl,
+      filename: baseName,
+      filext: ext,
+      filesize: file.size,
+      fileid: '',
+      fileurl: fileUrl
     });
     fileList.value = provider!.getFileList();
     toast(`PPT已导入，共${meta.numPages}页，请点击列表打开`);
@@ -2128,8 +2099,13 @@ async function importServerCoursewares() {
     return null;
   });
   if (!res) return;
-  const items: Array<{ id: string; filename: string; filext: string; filesize: number; fileUrl: string }> =
-    res.data?.list ?? [];
+  const items: Array<{
+    id: string;
+    filename: string;
+    filext: string;
+    filesize: number;
+    fileUrl: string;
+  }> = res.data?.list ?? [];
 
   // 对账清幽灵：doc 里 fileurl 不在服务端集合的条目 = 已在服务端被删除
   const serverUrls = new Set(items.map(it => it.fileUrl).filter(Boolean));
@@ -2147,7 +2123,12 @@ async function importServerCoursewares() {
   }
   if (prunedPages) showLayer(1);
 
-  const existing = new Set(provider.getFileList().map(i => i.fileurl).filter(Boolean));
+  const existing = new Set(
+    provider
+      .getFileList()
+      .map(i => i.fileurl)
+      .filter(Boolean)
+  );
   const pending = items.filter(it => it.fileUrl && !existing.has(it.fileUrl));
   if (ghosts.length === 0 && pending.length === 0) return;
 
@@ -2157,7 +2138,7 @@ async function importServerCoursewares() {
       filext: item.filext || 'ppt',
       filesize: Number(item.filesize) || 0,
       fileid: '',
-      fileurl: item.fileUrl,
+      fileurl: item.fileUrl
     });
   }
   fileList.value = provider.getFileList();
@@ -2271,7 +2252,10 @@ function showFile(ids: string): boolean {
 
 function alterFName(i: number, e: Event) {
   const val = (e.target as HTMLInputElement).value.trim();
-  if (!val) { toast('名字不能为空!'); return; }
+  if (!val) {
+    toast('名字不能为空!');
+    return;
+  }
   provider?.renameFileItem(i, val);
   fileList.value = provider!.getFileList();
   editFileIndex.value = -1;
@@ -2346,8 +2330,8 @@ defineExpose({
     x: renderer?.layer.x() ?? 0,
     y: renderer?.layer.y() ?? 0,
     stageX: renderer?.getStage().x() ?? 0,
-    stageY: renderer?.getStage().y() ?? 0,
-  }),
+    stageY: renderer?.getStage().y() ?? 0
+  })
 });
 </script>
 
@@ -2356,171 +2340,594 @@ defineExpose({
 
 @colorIcon: '../../assets/imgs/whiteboard/color-icon.png';
 
-.classroom-white-board { width: 100%; height: 100%; position: relative; }
-.whiteBoard { width: 100%; height: 100%; position: relative; overflow: visible; background: #fff; }
-.container { width: 100%; height: 100%; position: relative; }
+.classroom-white-board {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+.whiteBoard {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: visible;
+  background: #fff;
+}
+.container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
 
-.cursor-text { cursor: text; }
-.cursor-brush { cursor: url('../../assets/imgs/whiteboard/m_brush.png') 2 22, crosshair; }
-.cursor-eraser { cursor: url('../../assets/imgs/whiteboard/m_eraser.png') 8 18, crosshair; }
-.cursor-move { cursor: url('../../assets/imgs/whiteboard/m_move.png') 8 18, grab; }
-.cursor-laser { cursor: crosshair; }
+.cursor-text {
+  cursor: text;
+}
+.cursor-brush {
+  cursor:
+    url('../../assets/imgs/whiteboard/m_brush.png') 2 22,
+    crosshair;
+}
+.cursor-eraser {
+  cursor:
+    url('../../assets/imgs/whiteboard/m_eraser.png') 8 18,
+    crosshair;
+}
+.cursor-move {
+  cursor:
+    url('../../assets/imgs/whiteboard/m_move.png') 8 18,
+    grab;
+}
+.cursor-laser {
+  cursor: crosshair;
+}
 
-.wb-pop-enter-active { transition: opacity 150ms ease, transform 150ms ease; }
-.wb-pop-leave-active { transition: opacity 100ms ease, transform 100ms ease; }
-.wb-pop-enter-from, .wb-pop-leave-to { opacity: 0; transform: translateY(-4px); }
+.wb-pop-enter-active {
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+.wb-pop-leave-active {
+  transition:
+    opacity 100ms ease,
+    transform 100ms ease;
+}
+.wb-pop-enter-from,
+.wb-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
 
 .tools {
-  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
-  width: 44px; background: #efeff4; border-radius: 12px; display: flex;
-  flex-direction: column; align-items: center; padding: 4px 0; gap: 4px; z-index: 10;
-  div { width: 32px; height: 32px; border-radius: 6px; cursor: pointer; flex-shrink: 0; position: relative;
-    display: flex; align-items: center; justify-content: center;
-    &:hover { background-color: #e2e2e7; }
-    &.on { background-color: #fff; }
-    .el-icon { font-size: 16px; color: #555; }
-    &.on .el-icon { color: #409eff; }
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  background: #efeff4;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 0;
+  gap: 4px;
+  z-index: 10;
+  div {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    flex-shrink: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    &:hover {
+      background-color: #e2e2e7;
+    }
+    &.on {
+      background-color: #fff;
+    }
+    .el-icon {
+      font-size: 16px;
+      color: #555;
+    }
+    &.on .el-icon {
+      color: #409eff;
+    }
   }
-  .circle, .rectangle, .eraser, .move {
-    background-image: url('@{wbicon}'); background-repeat: no-repeat;
+  .circle,
+  .rectangle,
+  .eraser,
+  .move {
+    background-image: url('@{wbicon}');
+    background-repeat: no-repeat;
   }
-  .rectangle { background-position: 0 -34px; }
-  .move { background-position: -34px -68px; }
-  .eraser { background-position: 0 -102px; }
-  .circle { background-position: -68px -34px; }
-  input[type='file'] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  .rectangle {
+    background-position: 0 -34px;
+  }
+  .move {
+    background-position: -34px -68px;
+  }
+  .eraser {
+    background-position: 0 -102px;
+  }
+  .circle {
+    background-position: -68px -34px;
+  }
+  input[type='file'] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
 }
 
 .ctrl-tools {
-  position: absolute; left: 64px; bottom: 10px; height: 36px; background: #efeff4;
-  border-radius: 12px; display: flex; align-items: center; padding: 0 6px; gap: 2px; z-index: 10;
-  div { width: 26px; height: 26px; border-radius: 4px; cursor: pointer; flex-shrink: 0; position: relative;
-    display: flex; align-items: center; justify-content: center;
-    .el-icon { font-size: 14px; color: #555; }
-    &:hover { background-color: #e2e2e7; }
+  position: absolute;
+  left: 64px;
+  bottom: 10px;
+  height: 36px;
+  background: #efeff4;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  gap: 2px;
+  z-index: 10;
+  div {
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    .el-icon {
+      font-size: 14px;
+      color: #555;
+    }
+    &:hover {
+      background-color: #e2e2e7;
+    }
   }
   .clear {
-    background-image: url('@{wbicon}'); background-repeat: no-repeat;
+    background-image: url('@{wbicon}');
+    background-repeat: no-repeat;
     background-position: -154px 0;
   }
-  .num { width: auto; min-width: 48px; text-align: center; font-size: 12px; line-height: 26px;
-    background: none; cursor: pointer; position: relative;
-    .zoom-input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; text-align: center;
-      font-size: 12px; border: 1px solid #ccc; border-radius: 4px; display: none; }
-    &:hover .zoom-input { display: block; }
+  .num {
+    width: auto;
+    min-width: 48px;
+    text-align: center;
+    font-size: 12px;
+    line-height: 26px;
+    background: none;
+    cursor: pointer;
+    position: relative;
+    .zoom-input {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      text-align: center;
+      font-size: 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      display: none;
+    }
+    &:hover .zoom-input {
+      display: block;
+    }
   }
 }
 
 .page-tools {
-  position: absolute; right: 10px; bottom: 10px; height: 36px; background: #efeff4;
-  border-radius: 12px; display: flex; align-items: center; padding: 0 6px; gap: 2px; z-index: 10;
-  div { width: 26px; height: 26px; border-radius: 4px; cursor: pointer; flex-shrink: 0; position: relative;
-    display: flex; align-items: center; justify-content: center;
-    .el-icon { font-size: 14px; color: #555; }
-    &:hover { background-color: #e2e2e7; }
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  height: 36px;
+  background: #efeff4;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  gap: 2px;
+  z-index: 10;
+  div {
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    .el-icon {
+      font-size: 14px;
+      color: #555;
+    }
+    &:hover {
+      background-color: #e2e2e7;
+    }
   }
-  .num { width: auto; min-width: 36px; text-align: center; font-size: 12px; line-height: 26px; background: none; }
+  .num {
+    width: auto;
+    min-width: 36px;
+    text-align: center;
+    font-size: 12px;
+    line-height: 26px;
+    background: none;
+  }
 }
 
 .color-panel {
-  position: absolute; top: 0; left: 0; z-index: 10; will-change: transform, opacity;
-  width: 180px; background: #f3f3f4; border-radius: 8px; padding: 12px;
-  .color-panel-drag { width: auto; height: 14px; cursor: move; border-radius: 4px 4px 0 0; margin: -12px -12px 8px -12px; background: #e2e2e7; }
-  .edit-size { margin-bottom: 12px; }
-  .size-title { display: flex; justify-content: space-between; font-size: 12px; color: #666; margin-bottom: 6px; }
-  .strip { width: 130px; height: 10px; background: linear-gradient(to right, #ccc, #333); border-radius: 5px;
-    position: relative; margin: 0 auto; cursor: pointer;
-    .strip-btn { position: absolute; top: -3px; width: 16px; height: 16px; border-radius: 50%;
-      background: #fff; border: 2px solid #666; }
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  will-change: transform, opacity;
+  width: 180px;
+  background: #f3f3f4;
+  border-radius: 8px;
+  padding: 12px;
+  .color-panel-drag {
+    width: auto;
+    height: 14px;
+    cursor: move;
+    border-radius: 4px 4px 0 0;
+    margin: -12px -12px 8px -12px;
+    background: #e2e2e7;
   }
-  .edit-color { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
-    .item { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent;
-      &.on { border-color: #409eff; }
-      &.colours { background-image: url('@{colorIcon}'); background-size: cover; }
+  .edit-size {
+    margin-bottom: 12px;
+  }
+  .size-title {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 6px;
+  }
+  .strip {
+    width: 130px;
+    height: 10px;
+    background: linear-gradient(to right, #ccc, #333);
+    border-radius: 5px;
+    position: relative;
+    margin: 0 auto;
+    cursor: pointer;
+    .strip-btn {
+      position: absolute;
+      top: -3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      border: 2px solid #666;
     }
   }
-  .opacity-bar { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; color: #666;
-    .opacity-label { white-space: nowrap; flex-shrink: 0; }
-    .opacity-slider { flex: 1; min-width: 0; height: 4px; -webkit-appearance: none; appearance: none; background: #ccc; border-radius: 2px; outline: none;
-      &::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #409eff; cursor: pointer; border: 2px solid #fff; box-shadow: 0 0 2px #000; }
-    }
-    .opacity-val { min-width: 28px; text-align: right; flex-shrink: 0; }
-  }
-  .fill-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: #666;
-    .fill-label { white-space: nowrap; }
-    .fill-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 10px; background: #eee; color: #666; cursor: pointer; border: 1px solid #ddd; user-select: none;
-      &.on { background: #409eff; color: #fff; border-color: #409eff; }
-      .fill-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 1px rgba(0, 0, 0, 0.4); }
-    }
-    .fill-palette { width: 100%;
-      .fp-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-      .fp-item { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(0, 0, 0, 0.12);
-        &.on { border-color: #409eff; }
+  .edit-color {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    .item {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      &.on {
+        border-color: #409eff;
       }
-      .fp-none { padding: 2px 10px; border-radius: 10px; background: #f5f5f5; border: 1px dashed #bbb; color: #666; cursor: pointer; user-select: none;
-        &:hover { background: #ececec; }
+      &.colours {
+        background-image: url('@{colorIcon}');
+        background-size: cover;
       }
     }
   }
-  .pal-btn { position: absolute; width: 12px; height: 12px; border-radius: 50%;
-    background: #fff; border: 2px solid #444; box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
-    pointer-events: none; }
-  .pallet-box { display: flex; flex-direction: column; align-items: center; gap: 8px;
-    margin-top: 10px; padding: 10px; background: #fff; border: 1px solid #e4e7ed;
-    border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-    .pal-color { position: relative; width: 150px; height: 150px;
-      canvas { display: block; width: 150px; height: 150px; border-radius: 50%; cursor: crosshair; }
+  .opacity-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #666;
+    .opacity-label {
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .endSelectColor { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
-      .end-color-item { width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
-        border: 1px solid rgba(0, 0, 0, 0.15); }
+    .opacity-slider {
+      flex: 1;
+      min-width: 0;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: #ccc;
+      border-radius: 2px;
+      outline: none;
+      &::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #409eff;
+        cursor: pointer;
+        border: 2px solid #fff;
+        box-shadow: 0 0 2px #000;
+      }
+    }
+    .opacity-val {
+      min-width: 28px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+  }
+  .fill-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #666;
+    .fill-label {
+      white-space: nowrap;
+    }
+    .fill-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 10px;
+      border-radius: 10px;
+      background: #eee;
+      color: #666;
+      cursor: pointer;
+      border: 1px solid #ddd;
+      user-select: none;
+      &.on {
+        background: #409eff;
+        color: #fff;
+        border-color: #409eff;
+      }
+      .fill-swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        border: 1px solid rgba(255, 255, 255, 0.9);
+        box-shadow: 0 0 1px rgba(0, 0, 0, 0.4);
+      }
+    }
+    .fill-palette {
+      width: 100%;
+      .fp-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .fp-item {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid rgba(0, 0, 0, 0.12);
+        &.on {
+          border-color: #409eff;
+        }
+      }
+      .fp-none {
+        padding: 2px 10px;
+        border-radius: 10px;
+        background: #f5f5f5;
+        border: 1px dashed #bbb;
+        color: #666;
+        cursor: pointer;
+        user-select: none;
+        &:hover {
+          background: #ececec;
+        }
+      }
+    }
+  }
+  .pal-btn {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #444;
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+  }
+  .pallet-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #e4e7ed;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    .pal-color {
+      position: relative;
+      width: 150px;
+      height: 150px;
+      canvas {
+        display: block;
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        cursor: crosshair;
+      }
+    }
+    .endSelectColor {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      .end-color-item {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+      }
     }
   }
 }
 
 .color-panel-toggle {
-  position: absolute; top: 0; left: 0; z-index: 10; will-change: transform;
-  width: 32px; height: 32px; border-radius: 50%;
-  background: #f3f3f4; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
-  .color-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 2px #000; }
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  will-change: transform;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f3f3f4;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  .color-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 2px #000;
+  }
 }
 
-
-
 .fileList {
-  position: absolute; left: 60px; top: 50%; transform: translateY(-50%);
-  width: 180px; max-height: 356px; background: #f3f3f4; border-radius: 8px; overflow-y: auto;
-  padding: 8px; z-index: 10; pointer-events: auto;
+  position: absolute;
+  left: 60px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 180px;
+  max-height: 356px;
+  background: #f3f3f4;
+  border-radius: 8px;
+  overflow-y: auto;
+  padding: 8px;
+  z-index: 10;
+  pointer-events: auto;
   scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
-  .file-upload { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px;
-    padding: 6px 4px; margin-bottom: 4px; border: 1px dashed #c0c4cc; border-radius: 6px;
-    cursor: pointer; color: #409eff; font-size: 12px;
-    &:hover { background-color: #e8e8ec; }
-    input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+  &::-webkit-scrollbar {
+    display: none;
   }
-  .file-item { display: flex; align-items: center; padding: 6px 4px; border-bottom: 1px solid #e0e0e0; gap: 4px; }
-  .file-name { flex: 1; font-size: 12px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    .file-name-input { width: 100%; font-size: 12px; border: 1px solid #ccc; border-radius: 2px; padding: 1px 4px; }
+  .file-upload {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 4px;
+    margin-bottom: 4px;
+    border: 1px dashed #c0c4cc;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #409eff;
+    font-size: 12px;
+    &:hover {
+      background-color: #e8e8ec;
+    }
+    input {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
   }
-  .file-size { font-size: 10px; color: #999; }
-  .file-del { width: 16px; height: 16px; cursor: pointer; color: #999;
-    &:hover { color: #e0383e; }
-    .el-icon { font-size: 16px; }
+  .file-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 4px;
+    border-bottom: 1px solid #e0e0e0;
+    gap: 4px;
   }
-  .file-hint { margin-top: 6px; font-size: 10px; line-height: 1.5; color: #999; }
+  .file-name {
+    flex: 1;
+    font-size: 12px;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    .file-name-input {
+      width: 100%;
+      font-size: 12px;
+      border: 1px solid #ccc;
+      border-radius: 2px;
+      padding: 1px 4px;
+    }
+  }
+  .file-size {
+    font-size: 10px;
+    color: #999;
+  }
+  .file-del {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    color: #999;
+    &:hover {
+      color: #e0383e;
+    }
+    .el-icon {
+      font-size: 16px;
+    }
+  }
+  .file-hint {
+    margin-top: 6px;
+    font-size: 10px;
+    line-height: 1.5;
+    color: #999;
+  }
 }
 
 .loading-div {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; z-index: 100;
-  .loading-gif { width: 60px; height: 60px; color: #409eff; font-size: 48px; }
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  .loading-gif {
+    width: 60px;
+    height: 60px;
+    color: #409eff;
+    font-size: 48px;
+  }
 }
 
 .alert {
-  position: fixed; top: 40%; left: 50%; transform: translateX(-50%);
-  padding: 12px 24px; background: rgba(0,0,0,0.6); color: #fff; border-radius: 6px;
-  font-size: 14px; z-index: 200; white-space: nowrap;
+  position: fixed;
+  top: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border-radius: 6px;
+  font-size: 14px;
+  z-index: 200;
+  white-space: nowrap;
 }
 </style>

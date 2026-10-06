@@ -1,23 +1,14 @@
 <template>
   <div class="small-video-list">
     <div class="pre-or-next">
-      <div
-        class="swiper-button-prevs pre"
-        @click="scrollPrev"
-      >
+      <div class="swiper-button-prevs pre" @click="scrollPrev">
         <el-icon><ArrowLeft /></el-icon>
       </div>
-      <div
-        class="swiper-button-nexts next"
-        @click="scrollNext"
-      >
+      <div class="swiper-button-nexts next" @click="scrollNext">
         <el-icon><ArrowRight /></el-icon>
       </div>
     </div>
-    <div
-      ref="swiperContainer"
-      class="swiper-container"
-    >
+    <div ref="swiperContainer" class="swiper-container">
       <div class="swiper-wrapper">
         <div
           v-for="(item, index) in list"
@@ -25,8 +16,7 @@
           :key="index"
           class="swiper-slide"
           :class="
-            item.display[0] === 'ST' &&
-              (isInteraction == 2 || isInteraction == 3)
+            item.display[0] === 'ST' && (isInteraction == 2 || isInteraction == 3)
               ? 'swiper-slide-d'
               : 'swiper-slide-f'
           "
@@ -38,40 +28,28 @@
             :class="topId === item.id ? 'isMouse' : 'notMouse'"
             @click="setDisplayBig(item.id)"
           >
-            <el-icon><Expand /></el-icon><span v-if="clickId === item.id">缩回视图</span><span v-else>放大视图</span>
+            <el-icon><Expand /></el-icon><span v-if="clickId === item.id">缩回视图</span
+            ><span v-else>放大视图</span>
           </div>
           <div
-            v-if="
-              item.display[0] === 'ST' &&
-                (isInteraction == 2 || isInteraction == 3)
-            "
+            v-if="item.display[0] === 'ST' && (isInteraction == 2 || isInteraction == 3)"
             class="top"
           >
             <div class="right">
-              <el-icon
-                class="sound-icon"
-                aria-label="发言中"
-              >
+              <el-icon class="sound-icon" aria-label="发言中">
                 <Mic />
               </el-icon>
             </div>
           </div>
           <div class="bottom">
             <div class="left">
-              <el-icon
-                v-if="opaqueId === item.display[1]"
-                class="me-icon"
-                aria-label="我"
-              >
+              <el-icon v-if="opaqueId === item.display[1]" class="me-icon" aria-label="我">
                 <UserFilled />
               </el-icon>
               <span>{{ item.display[2] }}</span>
             </div>
             <div class="right">
-              <div
-                v-if="opaqueId === item.display[1]"
-                class="interaction-get1"
-              >
+              <div v-if="opaqueId === item.display[1]" class="interaction-get1">
                 <el-icon
                   v-if="cameraType"
                   aria-label="摄像头"
@@ -92,46 +70,25 @@
               <div
                 v-if="
                   item.display[0] === 'ST' &&
-                    ((isTeacher && isInteraction == 3) ||
-                      (!isTeacher &&
-                        isInteraction == 2 &&
-                        opaqueId === item.display[1]))
+                  ((isTeacher && isInteraction == 3) ||
+                    (!isTeacher && isInteraction == 2 && opaqueId === item.display[1]))
                 "
                 class="interaction-get2"
               >
-                <el-icon
-                  v-if="isSpeak"
-                  aria-label="麦克风"
-                  @click="isTalking('off', 'ST')"
-                >
+                <el-icon v-if="isSpeak" aria-label="麦克风" @click="isTalking('off', 'ST')">
                   <Microphone />
                 </el-icon>
-                <el-icon
-                  v-else
-                  class="is-off"
-                  aria-label="麦克风"
-                  @click="isTalking('on', 'ST')"
-                >
+                <el-icon v-else class="is-off" aria-label="麦克风" @click="isTalking('on', 'ST')">
                   <Mic />
                 </el-icon>
-                <el-icon
-                  aria-label="关闭发言"
-                  @click="stopApplication"
-                >
+                <el-icon aria-label="关闭发言" @click="stopApplication">
                   <CloseBold />
                 </el-icon>
               </div>
             </div>
           </div>
-          <div
-            :id="`video${item.id}`"
-            class="patert"
-          >
-            <VideoPlayer
-              :ref="`video${item.id}`"
-              :is-muted="true"
-              :radius="true"
-            />
+          <div :id="`video${item.id}`" class="patert">
+            <VideoPlayer :ref="`video${item.id}`" :is-muted="true" :radius="true" />
           </div>
         </div>
       </div>
@@ -232,11 +189,7 @@ async function ensureSelfTile(id: string, display: string[]) {
   list.value.push({ display, id, isShow: false });
 }
 
-async function studentMediaStream(
-  stream: MediaStream,
-  display: string[],
-  id: string
-) {
+async function studentMediaStream(stream: MediaStream, display: string[], id: string) {
   let num = await getC(id);
   const current = num > -1 ? list.value[num] : undefined;
   if (current && current.isShow) {
@@ -263,7 +216,7 @@ function getVideoElement(id: string) {
   if (!refs) return undefined;
   const refValue = refs[`video${id}`];
   const components = Array.isArray(refValue) ? refValue : [refValue];
-  const target = components.find((item) => !!item);
+  const target = components.find(item => !!item);
   return (
     target as unknown as {
       videoPlayers?: HTMLVideoElement;
@@ -271,10 +224,7 @@ function getVideoElement(id: string) {
   )?.videoPlayers;
 }
 
-function playStream(
-  element: HTMLVideoElement | undefined,
-  stream: MediaStream
-) {
+function playStream(element: HTMLVideoElement | undefined, stream: MediaStream) {
   if (!element) return;
   try {
     element.srcObject = stream;
@@ -290,7 +240,7 @@ function playStream(
 }
 
 function getC(id: string): Promise<number> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     let bNum = -1;
     try {
       list.value.forEach((item, index) => {

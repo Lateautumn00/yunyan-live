@@ -20,7 +20,15 @@ describe('LiveService.getStudentRooms', () => {
     const p3 = { userId: 'u1', roomId: 'r3', joinedAt: new Date(1704067320000) };
     participant.repo.find.mockResolvedValue([p1, p2, p3]);
     room.repo.findByIds.mockResolvedValue([
-      { roomId: 'r3', title: 'C', liveUserId: 't1', joinCode: 'SC1', status: 1, startTime: new Date(1704067320000), type: 0 }
+      {
+        roomId: 'r3',
+        title: 'C',
+        liveUserId: 't1',
+        joinCode: 'SC1',
+        status: 1,
+        startTime: new Date(1704067320000),
+        type: 0
+      }
     ]);
     const res = await service.getStudentRooms('u1', 2, 2);
     expect(res.total).toBe(3);
@@ -118,7 +126,10 @@ describe('LiveService.batchLeave', () => {
     expect(watchTime.repo.findOne).toHaveBeenCalledTimes(2);
     expect(watchTime.repo.save).not.toHaveBeenCalled();
     expect(participant.repo.find).toHaveBeenCalledWith({
-      where: [{ userId: 'u1', roomId: 'r1' }, { userId: 'u1', roomId: 'r2' }]
+      where: [
+        { userId: 'u1', roomId: 'r1' },
+        { userId: 'u1', roomId: 'r2' }
+      ]
     });
   });
 
@@ -136,17 +147,11 @@ describe('LiveService.batchLeave', () => {
     participant.repo.find.mockResolvedValue([]);
     const wt1 = { userId: 'u1', roomId: 'r1', leftAt: null as Date | null };
     const wt2 = { userId: 'u1', roomId: 'r2', leftAt: null as Date | null };
-    watchTime.repo.findOne
-      .mockResolvedValueOnce(wt1)
-      .mockResolvedValueOnce(wt2);
-    watchTime.repo.count
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(0);
+    watchTime.repo.findOne.mockResolvedValueOnce(wt1).mockResolvedValueOnce(wt2);
+    watchTime.repo.count.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
     const room1 = { roomId: 'r1', liveNums: 2 };
     const room2 = { roomId: 'r2', liveNums: 1 };
-    room.repo.findOne
-      .mockResolvedValueOnce(room1)
-      .mockResolvedValueOnce(room2);
+    room.repo.findOne.mockResolvedValueOnce(room1).mockResolvedValueOnce(room2);
     await service.batchLeave('u1', ['r1', 'r2']);
     expect(wt1.leftAt).toBeInstanceOf(Date);
     expect(wt2.leftAt).toBeInstanceOf(Date);

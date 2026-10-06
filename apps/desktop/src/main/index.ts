@@ -43,7 +43,7 @@ function createWindow(): void {
     mainWindow = null;
   });
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  mainWindow.webContents.setWindowOpenHandler(details => {
     if (isHttpUrl(details.url)) {
       shell.openExternal(details.url);
     }

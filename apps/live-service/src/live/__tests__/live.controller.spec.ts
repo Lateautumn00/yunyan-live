@@ -318,10 +318,7 @@ describe('LiveController gRPC 映射', () => {
       ],
       total: 5
     });
-    const res = await controller.getStudentRooms(
-      { page: 2, page_size: 3 },
-      userIdMetadata('u1')
-    );
+    const res = await controller.getStudentRooms({ page: 2, page_size: 3 }, userIdMetadata('u1'));
     expect(service.getStudentRooms).toHaveBeenCalledWith('u1', 2, 3);
     expect(res.data).toEqual({
       items: [
@@ -429,7 +426,14 @@ describe('LiveController gRPC 映射', () => {
     const { controller, service } = makeController();
     service.getVideoList.mockResolvedValue({
       items: [
-        { roomId: 'r1', title: '第一课', teacherName: '张老师', type: 0, startTime: '1704067200000', count: 3 }
+        {
+          roomId: 'r1',
+          title: '第一课',
+          teacherName: '张老师',
+          type: 0,
+          startTime: '1704067200000',
+          count: 3
+        }
       ],
       total: 1
     });

@@ -153,24 +153,25 @@ function createController() {
     deleteCourseware: vi.fn(() => of({ code: '0', msg: 'ok' }))
   };
   const authService = {
-    getUser: vi.fn(
-      (): Observable<{ code: string; msg: string; data?: UserRow }> =>
-        of({ code: '0', msg: 'ok', data: { id: 't1', username: '张老师', email: 't@b.com', role: 1 } })
+    getUser: vi.fn((): Observable<{ code: string; msg: string; data?: UserRow }> =>
+      of({
+        code: '0',
+        msg: 'ok',
+        data: { id: 't1', username: '张老师', email: 't@b.com', role: 1 }
+      })
     ),
-    batchGetUsers: vi.fn(
-      (): Observable<{ code: string; msg: string; data?: UserRow[] }> =>
-        of({
-          code: '0',
-          msg: 'ok',
-          data: [
-            { id: 'u1', username: '甲同学', email: '', role: 2 },
-            { id: 't1', username: '张老师', email: '', role: 1 }
-          ]
-        })
+    batchGetUsers: vi.fn((): Observable<{ code: string; msg: string; data?: UserRow[] }> =>
+      of({
+        code: '0',
+        msg: 'ok',
+        data: [
+          { id: 'u1', username: '甲同学', email: '', role: 2 },
+          { id: 't1', username: '张老师', email: '', role: 1 }
+        ]
+      })
     ),
-    searchTeachers: vi.fn(
-      (): Observable<{ code: string; msg: string; data?: UserRow[] }> =>
-        of({ code: '0', msg: 'ok', data: [{ id: 't1', username: '张老师', email: '', role: 1 }] })
+    searchTeachers: vi.fn((): Observable<{ code: string; msg: string; data?: UserRow[] }> =>
+      of({ code: '0', msg: 'ok', data: [{ id: 't1', username: '张老师', email: '', role: 1 }] })
     )
   };
   const liveClient = { getService: vi.fn(() => liveService) };
@@ -321,7 +322,13 @@ describe('LiveController create / updateLive / join', () => {
       join_code: 'SA1',
       live_user_id: 'u1'
     });
-    expect(res).toEqual({ roomId: 'r1', roleName: 'student', joinCode: 'S1', liveType: '1', status: 1 });
+    expect(res).toEqual({
+      roomId: 'r1',
+      roleName: 'student',
+      joinCode: 'S1',
+      liveType: '1',
+      status: 1
+    });
   });
 });
 
@@ -444,7 +451,9 @@ describe('LiveController cmsList / getStudentRooms', () => {
 
   it('cmsList 空列表不触发批量用户名查询', async () => {
     const { controller, liveService, authService } = createController();
-    liveService.cmsList.mockReturnValueOnce(of({ code: '0', msg: 'ok', data: { items: [], total: 0 } }));
+    liveService.cmsList.mockReturnValueOnce(
+      of({ code: '0', msg: 'ok', data: { items: [], total: 0 } })
+    );
     const res = await controller.cmsList({}, req('u1'));
     expect(authService.batchGetUsers).not.toHaveBeenCalled();
     expect(res).toEqual({ list: [], total: 0 });

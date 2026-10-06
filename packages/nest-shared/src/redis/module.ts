@@ -11,7 +11,7 @@ import { REDIS_CLIENT } from './token';
       useFactory: (configService: ConfigService) => {
         const client = createRedisClient({
           host: configService.get('REDIS_HOST', '127.0.0.1'),
-          port: configService.get('REDIS_PORT', 6379),
+          port: configService.get('REDIS_PORT', 6379)
         });
 
         client.on('connect', () => {
@@ -25,9 +25,9 @@ import { REDIS_CLIENT } from './token';
 
         return client;
       },
-      inject: [ConfigService],
-    },
+      inject: [ConfigService]
+    }
   ],
-  exports: [REDIS_CLIENT],
+  exports: [REDIS_CLIENT]
 })
 export class RedisModule {}

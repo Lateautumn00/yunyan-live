@@ -2,7 +2,7 @@ import {
   registerDecorator,
   ValidationOptions,
   ValidatorConstraint,
-  ValidatorConstraintInterface,
+  ValidatorConstraintInterface
 } from 'class-validator';
 
 @ValidatorConstraint({ name: 'IsAfterNow', async: false })
@@ -24,7 +24,7 @@ export function IsAfterNow(validationOptions?: ValidationOptions) {
       target: object.constructor,
       propertyName,
       options: validationOptions,
-      validator: IsAfterNowValidator,
+      validator: IsAfterNowValidator
     });
   };
 }

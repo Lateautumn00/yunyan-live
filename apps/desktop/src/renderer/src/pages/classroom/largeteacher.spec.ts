@@ -5,10 +5,22 @@ import ElementPlus from 'element-plus';
 import Classroom from '@/pages/classroom/Classroom.vue';
 
 const stubs = {
-  Top: { template: '<div class="top-stub" />', props: ['isTeacher', 'roomInfo', 'roomId', 'liveType', 'type', 'btn'] },
-  WhiteBoard: { template: '<div class="wb-stub" />', props: ['isTeacher', 'isDisplay', 'roomId', 'opaqueId', 'teacherStage', 'layouts'] },
-  Video: { template: '<div class="video-stub" />', props: ['roomInfo', 'isTeacher', 'opaqueId', 'roomId', 'userName', 'isInteraction'] },
-  Chat: { template: '<div class="chat-stub" />', props: ['roomId', 'liveUserId', 'userName', 'isTeacher', 'isInteraction', 'btn'] },
+  Top: {
+    template: '<div class="top-stub" />',
+    props: ['isTeacher', 'roomInfo', 'roomId', 'liveType', 'type', 'btn']
+  },
+  WhiteBoard: {
+    template: '<div class="wb-stub" />',
+    props: ['isTeacher', 'isDisplay', 'roomId', 'opaqueId', 'teacherStage', 'layouts']
+  },
+  Video: {
+    template: '<div class="video-stub" />',
+    props: ['roomInfo', 'isTeacher', 'opaqueId', 'roomId', 'userName', 'isInteraction']
+  },
+  Chat: {
+    template: '<div class="chat-stub" />',
+    props: ['roomId', 'liveUserId', 'userName', 'isTeacher', 'isInteraction', 'btn']
+  },
   Pople: { template: '<div class="pople-stub" />', props: ['liveUserId'] },
   History: { template: '<div class="history-stub" />', props: ['isTeacher'] },
   Apply: { template: '<div class="apply-stub" />', props: ['isTeacher', 'isInteraction'] },
@@ -17,7 +29,11 @@ const stubs = {
 
 vi.mock('@/api', () => ({
   default: {
-    show_room_info: vi.fn().mockResolvedValue({ code: 1000, data: { status: 0, videoList: [], updateTime: '' }, msg: '' }),
+    show_room_info: vi.fn().mockResolvedValue({
+      code: 1000,
+      data: { status: 0, videoList: [], updateTime: '' },
+      msg: ''
+    }),
     getNowTime: vi.fn().mockResolvedValue({ code: 1000, data: { nowTime: '' }, msg: '' })
   }
 }));
@@ -33,7 +49,9 @@ function createWrapper() {
   });
 }
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('Classroom large-teacher', () => {
   it('renders without throwing', async () => {
@@ -44,7 +62,11 @@ describe('Classroom large-teacher', () => {
 
   it('has correct initial state', () => {
     const wrapper = createWrapper();
-    const vm = wrapper.vm as unknown as { isTeacher: boolean; activeName: string; layoutNum: number };
+    const vm = wrapper.vm as unknown as {
+      isTeacher: boolean;
+      activeName: string;
+      layoutNum: number;
+    };
     expect(vm.isTeacher).toBe(true);
     expect(vm.activeName).toBe('chat');
     expect(vm.layoutNum).toBe(3);
@@ -63,7 +85,10 @@ describe('Classroom large-teacher', () => {
   it('getRoomInfo populates roomInfo', async () => {
     const wrapper = createWrapper();
     await flushPromises();
-    const vm = wrapper.vm as unknown as { roomInfo: Record<string, unknown>; getRoomInfo: () => Promise<void> };
+    const vm = wrapper.vm as unknown as {
+      roomInfo: Record<string, unknown>;
+      getRoomInfo: () => Promise<void>;
+    };
     await vm.getRoomInfo();
     expect(vm.roomInfo).toBeDefined();
   });

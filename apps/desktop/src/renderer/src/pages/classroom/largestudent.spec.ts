@@ -6,9 +6,18 @@ import Classroom from '@/pages/classroom/Classroom.vue';
 
 const stubs = {
   Top: { template: '<div class="top-stub" />', props: ['isTeacher', 'roomInfo', 'roomId', 'btn'] },
-  WhiteBoard: { template: '<div class="wb-stub" />', props: ['isTeacher', 'isDisplay', 'roomId', 'opaqueId', 'teacherStage', 'userName', 'layouts'] },
-  Video: { template: '<div class="video-stub" />', props: ['roomInfo', 'isInteraction', 'opaqueId', 'isTeacher', 'roomId', 'userName'] },
-  Chat: { template: '<div class="chat-stub" />', props: ['roomId', 'liveUserId', 'userName', 'isTeacher', 'isInteraction', 'btn'] },
+  WhiteBoard: {
+    template: '<div class="wb-stub" />',
+    props: ['isTeacher', 'isDisplay', 'roomId', 'opaqueId', 'teacherStage', 'userName', 'layouts']
+  },
+  Video: {
+    template: '<div class="video-stub" />',
+    props: ['roomInfo', 'isInteraction', 'opaqueId', 'isTeacher', 'roomId', 'userName']
+  },
+  Chat: {
+    template: '<div class="chat-stub" />',
+    props: ['roomId', 'liveUserId', 'userName', 'isTeacher', 'isInteraction', 'btn']
+  },
   Pople: { template: '<div class="pople-stub" />', props: ['liveUserId'] },
   History: { template: '<div class="history-stub" />', props: ['isTeacher'] },
   Apply: { template: '<div class="apply-stub" />', props: ['isTeacher', 'isInteraction'] },
@@ -17,7 +26,11 @@ const stubs = {
 
 vi.mock('@/api', () => ({
   default: {
-    show_room_info: vi.fn().mockResolvedValue({ code: 1000, data: { status: 0, videoList: [], updateTime: '' }, msg: '' })
+    show_room_info: vi.fn().mockResolvedValue({
+      code: 1000,
+      data: { status: 0, videoList: [], updateTime: '' },
+      msg: ''
+    })
   }
 }));
 
@@ -32,7 +45,9 @@ function createWrapper() {
   });
 }
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('Classroom large-student', () => {
   it('renders without throwing', async () => {
@@ -43,7 +58,11 @@ describe('Classroom large-student', () => {
 
   it('has correct initial state', () => {
     const wrapper = createWrapper();
-    const vm = wrapper.vm as unknown as { isTeacher: boolean; activeName: string; layoutNum: number };
+    const vm = wrapper.vm as unknown as {
+      isTeacher: boolean;
+      activeName: string;
+      layoutNum: number;
+    };
     expect(vm.isTeacher).toBe(false);
     expect(vm.activeName).toBe('chat');
     expect(vm.layoutNum).toBe(3);

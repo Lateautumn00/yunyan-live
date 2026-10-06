@@ -1,32 +1,17 @@
 <template>
   <div class="classroom-history-video">
     <div class="bottom">
-      <el-button
-        v-if="isPlay"
-        :loading="playPending"
-        @click="startPlayout"
-      >
+      <el-button v-if="isPlay" :loading="playPending" @click="startPlayout">
         <el-icon><VideoPlay /></el-icon>
       </el-button>
-      <el-button
-        v-if="!isPlay"
-        @click="playStop"
-      >
+      <el-button v-if="!isPlay" @click="playStop">
         <el-icon><VideoPause /></el-icon>
       </el-button>
-      <el-icon
-        v-if="!isPlay"
-        class="enlarge"
-        aria-label="全屏"
-        @click="pall"
-      >
+      <el-icon v-if="!isPlay" class="enlarge" aria-label="全屏" @click="pall">
         <FullScreen />
       </el-icon>
     </div>
-    <VideoPlayer
-      ref="videoPlayerRef"
-      :is-muted="false"
-    />
+    <VideoPlayer ref="videoPlayerRef" :is-muted="false" />
   </div>
 </template>
 
@@ -66,7 +51,7 @@ onMounted(() => {
         success: () => {
           recordAttach();
         },
-        error: (error) => {
+        error: error => {
           console.error(error);
         },
         destroyed: () => {}
@@ -86,10 +71,10 @@ function recordAttach() {
   record.value?.attach({
     plugin: 'janus.plugin.recordplay',
     opaqueId: props.opaqueId,
-    success: (pluginHandle) => {
+    success: pluginHandle => {
       recordPlay.value = pluginHandle;
     },
-    error: (error) => {
+    error: error => {
       console.error(error);
     },
     webrtcState: () => {},
@@ -97,7 +82,7 @@ function recordAttach() {
       message(msg, jsep);
     },
     onlocalstream: () => {},
-    onremotestream: (stream) => {
+    onremotestream: stream => {
       attachMediaStream(stream);
       const videoTracks = stream.getVideoTracks();
       if (!videoTracks || videoTracks.length === 0) {
@@ -121,7 +106,7 @@ function message(msg: Record<string, unknown>, jsep?: unknown) {
             audioSend: false,
             videoSend: false
           },
-          success: (answerJsep) => {
+          success: answerJsep => {
             recordPlay.value?.send({
               message: {
                 request: 'start'
@@ -129,7 +114,7 @@ function message(msg: Record<string, unknown>, jsep?: unknown) {
               jsep: answerJsep
             });
           },
-          error: (error) => {
+          error: error => {
             ElMessage.error(String(error));
             console.error(error);
           }

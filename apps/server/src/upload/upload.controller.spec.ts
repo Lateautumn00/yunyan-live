@@ -13,7 +13,7 @@ const h = vi.hoisted(() => ({
   producePdf: false
 }));
 
-vi.mock('fs', async (importOriginal) => {
+vi.mock('fs', async importOriginal => {
   const actual = await importOriginal<typeof import('fs')>();
   return {
     ...actual,
@@ -123,9 +123,12 @@ describe('UploadController.uploadPPT', () => {
     expect(h.written[0]).toMatch(new RegExp(`[\\\\/]ppt[\\\\/]\\d+-\\d+\\.pptx$`));
     expect(h.exec).toHaveLength(1);
     const call = h.exec[0];
-    expect(call?.file).toBe(process.env.SOFFICE_PATH || (process.platform === 'win32'
-      ? 'C:\\Program Files\\LibreOffice\\program\\soffice.exe'
-      : 'soffice'));
+    expect(call?.file).toBe(
+      process.env.SOFFICE_PATH ||
+        (process.platform === 'win32'
+          ? 'C:\\Program Files\\LibreOffice\\program\\soffice.exe'
+          : 'soffice')
+    );
     expect(call?.opts).toEqual({ timeout: PPT_TO_PDF_TIMEOUT_MS });
     expect(call?.args).toEqual(buildPptToPdfArgs(PPT_DIR, h.written[0] as string));
     expect(res.fileUrl).toMatch(/^http:\/\/localhost:3001\/uploads\/ppt\/\d+-\d+\.pdf$/);

@@ -9,12 +9,12 @@ export class AppService {
     return {
       status: 'ok',
       service: '@yunyan-live/server',
-      timestamp: Date.now(),
+      timestamp: Date.now()
     };
   }
 
   private tcpProbe(host: string, port: number, timeoutMs = 3000): Promise<boolean> {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const socket = new Socket();
       let done = false;
       const finish = (result: boolean) => {
@@ -35,27 +35,27 @@ export class AppService {
     const services = [
       { name: 'auth-service', host: '127.0.0.1', port: 50051 },
       { name: 'live-service', host: '127.0.0.1', port: 50052 },
-      { name: 'mail-service', host: '127.0.0.1', port: 50053 },
+      { name: 'mail-service', host: '127.0.0.1', port: 50053 }
     ];
 
     const results = await Promise.all(
-      services.map(async (service) => {
+      services.map(async service => {
         const ok = await this.tcpProbe(service.host, service.port);
         return {
           name: service.name,
           port: service.port,
-          status: ok ? 'ok' : 'unavailable',
+          status: ok ? 'ok' : 'unavailable'
         };
-      }),
+      })
     );
 
-    const allHealthy = results.every((r) => r.status === 'ok');
+    const allHealthy = results.every(r => r.status === 'ok');
 
     return {
       status: allHealthy ? 'ok' : 'degraded',
       service: '@yunyan-live/server',
       timestamp: Date.now(),
-      services: results,
+      services: results
     };
   }
 }

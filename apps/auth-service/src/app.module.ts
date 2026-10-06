@@ -12,11 +12,11 @@ import { AuthModule } from './auth/auth.module';
         type: 'postgres',
         url: config.get('DATABASE_URL'),
         entities: [User],
-        synchronize: false,
+        synchronize: false
       }),
-      inject: [ConfigService],
+      inject: [ConfigService]
     }),
-    AuthModule,
-  ],
+    AuthModule
+  ]
 })
 export class AppModule {}

@@ -29,7 +29,7 @@ export async function getPdfPageCount(url: string): Promise<number> {
 
 export async function getPdfPageDims(
   url: string,
-  pageNum: number,
+  pageNum: number
 ): Promise<{ w: number; h: number }> {
   const doc = await loadPdfDoc(url);
   const page = await doc.getPage(pageNum);
@@ -43,7 +43,7 @@ const renderCache = new Map<string, HTMLCanvasElement>();
 export async function renderPdfPage(
   url: string,
   pageNum: number,
-  scale = 3,
+  scale = 3
 ): Promise<HTMLCanvasElement> {
   const key = `${url}#${pageNum}@${scale}`;
   const hit = renderCache.get(key);

@@ -1,40 +1,21 @@
 <template>
   <div
     class="classroom-chat"
-    :class="
-      !isTeacher && (isInteraction == 2 || isInteraction == 3)
-        ? 'chats1'
-        : 'chats2'
-    "
+    :class="!isTeacher && (isInteraction == 2 || isInteraction == 3) ? 'chats1' : 'chats2'"
   >
     <div class="con">
-      <ul
-        ref="dialogueList"
-        @scroll="fetchData"
-      >
-        <li
-          v-for="(item, index) in tanmuMessage"
-          :key="index"
-        >
-          <div
-            v-if="!item.liveUser"
-            :class="item.isMe ? 'user end' : 'user'"
-          >
+      <ul ref="dialogueList" @scroll="fetchData">
+        <li v-for="(item, index) in tanmuMessage" :key="index">
+          <div v-if="!item.liveUser" :class="item.isMe ? 'user end' : 'user'">
             <div class="name">
               {{ item.userName }}
             </div>
-            <div
-              v-if="!item.isMe && item.isTeacher"
-              class="span teacher"
-            >
+            <div v-if="!item.isMe && item.isTeacher" class="span teacher">
               <el-icon><UserFilled /></el-icon>
               主讲
             </div>
 
-            <div
-              v-if="item.isMe"
-              class="span me"
-            >
+            <div v-if="item.isMe" class="span me">
               <el-icon><UserFilled /></el-icon> 我
             </div>
           </div>
@@ -94,35 +75,17 @@
         "
         placement="top"
       >
-        <div
-          v-if="!isTeacher"
-          class="hand"
-          :class="isInteraction == 3 ? 'allowed' : ''"
-        >
-          <el-icon
-            v-if="btn && isInteraction === 0"
-            aria-label="举手发言"
-            @click="apply(true, 3)"
-          >
+        <div v-if="!isTeacher" class="hand" :class="isInteraction == 3 ? 'allowed' : ''">
+          <el-icon v-if="btn && isInteraction === 0" aria-label="举手发言" @click="apply(true, 3)">
             <RaiseHand />
           </el-icon>
-          <el-icon
-            v-if="btn && isInteraction === 1"
-            aria-label="取消举手"
-            @click="apply(false, 6)"
-          >
+          <el-icon v-if="btn && isInteraction === 1" aria-label="取消举手" @click="apply(false, 6)">
             <ArrowUpBold />
           </el-icon>
-          <el-icon
-            v-if="btn && isInteraction === 2"
-            aria-label="退出发言"
-          >
+          <el-icon v-if="btn && isInteraction === 2" aria-label="退出发言">
             <ArrowUpBold />
           </el-icon>
-          <el-icon
-            v-if="btn && isInteraction === 3"
-            aria-label="禁止举手"
-          >
+          <el-icon v-if="btn && isInteraction === 3" aria-label="禁止举手">
             <RaiseHand />
           </el-icon>
         </div>
@@ -141,11 +104,7 @@
       >
         <Promotion />
       </el-icon>
-      <el-icon
-        v-else
-        class="send"
-        aria-label="发送"
-      >
+      <el-icon v-else class="send" aria-label="发送">
         <Promotion />
       </el-icon>
     </div>
@@ -171,23 +130,26 @@ interface TanmuItem {
   liveUser?: boolean;
 }
 
-const props = withDefaults(defineProps<{
-  liveUserId?: string;
-  roomId?: string;
-  userName?: string;
-  isTeacher?: boolean;
-  isInteraction?: number;
-  btn?: boolean;
-  useToken?: boolean;
-}>(), {
-  liveUserId: '',
-  roomId: '',
-  userName: '',
-  isTeacher: false,
-  isInteraction: 0,
-  btn: false,
-  useToken: true,
-});
+const props = withDefaults(
+  defineProps<{
+    liveUserId?: string;
+    roomId?: string;
+    userName?: string;
+    isTeacher?: boolean;
+    isInteraction?: number;
+    btn?: boolean;
+    useToken?: boolean;
+  }>(),
+  {
+    liveUserId: '',
+    roomId: '',
+    userName: '',
+    isTeacher: false,
+    isInteraction: 0,
+    btn: false,
+    useToken: true
+  }
+);
 
 const emit = defineEmits<{
   (e: 'apply', status: boolean, num: number): void;
@@ -284,7 +246,7 @@ const { run: updateForbid } = useAsyncAction(
     await api.updateForbid(data);
     speechClose.value = status;
   },
-  { onError: (e) => console.error(e) }
+  { onError: e => console.error(e) }
 );
 
 function createTutorSocket() {
@@ -430,7 +392,10 @@ function reconnect() {
   }, 4000);
 }
 
-function infoList(data: { liveMsg?: { info?: { host?: string }; msg?: string; name?: string }; info?: { liveUserId?: string; isTeacher?: boolean } }) {
+function infoList(data: {
+  liveMsg?: { info?: { host?: string }; msg?: string; name?: string };
+  info?: { liveUserId?: string; isTeacher?: boolean };
+}) {
   const { liveMsg } = data;
   if (liveMsg && liveMsg.info && liveMsg.info.host) {
     return;
@@ -438,10 +403,7 @@ function infoList(data: { liveMsg?: { info?: { host?: string }; msg?: string; na
   const { msg } = data.liveMsg ?? {};
   let liveUser = false;
   const len = tanmuMessage.value.length;
-  if (
-    len > 0 &&
-    data.info?.liveUserId == tanmuMessage.value[len - 1]?.liveUserId
-  ) {
+  if (len > 0 && data.info?.liveUserId == tanmuMessage.value[len - 1]?.liveUserId) {
     liveUser = true;
   }
   tanmuMessage.value.push({
@@ -590,30 +552,30 @@ defineExpose({ createTutorSocket, liveSocketClose, setSocketSend });
           .name {
             font-weight: bold;
           }
-            .span {
-              height: 16px;
-              line-height: 16px;
-              border-radius: 8px;
-              padding-left: 10px;
-              padding-right: 10px;
-              font-weight: bold;
-              display: flex;
-              align-items: center;
-              .el-icon {
-                font-size: 10px;
-                width: 10px;
-                height: 12px;
-                margin-right: 4px;
-              }
+          .span {
+            height: 16px;
+            line-height: 16px;
+            border-radius: 8px;
+            padding-left: 10px;
+            padding-right: 10px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            .el-icon {
+              font-size: 10px;
+              width: 10px;
+              height: 12px;
+              margin-right: 4px;
             }
-            .teacher {
-              background: rgba(248, 130, 26, 0.2);
-              color: #f8821a;
-            }
-            .me {
-              background: rgba(97, 186, 71, 0.2);
-              color: #61ba47;
-            }
+          }
+          .teacher {
+            background: rgba(248, 130, 26, 0.2);
+            color: #f8821a;
+          }
+          .me {
+            background: rgba(97, 186, 71, 0.2);
+            color: #61ba47;
+          }
         }
         .message {
           background: #ebebf0;

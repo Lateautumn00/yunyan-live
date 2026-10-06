@@ -48,7 +48,7 @@ export function useClassroomWhiteboard(options: ClassroomWhiteboardOptions) {
     const datastring = JSON.stringify(data);
     const base = 10240;
     const n = Math.ceil(datastring.length / base);
-    new Promise<void>((resolve) => {
+    new Promise<void>(resolve => {
       const string = datastring;
       for (let i = 0; i < n; i++) {
         const v = string.substring(i * base, (i + 1) * base);

@@ -41,7 +41,7 @@ function freePort(): Promise<number> {
   });
 }
 
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 async function waitFor(cond: () => boolean, label: string, timeout = 4000): Promise<void> {
   const start = Date.now();
@@ -62,7 +62,7 @@ function connect(roomId: string, doc: Y.Doc): WebsocketProvider {
     connect: true,
     disableBc: true,
     params: { roomId, token },
-    WebSocketPolyfill: NodeWebSocket as unknown as typeof WebSocket,
+    WebSocketPolyfill: NodeWebSocket as unknown as typeof WebSocket
   });
   providers.push(provider);
   return provider;
@@ -86,8 +86,8 @@ afterAll(async () => {
   }
   await sleep(300);
   for (const client of main.wss.clients) client.terminate();
-  await new Promise<void>((resolve) => main.wss.close(() => resolve()));
-  await new Promise<void>((resolve) => main.server.close(() => resolve()));
+  await new Promise<void>(resolve => main.wss.close(() => resolve()));
+  await new Promise<void>(resolve => main.server.close(() => resolve()));
 }, 15000);
 
 describe('yjs-ws realtime sync', () => {
@@ -129,7 +129,7 @@ describe('yjs-ws realtime sync', () => {
     pA.awareness.setLocalStateField('laser', { x: 1, y: 2 });
     await waitFor(
       () => pB.awareness.getStates().get(docA.clientID)?.laser?.x === 1,
-      'B receives laser awareness',
+      'B receives laser awareness'
     );
   }, 20000);
 
@@ -146,14 +146,14 @@ describe('yjs-ws realtime sync', () => {
     pA.awareness.setLocalStateField('laser', { x: 9, y: 9 });
     await waitFor(
       () => pB.awareness.getStates().get(docA.clientID)?.laser?.x === 9,
-      'B receives laser awareness',
+      'B receives laser awareness'
     );
 
     pA.destroy();
     await sleep(400);
     await waitFor(
       () => !pB.awareness.getStates().has(docA.clientID),
-      'stale awareness removed after graceful disconnect',
+      'stale awareness removed after graceful disconnect'
     );
   }, 20000);
 
@@ -170,7 +170,7 @@ describe('yjs-ws realtime sync', () => {
     pA.awareness.setLocalStateField('laser', { x: 5, y: 5 });
     await waitFor(
       () => pB.awareness.getStates().get(docA.clientID)?.laser?.x === 5,
-      'B receives laser awareness',
+      'B receives laser awareness'
     );
 
     pA.shouldConnect = false;
@@ -179,7 +179,7 @@ describe('yjs-ws realtime sync', () => {
     await sleep(400);
     await waitFor(
       () => !pB.awareness.getStates().has(docA.clientID),
-      'stale awareness removed after abrupt disconnect',
+      'stale awareness removed after abrupt disconnect'
     );
   }, 20000);
 });

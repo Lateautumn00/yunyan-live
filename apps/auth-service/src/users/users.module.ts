@@ -6,6 +6,6 @@ import { User } from '@yunyan-live/shared';
 @Module({
   imports: [TypeOrmModule.forFeature([User])],
   providers: [UsersService],
-  exports: [UsersService],
+  exports: [UsersService]
 })
 export class UsersModule {}

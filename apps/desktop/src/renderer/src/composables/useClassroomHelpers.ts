@@ -16,8 +16,16 @@ interface ClassroomHelpersOptions {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export function useClassroomHelpers(options: ClassroomHelpersOptions) {
-  const { top, chat, pople, video, liveType, type, audioTarget, diaBlaSyncsLiveType = false } =
-    options;
+  const {
+    top,
+    chat,
+    pople,
+    video,
+    liveType,
+    type,
+    audioTarget,
+    diaBlaSyncsLiveType = false
+  } = options;
 
   function sendTime(time: string) {
     top.value?.sendTime(time);
@@ -36,12 +44,7 @@ export function useClassroomHelpers(options: ClassroomHelpersOptions) {
     if (diaBlaSyncsLiveType) setLiveType(liveType.value);
   }
 
-  function openLive(
-    status: boolean,
-    _liveType: string,
-    _type: string,
-    liveTimeLen: number
-  ) {
+  function openLive(status: boolean, _liveType: string, _type: string, liveTimeLen: number) {
     if (_liveType !== 'screen') setLiveType(_liveType);
     type.value = _type;
     video.value?.openLive(status, _liveType, _type, liveTimeLen);

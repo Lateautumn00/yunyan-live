@@ -1,4 +1,11 @@
-import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+  Logger
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { extname, join } from 'path';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
@@ -29,22 +36,29 @@ export class UploadController {
   private readonly logger = new Logger(UploadController.name);
 
   @Post('image')
-  @UseInterceptors(FileInterceptor('file', {
-    limits: { fileSize: 10 * 1024 * 1024 },
-    fileFilter: (_req: Record<string, unknown>, file: { mimetype: string }, cb: (err: Error | null, accept: boolean) => void) => {
-      if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|bmp)$/)) {
-        return cb(new BadRequestException('仅支持图片格式 (jpg/png/gif/bmp)'), false);
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (
+        _req: Record<string, unknown>,
+        file: { mimetype: string },
+        cb: (err: Error | null, accept: boolean) => void
+      ) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|bmp)$/)) {
+          return cb(new BadRequestException('仅支持图片格式 (jpg/png/gif/bmp)'), false);
+        }
+        cb(null, true);
       }
-      cb(null, true);
-    },
-  }))
+    })
+  )
   uploadImage(@UploadedFile() file: UploadFile) {
     if (!file) {
       throw new BadRequestException('请选择文件');
     }
     const dir = join(UPLOAD_DIR, 'images');
     ensureDir(dir);
-    const filename = Date.now() + '-' + Math.round(Math.random() * 1e9) + extname(file.originalname);
+    const filename =
+      Date.now() + '-' + Math.round(Math.random() * 1e9) + extname(file.originalname);
     writeFileSync(join(dir, filename), file.buffer);
     this.logger.log(`图片上传成功: ${filename}`);
     const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
@@ -53,16 +67,22 @@ export class UploadController {
   }
 
   @Post('ppt')
-  @UseInterceptors(FileInterceptor('file', {
-    limits: { fileSize: 50 * 1024 * 1024 },
-    fileFilter: (_req: Record<string, unknown>, file: { originalname: string }, cb: (err: Error | null, accept: boolean) => void) => {
-      const name = file.originalname.toLowerCase();
-      if (!name.endsWith('.ppt') && !name.endsWith('.pptx')) {
-        return cb(new BadRequestException('仅支持 .ppt 和 .pptx 格式'), false);
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 50 * 1024 * 1024 },
+      fileFilter: (
+        _req: Record<string, unknown>,
+        file: { originalname: string },
+        cb: (err: Error | null, accept: boolean) => void
+      ) => {
+        const name = file.originalname.toLowerCase();
+        if (!name.endsWith('.ppt') && !name.endsWith('.pptx')) {
+          return cb(new BadRequestException('仅支持 .ppt 和 .pptx 格式'), false);
+        }
+        cb(null, true);
       }
-      cb(null, true);
-    },
-  }))
+    })
+  )
   async uploadPPT(@UploadedFile() file: UploadFile) {
     if (!file) {
       throw new BadRequestException('请选择文件');

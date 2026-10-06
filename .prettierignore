@@ -1,7 +1,7 @@
-# legacy app to be migrated/removed (P3/P4)
-src/
-static/
-test/
+# legacy app to be migrated/removed (P3/P4, root-level only)
+/src/
+/static/
+/test/
 .electron-vue/
 build/
 dist/

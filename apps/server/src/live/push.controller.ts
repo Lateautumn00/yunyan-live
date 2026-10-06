@@ -1,10 +1,5 @@
 import { Body, Controller, Inject, Post, UseGuards } from '@nestjs/common';
-import {
-  JwtAuthGuard,
-  REDIS_CLIENT,
-  UpdateForbidDto,
-  writeForbid
-} from '@yunyan-live/nest-shared';
+import { JwtAuthGuard, REDIS_CLIENT, UpdateForbidDto, writeForbid } from '@yunyan-live/nest-shared';
 import type { Redis } from 'ioredis';
 
 /**

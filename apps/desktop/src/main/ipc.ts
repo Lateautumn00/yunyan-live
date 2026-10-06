@@ -10,7 +10,7 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
       types: ['window', 'screen'],
       thumbnailSize: { width: 320, height: 200 }
     });
-    return sources.map((source) => ({
+    return sources.map(source => ({
       id: source.id,
       name: source.name,
       thumbnailDataUrl: source.thumbnail.toDataURL(),

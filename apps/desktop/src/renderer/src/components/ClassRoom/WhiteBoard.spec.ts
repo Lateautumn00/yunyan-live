@@ -14,27 +14,61 @@ const konvaMocks = vi.hoisted(() => {
     _width = 800;
     _height = 600;
     children: unknown[] = [];
-    constructor(_opts?: unknown) { MockStage.instances.push(this); }
-    add(_child: unknown) { this.children.push(_child); }
-    draggable(_val?: unknown) { return this; }
-    x(_val?: unknown) { if (_val !== undefined) this._x = _val as number; return this._x; }
-    y(_val?: unknown) { if (_val !== undefined) this._y = _val as number; return this._y; }
-    width(_val?: unknown) { if (_val !== undefined) this._width = _val as number; return this._width; }
-    height(_val?: unknown) { if (_val !== undefined) this._height = _val as number; return this._height; }
-    scaleX(_val?: unknown) { return 1; }
-    scaleY(_val?: unknown) { return 1; }
-    scale(_val?: unknown) { return this; }
+    constructor(_opts?: unknown) {
+      MockStage.instances.push(this);
+    }
+    add(_child: unknown) {
+      this.children.push(_child);
+    }
+    draggable(_val?: unknown) {
+      return this;
+    }
+    x(_val?: unknown) {
+      if (_val !== undefined) this._x = _val as number;
+      return this._x;
+    }
+    y(_val?: unknown) {
+      if (_val !== undefined) this._y = _val as number;
+      return this._y;
+    }
+    width(_val?: unknown) {
+      if (_val !== undefined) this._width = _val as number;
+      return this._width;
+    }
+    height(_val?: unknown) {
+      if (_val !== undefined) this._height = _val as number;
+      return this._height;
+    }
+    scaleX(_val?: unknown) {
+      return 1;
+    }
+    scaleY(_val?: unknown) {
+      return 1;
+    }
+    scale(_val?: unknown) {
+      return this;
+    }
     batchDraw() {}
     draw() {}
-    off() { this._handlers = {}; }
+    off() {
+      this._handlers = {};
+    }
     on(evt: string, cb: (e?: unknown) => void) {
-      evt.split(' ').forEach(k => { this._handlers[k] = cb; });
+      evt.split(' ').forEach(k => {
+        this._handlers[k] = cb;
+      });
     }
     // 可设状态：绘制类用例通过 stage._pointer 模拟鼠标落点
     _pointer = { x: 100, y: 100 };
-    getPointerPosition() { return this._pointer; }
-    getChildren() { return this.children; }
-    find(_sel?: string) { return []; }
+    getPointerPosition() {
+      return this._pointer;
+    }
+    getChildren() {
+      return this.children;
+    }
+    find(_sel?: string) {
+      return [];
+    }
     getAttr(key: string) {
       if (key === 'width') return this._width;
       if (key === 'height') return this._height;
@@ -44,7 +78,9 @@ const konvaMocks = vi.hoisted(() => {
       if (key === 'scaleY') return 1;
       return 0;
     }
-    container() { return { getBoundingClientRect: () => ({ left: 0, top: 0 }) }; }
+    container() {
+      return { getBoundingClientRect: () => ({ left: 0, top: 0 }) };
+    }
     destroy() {}
     getAbsoluteTransform() {
       return { copy: () => ({ invert: () => ({ point: (p: { x: number; y: number }) => p }) }) };
@@ -72,26 +108,53 @@ const konvaMocks = vi.hoisted(() => {
     destroy() {}
     moveToTop() {}
     destroyChildren() {
-      this.children.forEach(c => { (c as { _layer?: MockLayer | null })._layer = null; });
+      this.children.forEach(c => {
+        (c as { _layer?: MockLayer | null })._layer = null;
+      });
       this.children = [];
     }
     add(_child: unknown) {
       (_child as { _layer?: MockLayer | null })._layer = this;
       this.children.push(_child);
     }
-    x(_val?: unknown) { if (_val !== undefined) this._x = _val as number; return this._x; }
-    y(_val?: unknown) { if (_val !== undefined) this._y = _val as number; return this._y; }
-    width() { return 800; }
-    height() { return 600; }
+    x(_val?: unknown) {
+      if (_val !== undefined) this._x = _val as number;
+      return this._x;
+    }
+    y(_val?: unknown) {
+      if (_val !== undefined) this._y = _val as number;
+      return this._y;
+    }
+    width() {
+      return 800;
+    }
+    height() {
+      return 600;
+    }
     // 有状态：showPage/setZoom 会写入层缩放，视口同步用例据此断言重应用
     _sx = 1;
     _sy = 1;
-    scaleX(_val?: unknown) { if (_val !== undefined) this._sx = _val as number; return this._sx; }
-    scaleY(_val?: unknown) { if (_val !== undefined) this._sy = _val as number; return this._sy; }
-    getClientRect() { return { x: 0, y: 0, width: 100, height: 100 }; }
-    toArray() { return this.children; }
-    getChildren() { return this.children; }
-    find(_sel?: string) { return []; }    getAttr(key: string) {
+    scaleX(_val?: unknown) {
+      if (_val !== undefined) this._sx = _val as number;
+      return this._sx;
+    }
+    scaleY(_val?: unknown) {
+      if (_val !== undefined) this._sy = _val as number;
+      return this._sy;
+    }
+    getClientRect() {
+      return { x: 0, y: 0, width: 100, height: 100 };
+    }
+    toArray() {
+      return this.children;
+    }
+    getChildren() {
+      return this.children;
+    }
+    find(_sel?: string) {
+      return [];
+    }
+    getAttr(key: string) {
       if (key === 'width') return 800;
       if (key === 'height') return 600;
       if (key === 'x') return this._x;
@@ -124,86 +187,180 @@ const konvaMocks = vi.hoisted(() => {
       if (attrs?.width !== undefined) this._width = attrs.width as number;
       if (attrs?.height !== undefined) this._height = attrs.height as number;
     }
-    getLayer() { return this._layer; }
+    getLayer() {
+      return this._layer;
+    }
     _visible = true;
-    show() { this._visible = true; }
-    hide() { this._visible = false; }
-    visible(v?: boolean) { if (v !== undefined) this._visible = v; return this._visible; }
+    show() {
+      this._visible = true;
+    }
+    hide() {
+      this._visible = false;
+    }
+    visible(v?: boolean) {
+      if (v !== undefined) this._visible = v;
+      return this._visible;
+    }
     draw() {}
     batchDraw() {}
     destroy() {}
     getAttrs() {
       return {
-        x: this._x, y: this._y, width: this._width, height: this._height,
-        scaleX: this._scaleX, scaleY: this._scaleY, offsetX: 0, offsetY: 0,
-        visible: true, image: { currentSrc: '' }
+        x: this._x,
+        y: this._y,
+        width: this._width,
+        height: this._height,
+        scaleX: this._scaleX,
+        scaleY: this._scaleY,
+        offsetX: 0,
+        offsetY: 0,
+        visible: true,
+        image: { currentSrc: '' }
       };
     }
     setAttrs(_a: unknown) {}
-    zIndex(_val?: unknown) { return 0; }
-    getClientRect() { return { x: 0, y: 0, width: 100, height: 100 }; }
-    scaleX(_val?: unknown) { if (_val !== undefined) this._scaleX = _val as number; return this._scaleX; }
-    scaleY(_val?: unknown) { if (_val !== undefined) this._scaleY = _val as number; return this._scaleY; }
+    zIndex(_val?: unknown) {
+      return 0;
+    }
+    getClientRect() {
+      return { x: 0, y: 0, width: 100, height: 100 };
+    }
+    scaleX(_val?: unknown) {
+      if (_val !== undefined) this._scaleX = _val as number;
+      return this._scaleX;
+    }
+    scaleY(_val?: unknown) {
+      if (_val !== undefined) this._scaleY = _val as number;
+      return this._scaleY;
+    }
     getAttr(_key: string) {
       if (_key === 'visible') return true;
       if (_key === 'image') return { currentSrc: '' };
       return 0;
     }
-    getClassName() { return 'Node'; }
+    getClassName() {
+      return 'Node';
+    }
     add(_child: unknown) {}
-    draggable(_val?: unknown) { if (_val !== undefined) this._draggable = _val as boolean; return this._draggable; }
-    getPointerPosition() { return { x: 100, y: 100 }; }
-    off(_evt?: string) { this._handlers = {}; return this; }
-    on(evt: string, cb: (e?: unknown) => void) {
-      evt.split(' ').forEach(k => { this._handlers[k] = cb; });
+    draggable(_val?: unknown) {
+      if (_val !== undefined) this._draggable = _val as boolean;
+      return this._draggable;
+    }
+    getPointerPosition() {
+      return { x: 100, y: 100 };
+    }
+    off(_evt?: string) {
+      this._handlers = {};
       return this;
     }
-    fire(evt: string, e?: unknown) { this._handlers[evt]?.(e); }
-    x(_val?: unknown) { if (_val !== undefined) this._x = _val as number; return this._x; }
-    y(_val?: unknown) { if (_val !== undefined) this._y = _val as number; return this._y; }
-    width(_val?: unknown) { if (_val !== undefined) this._width = _val as number; return this._width; }
-    height(_val?: unknown) { if (_val !== undefined) this._height = _val as number; return this._height; }
+    on(evt: string, cb: (e?: unknown) => void) {
+      evt.split(' ').forEach(k => {
+        this._handlers[k] = cb;
+      });
+      return this;
+    }
+    fire(evt: string, e?: unknown) {
+      this._handlers[evt]?.(e);
+    }
+    x(_val?: unknown) {
+      if (_val !== undefined) this._x = _val as number;
+      return this._x;
+    }
+    y(_val?: unknown) {
+      if (_val !== undefined) this._y = _val as number;
+      return this._y;
+    }
+    width(_val?: unknown) {
+      if (_val !== undefined) this._width = _val as number;
+      return this._width;
+    }
+    height(_val?: unknown) {
+      if (_val !== undefined) this._height = _val as number;
+      return this._height;
+    }
   }
 
   class MockLine extends MockNode {
     _points: number[] = [];
-    points(_val?: number[]) { if (_val !== undefined) this._points = _val; return this._points; }
+    points(_val?: number[]) {
+      if (_val !== undefined) this._points = _val;
+      return this._points;
+    }
   }
   class MockArrow extends MockNode {
     _points: number[] = [];
-    points(_val?: number[]) { if (_val !== undefined) this._points = _val; return this._points; }
+    points(_val?: number[]) {
+      if (_val !== undefined) this._points = _val;
+      return this._points;
+    }
   }
   class MockText extends MockNode {
-    text(_val?: unknown) { return ''; }
-    fontSize(_val?: unknown) { return 14; }
-    fontFamily(_val?: unknown) { return 'Arial'; }
-    fill(_val?: unknown) { return '#000'; }
-    align(_val?: unknown) { return 'left'; }
-    lineHeight(_val?: unknown) { return 1.1; }
+    text(_val?: unknown) {
+      return '';
+    }
+    fontSize(_val?: unknown) {
+      return 14;
+    }
+    fontFamily(_val?: unknown) {
+      return 'Arial';
+    }
+    fill(_val?: unknown) {
+      return '#000';
+    }
+    align(_val?: unknown) {
+      return 'left';
+    }
+    lineHeight(_val?: unknown) {
+      return 1.1;
+    }
   }
   class MockCircle extends MockNode {
     _radius = 0;
-    radius(_val?: unknown) { if (_val !== undefined) this._radius = _val as number; return this._radius; }
+    radius(_val?: unknown) {
+      if (_val !== undefined) this._radius = _val as number;
+      return this._radius;
+    }
   }
   class MockRect extends MockNode {}
   class MockImage extends MockNode {}
   class MockEllipse extends MockNode {
     _rx = 0;
     _ry = 0;
-    radiusX(val?: unknown) { if (val !== undefined) this._rx = val as number; return this._rx; }
-    radiusY(val?: unknown) { if (val !== undefined) this._ry = val as number; return this._ry; }
+    radiusX(val?: unknown) {
+      if (val !== undefined) this._rx = val as number;
+      return this._rx;
+    }
+    radiusY(val?: unknown) {
+      if (val !== undefined) this._ry = val as number;
+      return this._ry;
+    }
   }
   class MockTransformer extends MockNode {
     _nodes: unknown[] = [];
     _keepRatio = false;
-    nodes(v?: unknown[]) { if (v !== undefined) this._nodes = v; return this._nodes; }
-    keepRatio(v?: boolean) { if (v !== undefined) this._keepRatio = v; return this._keepRatio; }
+    nodes(v?: unknown[]) {
+      if (v !== undefined) this._nodes = v;
+      return this._nodes;
+    }
+    keepRatio(v?: boolean) {
+      if (v !== undefined) this._keepRatio = v;
+      return this._keepRatio;
+    }
   }
   class MockGroup extends MockNode {}
 
   return {
-    MockStage, MockLayer, MockLine, MockArrow, MockText,
-    MockCircle, MockRect, MockImage, MockEllipse, MockTransformer, MockGroup,
+    MockStage,
+    MockLayer,
+    MockLine,
+    MockArrow,
+    MockText,
+    MockCircle,
+    MockRect,
+    MockImage,
+    MockEllipse,
+    MockTransformer,
+    MockGroup
   };
 });
 
@@ -219,7 +376,7 @@ vi.mock('konva', () => ({
     Rect: konvaMocks.MockRect,
     Image: konvaMocks.MockImage,
     Transformer: konvaMocks.MockTransformer,
-    Group: konvaMocks.MockGroup,
+    Group: konvaMocks.MockGroup
   }
 }));
 
@@ -227,19 +384,19 @@ vi.mock('konva', () => ({
 const liveMocks = vi.hoisted(() => ({
   saveCourseware: vi.fn(),
   coursewareList: vi.fn(),
-  deleteCourseware: vi.fn(),
+  deleteCourseware: vi.fn()
 }));
 
 vi.mock('@/api/backstage', () => ({
   default: {
     save_courseware: (params: unknown) => liveMocks.saveCourseware(params),
     courseware_list: (params: unknown) => liveMocks.coursewareList(params),
-    delete_courseware: (params: unknown) => liveMocks.deleteCourseware(params),
-  },
+    delete_courseware: (params: unknown) => liveMocks.deleteCourseware(params)
+  }
 }));
 
 // WhiteBoard setup 读取 route.query.userId；测试环境无 router，注入会让全部用例在 mount 时崩溃
-vi.mock('vue-router', async (importOriginal) => {
+vi.mock('vue-router', async importOriginal => {
   const actual = await importOriginal<typeof import('vue-router')>();
   return {
     ...actual,
@@ -251,8 +408,8 @@ vi.mock('vue-router', async (importOriginal) => {
       hash: '',
       matched: [],
       meta: {},
-      name: null,
-    }),
+      name: null
+    })
   };
 });
 
@@ -269,7 +426,7 @@ vi.mock('./whiteboard/pdfAsset', () => ({
   loadPdfDoc: vi.fn(),
   getPdfPageCount: vi.fn(),
   getPdfPageDims: vi.fn(),
-  renderPdfPage: vi.fn(() => Promise.reject(new Error('test: pdf render unavailable'))),
+  renderPdfPage: vi.fn(() => Promise.reject(new Error('test: pdf render unavailable')))
 }));
 
 function mountWB(props: Record<string, unknown> = {}) {
@@ -290,14 +447,14 @@ function mountWB(props: Record<string, unknown> = {}) {
       opaqueId: 'op1',
       userName: 'teacher',
       layouts: 1,
-      ...props,
+      ...props
     },
     attachTo: document.body,
     global: {
       stubs: { teleport: true },
       plugins: [ElementPlus],
-      components: { ...ElementPlusIconsVue },
-    },
+      components: { ...ElementPlusIconsVue }
+    }
   });
   return wrapper;
 }
@@ -453,12 +610,17 @@ describe('WhiteBoard.vue', () => {
 
 // ── PPT 课件导入 / 定位 / 删除 ────────────────────────────────────────────
 type PPTVM = WBVM & {
-  fileList: Array<{ filename: string; filext: string; fileid: string; fileurl?: string }> | { value: Array<{ filename: string; filext: string; fileid: string; fileurl?: string }> };
+  fileList:
+    | Array<{ filename: string; filext: string; fileid: string; fileurl?: string }>
+    | { value: Array<{ filename: string; filext: string; fileid: string; fileurl?: string }> };
   curLayerIndex: number | { value: number };
   toastMsg: string | { value: string };
   showFile: (ids: string) => boolean;
   showLayer: (index: number) => void;
-  openCourseware: (item: { filename: string; fileid: string; fileurl?: string }, index: number) => Promise<void>;
+  openCourseware: (
+    item: { filename: string; fileid: string; fileurl?: string },
+    index: number
+  ) => Promise<void>;
   delFile: (i: number) => Promise<void>;
   delLayer: (index: number) => void;
   setFileItemId: (index: number, fileid: string) => void;
@@ -477,7 +639,14 @@ type PPTVM = WBVM & {
     };
     setViewport: (x: number, y: number) => void;
   } | null;
-  viewState: () => { zoom: number; layerScale: number; x: number; y: number; stageX: number; stageY: number };
+  viewState: () => {
+    zoom: number;
+    layerScale: number;
+    x: number;
+    y: number;
+    stageX: number;
+    stageY: number;
+  };
   toLayerCoords: (pos: { x: number; y: number }) => { x: number; y: number };
   applyRemoteViewport: () => void;
   syncViewportToYjs: () => void;
@@ -486,7 +655,7 @@ type PPTVM = WBVM & {
 
 function unwrapVal<T>(v: T | { value: T }): T {
   return v !== null && typeof v === 'object' && 'value' in (v as object)
-    ? ((v as { value: T }).value)
+    ? (v as { value: T }).value
     : (v as T);
 }
 
@@ -542,7 +711,10 @@ describe('WhiteBoard.vue PPT 课件', () => {
     vi.clearAllMocks();
     vi.stubEnv('VITE_UPLOAD_PPT_URL', 'http://mock.test/ppt');
     liveMocks.saveCourseware.mockResolvedValue({ code: 1000, data: null });
-    liveMocks.coursewareList.mockResolvedValue({ code: 1000, data: { list: [], pageInfo: { totalElements: 0 } } });
+    liveMocks.coursewareList.mockResolvedValue({
+      code: 1000,
+      data: { list: [], pageInfo: { totalElements: 0 } }
+    });
     liveMocks.deleteCourseware.mockResolvedValue({ code: 1000, data: null });
   });
   afterEach(() => {
@@ -557,7 +729,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
     vi.mocked(getPdfPageDims).mockImplementation((_url, pageNum) =>
       failSecondPage && pageNum === 2
         ? Promise.reject(new Error('mock boom'))
-        : Promise.resolve({ w: 1000, h: 500 }),
+        : Promise.resolve({ w: 1000, h: 500 })
     );
 
     const fetchMock = vi.fn().mockResolvedValue({
@@ -565,15 +737,15 @@ describe('WhiteBoard.vue PPT 课件', () => {
       json: () =>
         Promise.resolve({
           code: 1000,
-          data: { fileUrl: 'http://mock.test/ppt/deck.pdf' },
-        }),
+          data: { fileUrl: 'http://mock.test/ppt/deck.pdf' }
+        })
     });
     vi.stubGlobal('fetch', fetchMock);
 
     const input = wrapper.find('input[accept=".ppt,.pptx"]');
     expect(input.exists()).toBe(true);
     const file = new File(['x'], '测试课件.pptx', {
-      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
     });
     Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
     await input.trigger('change');
@@ -589,7 +761,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     expect(unwrapVal(vm.fileList)[0]!.filename).toBe('测试课件');
     // 上传零建页：fileid 留空，画布保持挂载时状态
@@ -614,7 +786,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     expect(String(unwrapVal(vm.toastMsg))).toContain('请点击列表打开');
     expect(wrapper.find('.fileList').isVisible()).toBe(true);
@@ -633,7 +805,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     // 上传零建页：seed 页保留，fileid 待点击创建
     expect(vm.rendererPageCount()).toBe(1);
@@ -658,7 +830,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     // 上传零建页零节点
     expect(vm.rendererPageCount()).toBe(1);
@@ -679,7 +851,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     // 第 2 次上传同样仅登记
     await uploadTwoPagePpt(wrapper);
@@ -687,7 +859,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(2);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     expect(vm.rendererPageCount()).toBe(1);
     // 逐份点击创建：挂载层被首张幻灯片复用 → 2 页、4 页，最终停在第二份首张
@@ -707,7 +879,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     // 上传零建页；点击列表（openCourseware）创建后当前页 = 首张幻灯片页
     await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
@@ -734,7 +906,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
 
     // 未建页条目（pending）：仅移除条目，画布零改动
@@ -748,7 +920,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
     expect(vm.rendererPageCount()).toBe(2);
@@ -770,12 +942,15 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     // delFile 按 fileurl 回查服务端列表定位记录 id
     liveMocks.coursewareList.mockResolvedValue({
       code: 1000,
-      data: { list: [{ id: 'cw9', fileUrl: 'http://mock.test/ppt/deck.pdf' }], pageInfo: { totalElements: 1 } },
+      data: {
+        list: [{ id: 'cw9', fileUrl: 'http://mock.test/ppt/deck.pdf' }],
+        pageInfo: { totalElements: 1 }
+      }
     });
 
     await vm.delFile(0);
@@ -794,11 +969,14 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     liveMocks.coursewareList.mockResolvedValue({
       code: 1000,
-      data: { list: [{ id: 'cw9', fileUrl: 'http://mock.test/ppt/deck.pdf' }], pageInfo: { totalElements: 1 } },
+      data: {
+        list: [{ id: 'cw9', fileUrl: 'http://mock.test/ppt/deck.pdf' }],
+        pageInfo: { totalElements: 1 }
+      }
     });
     liveMocks.deleteCourseware.mockRejectedValue(new Error('network down'));
 
@@ -819,7 +997,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(String(unwrapVal(vm.toastMsg))).toContain('登记服务端失败');
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     expect(liveMocks.saveCourseware).toHaveBeenCalledTimes(1);
     expect(unwrapVal(vm.fileList).length).toBe(0);
@@ -835,14 +1013,15 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
     expect(vm.rendererPageCount()).toBe(2);
 
     // 服务端记录已在「我的直播」对话框中被删除 → 列表为空
     liveMocks.coursewareList.mockResolvedValue({
-      code: 1000, data: { list: [], pageInfo: { totalElements: 0 } },
+      code: 1000,
+      data: { list: [], pageInfo: { totalElements: 0 } }
     });
 
     await vm.importServerCoursewares();
@@ -862,7 +1041,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     liveMocks.coursewareList.mockRejectedValue(new Error('network down'));
 
@@ -881,7 +1060,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
     expect(vm.rendererPageCount()).toBe(2);
@@ -910,7 +1089,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     // 模拟页被删后残留的僵尸 fileid
     vm.setFileItemId(0, 'ghost_a,ghost_b');
@@ -936,7 +1115,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     expect(liveMocks.saveCourseware).toHaveBeenCalledTimes(1);
     expect(liveMocks.saveCourseware).toHaveBeenCalledWith({
@@ -944,7 +1123,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       filename: '测试课件',
       filext: 'pptx',
       filesize: 1,
-      fileUrl: 'http://mock.test/ppt/deck.pdf',
+      fileUrl: 'http://mock.test/ppt/deck.pdf'
     });
     wrapper.unmount();
   });
@@ -961,7 +1140,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
         expect(String(unwrapVal(vm.toastMsg))).toContain('课件预载失败');
         expect(String(unwrapVal(vm.toastMsg))).toContain('加载第2页尺寸失败');
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     expect(unwrapVal(vm.fileList).length).toBe(0);
     expect(vm.rendererPageCount()).toBe(before);
@@ -976,7 +1155,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
     const els = vm.provider!.getActiveElements()!;
@@ -989,7 +1168,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(spy).toHaveBeenCalled();
       },
-      { timeout: 1000 },
+      { timeout: 1000 }
     );
     wrapper.unmount();
   });
@@ -1002,14 +1181,14 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     vm.provider!.fileList.get(0).set('filename', '远端改名');
     await vi.waitFor(
       () => {
         expect(unwrapVal(vm.fileList)[0]!.filename).toBe('远端改名');
       },
-      { timeout: 1000 },
+      { timeout: 1000 }
     );
     wrapper.unmount();
   });
@@ -1046,7 +1225,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
         expect(vs.stageX).toBe(0);
         expect(vs.stageY).toBe(0);
       },
-      { timeout: 1000 },
+      { timeout: 1000 }
     );
     wrapper.unmount();
   });
@@ -1083,7 +1262,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
         expect(vs.stageX).toBe(0);
         expect(vs.stageY).toBe(0);
       },
-      { timeout: 1000 },
+      { timeout: 1000 }
     );
     wrapper.unmount();
   });
@@ -1100,7 +1279,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(vm.viewState().zoom).toBe(50);
       },
-      { timeout: 1000 },
+      { timeout: 1000 }
     );
     // 本地窗口/布局变化 → stage 改为 1200×900，重调 applyRemoteViewport → k = 0.75
     vm.renderer!.getStage().width(1200);
@@ -1128,7 +1307,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
         expect(vs.x).toBe(16);
         expect(vs.y).toBe(8);
       },
-      { timeout: 1000 },
+      { timeout: 1000 }
     );
     wrapper.unmount();
   });
@@ -1174,7 +1353,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(vm.viewState().layerScale).toBeCloseTo(2, 5);
       },
-      { timeout: 1000 },
+      { timeout: 1000 }
     );
     const p = vm.toLayerCoords({ x: 230, y: 140 });
     expect(p.x).toBeCloseTo(100, 5);
@@ -1191,7 +1370,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(vm.viewState().zoom).toBe(150);
       },
-      { timeout: 1000 },
+      { timeout: 1000 }
     );
     vm.addLayer();
     // 新页是独立 Layer，showPage 必须把缩放/平移重应用上去，否则层 scale 掉回 1
@@ -1199,7 +1378,7 @@ describe('WhiteBoard.vue PPT 课件', () => {
       () => {
         expect(vm.viewState().layerScale).toBeCloseTo(1.5, 5);
       },
-      { timeout: 1000 },
+      { timeout: 1000 }
     );
     expect(vm.viewState().zoom).toBe(150);
     wrapper.unmount();
@@ -1222,11 +1401,11 @@ describe('WhiteBoard.vue 进房导入服务端课件', () => {
             filename: '课前预习',
             filext: 'pptx',
             filesize: 2048,
-            fileUrl: 'http://mock.test/ppt/deck.pdf',
-          },
+            fileUrl: 'http://mock.test/ppt/deck.pdf'
+          }
         ],
-        pageInfo: { totalElements: 1 },
-      },
+        pageInfo: { totalElements: 1 }
+      }
     });
     vi.mocked(getPdfPageCount).mockResolvedValue(2);
     vi.mocked(getPdfPageDims).mockResolvedValue({ w: 1000, h: 500 });
@@ -1245,7 +1424,7 @@ describe('WhiteBoard.vue 进房导入服务端课件', () => {
       () => {
         expect(unwrapVal(vm.fileList).length).toBe(1);
       },
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
     expect(liveMocks.coursewareList).toHaveBeenCalledWith('1001');
     expect(unwrapVal(vm.fileList)[0]!.filename).toBe('课前预习');
@@ -1479,8 +1658,8 @@ describe('WhiteBoard.vue 选择器', () => {
           json: () =>
             Promise.resolve({
               code: 1000,
-              data: { fileUrl: `http://mock.test/img/pic${uploadCount}.png` },
-            }),
+              data: { fileUrl: `http://mock.test/img/pic${uploadCount}.png` }
+            })
         });
       })
     );
@@ -1711,8 +1890,21 @@ describe('WhiteBoard.vue 圆形工具绘制', () => {
     const provider = vm.provider!;
     // 与生产路径一致：WS 未同步时无页，先建页（onPointerUp 兜底建页的等价测试前置）
     if (!provider.getActiveElements()) provider.addPage();
-    provider.addShape({ id: 'cc1', type: 'circle', x: 50, y: 50, radius: 30, color: '#000', lineWidth: 1, opacity: 1 });
-    const el = () => provider.getActiveElements()!.toArray().find(m => m.get('id') === 'cc1')!;
+    provider.addShape({
+      id: 'cc1',
+      type: 'circle',
+      x: 50,
+      y: 50,
+      radius: 30,
+      color: '#000',
+      lineWidth: 1,
+      opacity: 1
+    });
+    const el = () =>
+      provider
+        .getActiveElements()!
+        .toArray()
+        .find(m => m.get('id') === 'cc1')!;
 
     vm.commitShapeTransform('cc1', { x: 50, y: 50, radiusX: 60, radiusY: 20 });
     expect(el().get('radiusX')).toBe(60);
@@ -1842,7 +2034,11 @@ describe('WhiteBoard.vue 快捷键', () => {
 
 // ── 直线工具：自由拖、Shift 锁定水平/垂直、预览 ────────────────────────────
 describe('WhiteBoard.vue 直线工具', () => {
-  function drawLine(stage: InstanceType<typeof konvaMocks.MockStage>, to: { x: number; y: number }, shift = false) {
+  function drawLine(
+    stage: InstanceType<typeof konvaMocks.MockStage>,
+    to: { x: number; y: number },
+    shift = false
+  ) {
     stage._pointer = { x: 100, y: 100 };
     stage.fire('mousedown', { target: stage, evt: {} });
     stage._pointer = to;
@@ -1898,11 +2094,24 @@ describe('WhiteBoard.vue 双击编辑文本', () => {
   function seedText(vm: SelVM, text = 'hello') {
     const provider = vm.provider!;
     if (!provider.getActiveElements()) provider.addPage();
-    provider.addShape({ id: 't1', type: 'text', x: 50, y: 60, text, fontSize: 20, color: '#000', opacity: 1 });
+    provider.addShape({
+      id: 't1',
+      type: 'text',
+      x: 50,
+      y: 60,
+      text,
+      fontSize: 20,
+      color: '#000',
+      opacity: 1
+    });
     vm.tool('cur');
     // 直接触发重建以挂载节点事件（生产中由 elements 观察器完成）
-    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(provider.getActiveElements());
-    return (vm.renderer as unknown as { layer: { getChildren: () => unknown[] } }).layer.getChildren()[0] as {
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(
+      provider.getActiveElements()
+    );
+    return (
+      vm.renderer as unknown as { layer: { getChildren: () => unknown[] } }
+    ).layer.getChildren()[0] as {
       fire: (e: string) => void;
     };
   }
@@ -1948,11 +2157,24 @@ describe('WhiteBoard.vue 双击编辑文本', () => {
     const vm = wrapper.vm as unknown as SelVM;
     const provider = vm.provider!;
     if (!provider.getActiveElements()) provider.addPage();
-    provider.addShape({ id: 'c1', type: 'circle', x: 50, y: 50, radius: 30, color: '#000', lineWidth: 1, opacity: 1 });
+    provider.addShape({
+      id: 'c1',
+      type: 'circle',
+      x: 50,
+      y: 50,
+      radius: 30,
+      color: '#000',
+      lineWidth: 1,
+      opacity: 1
+    });
     vm.tool('cur');
-    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(provider.getActiveElements());
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(
+      provider.getActiveElements()
+    );
 
-    const node = (vm.renderer as unknown as { layer: { getChildren: () => unknown[] } }).layer.getChildren()[0] as {
+    const node = (
+      vm.renderer as unknown as { layer: { getChildren: () => unknown[] } }
+    ).layer.getChildren()[0] as {
       fire: (e: string) => void;
     };
     node.fire('dblclick');
@@ -1967,14 +2189,23 @@ describe('WhiteBoard.vue 双击编辑文本', () => {
     const fakeEls = {
       forEach: (cb: (el: unknown) => void) => {
         const data: Record<string, unknown> = {
-          id: 't1', type: 'text', x: 50, y: 60, text: 'hi', fontSize: 14, color: '#000', opacity: 1,
+          id: 't1',
+          type: 'text',
+          x: 50,
+          y: 60,
+          text: 'hi',
+          fontSize: 14,
+          color: '#000',
+          opacity: 1
         };
         cb({ get: (k: string) => data[k] });
-      },
+      }
     };
     (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(fakeEls);
 
-    const node = (vm.renderer as unknown as { layer: { getChildren: () => unknown[] } }).layer.getChildren()[0] as {
+    const node = (
+      vm.renderer as unknown as { layer: { getChildren: () => unknown[] } }
+    ).layer.getChildren()[0] as {
       fire: (e: string) => void;
     };
     node.fire('dblclick');
@@ -1990,13 +2221,25 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
     if (!provider.getActiveElements()) provider.addPage();
     provider.addShape(shape);
     vm.tool('cur');
-    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(provider.getActiveElements());
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(
+      provider.getActiveElements()
+    );
   }
 
   it('选中矩形回填属性并打开面板，改色写回可撤销，清选中关闭面板', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
-    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 100, height: 60, color: '#123456', lineWidth: 3, opacity: 0.8 });
+    seedShape(vm, {
+      id: 'r1',
+      type: 'rect',
+      x: 10,
+      y: 10,
+      width: 100,
+      height: 60,
+      color: '#123456',
+      lineWidth: 3,
+      opacity: 0.8
+    });
 
     expect(wrapper.find('.color-panel').isVisible()).toBe(false);
     vm.selectShape('r1');
@@ -2023,7 +2266,16 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
   it('选中文字后粗细条作用于字号，拖拽结束写回并可撤销', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
-    seedShape(vm, { id: 't1', type: 'text', x: 50, y: 60, text: 'hi', fontSize: 20, color: '#000', opacity: 1 });
+    seedShape(vm, {
+      id: 't1',
+      type: 'text',
+      x: 50,
+      y: 60,
+      text: 'hi',
+      fontSize: 20,
+      color: '#000',
+      opacity: 1
+    });
     vm.selectShape('t1');
     await nextTick();
     expect(wrapper.find('.size-title').text()).toContain('小');
@@ -2044,7 +2296,17 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
   it('填充弹出色板：选色写入 fill、无颜色删除字段，可撤销/重做', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
-    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    seedShape(vm, {
+      id: 'r1',
+      type: 'rect',
+      x: 10,
+      y: 10,
+      width: 80,
+      height: 40,
+      color: '#123456',
+      lineWidth: 1,
+      opacity: 1
+    });
     vm.selectShape('r1');
     await nextTick();
 
@@ -2083,7 +2345,17 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
   it('开启填充后绘制椭圆：预览与落库均带 fill', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as DrawVM;
-    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    seedShape(vm, {
+      id: 'r1',
+      type: 'rect',
+      x: 10,
+      y: 10,
+      width: 80,
+      height: 40,
+      color: '#123456',
+      lineWidth: 1,
+      opacity: 1
+    });
     vm.selectShape('r1');
     await nextTick();
     await wrapper.find('.fill-toggle').trigger('click');
@@ -2094,7 +2366,9 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
     stage.fire('mousedown', { target: stage, evt: {} });
     stage._pointer = { x: 300, y: 160 };
     stage.fire('mousemove', { target: stage, evt: {} });
-    const preview = vm.renderer.previewLayer.getChildren()[0] as { _attrs?: Record<string, unknown> };
+    const preview = vm.renderer.previewLayer.getChildren()[0] as {
+      _attrs?: Record<string, unknown>;
+    };
     expect(preview._attrs?.fill).toBeTruthy();
     stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
     const shapes = vm.getCurrentPageShapes();
@@ -2108,7 +2382,16 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
   it('开启填充后绘制矩形：预览与落库均带 fill', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as DrawVM;
-    seedShape(vm, { id: 'c1', type: 'circle', x: 50, y: 50, radius: 30, color: '#123456', lineWidth: 1, opacity: 1 });
+    seedShape(vm, {
+      id: 'c1',
+      type: 'circle',
+      x: 50,
+      y: 50,
+      radius: 30,
+      color: '#123456',
+      lineWidth: 1,
+      opacity: 1
+    });
     vm.selectShape('c1');
     await nextTick();
     await wrapper.find('.fill-toggle').trigger('click');
@@ -2119,7 +2402,9 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
     stage.fire('mousedown', { target: stage, evt: {} });
     stage._pointer = { x: 200, y: 180 };
     stage.fire('mousemove', { target: stage, evt: {} });
-    const preview = vm.renderer.previewLayer.getChildren()[0] as { _attrs?: Record<string, unknown> };
+    const preview = vm.renderer.previewLayer.getChildren()[0] as {
+      _attrs?: Record<string, unknown>;
+    };
     expect(preview._attrs?.fill).toBeTruthy();
     stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
     const rect = vm.getCurrentPageShapes().find(s => s.type === 'rect');
@@ -2131,7 +2416,17 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
   it('填充色与描边色独立：改填充不动描边，换描边不动填充', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
-    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    seedShape(vm, {
+      id: 'r1',
+      type: 'rect',
+      x: 10,
+      y: 10,
+      width: 80,
+      height: 40,
+      color: '#123456',
+      lineWidth: 1,
+      opacity: 1
+    });
     vm.selectShape('r1');
     await nextTick();
     // 选绿填充色（PRESET_COLORS[7]）→ 描边不动
@@ -2149,7 +2444,17 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
   it('画图填充取独立填充色：选绿填充、换蓝描边后画圆 fill=绿 color=蓝', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as DrawVM;
-    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    seedShape(vm, {
+      id: 'r1',
+      type: 'rect',
+      x: 10,
+      y: 10,
+      width: 80,
+      height: 40,
+      color: '#123456',
+      lineWidth: 1,
+      opacity: 1
+    });
     vm.selectShape('r1');
     await nextTick();
     await wrapper.find('.fill-toggle').trigger('click');
@@ -2172,26 +2477,46 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
 
   function stubWheelCtx() {
     const putImageData = vi.fn();
-    const spy = vi
-      .spyOn(HTMLCanvasElement.prototype, 'getContext')
-      .mockReturnValue({
-        createImageData: (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
-        putImageData,
-        getImageData: (x: number) => ({ data: x < 100 ? [1, 168, 255, 255] : [255, 0, 0, 255] }),
-      } as unknown as RenderingContext);
+    const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      createImageData: (w: number, h: number) => ({
+        width: w,
+        height: h,
+        data: new Uint8ClampedArray(w * h * 4)
+      }),
+      putImageData,
+      getImageData: (x: number) => ({ data: x < 100 ? [1, 168, 255, 255] : [255, 0, 0, 255] })
+    } as unknown as RenderingContext);
     return { spy, putImageData };
   }
 
   function mockWheelRect(canvas: { element: Element }) {
     vi.spyOn(canvas.element, 'getBoundingClientRect').mockReturnValue({
-      x: 0, y: 0, left: 0, top: 0, right: 150, bottom: 150, width: 150, height: 150, toJSON: () => ({}),
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 150,
+      bottom: 150,
+      width: 150,
+      height: 150,
+      toJSON: () => ({})
     } as DOMRect);
   }
 
   it('描边颜色盘：HSV 轮盘按下仅预览、松手才提交、死代码色条已移除', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
-    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    seedShape(vm, {
+      id: 'r1',
+      type: 'rect',
+      x: 10,
+      y: 10,
+      width: 80,
+      height: 40,
+      color: '#123456',
+      lineWidth: 1,
+      opacity: 1
+    });
     vm.selectShape('r1');
     await nextTick();
     const { spy, putImageData } = stubWheelCtx();
@@ -2220,7 +2545,17 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
   it('填充颜色盘：与描边同款卡片、轮盘取色写 fill、描边不动、弹层保持打开', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
-    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    seedShape(vm, {
+      id: 'r1',
+      type: 'rect',
+      x: 10,
+      y: 10,
+      width: 80,
+      height: 40,
+      color: '#123456',
+      lineWidth: 1,
+      opacity: 1
+    });
     vm.selectShape('r1');
     await nextTick();
     const { spy, putImageData } = stubWheelCtx();
@@ -2245,7 +2580,17 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
   it('颜色盘按住拖动连续取色：拖动中不提交，松手提交最后命中的颜色', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
-    seedShape(vm, { id: 'r1', type: 'rect', x: 10, y: 10, width: 80, height: 40, color: '#123456', lineWidth: 1, opacity: 1 });
+    seedShape(vm, {
+      id: 'r1',
+      type: 'rect',
+      x: 10,
+      y: 10,
+      width: 80,
+      height: 40,
+      color: '#123456',
+      lineWidth: 1,
+      opacity: 1
+    });
     vm.selectShape('r1');
     await nextTick();
     const { spy } = stubWheelCtx();
@@ -2266,7 +2611,16 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
   it('选中图片不打开属性面板', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
-    seedShape(vm, { id: 'i1', type: 'image', x: 0, y: 0, width: 100, height: 100, url: 'http://mock.test/pic.png', opacity: 1 });
+    seedShape(vm, {
+      id: 'i1',
+      type: 'image',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+      url: 'http://mock.test/pic.png',
+      opacity: 1
+    });
     vm.selectShape('i1');
     await nextTick();
     expect(wrapper.find('.color-panel').isVisible()).toBe(false);
@@ -2288,9 +2642,7 @@ describe('WhiteBoard.vue 属性回改与填充', () => {
 describe('WhiteBoard.vue 激光笔', () => {
   function localLaser(vm: SelVM): { x: number; y: number } | null | undefined {
     return (vm.provider!.awareness.getLocalState() as Record<string, unknown> | null)?.laser as
-      | { x: number; y: number }
-      | null
-      | undefined;
+      { x: number; y: number } | null | undefined;
   }
 
   it('教师点选激光进入模式，移动广播 awareness 并渲染红点，切换工具即熄灭', async () => {
@@ -2304,8 +2656,9 @@ describe('WhiteBoard.vue 激光笔', () => {
     stage.fire('mousemove', { target: stage, evt: {} });
 
     expect(localLaser(vm)).toEqual({ x: 200, y: 150 });
-    const dot = (vm.renderer as unknown as { laserLayer: { getChildren: () => unknown[] } })
-      .laserLayer.getChildren()[0] as { x: () => number; y: () => number; visible: () => boolean };
+    const dot = (
+      vm.renderer as unknown as { laserLayer: { getChildren: () => unknown[] } }
+    ).laserLayer.getChildren()[0] as { x: () => number; y: () => number; visible: () => boolean };
     expect(dot).toBeTruthy();
     expect(dot.x()).toBe(200);
     expect(dot.y()).toBe(150);
@@ -2337,8 +2690,9 @@ describe('WhiteBoard.vue 激光笔', () => {
     // 学生端 readOnly 下 setLaser 不可用——直接写 awareness 触发同一 change 渲染路径
     provider.awareness.setLocalStateField('laser', { x: 30, y: 40 });
 
-    const dot = (vm.renderer as unknown as { laserLayer: { getChildren: () => unknown[] } })
-      .laserLayer.getChildren()[0] as { x: () => number; y: () => number; visible: () => boolean };
+    const dot = (
+      vm.renderer as unknown as { laserLayer: { getChildren: () => unknown[] } }
+    ).laserLayer.getChildren()[0] as { x: () => number; y: () => number; visible: () => boolean };
     expect(dot).toBeTruthy();
     expect(dot.x()).toBe(30);
     expect(dot.y()).toBe(40);

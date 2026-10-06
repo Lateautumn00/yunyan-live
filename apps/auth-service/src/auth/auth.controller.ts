@@ -18,14 +18,20 @@ export class AuthController {
   }
 
   @GrpcMethod('AuthService', 'Register')
-  async register(data: { username: string; email: string; password: string; code: string; role: number }) {
+  async register(data: {
+    username: string;
+    email: string;
+    password: string;
+    code: string;
+    role: number;
+  }) {
     this.logger.log(`gRPC Register: ${data.email}`);
     return this.authService.register({
       userName: data.username,
       email: data.email,
       password: data.password,
       code: data.code,
-      role: data.role,
+      role: data.role
     });
   }
 
@@ -41,7 +47,7 @@ export class AuthController {
     this.logger.log(`gRPC ChangePassword: ${userId}`);
     return this.authService.changePassword(
       { oldPassword: data.old_password, password: data.new_password },
-      userId,
+      userId
     );
   }
 

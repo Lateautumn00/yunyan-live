@@ -1,11 +1,7 @@
 <template>
   <div class="class-notification">
     <TransitionGroup name="notify">
-      <div
-        v-for="item in notifications"
-        :key="item.id"
-        class="notify-item"
-      >
+      <div v-for="item in notifications" :key="item.id" class="notify-item">
         {{ item.text }}
       </div>
     </TransitionGroup>
@@ -27,7 +23,7 @@ function add(text: string, duration = 3000) {
   const id = nextId++;
   notifications.value.push({ id, text });
   setTimeout(() => {
-    notifications.value = notifications.value.filter((n) => n.id !== id);
+    notifications.value = notifications.value.filter(n => n.id !== id);
   }, duration);
 }
 

@@ -39,17 +39,21 @@ describe('ClassRoom History.vue', () => {
 
   it('渲染回放列表并显示格式化时长', async () => {
     const wrapper = mountHistory({ isTeacher: true });
-    vmOf(wrapper).videoLists(true, { id: 'v1', duration: 125, createTime: new Date(2026, 0, 1, 10, 0, 0).getTime() });
+    vmOf(wrapper).videoLists(true, {
+      id: 'v1',
+      duration: 125,
+      createTime: new Date(2026, 0, 1, 10, 0, 0).getTime()
+    });
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain('时长:');
-    expect(wrapper.text()).toContain("2'05\"");
+    expect(wrapper.text()).toContain('2\'05"');
   });
 
   it('duration 为 0 时显示 00\'00"', async () => {
     const wrapper = mountHistory({ isTeacher: false });
     vmOf(wrapper).videoLists(true, { id: 'v1', duration: 0, createTime: new Date().getTime() });
     await wrapper.vm.$nextTick();
-    expect(wrapper.text()).toContain("00'00\"");
+    expect(wrapper.text()).toContain('00\'00"');
   });
 
   it('老师点击删除调用接口并触发 delList', async () => {
@@ -76,7 +80,12 @@ describe('ClassRoom History.vue', () => {
 
   it('点击回放触发 palyHistoryVideo', async () => {
     const wrapper = mountHistory({ isTeacher: false });
-    vmOf(wrapper).videoLists(true, { id: 'v1', address: 'addr1', duration: 60, createTime: new Date().getTime() });
+    vmOf(wrapper).videoLists(true, {
+      id: 'v1',
+      address: 'addr1',
+      duration: 60,
+      createTime: new Date().getTime()
+    });
     await wrapper.vm.$nextTick();
     const playIcon = wrapper.find('[aria-label="回放"]');
     await playIcon.trigger('click');

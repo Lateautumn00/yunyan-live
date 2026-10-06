@@ -47,13 +47,12 @@ export function importPptPages(
   cw: number,
   ch: number,
   fileUrl: string,
-  meta: PptMeta,
+  meta: PptMeta
 ): string[] {
   const layerIds: string[] = [];
   for (let i = 0; i < meta.numPages; i++) {
     // pages.observe 会同步创建并切换对应的 Konva 层，此处不得重复 showPage
-    const pageId =
-      provider?.addPage() || uid('local_');
+    const pageId = provider?.addPage() || uid('local_');
     const { w, h } = meta.dims[i]!;
     const k = Math.min(1, (cw * 0.9) / w, (ch * 0.9) / h);
     const width = w * k;
@@ -66,7 +65,7 @@ export function importPptPages(
       x: (cw - width) / 2,
       y: (ch - height) / 2,
       width,
-      height,
+      height
     });
     layerIds.push(pageId);
   }

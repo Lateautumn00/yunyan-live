@@ -69,10 +69,7 @@ describe('LiveService.getUserWatchTimeList', () => {
 
   it('totalTime 跨多行求和', async () => {
     const watch = mockRepo({
-      getRawMany: [
-        rawRow({ w_id: 1 }),
-        rawRow({ w_id: 2, w_joined_at: '2024-05-31T23:55:00Z' })
-      ],
+      getRawMany: [rawRow({ w_id: 1 }), rawRow({ w_id: 2, w_joined_at: '2024-05-31T23:55:00Z' })],
       getCount: 2
     });
     const { service } = createLiveService({ watchTime: watch });

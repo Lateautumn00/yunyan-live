@@ -4,33 +4,18 @@
       <div class="code">
         <span>直播码</span>
         <span>{{ localCode }}</span>
-        <el-icon
-          class="copy"
-          aria-label="复制"
-          @click="copyLink(localCode)"
-        >
+        <el-icon class="copy" aria-label="复制" @click="copyLink(localCode)">
           <CopyDocument />
         </el-icon>
       </div>
-      <el-button
-        :loading="updating"
-        @click="updateCode"
-      >
-        更新参加码
-      </el-button>
+      <el-button :loading="updating" @click="updateCode"> 更新参加码 </el-button>
     </div>
     <div class="share-row">
       <div class="copy-line">
         <label for="">客户端进入</label>
-        <el-input
-          :model-value="entryLink"
-          readonly
-        />
+        <el-input :model-value="entryLink" readonly />
       </div>
-      <span
-        class="copy"
-        @click="copyLink(entryLink)"
-      >复制</span>
+      <span class="copy" @click="copyLink(entryLink)">复制</span>
     </div>
   </div>
 </template>
@@ -71,7 +56,7 @@ const { loading: updating, run: updateCode } = useAsyncAction(
     emit('updated', data);
     ElMessage.success('更新成功');
   },
-  { onError: (e) => console.error(e) }
+  { onError: e => console.error(e) }
 );
 
 const { copy } = useCopy();

@@ -2,7 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
-import { HttpExceptionFilter, ResponseInterceptor, validationPipeOptions } from '@yunyan-live/nest-shared';
+import {
+  HttpExceptionFilter,
+  ResponseInterceptor,
+  validationPipeOptions
+} from '@yunyan-live/nest-shared';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -14,9 +18,12 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseInterceptor());
 
   app.enableCors({
-    origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:3000'],
+    origin: process.env.CORS_ORIGINS?.split(',') || [
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: ['Content-Type', 'Authorization', 'token', 'guid'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'token', 'guid']
   });
 
   app.useStaticAssets(join(__dirname, '..', 'uploads'), { prefix: '/uploads' });

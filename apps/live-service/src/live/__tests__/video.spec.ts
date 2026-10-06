@@ -155,10 +155,7 @@ describe('LiveService.getVideoDetail', () => {
       teacherName: '张老师',
       createdAt: String(created.getTime())
     });
-    expect(chainCalls(video.qb, 'where')).toContainEqual([
-      'v.roomId = :roomId',
-      { roomId: 'r1' }
-    ]);
+    expect(chainCalls(video.qb, 'where')).toContainEqual(['v.roomId = :roomId', { roomId: 'r1' }]);
     expect(chainCalls(video.qb, 'andWhere')).toEqual([
       ['v.createdAt >= :startTime', { startTime: new Date(1704067200000) }],
       ['v.createdAt <= :endTime', { endTime: new Date(1704153600000) }]
@@ -168,10 +165,7 @@ describe('LiveService.getVideoDetail', () => {
 
   it('createdAt 为字符串时按原样序列化', async () => {
     const video = mockRepo({
-      getManyAndCount: [
-        [{ id: 'v1', roomId: 'r1', createdAt: '2024-03-05T06:07:08.900Z' }],
-        1
-      ]
+      getManyAndCount: [[{ id: 'v1', roomId: 'r1', createdAt: '2024-03-05T06:07:08.900Z' }], 1]
     });
     const { service } = createLiveService({ video });
     const res = await service.getVideoDetail({ roomId: 'r1' });

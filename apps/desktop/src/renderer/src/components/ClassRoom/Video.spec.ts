@@ -261,7 +261,8 @@ describe('ClassRoom Video.vue', () => {
 
   it('recording 开始时获取服务器时间', async () => {
     apiMocks.getNowTime.mockResolvedValue({
-      code: 1000, data: { nowTime: '20230101' }
+      code: 1000,
+      data: { nowTime: '20230101' }
     });
     const { wrapper } = mountVideo();
     await vmOf(wrapper).recording(true, 100);

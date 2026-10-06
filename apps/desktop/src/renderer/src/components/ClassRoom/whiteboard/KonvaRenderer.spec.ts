@@ -298,7 +298,17 @@ const konvaMocks = vi.hoisted(() => {
     }
   }
 
-  return { MockStage, MockLayer, MockImage, MockShape, MockLineShape, MockCircle, MockEllipse, MockTransformer, MockShape2: MockShape };
+  return {
+    MockStage,
+    MockLayer,
+    MockImage,
+    MockShape,
+    MockLineShape,
+    MockCircle,
+    MockEllipse,
+    MockTransformer,
+    MockShape2: MockShape
+  };
 });
 
 vi.mock('konva', () => ({
@@ -312,8 +322,8 @@ vi.mock('konva', () => ({
     Circle: konvaMocks.MockCircle,
     Ellipse: konvaMocks.MockEllipse,
     Rect: konvaMocks.MockShape,
-    Transformer: konvaMocks.MockTransformer,
-  },
+    Transformer: konvaMocks.MockTransformer
+  }
 }));
 
 import { KonvaRenderer } from './KonvaRenderer';
@@ -347,7 +357,7 @@ function pptElement(overrides: Record<string, unknown> = {}) {
     width: 100,
     height: 50,
     opacity: 1,
-    ...overrides,
+    ...overrides
   };
   return { get: (k: string) => data[k] };
 }
@@ -542,7 +552,7 @@ describe('KonvaRenderer selection', () => {
     expect(renderer.layer.getChildren()[0]).not.toBe(node);
     expect(
       (renderer.layer.getChildren()[0] as unknown as InstanceType<typeof konvaMocks.MockImage>)
-        .attrs.x,
+        .attrs.x
     ).toBe(77);
     renderer.destroy();
   });
@@ -551,7 +561,14 @@ describe('KonvaRenderer selection', () => {
     vi.stubGlobal('Image', StubImage);
     const renderer = new KonvaRenderer(document.createElement('div'));
     const data: Record<string, unknown> = {
-      id: 'b1', type: 'brush', x: 5, y: 6, points: [0, 0, 10, 10], color: '#000', lineWidth: 2, opacity: 1,
+      id: 'b1',
+      type: 'brush',
+      x: 5,
+      y: 6,
+      points: [0, 0, 10, 10],
+      color: '#000',
+      lineWidth: 2,
+      opacity: 1
     };
     const elements = [{ get: (k: string) => data[k] }] as unknown as Parameters<
       typeof renderer.bindElements
@@ -570,7 +587,14 @@ describe('KonvaRenderer selection', () => {
     const renderer = new KonvaRenderer(document.createElement('div'));
     const bindStroke = (type: string) => {
       const data: Record<string, unknown> = {
-        id: type, type, x: 0, y: 0, points: [0, 0, 10, 10], color: '#000', lineWidth: 2, opacity: 1,
+        id: type,
+        type,
+        x: 0,
+        y: 0,
+        points: [0, 0, 10, 10],
+        color: '#000',
+        lineWidth: 2,
+        opacity: 1
       };
       const elements = [{ get: (k: string) => data[k] }] as unknown as Parameters<
         typeof renderer.bindElements
@@ -590,7 +614,14 @@ describe('KonvaRenderer selection', () => {
     const renderer = new KonvaRenderer(document.createElement('div'));
     const bindStroke = (type: string, lineWidth: number) => {
       const data: Record<string, unknown> = {
-        id: `${type}_${lineWidth}`, type, x: 0, y: 0, points: [0, 0, 10, 10], color: '#000', lineWidth, opacity: 1,
+        id: `${type}_${lineWidth}`,
+        type,
+        x: 0,
+        y: 0,
+        points: [0, 0, 10, 10],
+        color: '#000',
+        lineWidth,
+        opacity: 1
       };
       const elements = [{ get: (k: string) => data[k] }] as unknown as Parameters<
         typeof renderer.bindElements
@@ -603,7 +634,7 @@ describe('KonvaRenderer selection', () => {
     expect(bindStroke('brush', 1).attrs.hitStrokeWidth).toBe(HIT_STROKE_MIN);
     expect(bindStroke('brush', 20).attrs.hitStrokeWidth).toBe(20);
     expect(bindStroke('eraser', 2).attrs.hitStrokeWidth).toBe(
-      Math.max(2 * ERASER_WIDTH_MULT, HIT_STROKE_MIN),
+      Math.max(2 * ERASER_WIDTH_MULT, HIT_STROKE_MIN)
     );
     renderer.destroy();
   });
@@ -611,7 +642,15 @@ describe('KonvaRenderer selection', () => {
   it('细描边矩形命中区抬到 HIT_STROKE_MIN', () => {
     const renderer = new KonvaRenderer(document.createElement('div'));
     const data: Record<string, unknown> = {
-      id: 'r_hit', type: 'rect', x: 0, y: 0, width: 50, height: 40, color: '#000', lineWidth: 1, opacity: 1,
+      id: 'r_hit',
+      type: 'rect',
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 40,
+      color: '#000',
+      lineWidth: 1,
+      opacity: 1
     };
     const elements = [{ get: (k: string) => data[k] }] as unknown as Parameters<
       typeof renderer.bindElements
@@ -652,7 +691,14 @@ describe('KonvaRenderer selection', () => {
     vi.stubGlobal('Image', StubImage);
     const renderer = new KonvaRenderer(document.createElement('div'));
     const data: Record<string, unknown> = {
-      id: 'b2', type: 'brush', x: 0, y: 0, points: [10, 20, 30, 40], color: '#000', lineWidth: 2, opacity: 1,
+      id: 'b2',
+      type: 'brush',
+      x: 0,
+      y: 0,
+      points: [10, 20, 30, 40],
+      color: '#000',
+      lineWidth: 2,
+      opacity: 1
     };
     const elements = [{ get: (k: string) => data[k] }] as unknown as Parameters<
       typeof renderer.bindElements
@@ -678,8 +724,15 @@ describe('KonvaRenderer selection', () => {
 describe('KonvaRenderer circle/ellipse', () => {
   function circleData(overrides: Record<string, unknown> = {}) {
     const data: Record<string, unknown> = {
-      id: 'c1', type: 'circle', x: 10, y: 20, radius: 30,
-      color: '#000', lineWidth: 1, opacity: 1, ...overrides,
+      id: 'c1',
+      type: 'circle',
+      x: 10,
+      y: 20,
+      radius: 30,
+      color: '#000',
+      lineWidth: 1,
+      opacity: 1,
+      ...overrides
     };
     return { get: (k: string) => data[k] };
   }
@@ -698,11 +751,15 @@ describe('KonvaRenderer circle/ellipse', () => {
     const renderer = new KonvaRenderer(document.createElement('div'));
     renderer.bindElements([
       circleData({ id: 'c1' }),
-      circleData({ id: 'e1', radius: undefined, radiusX: 60, radiusY: 20 }),
+      circleData({ id: 'e1', radius: undefined, radiusX: 60, radiusY: 20 })
     ] as unknown as Parameters<typeof renderer.bindElements>[0]);
 
-    const c = renderer.layer.getChildren()[0] as unknown as InstanceType<typeof konvaMocks.MockCircle>;
-    const e = renderer.layer.getChildren()[1] as unknown as InstanceType<typeof konvaMocks.MockEllipse>;
+    const c = renderer.layer.getChildren()[0] as unknown as InstanceType<
+      typeof konvaMocks.MockCircle
+    >;
+    const e = renderer.layer.getChildren()[1] as unknown as InstanceType<
+      typeof konvaMocks.MockEllipse
+    >;
     expect(c.getClassName()).toBe('Circle');
     expect(c.radius()).toBe(30);
     expect(e.getClassName()).toBe('Ellipse');
@@ -785,7 +842,12 @@ describe('KonvaRenderer circle/ellipse', () => {
   it('creates Line nodes for line shapes with points', () => {
     const renderer = new KonvaRenderer(document.createElement('div'));
     const data: Record<string, unknown> = {
-      id: 'l1', type: 'line', points: [10, 20, 80, 90], color: '#000', lineWidth: 2, opacity: 1,
+      id: 'l1',
+      type: 'line',
+      points: [10, 20, 80, 90],
+      color: '#000',
+      lineWidth: 2,
+      opacity: 1
     };
     renderer.bindElements([{ get: (k: string) => data[k] }] as unknown as Parameters<
       typeof renderer.bindElements
@@ -823,8 +885,16 @@ describe('KonvaRenderer circle/ellipse', () => {
     const renderer = new KonvaRenderer(document.createElement('div'));
     const rectData = (overrides: Record<string, unknown> = {}) => {
       const data: Record<string, unknown> = {
-        id: 'r1', type: 'rect', x: 5, y: 6, width: 40, height: 30,
-        color: '#000', lineWidth: 1, opacity: 1, ...overrides,
+        id: 'r1',
+        type: 'rect',
+        x: 5,
+        y: 6,
+        width: 40,
+        height: 30,
+        color: '#000',
+        lineWidth: 1,
+        opacity: 1,
+        ...overrides
       };
       return { get: (k: string) => data[k] };
     };
@@ -832,7 +902,7 @@ describe('KonvaRenderer circle/ellipse', () => {
       rectData({ id: 'r1', fill: '#00ff00' }),
       rectData({ id: 'r2' }),
       circleData({ id: 'c1', fill: '#ff0000' }),
-      circleData({ id: 'c2' }),
+      circleData({ id: 'c2' })
     ] as unknown as Parameters<typeof renderer.bindElements>[0]);
 
     const [rf, rn, cf, cn] = renderer.layer.getChildren() as unknown as Array<{
@@ -848,12 +918,20 @@ describe('KonvaRenderer circle/ellipse', () => {
   it('renders ellipse (radiusX/radiusY) fill through to node attrs', () => {
     const renderer = new KonvaRenderer(document.createElement('div'));
     const data: Record<string, unknown> = {
-      id: 'e1', type: 'circle', x: 10, y: 20, radiusX: 40, radiusY: 25,
-      color: '#000', lineWidth: 1, opacity: 1, fill: '#00ff00',
+      id: 'e1',
+      type: 'circle',
+      x: 10,
+      y: 20,
+      radiusX: 40,
+      radiusY: 25,
+      color: '#000',
+      lineWidth: 1,
+      opacity: 1,
+      fill: '#00ff00'
     };
-    renderer.bindElements([
-      { get: (k: string) => data[k] },
-    ] as unknown as Parameters<typeof renderer.bindElements>[0]);
+    renderer.bindElements([{ get: (k: string) => data[k] }] as unknown as Parameters<
+      typeof renderer.bindElements
+    >[0]);
     const node = renderer.layer.getChildren()[0] as unknown as { attrs: Record<string, unknown> };
     expect(node.attrs.fill).toBe('#00ff00');
     renderer.destroy();

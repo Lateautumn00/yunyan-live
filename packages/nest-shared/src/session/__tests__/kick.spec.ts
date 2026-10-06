@@ -73,11 +73,7 @@ describe('subscribeKick', () => {
     expect(res).toBe(subscriber);
     expect(mock.duplicate).toHaveBeenCalled();
     expect(subscriber.subscribe).toHaveBeenCalledWith(SESSION_KICK_CHANNEL);
-    subscriber.emit(
-      'message',
-      SESSION_KICK_CHANNEL,
-      JSON.stringify({ guid: 'g1', oldSid: 'old' })
-    );
+    subscriber.emit('message', SESSION_KICK_CHANNEL, JSON.stringify({ guid: 'g1', oldSid: 'old' }));
     expect(onKick).toHaveBeenCalledWith('g1', 'old');
   });
 
@@ -107,9 +103,7 @@ describe('subscribeKick', () => {
   it('订阅失败按 subscribe 阶段上报并 3s 后重试', async () => {
     const { redis, subscriber } = makeRedis();
     const onError = vi.fn();
-    subscriber.subscribe
-      .mockRejectedValueOnce(new Error('sub fail'))
-      .mockResolvedValue(undefined);
+    subscriber.subscribe.mockRejectedValueOnce(new Error('sub fail')).mockResolvedValue(undefined);
     subscribeKick(redis, vi.fn(), onError);
     await vi.advanceTimersByTimeAsync(0);
     expect(onError).toHaveBeenCalledWith(expect.any(Error), 'subscribe');
@@ -123,7 +117,10 @@ describe('subscribeKick', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     subscribeKick(redis, vi.fn());
     subscriber.emit('message', SESSION_KICK_CHANNEL, 'not-json');
-    expect(consoleSpy).toHaveBeenCalledWith('[session] kick parse:', expect.stringContaining('Unexpected token'));
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[session] kick parse:',
+      expect.stringContaining('Unexpected token')
+    );
     consoleSpy.mockRestore();
   });
 });

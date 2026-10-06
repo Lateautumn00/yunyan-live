@@ -11,13 +11,16 @@ import {
   LoginDto,
   ok,
   RegisterDto,
-  ResetPasswordDto,
+  ResetPasswordDto
 } from '@yunyan-live/nest-shared';
 import { UsersService } from '../users/users.service';
 import { decryptPassword } from './password-crypto';
 
 interface MailServiceClient {
-  verifyCode(data: { email: string; code: string }): Observable<{ code: string; msg: string; valid: boolean }>;
+  verifyCode(data: {
+    email: string;
+    code: string;
+  }): Observable<{ code: string; msg: string; valid: boolean }>;
 }
 
 @Injectable()
@@ -27,7 +30,7 @@ export class AuthService implements OnModuleInit {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
-    @Inject('MAIL_GRPC') private mailClient: ClientGrpc,
+    @Inject('MAIL_GRPC') private mailClient: ClientGrpc
   ) {}
 
   onModuleInit() {
@@ -56,7 +59,9 @@ export class AuthService implements OnModuleInit {
     const emailExists = await this.usersService.findByEmail(dto.email);
     if (emailExists) throw grpcError(status.ALREADY_EXISTS, '邮箱已存在');
 
-    const result = await firstValueFrom<{ valid: boolean }>(this.mailService.verifyCode({ email: dto.email, code: dto.code }));
+    const result = await firstValueFrom<{ valid: boolean }>(
+      this.mailService.verifyCode({ email: dto.email, code: dto.code })
+    );
     if (!result.valid) throw grpcError(status.INVALID_ARGUMENT, '验证码无效或已过期');
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -64,7 +69,7 @@ export class AuthService implements OnModuleInit {
       username: dto.userName,
       email: dto.email,
       passwordHash,
-      role: dto.role || 2,
+      role: dto.role || 2
     });
 
     return ok({
@@ -77,7 +82,9 @@ export class AuthService implements OnModuleInit {
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) throw grpcError(status.NOT_FOUND, '邮箱未注册');
 
-    const result = await firstValueFrom<{ valid: boolean }>(this.mailService.verifyCode({ email: dto.email, code: dto.code }));
+    const result = await firstValueFrom<{ valid: boolean }>(
+      this.mailService.verifyCode({ email: dto.email, code: dto.code })
+    );
     if (!result.valid) throw grpcError(status.INVALID_ARGUMENT, '验证码无效或已过期');
 
     const passwordHash = await bcrypt.hash(password, 10);

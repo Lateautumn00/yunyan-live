@@ -4,6 +4,6 @@ import { GatewayClientsModule } from '../gateway/clients.module';
 
 @Module({
   imports: [GatewayClientsModule],
-  controllers: [UsersController],
+  controllers: [UsersController]
 })
 export class UsersModule {}

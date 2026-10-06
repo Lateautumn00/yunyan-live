@@ -5,20 +5,39 @@ import ElementPlus from 'element-plus';
 import Classroom from '@/pages/classroom/Classroom.vue';
 
 const stubs = {
-  Top: { template: '<div class="top-stub" />', props: ['isTeacher', 'isInteraction', 'roomInfo', 'roomId', 'btn', 'liveType'] },
-  WhiteBoard: { template: '<div class="wb-stub" />', props: ['isTeacher', 'isDisplay', 'roomId', 'opaqueId', 'teacherStage', 'userName', 'layouts'] },
-  Video: { template: '<div class="video-stub" />', props: ['roomInfo', 'isInteraction', 'opaqueId', 'isTeacher', 'roomId', 'userName'] },
-  Chat: { template: '<div class="chat-stub" />', props: ['roomId', 'liveUserId', 'userName', 'isTeacher', 'isInteraction', 'btn'] },
+  Top: {
+    template: '<div class="top-stub" />',
+    props: ['isTeacher', 'isInteraction', 'roomInfo', 'roomId', 'btn', 'liveType']
+  },
+  WhiteBoard: {
+    template: '<div class="wb-stub" />',
+    props: ['isTeacher', 'isDisplay', 'roomId', 'opaqueId', 'teacherStage', 'userName', 'layouts']
+  },
+  Video: {
+    template: '<div class="video-stub" />',
+    props: ['roomInfo', 'isInteraction', 'opaqueId', 'isTeacher', 'roomId', 'userName']
+  },
+  Chat: {
+    template: '<div class="chat-stub" />',
+    props: ['roomId', 'liveUserId', 'userName', 'isTeacher', 'isInteraction', 'btn']
+  },
   Pople: { template: '<div class="pople-stub" />', props: ['liveUserId'] },
   History: { template: '<div class="history-stub" />', props: ['isTeacher'] },
   HistoryVideo: { template: '<div class="hv-stub" />', props: ['opaqueId', 'id'] },
-  VideoList: { template: '<div class="videolist-stub" />', props: ['isTeacher', 'opaqueId', 'isInteraction', 'liveType'] },
+  VideoList: {
+    template: '<div class="videolist-stub" />',
+    props: ['isTeacher', 'opaqueId', 'isInteraction', 'liveType']
+  },
   VideoPlayer: { template: '<div class="vp-stub" />', props: ['isMuted'] }
 };
 
 vi.mock('@/api', () => ({
   default: {
-    show_room_info: vi.fn().mockResolvedValue({ code: 1000, data: { status: 0, videoList: [], updateTime: '' }, msg: '' })
+    show_room_info: vi.fn().mockResolvedValue({
+      code: 1000,
+      data: { status: 0, videoList: [], updateTime: '' },
+      msg: ''
+    })
   }
 }));
 
@@ -33,7 +52,9 @@ function createWrapper() {
   });
 }
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('Classroom small-student', () => {
   it('renders without throwing', async () => {
@@ -44,7 +65,11 @@ describe('Classroom small-student', () => {
 
   it('has correct initial state', () => {
     const wrapper = createWrapper();
-    const vm = wrapper.vm as unknown as { isTeacher: boolean; activeName: string; layoutNum: number };
+    const vm = wrapper.vm as unknown as {
+      isTeacher: boolean;
+      activeName: string;
+      layoutNum: number;
+    };
     expect(vm.isTeacher).toBe(false);
     expect(vm.activeName).toBe('chat');
     expect(vm.layoutNum).toBe(2);

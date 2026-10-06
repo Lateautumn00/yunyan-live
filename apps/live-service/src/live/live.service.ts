@@ -3,7 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { grpcError } from '@yunyan-live/nest-shared';
 import { status as GrpcStatus } from '@grpc/grpc-js';
-import { Courseware, LiveParticipant, LiveRoom, LiveTransferCode, UserWatchTime, VideoRecording } from '@yunyan-live/shared';
+import {
+  Courseware,
+  LiveParticipant,
+  LiveRoom,
+  LiveTransferCode,
+  UserWatchTime,
+  VideoRecording
+} from '@yunyan-live/shared';
 import { JanusService } from '../janus/janus.service';
 
 @Injectable()
@@ -24,7 +31,7 @@ export class LiveService {
     @InjectRepository(Courseware)
     private coursewareRepo: Repository<Courseware>,
     private dataSource: DataSource,
-    private janusService: JanusService,
+    private janusService: JanusService
   ) {}
 
   private generateRoomId(): string {
@@ -44,13 +51,16 @@ export class LiveService {
     return code;
   }
 
-  async create(dto: {
-    title: string;
-    type?: number;
-    startTime: string;
-    duration?: number;
-    roomId?: string;
-  }, userId: string): Promise<LiveRoom> {
+  async create(
+    dto: {
+      title: string;
+      type?: number;
+      startTime: string;
+      duration?: number;
+      roomId?: string;
+    },
+    userId: string
+  ): Promise<LiveRoom> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -67,7 +77,7 @@ export class LiveService {
         status: 1,
         startTime: new Date(Number(dto.startTime)),
         duration: dto.duration ?? 60,
-        liveUserId: userId,
+        liveUserId: userId
       });
 
       await queryRunner.manager.save(room);
@@ -84,7 +94,13 @@ export class LiveService {
     }
   }
 
-  async update(dto: { roomId: string; title?: string; type?: number; startTime?: string; duration?: number }): Promise<LiveRoom> {
+  async update(dto: {
+    roomId: string;
+    title?: string;
+    type?: number;
+    startTime?: string;
+    duration?: number;
+  }): Promise<LiveRoom> {
     const room = await this.repo.findOne({ where: { roomId: dto.roomId } });
     if (!room) {
       throw grpcError(GrpcStatus.NOT_FOUND, '房间不存在');
@@ -108,35 +124,35 @@ export class LiveService {
 
     try {
       const room = await queryRunner.manager.findOne(LiveRoom, {
-        where: { joinCode: dto.joinCode },
+        where: { joinCode: dto.joinCode }
       });
 
       if (!room) throw new NotFoundException('房间不存在');
 
       if (dto.liveUserId) {
         const existing = await queryRunner.manager.findOne(LiveParticipant, {
-          where: { userId: dto.liveUserId, roomId: room.roomId },
+          where: { userId: dto.liveUserId, roomId: room.roomId }
         });
         if (!existing) {
           const participant = this.participantRepo.create({
             userId: dto.liveUserId,
-            roomId: room.roomId,
+            roomId: room.roomId
           });
           await queryRunner.manager.save(participant);
         }
 
         const openWatchTime = await queryRunner.manager.findOne(UserWatchTime, {
-          where: { userId: dto.liveUserId, roomId: room.roomId, leftAt: null },
+          where: { userId: dto.liveUserId, roomId: room.roomId, leftAt: null }
         });
         if (!openWatchTime) {
           const wt = this.watchTimeRepo.create({
             userId: dto.liveUserId,
             roomId: room.roomId,
-            joinedAt: new Date(),
+            joinedAt: new Date()
           });
           await queryRunner.manager.save(wt);
           const online = await queryRunner.manager.count(UserWatchTime, {
-            where: { roomId: room.roomId, leftAt: null },
+            where: { roomId: room.roomId, leftAt: null }
           });
           if (room.liveNums !== online) {
             room.liveNums = online;
@@ -154,7 +170,7 @@ export class LiveService {
         roleName,
         joinCode: room.joinCode,
         liveType: room.type === 0 ? 'smallClass' : 'largeClass',
-        status: room.status,
+        status: room.status
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -171,7 +187,7 @@ export class LiveService {
       ...room,
       videoList: [],
       teacherCode: room.joinCode,
-      studentCode: room.joinCode,
+      studentCode: room.joinCode
     };
   }
 
@@ -187,7 +203,16 @@ export class LiveService {
     return room;
   }
 
-  async cmsList(page = 1, pageSize = 10, status?: number, liveUserId?: string, searchName?: string, startTime?: string, endTime?: string, type?: number) {
+  async cmsList(
+    page = 1,
+    pageSize = 10,
+    status?: number,
+    liveUserId?: string,
+    searchName?: string,
+    startTime?: string,
+    endTime?: string,
+    type?: number
+  ) {
     const qb = this.repo.createQueryBuilder('live');
     if (status !== undefined && status > 0) {
       qb.andWhere('live.status = :status', { status });
@@ -214,7 +239,7 @@ export class LiveService {
     const list = rawList.map(item => ({
       ...item,
       teacherCode: item.joinCode,
-      studentCode: item.joinCode,
+      studentCode: item.joinCode
     }));
     return { list, total, page, pageSize };
   }
@@ -225,7 +250,7 @@ export class LiveService {
     return {
       ...room,
       teacherCode: room.joinCode,
-      studentCode: room.joinCode,
+      studentCode: room.joinCode
     };
   }
 
@@ -250,7 +275,7 @@ export class LiveService {
   async getStudentRooms(userId: string, page = 1, pageSize = 10) {
     const participants = await this.participantRepo.find({
       where: { userId },
-      order: { joinedAt: 'DESC' },
+      order: { joinedAt: 'DESC' }
     });
 
     if (participants.length === 0) return { items: [], total: 0 };
@@ -274,7 +299,7 @@ export class LiveService {
           status: room.status,
           startTime: room.startTime,
           type: room.type,
-          joinedAt: p.joinedAt,
+          joinedAt: p.joinedAt
         };
       })
       .filter(Boolean);
@@ -283,7 +308,7 @@ export class LiveService {
 
   async leaveRoom(userId: string, roomId: string) {
     const wt = await this.watchTimeRepo.findOne({
-      where: { userId, roomId, leftAt: null },
+      where: { userId, roomId, leftAt: null }
     });
     if (wt) {
       wt.leftAt = new Date();
@@ -306,14 +331,14 @@ export class LiveService {
 
   async batchLeave(userId: string, roomIds: string[]) {
     const participants = await this.participantRepo.find({
-      where: roomIds.map(roomId => ({ userId, roomId })),
+      where: roomIds.map(roomId => ({ userId, roomId }))
     });
     if (participants.length > 0) {
       await this.participantRepo.remove(participants);
     }
     for (const roomId of roomIds) {
       const wt = await this.watchTimeRepo.findOne({
-        where: { userId, roomId, leftAt: null },
+        where: { userId, roomId, leftAt: null }
       });
       if (wt) {
         wt.leftAt = new Date();
@@ -327,7 +352,7 @@ export class LiveService {
   async getParticipants(roomId: string) {
     const participants = await this.participantRepo.find({
       where: { roomId },
-      order: { joinedAt: 'DESC' },
+      order: { joinedAt: 'DESC' }
     });
     return participants;
   }
@@ -349,10 +374,7 @@ export class LiveService {
     if (!room) throw grpcError(GrpcStatus.NOT_FOUND, '房间不存在');
     if (room.status !== 1) throw grpcError(GrpcStatus.INVALID_ARGUMENT, '只有未开播的房间才能转移');
 
-    await this.transferCodeRepo.update(
-      { roomId, targetUserId, status: 0 },
-      { status: 2 },
-    );
+    await this.transferCodeRepo.update({ roomId, targetUserId, status: 0 }, { status: 2 });
 
     const code = await this.generateTransferCode();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
@@ -362,7 +384,7 @@ export class LiveService {
       roomId,
       targetUserId,
       status: 0,
-      expiresAt,
+      expiresAt
     });
     await this.transferCodeRepo.save(transferCode);
 
@@ -373,13 +395,17 @@ export class LiveService {
     const room = await this.repo.findOne({ where: { roomId } });
     if (!room) throw grpcError(GrpcStatus.NOT_FOUND, '房间不存在');
     if (room.status !== 1) throw grpcError(GrpcStatus.INVALID_ARGUMENT, '只有未开播的房间才能转移');
-    if (room.liveUserId !== fromUserId) throw grpcError(GrpcStatus.PERMISSION_DENIED, '只能转移自己的直播间');
+    if (room.liveUserId !== fromUserId)
+      throw grpcError(GrpcStatus.PERMISSION_DENIED, '只能转移自己的直播间');
 
     const transferCode = await this.transferCodeRepo.findOne({ where: { code } });
     if (!transferCode) throw grpcError(GrpcStatus.INVALID_ARGUMENT, '转移码无效');
-    if (transferCode.status !== 0) throw grpcError(GrpcStatus.INVALID_ARGUMENT, '转移码已使用或已过期');
-    if (transferCode.expiresAt < new Date()) throw grpcError(GrpcStatus.INVALID_ARGUMENT, '转移码已过期');
-    if (transferCode.roomId !== roomId) throw grpcError(GrpcStatus.INVALID_ARGUMENT, '转移码与房间不匹配');
+    if (transferCode.status !== 0)
+      throw grpcError(GrpcStatus.INVALID_ARGUMENT, '转移码已使用或已过期');
+    if (transferCode.expiresAt < new Date())
+      throw grpcError(GrpcStatus.INVALID_ARGUMENT, '转移码已过期');
+    if (transferCode.roomId !== roomId)
+      throw grpcError(GrpcStatus.INVALID_ARGUMENT, '转移码与房间不匹配');
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -418,7 +444,7 @@ export class LiveService {
       fileSize: dto.fileSize,
       duration: dto.duration,
       recordType: dto.recordType,
-      teacherName: dto.teacherName,
+      teacherName: dto.teacherName
     });
     await this.videoRepo.save(recording);
     return { success: true };
@@ -436,7 +462,8 @@ export class LiveService {
     const page = dto.page || 1;
     const pageSize = dto.pageSize || 10;
 
-    const qb = this.videoRepo.createQueryBuilder('v')
+    const qb = this.videoRepo
+      .createQueryBuilder('v')
       .select('v.roomId', 'roomId')
       .addSelect('COUNT(*)', 'count')
       .addSelect('MIN(v.createdAt)', 'firstRecordedAt')
@@ -449,7 +476,8 @@ export class LiveService {
       return { items: [], total: 0 };
     }
 
-    const roomQb = this.repo.createQueryBuilder('r')
+    const roomQb = this.repo
+      .createQueryBuilder('r')
       .where('r.roomId IN (:...roomIds)', { roomIds });
 
     if (dto.liveUserId) {
@@ -471,12 +499,15 @@ export class LiveService {
     roomQb.orderBy('r.createdAt', 'DESC');
     const [rooms, total] = await roomQb.getManyAndCount();
 
-    const countMap = new Map(recordings.map((r: { roomId: string; count: string }) => [r.roomId, Number(r.count)]));
+    const countMap = new Map(
+      recordings.map((r: { roomId: string; count: string }) => [r.roomId, Number(r.count)])
+    );
     const firstRecordedAtMap = new Map(
       recordings.map((r: { roomId: string; firstRecordedAt: string | Date }) => {
-        const raw = r.firstRecordedAt instanceof Date
-          ? r.firstRecordedAt
-          : new Date(String(r.firstRecordedAt));
+        const raw =
+          r.firstRecordedAt instanceof Date
+            ? r.firstRecordedAt
+            : new Date(String(r.firstRecordedAt));
         return [r.roomId, String(raw.getTime())];
       })
     );
@@ -487,7 +518,7 @@ export class LiveService {
       teacherName: '',
       type: room.type,
       startTime: firstRecordedAtMap.get(room.roomId) || '',
-      count: countMap.get(room.roomId) || 0,
+      count: countMap.get(room.roomId) || 0
     }));
 
     const paged = items.slice((page - 1) * pageSize, page * pageSize);
@@ -495,7 +526,8 @@ export class LiveService {
   }
 
   async getVideoDetail(dto: { roomId: string; startTime?: string; endTime?: string }) {
-    const qb = this.videoRepo.createQueryBuilder('v')
+    const qb = this.videoRepo
+      .createQueryBuilder('v')
       .where('v.roomId = :roomId', { roomId: dto.roomId });
 
     if (dto.startTime) {
@@ -518,9 +550,10 @@ export class LiveService {
         duration: v.duration,
         recordType: v.recordType,
         teacherName: v.teacherName,
-        createdAt: v.createdAt instanceof Date ? v.createdAt.getTime().toString() : String(v.createdAt || ''),
+        createdAt:
+          v.createdAt instanceof Date ? v.createdAt.getTime().toString() : String(v.createdAt || '')
       })),
-      total,
+      total
     };
   }
 
@@ -550,7 +583,7 @@ export class LiveService {
       filext: dto.filext,
       filesize: dto.filesize,
       fileurl: dto.fileurl,
-      createUserId: dto.createUserId || '',
+      createUserId: dto.createUserId || ''
     });
     await this.coursewareRepo.save(courseware);
     return { id: courseware.id };
@@ -559,7 +592,7 @@ export class LiveService {
   async listCoursewares(roomId: string) {
     const items = await this.coursewareRepo.find({
       where: { roomId },
-      order: { createdAt: 'ASC' },
+      order: { createdAt: 'ASC' }
     });
     return {
       items: items.map(c => ({
@@ -569,9 +602,10 @@ export class LiveService {
         filext: c.filext,
         filesize: c.filesize,
         fileurl: c.fileurl,
-        createdAt: c.createdAt instanceof Date ? c.createdAt.getTime().toString() : String(c.createdAt || ''),
+        createdAt:
+          c.createdAt instanceof Date ? c.createdAt.getTime().toString() : String(c.createdAt || '')
       })),
-      total: items.length,
+      total: items.length
     };
   }
 
@@ -583,17 +617,29 @@ export class LiveService {
     return { success: true };
   }
 
-  async getUserWatchTimeList(dto: {page?:number;pageSize?:number;roomId?:string;searchName?:string}) {
+  async getUserWatchTimeList(dto: {
+    page?: number;
+    pageSize?: number;
+    roomId?: string;
+    searchName?: string;
+  }) {
     const page = dto.page || 1;
     const pageSize = dto.pageSize || 10;
-    const qb = this.watchTimeRepo.createQueryBuilder('w')
+    const qb = this.watchTimeRepo
+      .createQueryBuilder('w')
       .innerJoin(LiveRoom, 'r', 'r.roomId = w.roomId AND r.deletedAt IS NULL');
     if (dto.roomId) qb.andWhere('w.roomId = :roomId', { roomId: dto.roomId });
-    if (dto.searchName) qb.andWhere('r.title LIKE :searchName', { searchName: '%' + dto.searchName + '%' });
+    if (dto.searchName)
+      qb.andWhere('r.title LIKE :searchName', { searchName: '%' + dto.searchName + '%' });
     qb.select([
-      'w.id', 'w.userId', 'w.roomId', 'w.joinedAt', 'w.leftAt', 'w.createdAt',
+      'w.id',
+      'w.userId',
+      'w.roomId',
+      'w.joinedAt',
+      'w.leftAt',
+      'w.createdAt',
       'r.title',
-      'CASE WHEN w."leftAt" IS NULL THEN true ELSE false END AS is_online',
+      'CASE WHEN w."leftAt" IS NULL THEN true ELSE false END AS is_online'
     ])
       .groupBy('w.id, r.title')
       .orderBy('w.createdAt', 'DESC');
@@ -611,7 +657,7 @@ export class LiveService {
       leftAt: i.w_left_at ? new Date(i.w_left_at) : null,
       createdAt: new Date(i.w_created_at),
       roomTitle: i.r_title,
-      isOnline: i.is_online === true || i.is_online === 'true',
+      isOnline: i.is_online === true || i.is_online === 'true'
     }));
     const paged = items.slice((page - 1) * pageSize, page * pageSize);
     return { items: paged, total, totalTime };

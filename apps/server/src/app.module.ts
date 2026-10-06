@@ -14,19 +14,21 @@ import { AppService } from './app.service';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 100,
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100
+      }
+    ]),
     RedisModule,
     GatewayClientsModule,
     AuthModule,
     UsersModule,
     LiveModule,
     MailModule,
-    UploadModule,
+    UploadModule
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService]
 })
 export class AppModule {}

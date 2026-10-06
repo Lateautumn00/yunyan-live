@@ -106,16 +106,18 @@ type LiveServiceHarness = {
   dataSource: { createQueryRunner: Mock };
 };
 
-export function createLiveService(opts: {
-  room?: RepoMock;
-  participant?: RepoMock;
-  transfer?: RepoMock;
-  video?: RepoMock;
-  watchTime?: RepoMock;
-  courseware?: RepoMock;
-  janus?: JanusMock;
-  database?: DataSourceMock;
-} = {}): LiveServiceHarness {
+export function createLiveService(
+  opts: {
+    room?: RepoMock;
+    participant?: RepoMock;
+    transfer?: RepoMock;
+    video?: RepoMock;
+    watchTime?: RepoMock;
+    courseware?: RepoMock;
+    janus?: JanusMock;
+    database?: DataSourceMock;
+  } = {}
+): LiveServiceHarness {
   const room = opts.room ?? mockRepo();
   const participant = opts.participant ?? mockRepo();
   const transfer = opts.transfer ?? mockRepo();

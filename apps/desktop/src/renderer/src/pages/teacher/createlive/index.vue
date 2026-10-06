@@ -6,23 +6,12 @@
         <div>
           <h3>基本信息</h3>
 
-          <el-form
-            ref="liveFormRef"
-            :model="liveForm"
-            :rules="rules"
-            label-width="110px"
-          >
-            <el-form-item
-              label="直播名称"
-              prop="title"
-            >
+          <el-form ref="liveFormRef" :model="liveForm" :rules="rules" label-width="110px">
+            <el-form-item label="直播名称" prop="title">
               <el-input v-model="liveForm.title" />
             </el-form-item>
 
-            <el-form-item
-              label="直播类型"
-              prop="type"
-            >
+            <el-form-item label="直播类型" prop="type">
               <div class="live-type">
                 <div
                   class="class-type small"
@@ -31,9 +20,7 @@
                 >
                   <div>
                     <h4>小班教学</h4>
-                    <p>
-                      适用于1-10人小班面对面教学场景，学生听课更流畅，免费。
-                    </p>
+                    <p>适用于1-10人小班面对面教学场景，学生听课更流畅，免费。</p>
                   </div>
                 </div>
                 <div
@@ -43,18 +30,12 @@
                 >
                   <div>
                     <h4>大班教学</h4>
-                    <p>
-                      适用教育机构开展招生引流课程，支持百人同时在线，稳定流畅，高清画质。
-                    </p>
+                    <p>适用教育机构开展招生引流课程，支持百人同时在线，稳定流畅，高清画质。</p>
                   </div>
                 </div>
               </div>
             </el-form-item>
-            <el-form-item
-              label="开始时间"
-              prop="startTime"
-              required
-            >
+            <el-form-item label="开始时间" prop="startTime" required>
               <el-date-picker
                 v-model="liveForm.startTime"
                 type="datetime"
@@ -65,10 +46,7 @@
                 :disabled-minutes="disabledMinutes"
               />
             </el-form-item>
-            <el-form-item
-              label="直播时长"
-              prop="duration"
-            >
+            <el-form-item label="直播时长" prop="duration">
               <el-input-number
                 v-model="liveForm.duration"
                 :min="10"
@@ -79,13 +57,7 @@
           </el-form>
         </div>
       </div>
-      <el-button
-        type="primary"
-        :loading="creating"
-        @click="submitForm"
-      >
-        创建
-      </el-button>
+      <el-button type="primary" :loading="creating" @click="submitForm"> 创建 </el-button>
     </div>
   </div>
 </template>
@@ -120,7 +92,7 @@ const opaqueId = ref(userStore.guid);
 const room = ref<JanusSession | null>(null);
 const plugin = ref<JanusHandle | null>(null);
 const boardPlugin = ref<JanusHandle | null>(null);
-const janusLib = ref<typeof import('@/vendor/live/live')['default'] | null>(null);
+const janusLib = ref<(typeof import('@/vendor/live/live'))['default'] | null>(null);
 const liveFormRef = ref<FormInstance>();
 const creating = ref(false);
 const liveForm = ref<CreateForm>({
@@ -182,7 +154,8 @@ function disabledHours() {
 function disabledMinutes(hour: number) {
   const now = new Date();
   const selected = liveForm.value.startTime ? new Date(liveForm.value.startTime) : null;
-  if (!selected || selected.toDateString() !== now.toDateString() || hour !== now.getHours()) return [];
+  if (!selected || selected.toDateString() !== now.toDateString() || hour !== now.getHours())
+    return [];
   const minutes: number[] = [];
   for (let i = 0; i < now.getMinutes(); i++) minutes.push(i);
   return minutes;
@@ -202,9 +175,7 @@ async function LiveCreate() {
   try {
     const res = await Live.create_live({
       title: liveForm.value.title,
-      startTime: dayjs(liveForm.value.startTime)
-        .valueOf()
-        .toString(),
+      startTime: dayjs(liveForm.value.startTime).valueOf().toString(),
       type: liveForm.value.type,
       roomId: liveForm.value.roomId,
       duration: liveForm.value.duration ? Number(liveForm.value.duration) : undefined
@@ -263,7 +234,7 @@ function getRoomId() {
   };
   plugin.value.send({
     message: data,
-    success: (result) => {
+    success: result => {
       if (result['videoroom'] && result['videoroom'] === 'created') {
         setWhiteBoard();
       }
@@ -335,7 +306,7 @@ async function init() {
           liveAttach();
           textAttach();
         },
-        error: (error) => {
+        error: error => {
           ElMessage.error(String(error));
         }
       });
@@ -347,7 +318,7 @@ function liveAttach() {
   room.value?.attach({
     plugin: 'janus.plugin.videoroom',
     opaqueId: opaqueId.value,
-    success: (pluginHandle) => {
+    success: pluginHandle => {
       plugin.value = pluginHandle;
     },
     error: () => {},
@@ -363,7 +334,7 @@ function textAttach() {
   room.value?.attach({
     plugin: 'janus.plugin.textroom',
     opaqueId: opaqueId.value,
-    success: (pluginHandle) => {
+    success: pluginHandle => {
       boardPlugin.value = pluginHandle;
       pluginTextSend({ request: 'setup' });
     },
@@ -377,7 +348,7 @@ function textAttach() {
             video: false,
             data: true
           },
-          success: (answerJsep) => {
+          success: answerJsep => {
             pluginTextSend({ request: 'ack' }, answerJsep);
           },
           error: () => {}
@@ -385,7 +356,7 @@ function textAttach() {
       }
     },
     ondataopen: () => {},
-    ondata: (data) => {
+    ondata: data => {
       const json = JSON.parse(data) as { textroom?: string };
       if (json.textroom === 'success') {
         void LiveCreate();
@@ -442,7 +413,9 @@ const { getServerTime } = useServerTime();
       color: @color-333333;
       font-size: @fs14;
       margin: 0;
-      font-family: PingFangSC-Medium, PingFang SC;
+      font-family:
+        PingFangSC-Medium,
+        PingFang SC;
       font-weight: 500;
     }
     > p {
@@ -485,4 +458,3 @@ const { getServerTime } = useServerTime();
   display: none;
 }
 </style>
-

@@ -53,8 +53,7 @@ export function useClassroomStudentHooks(options: ClassroomStudentHooksOptions) 
     video.value?.retryExists();
   }
 
-  function closedPlay() {
-  }
+  function closedPlay() {}
 
   function palyHistoryVideo(id: string, title: string) {
     playId.value = id;

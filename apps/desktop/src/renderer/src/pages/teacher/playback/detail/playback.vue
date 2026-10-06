@@ -1,29 +1,14 @@
 ﻿<template>
   <div class="playback-page">
     <div class="playback-header">
-      <el-button
-        class="back-btn"
-        @click="goBack"
-      >
+      <el-button class="back-btn" @click="goBack">
         <el-icon><ArrowLeft /></el-icon>
         返回
       </el-button>
       <div class="header-info">
         <span class="title">{{ title }}</span>
-        <el-tag
-          v-if="recordType === 1"
-          type="info"
-          size="small"
-        >
-          窗口录制
-        </el-tag>
-        <el-tag
-          v-else
-          type="success"
-          size="small"
-        >
-          流录制
-        </el-tag>
+        <el-tag v-if="recordType === 1" type="info" size="small"> 窗口录制 </el-tag>
+        <el-tag v-else type="success" size="small"> 流录制 </el-tag>
         <span class="duration">{{ formatDurationClock(duration) }}</span>
         <span class="time">{{ formatDate(Number(createTime)) }}</span>
         <el-button
@@ -52,12 +37,7 @@
         ref="historyVideoRef"
         :opaque-id="opaqueId"
       />
-      <div
-        v-else
-        class="no-video"
-      >
-        暂无视频
-      </div>
+      <div v-else class="no-video">暂无视频</div>
     </div>
   </div>
 </template>
@@ -75,13 +55,13 @@ const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
 
-const roomId = ref(route.query.roomId as string || '');
-const videoId = ref(route.query.videoId as string || '');
+const roomId = ref((route.query.roomId as string) || '');
+const videoId = ref((route.query.videoId as string) || '');
 const recordType = ref(Number(route.query.recordType) || 2);
-const title = ref(route.query.title as string || '');
+const title = ref((route.query.title as string) || '');
 const duration = ref(Number(route.query.duration) || 0);
-const createTime = ref(route.query.createTime as string || '');
-const filePath = ref(route.query.filePath as string || '');
+const createTime = ref((route.query.createTime as string) || '');
+const filePath = ref((route.query.filePath as string) || '');
 
 const fileUrl = ref('');
 const opaqueId = ref('');
@@ -89,7 +69,11 @@ const historyVideoRef = ref<InstanceType<typeof HistoryVideo> | null>(null);
 const { downloading, download } = useRecordingDownload();
 
 async function loadFileUrl() {
-  console.log('[playback] loadFileUrl', { recordType: recordType.value, filePath: filePath.value, hasElectronAPI: !!window.electronAPI });
+  console.log('[playback] loadFileUrl', {
+    recordType: recordType.value,
+    filePath: filePath.value,
+    hasElectronAPI: !!window.electronAPI
+  });
   if (recordType.value === 1 && filePath.value && window.electronAPI) {
     const url = await window.electronAPI.recordingGetFileUrl(filePath.value);
     console.log('[playback] fileUrl resolved', url);

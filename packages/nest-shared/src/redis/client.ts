@@ -14,6 +14,6 @@ export function createRedisClient(options: RedisClientOptions = {}): Redis {
     host: options.host || '127.0.0.1',
     port: Number(options.port) || 6379,
     enableOfflineQueue: false,
-    maxRetriesPerRequest: 1,
+    maxRetriesPerRequest: 1
   });
 }

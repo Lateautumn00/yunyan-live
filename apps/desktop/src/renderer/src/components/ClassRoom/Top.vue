@@ -6,10 +6,7 @@
     <div class="classroom-top">
       <div class="left">
         <div class="top-left">
-          <div
-            v-if="!visible2"
-            class="tf"
-          >
+          <div v-if="!visible2" class="tf">
             <el-tooltip
               class="item"
               effect="dark"
@@ -40,31 +37,14 @@
               >
                 <Connection />
               </el-icon>
-              <el-icon
-                v-else
-                :size="18"
-                color="#989898"
-                aria-label="无法访问"
-              >
+              <el-icon v-else :size="18" color="#989898" aria-label="无法访问">
                 <Connection />
               </el-icon>
             </el-tooltip>
           </div>
-          <div
-            v-else
-            class="tf"
-          >
-            <el-tooltip
-              class="item"
-              effect="dark"
-              content="网络未连接"
-              placement="bottom-end"
-            >
-              <el-icon
-                :size="18"
-                color="#989898"
-                aria-label="无法访问"
-              >
+          <div v-else class="tf">
+            <el-tooltip class="item" effect="dark" content="网络未连接" placement="bottom-end">
+              <el-icon :size="18" color="#989898" aria-label="无法访问">
                 <Connection />
               </el-icon>
             </el-tooltip>
@@ -86,19 +66,13 @@
             </li>
             <li>
               <span class="name">参加码：</span><span>{{ roomInfo.joinCode }}</span>
-              <el-icon
-                class="copy"
-                @click="copy(roomInfo.joinCode ?? '')"
-              >
+              <el-icon class="copy" @click="copy(roomInfo.joinCode ?? '')">
                 <CopyDocument />
               </el-icon>
             </li>
             <li>
               <span class="name">参加链接：</span><span>http://abc</span>
-              <el-icon
-                class="copy"
-                @click="copy('http://abc')"
-              >
+              <el-icon class="copy" @click="copy('http://abc')">
                 <CopyDocument />
               </el-icon>
             </li>
@@ -123,42 +97,25 @@
           popper-class="lay2"
         >
           <ul class="layout">
-            <li
-              :class="layoutNum === 1 ? 'not' : ''"
-              @click="setLayout(1)"
-            >
+            <li :class="layoutNum === 1 ? 'not' : ''" @click="setLayout(1)">
               <el-icon :class="layoutNum === 1 ? 'click-btn' : ''">
-                <Grid />
-              </el-icon><span>白板模式</span>
+                <Grid /> </el-icon
+              ><span>白板模式</span>
             </li>
-            <li
-              :class="layoutNum === 3 || layoutNum === 2 ? 'not' : ''"
-              @click="setLayout(3)"
-            >
+            <li :class="layoutNum === 3 || layoutNum === 2 ? 'not' : ''" @click="setLayout(3)">
               <el-icon :class="layoutNum === 3 || layoutNum === 2 ? 'click-btn' : ''">
-                <Platform />
-              </el-icon><span>默认模式</span>
+                <Platform /> </el-icon
+              ><span>默认模式</span>
             </li>
           </ul>
           <template #reference>
             <div class="top-left left-pointer">
               <div class="dot-pos">
-                <el-badge
-                  :is-dot="layoutNum === 1 && isDotNum > 0 ? true : false"
-                  class="item"
-                >
-                  <el-icon
-                    v-if="layoutNum === 1"
-                    :size="18"
-                    aria-label="布局"
-                  >
+                <el-badge :is-dot="layoutNum === 1 && isDotNum > 0 ? true : false" class="item">
+                  <el-icon v-if="layoutNum === 1" :size="18" aria-label="布局">
                     <Grid />
                   </el-icon>
-                  <el-icon
-                    v-else
-                    :size="18"
-                    aria-label="布局"
-                  >
+                  <el-icon v-else :size="18" aria-label="布局">
                     <Platform />
                   </el-icon>
                 </el-badge>
@@ -200,8 +157,8 @@
 
         <div class="top-left content">
           <el-icon :size="18">
-            <Timer />
-          </el-icon><span>{{ formatStopwatch(liveTimeLen) }}</span>
+            <Timer /> </el-icon
+          ><span>{{ formatStopwatch(liveTimeLen) }}</span>
         </div>
       </div>
       <div class="right">
@@ -211,8 +168,8 @@
           @click="openLives(true, 'hires', 'open')"
         >
           <el-icon :size="16">
-            <VideoPlay />
-          </el-icon><span>开始直播</span>
+            <VideoPlay /> </el-icon
+          ><span>开始直播</span>
         </div>
         <div
           v-if="!btn && isTeacher && type === 'stop'"
@@ -220,17 +177,13 @@
           @click="openLives(true, 'hires', 'open')"
         >
           <el-icon :size="16">
-            <VideoPlay />
-          </el-icon><span>继续直播</span>
+            <VideoPlay /> </el-icon
+          ><span>继续直播</span>
         </div>
-        <div
-          v-if="!btn && isTeacher"
-          class="top-right content"
-          @click="lookLive(false)"
-        >
+        <div v-if="!btn && isTeacher" class="top-right content" @click="lookLive(false)">
           <el-icon :size="16">
-            <CircleClose />
-          </el-icon><span>退出</span>
+            <CircleClose /> </el-icon
+          ><span>退出</span>
         </div>
         <div
           v-if="btn && isTeacher"
@@ -238,8 +191,8 @@
           @click="openLives(false, '', 'stop')"
         >
           <el-icon :size="16">
-            <VideoPause />
-          </el-icon><span>暂停直播</span>
+            <VideoPause /> </el-icon
+          ><span>暂停直播</span>
         </div>
         <div
           v-if="btn && (isTeacher || isInteraction === 2) && liveType === 'hires'"
@@ -247,8 +200,8 @@
           @click="openLives(true, 'screen', 'update')"
         >
           <el-icon :size="16">
-            <Monitor />
-          </el-icon><span>共享桌面</span>
+            <Monitor /> </el-icon
+          ><span>共享桌面</span>
         </div>
         <div
           v-if="btn && (isTeacher || isInteraction === 2) && liveType === 'screen'"
@@ -256,8 +209,8 @@
           @click="openLives(true, 'hires', 'update')"
         >
           <el-icon :size="16">
-            <Monitor />
-          </el-icon><span>结束共享</span>
+            <Monitor /> </el-icon
+          ><span>结束共享</span>
         </div>
         <div
           v-if="!recordType && btn && isTeacher"
@@ -265,8 +218,8 @@
           @click="record(true, recordTimeLen)"
         >
           <el-icon :size="16">
-            <VideoCamera />
-          </el-icon><span>录制</span>
+            <VideoCamera /> </el-icon
+          ><span>录制</span>
         </div>
         <div
           v-if="recordType && btn && isTeacher"
@@ -275,31 +228,20 @@
           @mouseover="recordMouse(true)"
           @mouseleave="recordMouse(false)"
         >
-          <el-icon
-            :size="16"
-            color="#e0383e"
-            aria-label="录制中"
-          >
-            <VideoCameraFilled />
-          </el-icon><span v-show="!recordMouseType">{{ formatStopwatch(recordTimeLen) }}</span><span v-show="recordMouseType">停止录制</span>
+          <el-icon :size="16" color="#e0383e" aria-label="录制中">
+            <VideoCameraFilled /> </el-icon
+          ><span v-show="!recordMouseType">{{ formatStopwatch(recordTimeLen) }}</span
+          ><span v-show="recordMouseType">停止录制</span>
         </div>
-        <div
-          v-if="btn && isTeacher"
-          class="top-right content closebgcolor"
-          @click="end()"
-        >
+        <div v-if="btn && isTeacher" class="top-right content closebgcolor" @click="end()">
           <el-icon :size="16">
-            <CircleClose />
-          </el-icon><span>结束</span>
+            <CircleClose /> </el-icon
+          ><span>结束</span>
         </div>
-        <div
-          v-if="!isTeacher"
-          class="top-right content closebgcolor"
-          @click="lookLive(false)"
-        >
+        <div v-if="!isTeacher" class="top-right content closebgcolor" @click="lookLive(false)">
           <el-icon :size="16">
-            <CircleClose />
-          </el-icon><span>退出</span>
+            <CircleClose /> </el-icon
+          ><span>退出</span>
         </div>
       </div>
     </div>
@@ -314,15 +256,8 @@
     >
       <div class="visible">
         <div class="share-bottom">
-          <el-button
-            class="share-cancl"
-            @click="visible = false"
-          >
-            继续直播
-          </el-button><el-button
-            class="share-share"
-            @click="openLives(false, 'hires', 'close')"
-          >
+          <el-button class="share-cancl" @click="visible = false"> 继续直播 </el-button
+          ><el-button class="share-share" @click="openLives(false, 'hires', 'close')">
             结束
           </el-button>
         </div>
@@ -340,29 +275,22 @@
       :teleported="false"
     >
       <div class="visible1">
-        <div class="title1">
-          直播已结束
-        </div>
-        <div class="title2">
-          {{ roomInfo.title }}直播间
-        </div>
+        <div class="title1">直播已结束</div>
+        <div class="title2">{{ roomInfo.title }}直播间</div>
         <div class="num">
           <div class="timeLen">
-            <span class="con">{{ formatStopwatch(endMessage.realDuration) }}</span><span class="title2">总时长</span>
+            <span class="con">{{ formatStopwatch(endMessage.realDuration) }}</span
+            ><span class="title2">总时长</span>
           </div>
 
           <el-divider direction="vertical" />
           <div class="popleNum">
-            <span class="con">{{ endMessage.totalWatchNum }}</span><span class="title2">观看人次</span>
+            <span class="con">{{ endMessage.totalWatchNum }}</span
+            ><span class="title2">观看人次</span>
           </div>
         </div>
         <div class="share-bottom">
-          <el-button
-            class="share-share"
-            @click="lookLive(false)"
-          >
-            退出直播间
-          </el-button>
+          <el-button class="share-share" @click="lookLive(false)"> 退出直播间 </el-button>
         </div>
       </div>
     </el-dialog>
@@ -378,26 +306,14 @@
     >
       <div class="visible2">
         <div class="con">
-          <img
-            src="~@/assets/imgs/classroom/wifi-close.png"
-            alt="/"
-          >
+          <img src="~@/assets/imgs/classroom/wifi-close.png" alt="/" />
           <div class="vis-con">
-            <div class="title">
-              网络连接失败
-            </div>
-            <div class="cons">
-              请检查网络状态并重新进入直播间
-            </div>
+            <div class="title">网络连接失败</div>
+            <div class="cons">请检查网络状态并重新进入直播间</div>
           </div>
         </div>
         <div class="share-bottom">
-          <el-button
-            class="share-share"
-            @click="goBack()"
-          >
-            返回首页
-          </el-button>
+          <el-button class="share-share" @click="goBack()"> 返回首页 </el-button>
         </div>
       </div>
     </el-dialog>

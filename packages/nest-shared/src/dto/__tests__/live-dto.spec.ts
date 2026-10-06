@@ -25,7 +25,7 @@ function errorsOf<T extends object>(cls: new () => T, input: Record<string, unkn
 }
 
 function constraintsOf(errors: ValidationError[], property: string) {
-  return errors.find((e) => e.property === property)?.constraints;
+  return errors.find(e => e.property === property)?.constraints;
 }
 
 afterEach(() => {
@@ -135,9 +135,9 @@ describe('JoinLiveDto / ChangeStatusDto', () => {
     expect(
       constraintsOf(await errorsOf(ChangeStatusDto, { roomId: 'r1', status: '2' }), 'status')
     ).toMatchObject({ isNumber: expect.any(String) });
-    expect(
-      constraintsOf(await errorsOf(ChangeStatusDto, { roomId: '' }), 'roomId')
-    ).toMatchObject({ isNotEmpty: expect.any(String) });
+    expect(constraintsOf(await errorsOf(ChangeStatusDto, { roomId: '' }), 'roomId')).toMatchObject({
+      isNotEmpty: expect.any(String)
+    });
   });
 });
 
@@ -152,9 +152,9 @@ describe('UpdateForbidDto', () => {
 
   it('liveUserId 可缺省，roomId 必填', async () => {
     expect(await errorsOf(UpdateForbidDto, { roomId: 'r1', status: 1 })).toEqual([]);
-    expect(constraintsOf(await errorsOf(UpdateForbidDto, { status: 1 }), 'roomId')).toMatchObject(
-      { isNotEmpty: expect.any(String) }
-    );
+    expect(constraintsOf(await errorsOf(UpdateForbidDto, { status: 1 }), 'roomId')).toMatchObject({
+      isNotEmpty: expect.any(String)
+    });
   });
 });
 
@@ -164,8 +164,9 @@ describe('UpdateLiveDto', () => {
   });
 
   it('title 给值时必须 1-200 字符（无 IsNotEmpty，靠 MinLength 兜底空串）', async () => {
-    expect(constraintsOf(await errorsOf(UpdateLiveDto, { roomId: 'r1', title: '' }), 'title'))
-      .toEqual({ minLength: expect.any(String) });
+    expect(
+      constraintsOf(await errorsOf(UpdateLiveDto, { roomId: 'r1', title: '' }), 'title')
+    ).toEqual({ minLength: expect.any(String) });
     expect(
       constraintsOf(
         await errorsOf(UpdateLiveDto, { roomId: 'r1', title: 'x'.repeat(201) }),
@@ -196,7 +197,10 @@ describe('CreateCoursewareDto', () => {
 
   it('filename/fileUrl 必填且 filename≤255、filext≤20', async () => {
     expect(
-      constraintsOf(await errorsOf(CreateCoursewareDto, { roomId: 'r1', fileUrl: '/u/a' }), 'filename')
+      constraintsOf(
+        await errorsOf(CreateCoursewareDto, { roomId: 'r1', fileUrl: '/u/a' }),
+        'filename'
+      )
     ).toMatchObject({ isNotEmpty: expect.any(String) });
     expect(
       constraintsOf(
@@ -220,7 +224,10 @@ describe('CreateCoursewareDto', () => {
       )
     ).toMatchObject({ maxLength: expect.any(String) });
     expect(
-      constraintsOf(await errorsOf(CreateCoursewareDto, { roomId: 'r1', filename: 'a.pptx' }), 'fileUrl')
+      constraintsOf(
+        await errorsOf(CreateCoursewareDto, { roomId: 'r1', filename: 'a.pptx' }),
+        'fileUrl'
+      )
     ).toMatchObject({ isNotEmpty: expect.any(String) });
     expect(
       constraintsOf(

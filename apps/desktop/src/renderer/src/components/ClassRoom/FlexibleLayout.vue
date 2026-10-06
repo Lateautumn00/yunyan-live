@@ -5,17 +5,9 @@
         <slot name="whiteboard" />
       </div>
 
-      <div
-        v-show="showChat"
-        class="divider vertical"
-        @mousedown="onVerticalDragStart"
-      />
+      <div v-show="showChat" class="divider vertical" @mousedown="onVerticalDragStart" />
 
-      <div
-        v-show="showChat"
-        class="chat-panel"
-        :style="{ width: chatWidth + 'px' }"
-      >
+      <div v-show="showChat" class="chat-panel" :style="{ width: chatWidth + 'px' }">
         <slot name="chat" />
       </div>
     </div>
@@ -51,7 +43,7 @@ const props = withDefaults(
   {
     enableVideos: true,
     chatVisible: true,
-    videosVisible: true,
+    videosVisible: true
   }
 );
 
@@ -63,10 +55,24 @@ const emit = defineEmits<{
 const showChat = ref(props.chatVisible);
 const showVideos = ref(props.videosVisible);
 
-watch(() => props.chatVisible, (val) => { showChat.value = val; });
-watch(() => props.videosVisible, (val) => { showVideos.value = val; });
-watch(showChat, (val) => { emit('update:chatVisible', val); });
-watch(showVideos, (val) => { emit('update:videosVisible', val); });
+watch(
+  () => props.chatVisible,
+  val => {
+    showChat.value = val;
+  }
+);
+watch(
+  () => props.videosVisible,
+  val => {
+    showVideos.value = val;
+  }
+);
+watch(showChat, val => {
+  emit('update:chatVisible', val);
+});
+watch(showVideos, val => {
+  emit('update:videosVisible', val);
+});
 const chatWidth = ref(280);
 const videoHeight = ref(150);
 

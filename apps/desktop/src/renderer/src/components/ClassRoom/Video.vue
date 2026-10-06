@@ -2,7 +2,16 @@
   <div
     class="classroom-video"
     :class="{ floating: isFloating }"
-    :style="isFloating ? { left: posX + 'px', top: posY + 'px', width: floatingWidth + 'px', height: floatingHeight + 'px' } : {}"
+    :style="
+      isFloating
+        ? {
+            left: posX + 'px',
+            top: posY + 'px',
+            width: floatingWidth + 'px',
+            height: floatingHeight + 'px'
+          }
+        : {}
+    "
     @mousedown="isFloating && onDragStart($event)"
   >
     <div class="bottom">
@@ -60,31 +69,16 @@
           content="全屏观看"
           placement="bottom-end"
         >
-          <el-icon
-            aria-label="全屏"
-            @click.stop="pall"
-          >
+          <el-icon aria-label="全屏" @click.stop="pall">
             <FullScreen />
           </el-icon>
         </el-tooltip>
       </div>
     </div>
-    <VideoPlayer
-      ref="videoPlayer"
-      :is-muted="isTeacher"
-    />
-    <div
-      v-if="!isTeacher && !remoteCameraOn"
-      class="camera-off-overlay"
-    >
-      <div
-        v-if="remoteMicOn"
-        class="overlay-content"
-      >
-        <el-icon
-          class="is-off"
-          aria-label="摄像头"
-        >
+    <VideoPlayer ref="videoPlayer" :is-muted="isTeacher" />
+    <div v-if="!isTeacher && !remoteCameraOn" class="camera-off-overlay">
+      <div v-if="remoteMicOn" class="overlay-content">
+        <el-icon class="is-off" aria-label="摄像头">
           <VideoCamera />
         </el-icon>
         <span>摄像头未开启</span>
@@ -121,12 +115,9 @@
                 class="share-player"
                 :class="index === sourcesNum ? 'share-select' : 'share-default'"
               >
-                <img :src="item.thumbnailDataUrl">
+                <img :src="item.thumbnailDataUrl" />
               </div>
-              <div
-                class="share-name"
-                :class="index === sourcesNum ? 'share-select-name' : ''"
-              >
+              <div class="share-name" :class="index === sourcesNum ? 'share-select-name' : ''">
                 {{ item.name }}
               </div>
             </div>
@@ -134,60 +125,98 @@
         </div>
 
         <div class="share-bottom">
-          <el-button
-            class="share-cancl"
-            @click="closeDig()"
-          >
-            取消
-          </el-button>
-          <el-button
-            class="share-share"
-            @click="goShare()"
-          >
-            共享
-          </el-button>
+          <el-button class="share-cancl" @click="closeDig()"> 取消 </el-button>
+          <el-button class="share-share" @click="goShare()"> 共享 </el-button>
         </div>
       </div>
     </el-dialog>
     <template v-if="isFloating">
       <div
         class="resize-handle resize-n"
-        :style="{ position: 'fixed', left: posX + 'px', top: posY + 'px', width: floatingWidth + 'px', height: '10px' }"
+        :style="{
+          position: 'fixed',
+          left: posX + 'px',
+          top: posY + 'px',
+          width: floatingWidth + 'px',
+          height: '10px'
+        }"
         @mousedown.stop="onResizeStart($event, false, false, true, false)"
       />
       <div
         class="resize-handle resize-s"
-        :style="{ position: 'fixed', left: posX + 'px', top: posY + floatingHeight - 10 + 'px', width: floatingWidth + 'px', height: '10px' }"
+        :style="{
+          position: 'fixed',
+          left: posX + 'px',
+          top: posY + floatingHeight - 10 + 'px',
+          width: floatingWidth + 'px',
+          height: '10px'
+        }"
         @mousedown.stop="onResizeStart($event, false, false, false, true)"
       />
       <div
         class="resize-handle resize-e"
-        :style="{ position: 'fixed', left: posX + floatingWidth - 10 + 'px', top: posY + 'px', width: '10px', height: floatingHeight + 'px' }"
+        :style="{
+          position: 'fixed',
+          left: posX + floatingWidth - 10 + 'px',
+          top: posY + 'px',
+          width: '10px',
+          height: floatingHeight + 'px'
+        }"
         @mousedown.stop="onResizeStart($event, false, true, false, false)"
       />
       <div
         class="resize-handle resize-w"
-        :style="{ position: 'fixed', left: posX + 'px', top: posY + 'px', width: '10px', height: floatingHeight + 'px' }"
+        :style="{
+          position: 'fixed',
+          left: posX + 'px',
+          top: posY + 'px',
+          width: '10px',
+          height: floatingHeight + 'px'
+        }"
         @mousedown.stop="onResizeStart($event, true, false, false, false)"
       />
       <div
         class="resize-handle resize-ne"
-        :style="{ position: 'fixed', left: posX + floatingWidth - 16 + 'px', top: posY + 'px', width: '16px', height: '16px' }"
+        :style="{
+          position: 'fixed',
+          left: posX + floatingWidth - 16 + 'px',
+          top: posY + 'px',
+          width: '16px',
+          height: '16px'
+        }"
         @mousedown.stop="onResizeStart($event, false, true, true, false)"
       />
       <div
         class="resize-handle resize-nw"
-        :style="{ position: 'fixed', left: posX + 'px', top: posY + 'px', width: '16px', height: '16px' }"
+        :style="{
+          position: 'fixed',
+          left: posX + 'px',
+          top: posY + 'px',
+          width: '16px',
+          height: '16px'
+        }"
         @mousedown.stop="onResizeStart($event, true, false, true, false)"
       />
       <div
         class="resize-handle resize-se"
-        :style="{ position: 'fixed', left: posX + floatingWidth - 16 + 'px', top: posY + floatingHeight - 16 + 'px', width: '16px', height: '16px' }"
+        :style="{
+          position: 'fixed',
+          left: posX + floatingWidth - 16 + 'px',
+          top: posY + floatingHeight - 16 + 'px',
+          width: '16px',
+          height: '16px'
+        }"
         @mousedown.stop="onResizeStart($event, false, true, false, true)"
       />
       <div
         class="resize-handle resize-sw"
-        :style="{ position: 'fixed', left: posX + 'px', top: posY + floatingHeight - 16 + 'px', width: '16px', height: '16px' }"
+        :style="{
+          position: 'fixed',
+          left: posX + 'px',
+          top: posY + floatingHeight - 16 + 'px',
+          width: '16px',
+          height: '16px'
+        }"
         @mousedown.stop="onResizeStart($event, true, false, false, true)"
       />
     </template>
@@ -231,7 +260,7 @@ const props = withDefaults(
     isSmall: true,
     embed: false,
     roomTitle: '',
-    teacherName: '',
+    teacherName: ''
   }
 );
 
@@ -295,7 +324,10 @@ function onDragStart(e: MouseEvent) {
 
 function onDragMove(e: MouseEvent) {
   if (!isDragging.value) return;
-  posX.value = Math.max(0, Math.min(window.innerWidth - floatingWidth.value, e.clientX - dragOffsetX.value));
+  posX.value = Math.max(
+    0,
+    Math.min(window.innerWidth - floatingWidth.value, e.clientX - dragOffsetX.value)
+  );
   posY.value = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - dragOffsetY.value));
 }
 
@@ -311,7 +343,7 @@ function onResizeStart(
   left: boolean,
   right: boolean,
   top: boolean,
-  bottom: boolean,
+  bottom: boolean
 ) {
   isResizing.value = true;
   resizeDir.left = left;
@@ -343,14 +375,20 @@ function onResizeMove(e: MouseEvent) {
   } else if (resizeDir.left) {
     newW = Math.min(RESIZE_MAX_W, Math.max(RESIZE_MIN_W, resizeStartW.value - dx));
     newH = newW / RATIO;
-    posX.value = Math.max(0, Math.min(window.innerWidth - newW, resizeStartPosX.value + resizeStartW.value - newW));
+    posX.value = Math.max(
+      0,
+      Math.min(window.innerWidth - newW, resizeStartPosX.value + resizeStartW.value - newW)
+    );
   } else if (resizeDir.bottom) {
     newH = Math.min(RESIZE_MAX_W / RATIO, Math.max(RESIZE_MIN_W / RATIO, resizeStartH.value + dy));
     newW = newH * RATIO;
   } else if (resizeDir.top) {
     newH = Math.min(RESIZE_MAX_W / RATIO, Math.max(RESIZE_MIN_W / RATIO, resizeStartH.value - dy));
     newW = newH * RATIO;
-    posY.value = Math.max(0, Math.min(window.innerHeight - 40, resizeStartPosY.value + resizeStartH.value - newH));
+    posY.value = Math.max(
+      0,
+      Math.min(window.innerHeight - 40, resizeStartPosY.value + resizeStartH.value - newH)
+    );
   }
 
   floatingWidth.value = newW;
@@ -428,20 +466,14 @@ function onOpaqueId() {
 
 watch([() => props.opaqueId, () => props.userName], onOpaqueId, { immediate: true });
 
-watch(display, (val) => {
+watch(display, val => {
   if (liveUser.value.id && val) {
     participantDisplays.set(liveUser.value.id, val);
   }
 });
 
-async function apply(
-  _status: boolean,
-  num: number,
-  displayParam: string = ''
-) {
-  const user = await getDisplay(
-    displayParam == '' ? teacher.value.display : displayParam
-  );
+async function apply(_status: boolean, num: number, displayParam: string = '') {
+  const user = await getDisplay(displayParam == '' ? teacher.value.display : displayParam);
   sendData(
     'private',
     JSON.stringify({
@@ -512,7 +544,11 @@ async function fromMessage(json: { from?: string; text: string }) {
       isBroadcastActive = false;
       clearVideoStream();
       emit('broadcastStop', (obj.data as { type?: string }).type ?? 'end');
-      onLookLive(false, (obj.data as { type: string }).type, (obj.data as { liveTimeLen: number }).liveTimeLen);
+      onLookLive(
+        false,
+        (obj.data as { type: string }).type,
+        (obj.data as { liveTimeLen: number }).liveTimeLen
+      );
     }
   }
 }
@@ -620,9 +656,7 @@ function onOpenLive(status: boolean, liveType: string, liveTimeLen: number) {
   if (
     status &&
     type.value === 'open' &&
-    (props.roomInfo?.status === 1 ||
-      props.roomInfo?.status === 3 ||
-      props.roomInfo?.status === 4)
+    (props.roomInfo?.status === 1 || props.roomInfo?.status === 3 || props.roomInfo?.status === 4)
   )
     void changeLiveStatus(2);
   if (!status && type.value === 'close') void changeLiveStatus(3);
@@ -667,7 +701,7 @@ async function getSources() {
     return;
   }
   const sourceList = await window.electronAPI.getSources();
-  const list = sourceList.filter((item) => !item.name.includes('云砚直播'));
+  const list = sourceList.filter(item => !item.name.includes('云砚直播'));
   sources.value = list;
   shareDig.value = true;
 }
@@ -699,12 +733,7 @@ function setDig(index: number) {
   sourcesNum.value = index;
 }
 
-function openLive(
-  _status: boolean,
-  liveTypeParam: string,
-  typeParam: string,
-  liveTimeLen: number
-) {
+function openLive(_status: boolean, liveTypeParam: string, typeParam: string, liveTimeLen: number) {
   liveType.value = liveTypeParam;
   type.value = typeParam;
   if (typeParam == 'open') {
@@ -770,16 +799,18 @@ function pluginSend(data: Record<string, unknown>, jsep: unknown = null) {
         joinRoom(props.isTeacher ? 'publisher' : 'subscriber');
       } else if (data.request === 'listparticipants') {
         const participants =
-          (result as {
-            participants?: Array<{ id: string; display: string }>;
-          }).participants ?? [];
+          (
+            result as {
+              participants?: Array<{ id: string; display: string }>;
+            }
+          ).participants ?? [];
         const poples: Array<{
           userName: string;
           opaqueId: string;
           isTeacher: boolean;
           id: string;
         }> = [];
-        participants?.forEach((item) => {
+        participants?.forEach(item => {
           let displayStr = item.display;
           if (displayStr && item.id) {
             participantDisplays.set(String(item.id), displayStr);
@@ -821,7 +852,8 @@ function pluginSend(data: Record<string, unknown>, jsep: unknown = null) {
               const displayStr = participantDisplays.get(id) ?? '';
               const user = getDisplay(displayStr);
               const isTeacherUser = user[0] === 'T' || id === String(teacher.value.id);
-              const isDeduped = recentlyNotified.has('bstop_' + id) || recentlyNotified.has('pleave_' + id);
+              const isDeduped =
+                recentlyNotified.has('bstop_' + id) || recentlyNotified.has('pleave_' + id);
               if (isDeduped) {
                 participantDisplays.delete(id);
                 participantNames.delete(id);
@@ -902,11 +934,7 @@ function setCameraType(status: boolean) {
   emit('setCameraType', status);
 }
 
-function isTalking(
-  type: string,
-  userType: string,
-  isTeacherMess: boolean = false
-) {
+function isTalking(type: string, userType: string, isTeacherMess: boolean = false) {
   const media: Record<string, unknown> = {
     videoSend: isTeacherMess ? true : isCameraType.value,
     audioSend: type === 'off' ? false : true
@@ -1041,10 +1069,7 @@ function attachMediaStream(stream: MediaStream) {
   }
 }
 
-function playStream(
-  element: HTMLVideoElement | HTMLAudioElement | undefined,
-  stream: MediaStream
-) {
+function playStream(element: HTMLVideoElement | HTMLAudioElement | undefined, stream: MediaStream) {
   if (!element) return;
   const videoTracks = stream.getVideoTracks();
   if (videoTracks.length === 0) {
@@ -1190,7 +1215,7 @@ function liveAttach() {
         setLiveMessageStudent(msg, jsep);
       }
     },
-    onlocalstream: (stream) => {
+    onlocalstream: stream => {
       if (props.isTeacher) {
         attachMediaStream(stream);
       } else {
@@ -1452,8 +1477,7 @@ function setLiveMessageTeacher(msg: VideoRoomMessage, jsep: unknown) {
       } else if (msg['unpublished']) {
         if (
           props.isInteraction === 3 &&
-          (msg['unpublished'] === audio.value.id ||
-            msg['unpublished'] === 'ok')
+          (msg['unpublished'] === audio.value.id || msg['unpublished'] === 'ok')
         ) {
           setAudioing(false, '');
         }
@@ -1631,7 +1655,11 @@ function setLiveMessageStudent(msg: VideoRoomMessage, jsep: unknown) {
         }
         if (msg['unpublished'] === teacher.value.id) {
           const unpubId = String(msg['unpublished']);
-          if (isBroadcastActive && !recentlyNotified.has(unpubId) && !recentlyNotified.has('bstop_' + unpubId)) {
+          if (
+            isBroadcastActive &&
+            !recentlyNotified.has(unpubId) &&
+            !recentlyNotified.has('bstop_' + unpubId)
+          ) {
             clearVideoStream();
             onLookLive(false, 'stop', 0);
             setTime('close');
@@ -1748,7 +1776,7 @@ function newRemoteFeed(
       }
     },
     onlocalstream: () => {},
-    onremotestream: (stream) => {
+    onremotestream: stream => {
       if (user[0] === 'T') {
         const updateState = () => {
           const videoTracks = stream.getVideoTracks();
@@ -1949,14 +1977,30 @@ defineExpose({
   .resize-handle {
     z-index: 10001;
   }
-  .resize-n { cursor: n-resize; }
-  .resize-s { cursor: s-resize; }
-  .resize-e { cursor: e-resize; }
-  .resize-w { cursor: w-resize; }
-  .resize-ne { cursor: ne-resize; }
-  .resize-nw { cursor: nw-resize; }
-  .resize-se { cursor: se-resize; }
-  .resize-sw { cursor: sw-resize; }
+  .resize-n {
+    cursor: n-resize;
+  }
+  .resize-s {
+    cursor: s-resize;
+  }
+  .resize-e {
+    cursor: e-resize;
+  }
+  .resize-w {
+    cursor: w-resize;
+  }
+  .resize-ne {
+    cursor: ne-resize;
+  }
+  .resize-nw {
+    cursor: nw-resize;
+  }
+  .resize-se {
+    cursor: se-resize;
+  }
+  .resize-sw {
+    cursor: sw-resize;
+  }
   .bottom {
     .flex();
     position: absolute;

@@ -101,9 +101,7 @@ export function createResponseErrorInterceptor(opts: ResponseErrorInterceptorOpt
       switch (error.response.status) {
         case 401: {
           const data = error.response.data;
-          opts.onUnauthorized?.(
-            data && typeof data === 'object' ? (data as ApiResult) : undefined
-          );
+          opts.onUnauthorized?.(data && typeof data === 'object' ? (data as ApiResult) : undefined);
           break;
         }
         case 503:

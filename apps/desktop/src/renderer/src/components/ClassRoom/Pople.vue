@@ -1,23 +1,14 @@
 <template>
   <div class="classroom-pople">
     <ul>
-      <li
-        v-for="(item, index) in userList"
-        :key="index"
-      >
+      <li v-for="(item, index) in userList" :key="index">
         <div class="name">
           {{ item.userName }}
         </div>
-        <div
-          v-if="item.isTeacher"
-          class="span teacher"
-        >
+        <div v-if="item.isTeacher" class="span teacher">
           <el-icon><UserFilled /></el-icon> 主讲
         </div>
-        <div
-          v-if="item.opaqueId == liveUserId"
-          class="span me"
-        >
+        <div v-if="item.opaqueId == liveUserId" class="span me">
           <el-icon><UserFilled /></el-icon> 我
         </div>
       </li>

@@ -9,7 +9,7 @@ function buildDto(overrides: Partial<RegisterDto> = {}): RegisterDto {
     userName: '张三',
     password: 'u'.repeat(344),
     code: '123456',
-    ...overrides,
+    ...overrides
   });
   return dto;
 }

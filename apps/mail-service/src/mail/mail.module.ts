@@ -14,17 +14,17 @@ import { MailService } from './mail.service';
           secure: true,
           auth: {
             user: config.get('SMTP_USER'),
-            pass: config.get('SMTP_PASS'),
-          },
+            pass: config.get('SMTP_PASS')
+          }
         },
         defaults: {
-          from: config.get('SMTP_FROM', '云砚直播 <noreply@example.com>'),
-        },
+          from: config.get('SMTP_FROM', '云砚直播 <noreply@example.com>')
+        }
       }),
-      inject: [ConfigService],
-    }),
+      inject: [ConfigService]
+    })
   ],
   controllers: [MailController],
-  providers: [MailService],
+  providers: [MailService]
 })
 export class MailModule {}

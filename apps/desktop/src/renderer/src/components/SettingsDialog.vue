@@ -11,56 +11,24 @@
     <div class="settings-layout">
       <!-- 左侧菜单 -->
       <div class="settings-menu">
-        <el-menu
-          :default-active="activeMenu"
-          @select="handleMenuSelect"
-        >
-          <el-menu-item index="username">
-            修改用户名
-          </el-menu-item>
-          <el-menu-item index="device">
-            设备检测
-          </el-menu-item>
-          <el-menu-item index="password">
-            修改密码
-          </el-menu-item>
-          <el-menu-item index="logout">
-            退出登录
-          </el-menu-item>
+        <el-menu :default-active="activeMenu" @select="handleMenuSelect">
+          <el-menu-item index="username"> 修改用户名 </el-menu-item>
+          <el-menu-item index="device"> 设备检测 </el-menu-item>
+          <el-menu-item index="password"> 修改密码 </el-menu-item>
+          <el-menu-item index="logout"> 退出登录 </el-menu-item>
         </el-menu>
       </div>
 
       <!-- 右侧内容 -->
-      <div
-        ref="contentRef"
-        class="settings-content"
-        @scroll="handleScroll"
-      >
+      <div ref="contentRef" class="settings-content" @scroll="handleScroll">
         <!-- 修改用户名 -->
-        <div
-          id="section-username"
-          class="section"
-        >
-          <h4 class="section-title">
-            修改用户名
-          </h4>
-          <el-form
-            ref="formRef"
-            :model="form"
-            :rules="rules"
-            label-width="80px"
-          >
-            <el-form-item
-              label="用户名"
-              prop="userName"
-            >
+        <div id="section-username" class="section">
+          <h4 class="section-title">修改用户名</h4>
+          <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
+            <el-form-item label="用户名" prop="userName">
               <div class="username-row">
                 <el-input v-model="form.userName" />
-                <el-button
-                  type="primary"
-                  :loading="loading"
-                  @click="handleSubmit"
-                >
+                <el-button type="primary" :loading="loading" @click="handleSubmit">
                   保存
                 </el-button>
               </div>
@@ -69,38 +37,17 @@
         </div>
 
         <!-- 设备检测 -->
-        <div
-          id="section-device"
-          class="section section-device"
-        >
-          <h4 class="section-title">
-            设备检测
-          </h4>
+        <div id="section-device" class="section section-device">
+          <h4 class="section-title">设备检测</h4>
           <EquipmentTestPanel />
         </div>
 
         <!-- 修改密码 -->
-        <div
-          id="section-password"
-          class="section"
-        >
-          <h4 class="section-title">
-            修改密码
-          </h4>
-          <el-form
-            ref="passFormRef"
-            :model="passForm"
-            :rules="passRules"
-            label-width="80px"
-          >
-            <el-form-item
-              label="旧密码"
-              prop="oldPassword"
-            >
-              <el-input
-                v-model="passForm.oldPassword"
-                :type="showOldPass ? 'text' : 'password'"
-              >
+        <div id="section-password" class="section">
+          <h4 class="section-title">修改密码</h4>
+          <el-form ref="passFormRef" :model="passForm" :rules="passRules" label-width="80px">
+            <el-form-item label="旧密码" prop="oldPassword">
+              <el-input v-model="passForm.oldPassword" :type="showOldPass ? 'text' : 'password'">
                 <template #suffix>
                   <el-icon
                     v-if="showOldPass"
@@ -110,25 +57,14 @@
                   >
                     <View />
                   </el-icon>
-                  <el-icon
-                    v-else
-                    :size="16"
-                    style="cursor: pointer"
-                    @click="showOldPass = true"
-                  >
+                  <el-icon v-else :size="16" style="cursor: pointer" @click="showOldPass = true">
                     <Hide />
                   </el-icon>
                 </template>
               </el-input>
             </el-form-item>
-            <el-form-item
-              label="新密码"
-              prop="password"
-            >
-              <el-input
-                v-model="passForm.password"
-                :type="showNewPass ? 'text' : 'password'"
-              >
+            <el-form-item label="新密码" prop="password">
+              <el-input v-model="passForm.password" :type="showNewPass ? 'text' : 'password'">
                 <template #suffix>
                   <el-icon
                     v-if="showNewPass"
@@ -138,25 +74,14 @@
                   >
                     <View />
                   </el-icon>
-                  <el-icon
-                    v-else
-                    :size="16"
-                    style="cursor: pointer"
-                    @click="showNewPass = true"
-                  >
+                  <el-icon v-else :size="16" style="cursor: pointer" @click="showNewPass = true">
                     <Hide />
                   </el-icon>
                 </template>
               </el-input>
             </el-form-item>
-            <el-form-item
-              label="确认密码"
-              prop="repassword"
-            >
-              <el-input
-                v-model="passForm.repassword"
-                :type="showRePass ? 'text' : 'password'"
-              >
+            <el-form-item label="确认密码" prop="repassword">
+              <el-input v-model="passForm.repassword" :type="showRePass ? 'text' : 'password'">
                 <template #suffix>
                   <el-icon
                     v-if="showRePass"
@@ -166,23 +91,14 @@
                   >
                     <View />
                   </el-icon>
-                  <el-icon
-                    v-else
-                    :size="16"
-                    style="cursor: pointer"
-                    @click="showRePass = true"
-                  >
+                  <el-icon v-else :size="16" style="cursor: pointer" @click="showRePass = true">
                     <Hide />
                   </el-icon>
                 </template>
               </el-input>
             </el-form-item>
             <el-form-item>
-              <el-button
-                type="primary"
-                :loading="passLoading"
-                @click="handlePassSubmit"
-              >
+              <el-button type="primary" :loading="passLoading" @click="handlePassSubmit">
                 确定
               </el-button>
             </el-form-item>
@@ -190,19 +106,10 @@
         </div>
 
         <!-- 退出登录 -->
-        <div
-          id="section-logout"
-          class="section logout-panel"
-        >
-          <h4 class="section-title">
-            退出登录
-          </h4>
+        <div id="section-logout" class="section logout-panel">
+          <h4 class="section-title">退出登录</h4>
           <p>确定要退出当前账号吗？</p>
-          <el-button
-            type="danger"
-            :loading="loggingOut"
-            @click="handleLogout"
-          >
+          <el-button type="danger" :loading="loggingOut" @click="handleLogout">
             退出登录
           </el-button>
         </div>
@@ -303,7 +210,10 @@ function updateActiveMenuByScroll() {
     if (!el) continue;
     const offsetTop = el.offsetTop - container.offsetTop;
     const offsetBottom = offsetTop + el.offsetHeight;
-    if (scrollTop + containerHeight / 2 >= offsetTop && scrollTop + containerHeight / 2 < offsetBottom) {
+    if (
+      scrollTop + containerHeight / 2 >= offsetTop &&
+      scrollTop + containerHeight / 2 < offsetBottom
+    ) {
       activeMenu.value = id;
       break;
     }
@@ -313,7 +223,7 @@ function updateActiveMenuByScroll() {
 function initObserver() {
   if (!contentRef.value) return;
   observer = new IntersectionObserver(
-    (entries) => {
+    entries => {
       if (isScrolling.value) return;
       for (const entry of entries) {
         if (entry.isIntersecting) {
@@ -326,7 +236,7 @@ function initObserver() {
     },
     {
       root: contentRef.value,
-      threshold: 0.4,
+      threshold: 0.4
     }
   );
 

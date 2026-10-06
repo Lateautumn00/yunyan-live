@@ -19,39 +19,49 @@ async function encryptForClient(plaintext: string): Promise<string> {
     createPublicKey(privateKey).export({ type: 'spki', format: 'der' }),
     { name: 'RSA-OAEP', hash: 'SHA-256' },
     false,
-    ['encrypt'],
+    ['encrypt']
   );
-  const ciphertext = await webcrypto.subtle.encrypt({ name: 'RSA-OAEP' }, key, new TextEncoder().encode(plaintext));
+  const ciphertext = await webcrypto.subtle.encrypt(
+    { name: 'RSA-OAEP' },
+    key,
+    new TextEncoder().encode(plaintext)
+  );
   return Buffer.from(ciphertext).toString('base64');
 }
 
 function setupPrivateKeyEnv() {
-  process.env.PASSWORD_PRIVATE_KEY = Buffer.from(privateKey.export({ type: 'pkcs8', format: 'der' })).toString(
-    'base64',
-  );
+  process.env.PASSWORD_PRIVATE_KEY = Buffer.from(
+    privateKey.export({ type: 'pkcs8', format: 'der' })
+  ).toString('base64');
 }
 
 function buildService(options?: { passwordHash?: string; emailExists?: boolean }) {
   const passwordHash = options?.passwordHash ?? bcrypt.hashSync(PLAIN_OLD_PASSWORD, 10);
-  const user = { id: USER_ID, username: '张三', email: 'teacher@example.com', passwordHash, role: 1 };
+  const user = {
+    id: USER_ID,
+    username: '张三',
+    email: 'teacher@example.com',
+    passwordHash,
+    role: 1
+  };
   const usersService = {
     findByEmail: vi.fn((_email?: unknown) => (options?.emailExists === false ? null : user)),
     findById: vi.fn((_id?: unknown) => user),
     create: vi.fn((_options?: unknown) => user),
     updatePassword: vi.fn((..._args: unknown[]) => undefined),
-    updateUsername: vi.fn((..._args: unknown[]) => undefined),
+    updateUsername: vi.fn((..._args: unknown[]) => undefined)
   };
   const jwtService = { sign: vi.fn(() => 'signed-token') };
   const mailClient = {
     getService: vi.fn(() => ({
-      verifyCode: () => of({ valid: true }),
-    })),
+      verifyCode: () => of({ valid: true })
+    }))
   };
 
   const service = new AuthService(
     usersService as unknown as UsersService,
     jwtService as unknown as JwtService,
-    mailClient as never,
+    mailClient as never
   );
   service.onModuleInit();
   return { service, usersService, jwtService };
@@ -72,7 +82,7 @@ describe('AuthService password flows (RSA-OAEP encrypted)', () => {
     const { service, jwtService } = buildService();
     const result = await service.login({
       email: 'teacher@example.com',
-      password: await encryptForClient(PLAIN_OLD_PASSWORD),
+      password: await encryptForClient(PLAIN_OLD_PASSWORD)
     });
     expect(result.access_token).toBe('signed-token');
     expect(jwtService.sign).toHaveBeenCalled();
@@ -81,15 +91,18 @@ describe('AuthService password flows (RSA-OAEP encrypted)', () => {
   it('login rejects wrong password', async () => {
     const { service } = buildService();
     await expect(
-      service.login({ email: 'teacher@example.com', password: await encryptForClient('Wrong!pass1') }),
+      service.login({
+        email: 'teacher@example.com',
+        password: await encryptForClient('Wrong!pass1')
+      })
     ).rejects.toThrow(/密码错误/);
   });
 
   it('login rejects legacy plaintext password', async () => {
     const { service } = buildService();
-    await expect(service.login({ email: 'teacher@example.com', password: PLAIN_OLD_PASSWORD })).rejects.toThrow(
-      RpcException,
-    );
+    await expect(
+      service.login({ email: 'teacher@example.com', password: PLAIN_OLD_PASSWORD })
+    ).rejects.toThrow(RpcException);
   });
 
   it('register hashes the decrypted password', async () => {
@@ -99,7 +112,7 @@ describe('AuthService password flows (RSA-OAEP encrypted)', () => {
       userName: '新用户',
       password: await encryptForClient(PLAIN_NEW_PASSWORD),
       code: '123456',
-      role: 2,
+      role: 2
     });
     expect(usersService.create).toHaveBeenCalled();
     const created = usersService.create.mock.calls[0]?.[0] as { passwordHash: string };
@@ -111,7 +124,7 @@ describe('AuthService password flows (RSA-OAEP encrypted)', () => {
     await service.resetPassword({
       email: 'teacher@example.com',
       code: '123456',
-      password: await encryptForClient(PLAIN_NEW_PASSWORD),
+      password: await encryptForClient(PLAIN_NEW_PASSWORD)
     });
     expect(usersService.updatePassword).toHaveBeenCalled();
     const updated = usersService.updatePassword.mock.calls[0];
@@ -124,9 +137,9 @@ describe('AuthService password flows (RSA-OAEP encrypted)', () => {
     await service.changePassword(
       {
         oldPassword: await encryptForClient(PLAIN_OLD_PASSWORD),
-        password: await encryptForClient(PLAIN_NEW_PASSWORD),
+        password: await encryptForClient(PLAIN_NEW_PASSWORD)
       },
-      USER_ID,
+      USER_ID
     );
     const updated = usersService.updatePassword.mock.calls[0];
     expect(await bcrypt.compare(PLAIN_NEW_PASSWORD, updated?.[1] as string)).toBe(true);
@@ -138,10 +151,10 @@ describe('AuthService password flows (RSA-OAEP encrypted)', () => {
       service.changePassword(
         {
           oldPassword: await encryptForClient('Wrong!pass1'),
-          password: await encryptForClient(PLAIN_NEW_PASSWORD),
+          password: await encryptForClient(PLAIN_NEW_PASSWORD)
         },
-        USER_ID,
-      ),
+        USER_ID
+      )
     ).rejects.toThrow(/旧密码错误/);
   });
 
@@ -150,8 +163,8 @@ describe('AuthService password flows (RSA-OAEP encrypted)', () => {
     await expect(
       service.changePassword(
         { oldPassword: PLAIN_OLD_PASSWORD, password: await encryptForClient(PLAIN_NEW_PASSWORD) },
-        USER_ID,
-      ),
+        USER_ID
+      )
     ).rejects.toThrow(RpcException);
   });
 });

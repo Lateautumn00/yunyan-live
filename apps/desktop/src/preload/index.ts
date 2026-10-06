@@ -29,8 +29,11 @@ const api: ElectronApi = {
     return ipcRenderer.invoke(IpcChannels.recordingGetFileUrl, filePath) as Promise<string>;
   },
   recordingSaveBlob: (data: RecordingSaveBlobArgs) => {
-    return ipcRenderer.invoke(IpcChannels.recordingSaveBlob, data) as Promise<RecordingSaveBlobResult>;
-  },
+    return ipcRenderer.invoke(
+      IpcChannels.recordingSaveBlob,
+      data
+    ) as Promise<RecordingSaveBlobResult>;
+  }
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

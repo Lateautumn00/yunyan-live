@@ -11,11 +11,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function expectHttpException(
-  promise: Promise<unknown>,
-  status: number,
-  message: string
-) {
+async function expectHttpException(promise: Promise<unknown>, status: number, message: string) {
   const err = await promise.then(
     () => {
       throw new Error('expected promise to reject');
@@ -83,11 +79,7 @@ describe('grpcCall', () => {
       404,
       '嵌套 message'
     );
-    await expectHttpException(
-      grpcCall(throwError(() => ({ code: 5 }))),
-      404,
-      '服务异常'
-    );
+    await expectHttpException(grpcCall(throwError(() => ({ code: 5 }))), 404, '服务异常');
   });
 
   it('未知 gRPC code 兜底 500，普通 Error 亦为 500', async () => {
@@ -96,11 +88,7 @@ describe('grpcCall', () => {
       500,
       '未知码'
     );
-    await expectHttpException(
-      grpcCall(throwError(() => new Error('普通失败'))),
-      500,
-      '普通失败'
-    );
+    await expectHttpException(grpcCall(throwError(() => new Error('普通失败'))), 500, '普通失败');
   });
 
   it('空 Observable（无元素）同样转成 HttpException 500', async () => {

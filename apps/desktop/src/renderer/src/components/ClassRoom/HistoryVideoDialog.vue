@@ -8,11 +8,7 @@
     class="history-dig"
     @close="$emit('close')"
   >
-    <HistoryVideo
-      :id="playId"
-      ref="historyvideoRef"
-      :opaque-id="opaqueId"
-    />
+    <HistoryVideo :id="playId" ref="historyvideoRef" :opaque-id="opaqueId" />
   </el-dialog>
 </template>
 

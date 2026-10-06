@@ -108,7 +108,7 @@ describe('ClassRoom Top.vue', () => {
 
   it('点击开始直播触发 openLive 事件', async () => {
     const { wrapper } = mountTop();
-    const start = wrapper.findAll('.top-right').find((el) => el.text().includes('开始直播'))!;
+    const start = wrapper.findAll('.top-right').find(el => el.text().includes('开始直播'))!;
     await start.trigger('click');
     expect(wrapper.emitted('openLive')?.[0]).toEqual([true, 'hires', 'open', 0]);
   });
@@ -137,18 +137,19 @@ describe('ClassRoom Top.vue', () => {
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain('直播已结束');
     const cons = wrapper.findAll('.visible1 .con');
-    expect(cons.map((c) => c.text())).toEqual(["02'05\"", '12']);
+    expect(cons.map(c => c.text())).toEqual(['02\'05"', '12']);
   });
 
   it('setsTime 从服务器时间校准直播时长', async () => {
     apiMocks.getNowTime.mockResolvedValue({
-      code: 1000, data: { nowTime: 2000000 }
+      code: 1000,
+      data: { nowTime: 2000000 }
     });
     const { wrapper } = mountTop();
     const vm = vmOf(wrapper);
     await vm.setsTime('1900000');
     await wrapper.vm.$nextTick();
-    expect(wrapper.text()).toContain("01'40\"");
+    expect(wrapper.text()).toContain('01\'40"');
   });
 
   it('setLayout 切换布局并触发 setLayouts', async () => {
@@ -189,12 +190,23 @@ describe('ClassRoom Top.vue', () => {
   });
 
   it('小班课学生互动时可共享桌面', () => {
-    const { wrapper } = mountTop({ isSmall: true, isTeacher: false, isInteraction: 2, btn: true, liveType: 'hires' });
+    const { wrapper } = mountTop({
+      isSmall: true,
+      isTeacher: false,
+      isInteraction: 2,
+      btn: true,
+      liveType: 'hires'
+    });
     expect(wrapper.text()).toContain('共享桌面');
   });
 
   it('大班课非老师不显示共享桌面', () => {
-    const { wrapper } = mountTop({ isTeacher: false, isInteraction: 0, btn: true, liveType: 'hires' });
+    const { wrapper } = mountTop({
+      isTeacher: false,
+      isInteraction: 0,
+      btn: true,
+      liveType: 'hires'
+    });
     expect(wrapper.text()).not.toContain('共享桌面');
   });
 });

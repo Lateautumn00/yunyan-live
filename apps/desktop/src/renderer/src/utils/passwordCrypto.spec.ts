@@ -41,7 +41,9 @@ async function generateOaepKeyPair(): Promise<CryptoKeyPair> {
 describe('encryptPassword', () => {
   it('round-trip: RSA-OAEP-SHA256 密文可被对应私钥解密', async () => {
     const keyPair = await generateOaepKeyPair();
-    const publicPem = derToPublicKeyPem(new Uint8Array(await globalThis.crypto.subtle.exportKey('spki', keyPair.publicKey)));
+    const publicPem = derToPublicKeyPem(
+      new Uint8Array(await globalThis.crypto.subtle.exportKey('spki', keyPair.publicKey))
+    );
 
     const cipherBase64 = await encryptPassword('Str0ng!pass', publicPem);
 
@@ -61,7 +63,10 @@ describe('encryptPassword', () => {
   });
 
   it('不同明文产生不同密文（OAEP 随机填充）', async () => {
-    const [a, b] = await Promise.all([encryptPassword('Str0ng!pass'), encryptPassword('Str0ng!pass')]);
+    const [a, b] = await Promise.all([
+      encryptPassword('Str0ng!pass'),
+      encryptPassword('Str0ng!pass')
+    ]);
     expect(a).not.toBe(b);
   });
 

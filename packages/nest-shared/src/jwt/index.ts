@@ -41,8 +41,8 @@ export function jwtModuleAsyncOptions(): JwtModuleAsyncOptions {
     imports: [ConfigModule],
     useFactory: (config: ConfigService) => ({
       secret: config.get('JWT_SECRET'),
-      signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', JWT_EXPIRES_IN_DEFAULT) },
+      signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', JWT_EXPIRES_IN_DEFAULT) }
     }),
-    inject: [ConfigService],
+    inject: [ConfigService]
   };
 }

@@ -7,12 +7,7 @@
         </li>
         <li>欢迎您</li>
         <li>
-          <el-button
-            text
-            @click="settingsVisible = true"
-          >
-            设置
-          </el-button>
+          <el-button text @click="settingsVisible = true"> 设置 </el-button>
           <SettingsDialog v-model="settingsVisible" />
         </li>
       </ul>
@@ -31,18 +26,8 @@
           </el-button>
         </div>
         <div class="toolbar-right">
-          <el-input
-            v-model="joinCode"
-            placeholder="请输入直播码"
-            @keyup.enter="handleJoin"
-          />
-          <el-button
-            type="primary"
-            :loading="joining"
-            @click="handleJoin"
-          >
-            加入
-          </el-button>
+          <el-input v-model="joinCode" placeholder="请输入直播码" @keyup.enter="handleJoin" />
+          <el-button type="primary" :loading="joining" @click="handleJoin"> 加入 </el-button>
         </div>
       </div>
       <div v-loading="loading">
@@ -52,30 +37,15 @@
           style="width: 100%"
           @selection-change="handleSelectionChange"
         >
-          <el-table-column
-            type="selection"
-            width="40"
-          />
-          <el-table-column
-            prop="title"
-            label="直播名称"
-          />
-          <el-table-column
-            prop="speakerName"
-            label="老师"
-          />
-          <el-table-column
-            label="直播类型"
-            min-width="80"
-          >
+          <el-table-column type="selection" width="40" />
+          <el-table-column prop="title" label="直播名称" />
+          <el-table-column prop="speakerName" label="老师" />
+          <el-table-column label="直播类型" min-width="80">
             <template #default="{ row }">
               {{ row.type === 0 ? '小班教学' : '大班教学' }}
             </template>
           </el-table-column>
-          <el-table-column
-            prop="joinCode"
-            label="直播码"
-          />
+          <el-table-column prop="joinCode" label="直播码" />
           <el-table-column label="状态">
             <template #default="{ row }">
               <el-tag :type="getStatusType(row.status)">
@@ -88,10 +58,7 @@
               {{ formatDate(Number(row.startTime)) }}
             </template>
           </el-table-column>
-          <el-table-column
-            label="操作"
-            min-width="120"
-          >
+          <el-table-column label="操作" min-width="120">
             <template #default="{ row }">
               <el-button
                 type="text"
@@ -112,13 +79,8 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-empty
-          v-else-if="!loading"
-          description="暂无直播数据"
-        >
-          <p class="empty-hint">
-            如有直播码，可在上方输入并加入直播
-          </p>
+        <el-empty v-else-if="!loading" description="暂无直播数据">
+          <p class="empty-hint">如有直播码，可在上方输入并加入直播</p>
         </el-empty>
       </div>
       <el-pagination
@@ -128,7 +90,7 @@
         :page-size="params.pageSize"
         layout="prev, pager, next, jumper"
         :total="total"
-        style="margin-top: 16px; justify-content: flex-end;"
+        style="margin-top: 16px; justify-content: flex-end"
         @current-change="handleCurrentChange"
       />
     </div>
@@ -179,8 +141,8 @@ const {
 } = usePagedList<RoomItem>({
   pageSize: 10,
   initialLoading: true,
-  onError: (err) => console.error('加载直播间列表失败', err),
-  fetchPage: async (query) => {
+  onError: err => console.error('加载直播间列表失败', err),
+  fetchPage: async query => {
     const res = await api.student_rooms({
       page: query.pageNum,
       pageSize: query.pageSize
@@ -190,8 +152,8 @@ const {
 });
 
 const { deleting, confirmAndDelete } = useConfirmDelete<{ message: string; roomIds: string[] }>({
-  message: (payload) => payload.message,
-  action: (payload) => api.batch_leave(payload.roomIds),
+  message: payload => payload.message,
+  action: payload => api.batch_leave(payload.roomIds),
   successMessage: () => '删除成功',
   refresh: () => loadRooms()
 });

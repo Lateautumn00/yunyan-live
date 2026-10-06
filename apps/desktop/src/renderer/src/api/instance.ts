@@ -14,7 +14,7 @@ export const http = createHttpClient({
     token: localStorage.getItem('token'),
     guid: localStorage.getItem('guid')
   }),
-  onMessageError: (msg) => {
+  onMessageError: msg => {
     ElMessage({ message: msg, type: 'error', duration: 2000 });
   },
   onUnauthorized: (data?: ApiResult) => {
@@ -24,7 +24,7 @@ export const http = createHttpClient({
     const reason = data?.code === ApiCode.SESSION_KICKED ? 'kicked' : 'expired';
     useUserStore().sessionInterrupted(reason);
   },
-  onServerError: (msg) => {
+  onServerError: msg => {
     ElMessage({ message: msg, type: 'error', duration: 2000 });
   }
 }) as unknown as HttpClient;

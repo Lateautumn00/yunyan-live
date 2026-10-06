@@ -9,7 +9,7 @@ describe('shared domain types (compile-time contract)', () => {
       token: 't1',
       userName: 'u1',
       email: 'a@b.com',
-      role: 1,
+      role: 1
     };
     expect(user.guid).toBe('g1');
     expect(user.role).toBe(1);

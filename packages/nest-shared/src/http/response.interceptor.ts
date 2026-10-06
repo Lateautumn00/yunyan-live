@@ -12,9 +12,9 @@ interface ApiResponse<T> {
 export class ResponseInterceptor<T> implements NestInterceptor<T, ApiResponse<T>> {
   intercept(context: ExecutionContext, next: CallHandler): Observable<ApiResponse<T>> {
     return next.handle().pipe(
-      map((data) => {
+      map(data => {
         return { code: 1000, msg: 'success', data };
-      }),
+      })
     );
   }
 }

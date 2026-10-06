@@ -1,4 +1,11 @@
-import { generateKeyPairSync, createPublicKey, webcrypto, KeyObject, constants, privateDecrypt } from 'node:crypto';
+import {
+  generateKeyPairSync,
+  createPublicKey,
+  webcrypto,
+  KeyObject,
+  constants,
+  privateDecrypt
+} from 'node:crypto';
 import { afterEach, beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { RpcException } from '@nestjs/microservices';
 import { decryptPassword } from './password-crypto';
@@ -14,12 +21,12 @@ async function encryptForClient(plaintext: string): Promise<string> {
     publicKey.export({ type: 'spki', format: 'der' }),
     { name: 'RSA-OAEP', hash: 'SHA-256' },
     false,
-    ['encrypt'],
+    ['encrypt']
   );
   const ciphertext = await webcrypto.subtle.encrypt(
     { name: 'RSA-OAEP' },
     key,
-    new TextEncoder().encode(plaintext),
+    new TextEncoder().encode(plaintext)
   );
   return Buffer.from(ciphertext).toString('base64');
 }
@@ -51,7 +58,9 @@ afterAll(() => {
 });
 
 afterEach(() => {
-  process.env.PASSWORD_PRIVATE_KEY = Buffer.from(privateKey.export({ type: 'pkcs8', format: 'der' })).toString('base64');
+  process.env.PASSWORD_PRIVATE_KEY = Buffer.from(
+    privateKey.export({ type: 'pkcs8', format: 'der' })
+  ).toString('base64');
 });
 
 describe('decryptPassword', () => {
@@ -64,7 +73,7 @@ describe('decryptPassword', () => {
     const cipher = await encryptForClient('Str0ng!pass');
     const plain = privateDecrypt(
       { key: privateKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
-      Buffer.from(cipher, 'base64'),
+      Buffer.from(cipher, 'base64')
     );
     expect(plain.toString('utf8')).toBe('Str0ng!pass');
   });

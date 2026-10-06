@@ -9,7 +9,7 @@ describe('ppt-convert', () => {
       'pdf',
       '--outdir',
       '/tmp/out',
-      '/tmp/a.pptx',
+      '/tmp/a.pptx'
     ]);
   });
 

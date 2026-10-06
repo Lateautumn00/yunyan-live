@@ -9,7 +9,7 @@ export async function validateSession(
   redis: Redis,
   guid?: string,
   sid?: string,
-  onFailOpen?: (err: unknown) => void,
+  onFailOpen?: (err: unknown) => void
 ): Promise<SessionState> {
   if (!guid || !sid) return 'expired';
   try {
@@ -31,7 +31,7 @@ type KickErrorStage = 'connection' | 'subscribe' | 'parse';
 export function subscribeKick(
   redis: Redis,
   onKick: (guid: string, oldSid: string) => void,
-  onError?: (err: unknown, stage: KickErrorStage) => void,
+  onError?: (err: unknown, stage: KickErrorStage) => void
 ): Redis {
   const report =
     onError ??

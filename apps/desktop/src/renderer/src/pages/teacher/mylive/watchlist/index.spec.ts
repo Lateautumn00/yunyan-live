@@ -22,8 +22,20 @@ vi.mock('@/layouts/sidebar.vue', () => ({
 }));
 
 const items: WatchItem[] = [
-  { userId: 'u1', nickName: '小明', watchTime: 300, joinedAt: '2026-09-01T10:00:00.000Z', leftAt: '2026-09-01T10:05:00.000Z' },
-  { userId: 'u2', nickName: '小红', watchTime: 600, joinedAt: '2026-09-01T10:00:00.000Z', leftAt: '2026-09-01T10:10:00.000Z' }
+  {
+    userId: 'u1',
+    nickName: '小明',
+    watchTime: 300,
+    joinedAt: '2026-09-01T10:00:00.000Z',
+    leftAt: '2026-09-01T10:05:00.000Z'
+  },
+  {
+    userId: 'u2',
+    nickName: '小红',
+    watchTime: 600,
+    joinedAt: '2026-09-01T10:00:00.000Z',
+    leftAt: '2026-09-01T10:10:00.000Z'
+  }
 ];
 
 function mountPage() {
@@ -59,8 +71,6 @@ describe('观看时长列表 mylive/watchlist/index.vue', { timeout: 10000 }, ()
     const pagination = wrapper.findComponent({ name: 'ElPagination' });
     pagination.vm.$emit('current-change', 2);
     await flushPromises();
-    expect(mocks.watchTimeList).toHaveBeenLastCalledWith(
-      expect.objectContaining({ pageNum: 2 })
-    );
+    expect(mocks.watchTimeList).toHaveBeenLastCalledWith(expect.objectContaining({ pageNum: 2 }));
   });
 });

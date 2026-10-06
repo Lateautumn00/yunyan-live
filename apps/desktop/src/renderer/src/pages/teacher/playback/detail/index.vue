@@ -20,10 +20,7 @@
           @change="getVideoDetail"
         />
         <div class="delete">
-          <el-button
-            :disabled="multipleSelection.length === 0"
-            @click="multiDeleteClick"
-          >
+          <el-button :disabled="multipleSelection.length === 0" @click="multiDeleteClick">
             批量删除
           </el-button>
         </div>
@@ -36,50 +33,26 @@
         stripe
         @selection-change="handleSelectionChange"
       >
-        <el-table-column
-          type="selection"
-          width="40"
-          align="center"
-        />
-        <el-table-column
-          prop="roomId"
-          label="教室ID"
-          min-width="90"
-        />
-        <el-table-column
-          prop="id"
-          label="视频ID"
-          min-width="90"
-        />
-        <el-table-column
-          prop="createTime"
-          label="录制时间"
-          min-width="140"
-        >
+        <el-table-column type="selection" width="40" align="center" />
+        <el-table-column prop="roomId" label="教室ID" min-width="90" />
+        <el-table-column prop="id" label="视频ID" min-width="90" />
+        <el-table-column prop="createTime" label="录制时间" min-width="140">
           <template #default="scope">
             <span>{{ formatDate(Number(scope.row.createTime)) }}</span>
           </template>
         </el-table-column>
-        <el-table-column
-          prop="duration"
-          label="时长"
-          min-width="90"
-        >
+        <el-table-column prop="duration" label="时长" min-width="90">
           <template #default="scope">
-            <span>{{ scope.row.duration < 60 ? `${scope.row.duration}秒` : `${Math.floor(scope.row.duration / 60)}分${scope.row.duration % 60}秒` }}</span>
+            <span>{{
+              scope.row.duration < 60
+                ? `${scope.row.duration}秒`
+                : `${Math.floor(scope.row.duration / 60)}分${scope.row.duration % 60}秒`
+            }}</span>
           </template>
         </el-table-column>
-        <el-table-column
-          prop=""
-          label="操作"
-          min-width="120"
-        >
+        <el-table-column prop="" label="操作" min-width="120">
           <template #default="scope">
-            <el-button
-              text
-              size="small"
-              @click="playClick(scope.row as VideoItem)"
-            >
+            <el-button text size="small" @click="playClick(scope.row as VideoItem)">
               播放
             </el-button>
             <el-button
@@ -93,10 +66,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <div
-        v-show="total !== 0"
-        class="tc-page"
-      >
+      <div v-show="total !== 0" class="tc-page">
         <el-pagination
           background
           :current-page="params.pageNum"
@@ -108,27 +78,15 @@
         />
       </div>
     </div>
-    <el-dialog
-      v-model="centerDialogVisible"
-      title=""
-      width="min(480px, 90vw)"
-      align-center
-    >
-      <el-icon
-        class="jinggao"
-        aria-label="警告"
-      >
+    <el-dialog v-model="centerDialogVisible" title="" width="min(480px, 90vw)" align-center>
+      <el-icon class="jinggao" aria-label="警告">
         <WarningFilled />
       </el-icon>
       <span>删除后，将无法恢复，确定删除么？</span>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="centerDialogVisible = false">取 消</el-button>
-          <el-button
-            type="primary"
-            :loading="deleting"
-            @click="submitDelete"
-          >确 定</el-button>
+          <el-button type="primary" :loading="deleting" @click="submitDelete">确 定</el-button>
         </span>
       </template>
     </el-dialog>
@@ -172,7 +130,7 @@ const {
   handleCurrentChange
 } = usePagedList<VideoItem>({
   pageSize: 6,
-  fetchPage: async (query) => {
+  fetchPage: async query => {
     const range = timerange.value as Array<string | Date> | null;
     const startTime = range && range.length > 0 ? String(range[0]) : '';
     const endTime = range && range.length > 1 ? String(range[1]) : '';
@@ -184,7 +142,15 @@ const {
       endTime
     });
     const data = res.data as VideoDetailResult;
-    console.log('[playback/index] getVideoDetail', data.list?.map(i => ({ id: i.id, recordType: i.recordType, filePath: i.filePath, address: i.address })));
+    console.log(
+      '[playback/index] getVideoDetail',
+      data.list?.map(i => ({
+        id: i.id,
+        recordType: i.recordType,
+        filePath: i.filePath,
+        address: i.address
+      }))
+    );
     return { list: data.list, total: data.pageInfo.totalElements };
   }
 });
@@ -197,24 +163,29 @@ function handleSelectionChange(val: VideoItem[]) {
 function multiDeleteClick() {
   centerDialogVisible.value = true;
   videoIdList.value = [];
-  multipleSelection.value.forEach((item) => {
+  multipleSelection.value.forEach(item => {
     if (item.id) videoIdList.value.push(item.id);
   });
 }
 
 function playClick(row: VideoItem) {
   const recordType = row.recordType ?? 1;
-  console.log('[playback/index] playClick', { recordType, filePath: row.filePath, address: row.address, roomId: row.roomId });
+  console.log('[playback/index] playClick', {
+    recordType,
+    filePath: row.filePath,
+    address: row.address,
+    roomId: row.roomId
+  });
   void router.push({
     path: '/teacher/playback/detail/playback',
     query: {
       roomId: row.roomId,
-      videoId: recordType === 1 ? (row.filePath || row.address) : row.address,
+      videoId: recordType === 1 ? row.filePath || row.address : row.address,
       recordType: String(recordType),
       title: `${recordType === 1 ? '窗口录制' : '流录制'} - ${formatCnDateTime(Number(row.createTime))}`,
       duration: String(row.duration || 0),
       createTime: row.createTime,
-      filePath: row.filePath || '',
+      filePath: row.filePath || ''
     }
   });
 }

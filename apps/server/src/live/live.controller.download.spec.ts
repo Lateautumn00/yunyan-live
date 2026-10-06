@@ -11,12 +11,16 @@ const h = vi.hoisted(() => ({
   written: [] as string[],
   reads: [] as string[],
   piped: [] as unknown[],
-  spawns: [] as Array<{ file: string; args: string[]; opts: { detached?: boolean; stdio?: string } }>,
+  spawns: [] as Array<{
+    file: string;
+    args: string[];
+    opts: { detached?: boolean; stdio?: string };
+  }>,
   unref: 0,
   statSize: 4096
 }));
 
-vi.mock('fs', async (importOriginal) => {
+vi.mock('fs', async importOriginal => {
   const actual = await importOriginal<typeof import('fs')>();
   return {
     ...actual,
@@ -37,13 +41,17 @@ vi.mock('fs', async (importOriginal) => {
   };
 });
 
-vi.mock('child_process', async (importOriginal) => {
+vi.mock('child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('child_process')>();
   return {
     ...actual,
     spawn: (file: string, args: string[], opts: { detached?: boolean; stdio?: string }) => {
       h.spawns.push({ file, args, opts });
-      return { unref: () => { h.unref += 1; } };
+      return {
+        unref: () => {
+          h.unref += 1;
+        }
+      };
     }
   };
 });
@@ -174,7 +182,9 @@ describe('downloadRecording 转码触发', () => {
 
     const script = spawn?.args[1] ?? '';
     expect(script).toContain('docker exec janus-gateway /opt/janus/bin/janus-pp-rec');
-    expect(script).toContain('"/tmp/janus/recordings/rec-1-video.mjr" "/tmp/janus/recordings/1-video.webm"');
+    expect(script).toContain(
+      '"/tmp/janus/recordings/rec-1-video.mjr" "/tmp/janus/recordings/1-video.webm"'
+    );
     expect(script).toContain(
       'docker exec janus-gateway ffmpeg -y -i "/tmp/janus/recordings/1-video.webm" -c:v libx264 -preset ultrafast "/tmp/janus/recordings/1.mp4"'
     );
@@ -197,7 +207,9 @@ describe('downloadRecording 转码触发', () => {
     expect(script).toContain(
       'ffmpeg -y -i "/tmp/janus/recordings/1-video.webm" -i "/tmp/janus/recordings/1-audio.opus" -c:v libx264 -preset ultrafast -c:a aac "/tmp/janus/recordings/1.mp4"'
     );
-    expect(script).toContain('rm -f "/tmp/janus/recordings/1-video.webm" "/tmp/janus/recordings/1-audio.opus"');
+    expect(script).toContain(
+      'rm -f "/tmp/janus/recordings/1-video.webm" "/tmp/janus/recordings/1-audio.opus"'
+    );
     expect(script.split(' && ')).toHaveLength(5);
   });
 
@@ -212,7 +224,9 @@ describe('downloadRecording 转码触发', () => {
 
     expect(h.written).toEqual([path.join('D:\\rec', '9.converting')]);
     const script = h.spawns[0]?.args[1] ?? '';
-    expect(script).toContain('docker exec janus-prod /opt/custom/janus-pp-rec "/tmp/janus/recordings/rec-9-video.mjr"');
+    expect(script).toContain(
+      'docker exec janus-prod /opt/custom/janus-pp-rec "/tmp/janus/recordings/rec-9-video.mjr"'
+    );
     expect(script).toContain(`rm -f "${path.join('D:\\rec', '9.converting')}"`);
   });
 });

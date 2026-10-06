@@ -100,7 +100,7 @@ describe('回放管理 playback/index.vue', () => {
       vm(wrapper).handleSelectionChange([room, { ...room, roomId: 'R2' }]);
       await flushPromises();
       const buttons = wrapper.findAll('button');
-      const deleteBtn = buttons.find((b) => b.text().includes('批量删除'))!;
+      const deleteBtn = buttons.find(b => b.text().includes('批量删除'))!;
       await deleteBtn.trigger('click');
       await flushPromises();
       expect(mocks.roomIdsDelete).toHaveBeenCalledWith({
@@ -115,7 +115,7 @@ describe('回放管理 playback/index.vue', () => {
   it('未选择时批量删除按钮禁用', async () => {
     const { wrapper } = await mountPage();
     const buttons = wrapper.findAll('button');
-    const deleteBtn = buttons.find((b) => b.text().includes('批量删除'))!;
+    const deleteBtn = buttons.find(b => b.text().includes('批量删除'))!;
     expect(deleteBtn.attributes('disabled')).toBeDefined();
   });
 
@@ -124,8 +124,6 @@ describe('回放管理 playback/index.vue', () => {
     const pagination = wrapper.findComponent({ name: 'ElPagination' });
     pagination.vm.$emit('current-change', 2);
     await flushPromises();
-    expect(mocks.videoList).toHaveBeenLastCalledWith(
-      expect.objectContaining({ pageNum: 2 })
-    );
+    expect(mocks.videoList).toHaveBeenLastCalledWith(expect.objectContaining({ pageNum: 2 }));
   });
 });

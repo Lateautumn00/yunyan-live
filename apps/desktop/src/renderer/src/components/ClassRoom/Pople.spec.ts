@@ -13,7 +13,9 @@ function mountPople(props: { liveUserId: string }) {
 
 function vmOf(wrapper: ReturnType<typeof mount>) {
   return wrapper.vm as unknown as {
-    updatePopleList: (list: Array<{ userName: string; opaqueId: string; isTeacher?: boolean }>) => void;
+    updatePopleList: (
+      list: Array<{ userName: string; opaqueId: string; isTeacher?: boolean }>
+    ) => void;
   };
 }
 

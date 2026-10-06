@@ -61,11 +61,7 @@ vi.mock('@/vendor/live/live', () => {
     constructor(opts: { success: () => void; error: (e: unknown) => void }) {
       vendorState.ctorOpts = opts;
     }
-    attach(opts: {
-      plugin: string;
-      success: (h: unknown) => void;
-      ondata?: (d: string) => void;
-    }) {
+    attach(opts: { plugin: string; success: (h: unknown) => void; ondata?: (d: string) => void }) {
       vendorState.attachOpts.push(opts);
     }
   }
@@ -81,16 +77,8 @@ interface CreateVm {
     duration: number | null;
   };
   submitForm: () => void;
-  validateTitle: (
-    rule: unknown,
-    value: string,
-    callback: (error?: Error) => void
-  ) => void;
-  validateDuration: (
-    rule: unknown,
-    value: number,
-    callback: (error?: Error) => void
-  ) => void;
+  validateTitle: (rule: unknown, value: string, callback: (error?: Error) => void) => void;
+  validateDuration: (rule: unknown, value: number, callback: (error?: Error) => void) => void;
 }
 
 function vm(wrapper: VueWrapper): CreateVm {
@@ -171,7 +159,7 @@ describe('创建直播 createlive/index.vue', () => {
     await flushPromises();
 
     const buttons = wrapper.findAll('button');
-    const createBtn = buttons.find((b) => b.text().includes('创建'))!;
+    const createBtn = buttons.find(b => b.text().includes('创建'))!;
     await createBtn.trigger('click');
     await flushPromises();
 

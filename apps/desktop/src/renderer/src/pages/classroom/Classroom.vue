@@ -27,10 +27,7 @@
     >
       <template #whiteboard>
         <div class="whiteboard-wrapper">
-          <div
-            v-if="isLargeTeacher"
-            class="player"
-          >
+          <div v-if="isLargeTeacher" class="player">
             <div id="div1">
               <WhiteBoard
                 :is-teacher="isTeacher"
@@ -42,16 +39,10 @@
                 @paint-log="paintLog"
               />
             </div>
-            <div
-              v-show="false"
-              id="div3"
-            />
+            <div v-show="false" id="div3" />
           </div>
           <template v-else>
-            <div
-              v-show="dis"
-              class="player"
-            >
+            <div v-show="dis" class="player">
               <div id="div5">
                 <VideoPlayer :is-muted="true" />
               </div>
@@ -69,10 +60,7 @@
                   @paint-log="paintLog"
                 />
               </div>
-              <div
-                v-show="false"
-                id="div3"
-              />
+              <div v-show="false" id="div3" />
             </div>
           </template>
         </div>
@@ -85,7 +73,7 @@
                 ? { key: 'raisehands', label: '举手', badge: badgeNum }
                 : { key: 'playback', label: '回放', badge: badgeNum },
               { key: 'chat', label: '聊天', badge: chatNum },
-              { key: 'people', label: `人数(${num})` },
+              { key: 'people', label: `人数(${num})` }
             ]"
             :active-name="activeName"
             :max="max"
@@ -124,11 +112,7 @@
               @get-white-board="getWhiteBoard"
               @live-started="onLiveStarted"
             />
-            <Pople
-              v-show="activeName === 'people'"
-              ref="pople"
-              :live-user-id="opaqueId"
-            />
+            <Pople v-show="activeName === 'people'" ref="pople" :live-user-id="opaqueId" />
           </div>
         </div>
       </template>
@@ -289,15 +273,21 @@ export default defineComponent({
       dotTop: variant === 'large-student' ? top : undefined
     });
 
-    const { router, roomId, nickName, roomInfo, getRoomInfo, videoList: roomVideoList } =
-      useClassroomRoom({
-        role: props.role,
-        top,
-        video,
-        chat,
-        updateNum,
-        history: isStudent ? history : undefined
-      });
+    const {
+      router,
+      roomId,
+      nickName,
+      roomInfo,
+      getRoomInfo,
+      videoList: roomVideoList
+    } = useClassroomRoom({
+      role: props.role,
+      top,
+      video,
+      chat,
+      updateNum,
+      history: isStudent ? history : undefined
+    });
 
     const userName = ref(nickName);
     const opaqueId = ref(uid());
@@ -323,17 +313,24 @@ export default defineComponent({
       withHoverSwap: !isLargeTeacher
     });
 
-    const { sendTime, socketClose, setLiveType, setDiaBla, openLive, updatePopleList, setAudioAll } =
-      useClassroomHelpers({
-        top,
-        chat,
-        pople,
-        video,
-        liveType,
-        type,
-        audioTarget: isSmall ? videoListComp : applyRef,
-        diaBlaSyncsLiveType: isStudent
-      });
+    const {
+      sendTime,
+      socketClose,
+      setLiveType,
+      setDiaBla,
+      openLive,
+      updatePopleList,
+      setAudioAll
+    } = useClassroomHelpers({
+      top,
+      chat,
+      pople,
+      video,
+      liveType,
+      type,
+      audioTarget: isSmall ? videoListComp : applyRef,
+      diaBlaSyncsLiveType: isStudent
+    });
 
     const teacherHooks = isTeacher
       ? useClassroomTeacherHooks({
@@ -372,15 +369,11 @@ export default defineComponent({
 
     const hooks = teacherHooks || studentHooks;
 
-    const {
-      onParticipantJoin,
-      onParticipantLeave,
-      onBroadcastStart,
-      onBroadcastStop
-    } = useClassroomNotifications(
-      classNotification,
-      `[${isSmall ? 'Small' : 'Large'}${isTeacher ? 'Teacher' : 'Student'}]`
-    );
+    const { onParticipantJoin, onParticipantLeave, onBroadcastStart, onBroadcastStop } =
+      useClassroomNotifications(
+        classNotification,
+        `[${isSmall ? 'Small' : 'Large'}${isTeacher ? 'Teacher' : 'Student'}]`
+      );
 
     function handleSetCameraStudent(status: boolean, isSpeak: boolean) {
       video.value?.setCameraStudent(status, isSpeak);
@@ -436,19 +429,96 @@ export default defineComponent({
     const applyStopApplication = isLarge ? hooks?.stopApplication : undefined;
 
     return {
-      variant, isSmall, isLarge, isStudent, isTeacher, isLargeTeacher, hasApply, applyTab,
-      bindChatModel, roomId, top, video, chat, applyRef, pople, history, videoListComp,
-      classNotification, badgeNum, chatNum, max, num, userName, opaqueId, activeName, layoutNum,
-      chatVisible, videosVisible, isDisplay, roomInfo, isInteraction, liveType, type, btn, dis,
-      teacherStage, wbdata, openLive, lookLive, setLayouts, recording, onOpenLive, setRecord,
-      applyList, onRoomCreated, agree, paintLog, videoList, studentMediaStream, delUserList,
-      apply, onLookLive, onLiveStarted, setTime, centerDialogVisible, playId, playTitle,
-      closedPlay, palyHistoryVideo, setHires, isTalking, stopApplication, application,
-      applyIsTalking, applyStopApplication, setCameraStudent, setCameraType, onSelfJoined,
-      onVideosVisibleChange, onChatVisibleChange, act, getWhiteBoard, sendTime, updateNum,
-      socketClose, setDiaBla, setLiveType, setAudioAll, popleNum, getRoomInfo, handleClick,
-      setDisplay2, setDisplay, pall, sendWhiteboardNews, onParticipantJoin, onParticipantLeave,
-      onBroadcastStart, onBroadcastStop, updatePopleList
+      variant,
+      isSmall,
+      isLarge,
+      isStudent,
+      isTeacher,
+      isLargeTeacher,
+      hasApply,
+      applyTab,
+      bindChatModel,
+      roomId,
+      top,
+      video,
+      chat,
+      applyRef,
+      pople,
+      history,
+      videoListComp,
+      classNotification,
+      badgeNum,
+      chatNum,
+      max,
+      num,
+      userName,
+      opaqueId,
+      activeName,
+      layoutNum,
+      chatVisible,
+      videosVisible,
+      isDisplay,
+      roomInfo,
+      isInteraction,
+      liveType,
+      type,
+      btn,
+      dis,
+      teacherStage,
+      wbdata,
+      openLive,
+      lookLive,
+      setLayouts,
+      recording,
+      onOpenLive,
+      setRecord,
+      applyList,
+      onRoomCreated,
+      agree,
+      paintLog,
+      videoList,
+      studentMediaStream,
+      delUserList,
+      apply,
+      onLookLive,
+      onLiveStarted,
+      setTime,
+      centerDialogVisible,
+      playId,
+      playTitle,
+      closedPlay,
+      palyHistoryVideo,
+      setHires,
+      isTalking,
+      stopApplication,
+      application,
+      applyIsTalking,
+      applyStopApplication,
+      setCameraStudent,
+      setCameraType,
+      onSelfJoined,
+      onVideosVisibleChange,
+      onChatVisibleChange,
+      act,
+      getWhiteBoard,
+      sendTime,
+      updateNum,
+      socketClose,
+      setDiaBla,
+      setLiveType,
+      setAudioAll,
+      popleNum,
+      getRoomInfo,
+      handleClick,
+      setDisplay2,
+      setDisplay,
+      pall,
+      sendWhiteboardNews,
+      onParticipantJoin,
+      onParticipantLeave,
+      onBroadcastStart,
+      onBroadcastStop,
+      updatePopleList
     };
   }
 });

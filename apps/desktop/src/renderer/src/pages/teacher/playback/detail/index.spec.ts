@@ -112,8 +112,6 @@ describe('回放详情 playback/detail/index.vue', () => {
     const pagination = wrapper.findComponent({ name: 'ElPagination' });
     pagination.vm.$emit('current-change', 2);
     await flushPromises();
-    expect(mocks.videoDetail).toHaveBeenLastCalledWith(
-      expect.objectContaining({ pageNum: 2 })
-    );
+    expect(mocks.videoDetail).toHaveBeenLastCalledWith(expect.objectContaining({ pageNum: 2 }));
   });
 });

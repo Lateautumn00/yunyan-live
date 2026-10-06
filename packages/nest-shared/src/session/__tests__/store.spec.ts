@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionService } from '../store';
 import { SESSION_KICK_CHANNEL, SESSION_TTL_SECONDS, sessionKey } from '../constants';
 
-vi.mock('crypto', async (importOriginal) => {
+vi.mock('crypto', async importOriginal => {
   const actual = await importOriginal<typeof import('crypto')>();
   return { ...actual, randomUUID: () => 'sid-fixed' };
 });
@@ -44,7 +44,12 @@ describe('SessionService.createSession', () => {
     const res = await service.createSession('g1');
     expect(res).toEqual({ sid: 'sid-fixed', oldSid: null });
     expect(redis.get).toHaveBeenCalledWith(sessionKey('g1'));
-    expect(redis.set).toHaveBeenCalledWith(sessionKey('g1'), 'sid-fixed', 'EX', SESSION_TTL_SECONDS);
+    expect(redis.set).toHaveBeenCalledWith(
+      sessionKey('g1'),
+      'sid-fixed',
+      'EX',
+      SESSION_TTL_SECONDS
+    );
     expect(redis.publish).not.toHaveBeenCalled();
   });
 
@@ -74,9 +79,7 @@ describe('SessionService.createSession', () => {
     const res = await service.createSession('g1');
     expect(res).toEqual({ sid: 'sid-fixed', oldSid: null });
     expect(redis.set).not.toHaveBeenCalled();
-    expect(errSpy).toHaveBeenCalledWith(
-      'createSession failed for guid=g1: Error: redis down'
-    );
+    expect(errSpy).toHaveBeenCalledWith('createSession failed for guid=g1: Error: redis down');
   });
 
   it('Redis 写入失败时同样 fail-open', async () => {

@@ -11,7 +11,7 @@ export class JanusService {
     this.axios = axios.create({
       baseURL: janusConfig.baseUrl,
       timeout: 5000,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' }
     });
   }
 
@@ -27,7 +27,7 @@ export class JanusService {
         transaction: this.transactionId(),
         request: 'create',
         room: numericId,
-        description,
+        description
       });
       this.logger.log(`Janus room created: ${numericId}`);
     } catch (error: unknown) {
@@ -45,7 +45,7 @@ export class JanusService {
         janus: 'videoroom',
         transaction: this.transactionId(),
         request: 'destroy',
-        room: numericId,
+        room: numericId
       });
       this.logger.log(`Janus room destroyed: ${numericId}`);
     } catch (error: unknown) {

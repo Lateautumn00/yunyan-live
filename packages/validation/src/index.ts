@@ -21,11 +21,7 @@ export function isVoid(checkedmsg: string): boolean {
   return !checkedmsg;
 }
 
-export function isCheckedLength(
-  checkedmsg: string,
-  minLength: number,
-  maxLength: number
-): boolean {
+export function isCheckedLength(checkedmsg: string, minLength: number, maxLength: number): boolean {
   const checkedmsgLength = checkedmsg.length;
   return checkedmsgLength >= minLength && checkedmsgLength <= maxLength;
 }

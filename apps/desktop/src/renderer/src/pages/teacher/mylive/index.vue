@@ -23,11 +23,7 @@
       </div>
       <div class="search-row2">
         <label for="status">直播状态</label>
-        <el-select
-          v-model="status"
-          placeholder="请选择"
-          style="width: 150px"
-        >
+        <el-select v-model="status" placeholder="请选择" style="width: 150px">
           <el-option
             v-for="item in statusOptions"
             :key="item.value"
@@ -36,16 +32,8 @@
           />
         </el-select>
         <label for="type">直播类型</label>
-        <el-select
-          v-model="type"
-          placeholder="请选择"
-          clearable
-          style="width: 150px"
-        >
-          <el-option
-            label="全部"
-            :value="''"
-          />
+        <el-select v-model="type" placeholder="请选择" clearable style="width: 150px">
+          <el-option label="全部" :value="''" />
           <el-option
             v-for="item in typeOptions"
             :key="item.value"
@@ -53,25 +41,10 @@
             :value="item.value"
           />
         </el-select>
-        <el-button
-          type="primary"
-          :loading="loading"
-          @click="onSearch"
-        >
-          搜索
-        </el-button>
-        <el-button
-          :loading="loading"
-          @click="onReset"
-        >
-          重置
-        </el-button>
+        <el-button type="primary" :loading="loading" @click="onSearch"> 搜索 </el-button>
+        <el-button :loading="loading" @click="onReset"> 重置 </el-button>
       </div>
-      <div
-        v-loading="loading"
-        class="live-list"
-        style="overflow-x: auto"
-      >
+      <div v-loading="loading" class="live-list" style="overflow-x: auto">
         <el-table
           v-if="tableData.length > 0"
           :data="tableData"
@@ -80,64 +53,36 @@
           stripe
           @row-click="goToDetail"
         >
-          <el-table-column
-            prop="roomId"
-            label="教室ID"
-            min-width="81"
-            class-name="no-row-click"
-          />
-          <el-table-column
-            prop="title"
-            label="直播名称"
-            min-width="126"
-          />
-          <el-table-column
-            prop="type"
-            label="直播类型"
-            min-width="80"
-          >
+          <el-table-column prop="roomId" label="教室ID" min-width="81" class-name="no-row-click" />
+          <el-table-column prop="title" label="直播名称" min-width="126" />
+          <el-table-column prop="type" label="直播类型" min-width="80">
             <template #default="scope">
               <span>{{ typeOptions[scope.row.type]!['label'] }}</span>
             </template>
           </el-table-column>
-          <el-table-column
-            prop="joinCode"
-            label="直播码"
-            min-width="90"
-          />
+          <el-table-column prop="joinCode" label="直播码" min-width="90" />
           <el-table-column
             prop="startTime"
             label="开始时间"
             min-width="133"
             :formatter="dateFormatter"
           />
-          <el-table-column
-            prop="status"
-            label="状态"
-            min-width="56"
-          >
+          <el-table-column prop="status" label="状态" min-width="56">
             <template #default="scope">
               <span>{{ ROOM_STATUS_TEXT[scope.row.status] ?? '未知' }}</span>
             </template>
           </el-table-column>
-          <el-table-column
-            prop="hasVideo"
-            label="回放"
-            min-width="60"
-          >
+          <el-table-column prop="hasVideo" label="回放" min-width="60">
             <template #default="scope">
               <span
                 v-if="scope.row.status > 2"
                 class="has-video"
                 @click="nav.goplayback(scope.row as LiveRoom)"
-              >回放</span>
+                >回放</span
+              >
             </template>
           </el-table-column>
-          <el-table-column
-            label="操作"
-            min-width="60"
-            align="center"
-          >
+          <el-table-column label="操作" min-width="60" align="center">
             <template #default="scope">
               <RoomActions
                 variant="dropdown"
@@ -149,24 +94,13 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-empty
-          v-else-if="!loading"
-          :description="emptyDescription"
-        >
-          <el-button
-            v-if="isFiltered"
-            type="primary"
-            :loading="loading"
-            @click="onReset"
-          >
+        <el-empty v-else-if="!loading" :description="emptyDescription">
+          <el-button v-if="isFiltered" type="primary" :loading="loading" @click="onReset">
             清空筛选
           </el-button>
         </el-empty>
       </div>
-      <div
-        v-show="total !== 0"
-        class="tc-page"
-      >
+      <div v-show="total !== 0" class="tc-page">
         <el-pagination
           background
           :current-page="params.pageNum"
@@ -226,8 +160,8 @@ const {
 } = usePagedList<LiveRoom>({
   pageSize: 10,
   initialLoading: true,
-  onError: (e) => console.error('[mylive] getLiveList error:', e),
-  fetchPage: async (query) => {
+  onError: e => console.error('[mylive] getLiveList error:', e),
+  fetchPage: async query => {
     let startTime = '';
     let endTime = '';
     const toTimestamp = (value?: string | Date) =>

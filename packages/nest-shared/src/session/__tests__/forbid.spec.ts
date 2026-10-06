@@ -1,13 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { Redis } from 'ioredis';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  FORBID_CHANNEL,
-  forbidKey,
-  readForbid,
-  subscribeForbid,
-  writeForbid
-} from '../index';
+import { FORBID_CHANNEL, forbidKey, readForbid, subscribeForbid, writeForbid } from '../index';
 
 type FakeSubscriber = EventEmitter & { subscribe: (channel: string) => Promise<void> };
 

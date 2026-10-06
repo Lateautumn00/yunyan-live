@@ -4,6 +4,6 @@ import { JanusService } from './janus.service';
 @Global()
 @Module({
   providers: [JanusService],
-  exports: [JanusService],
+  exports: [JanusService]
 })
 export class JanusModule {}

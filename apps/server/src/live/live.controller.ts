@@ -1,4 +1,19 @@
-﻿import { Controller, Get, Post, Put, Delete, Body, Query, Param, Res, UseGuards, Request, Inject, OnModuleInit, Logger } from '@nestjs/common';
+﻿import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Query,
+  Param,
+  Res,
+  UseGuards,
+  Request,
+  Inject,
+  OnModuleInit,
+  Logger
+} from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { Metadata } from '@grpc/grpc-js';
 import { Observable } from 'rxjs';
@@ -7,7 +22,17 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { grpcCall } from '../common/helpers/grpc.helper';
-import { ChangeStatusDto, CreateCoursewareDto, CreateLiveDto, JoinLiveDto, JwtAuthGuard, normalizePageQuery, toGrpcPage, UpdateLiveDto, userIdMetadata } from '@yunyan-live/nest-shared';
+import {
+  ChangeStatusDto,
+  CreateCoursewareDto,
+  CreateLiveDto,
+  JoinLiveDto,
+  JwtAuthGuard,
+  normalizePageQuery,
+  toGrpcPage,
+  UpdateLiveDto,
+  userIdMetadata
+} from '@yunyan-live/nest-shared';
 
 interface LiveResponse {
   code: string;
@@ -87,28 +112,151 @@ interface StudentRoomsResponse {
 }
 
 interface LiveServiceClient {
-  createLive(data: { title: string; type?: number; start_time: string; duration?: number; room_id?: string }, metadata?: Metadata): Observable<LiveResponse>;
+  createLive(
+    data: { title: string; type?: number; start_time: string; duration?: number; room_id?: string },
+    metadata?: Metadata
+  ): Observable<LiveResponse>;
   joinLive(data: { join_code: string; live_user_id?: string }): Observable<JoinLiveResponse>;
   showRoom(data: { room_id: string }): Observable<ShowRoomResponse>;
   changeStatus(data: { room_id: string; status: number }): Observable<LiveResponse>;
-  updateLive(data: { room_id: string; title: string; type: number; start_time: string; duration: number }): Observable<LiveResponse>;
-  cmsList(data: { page?: number; page_size?: number; status?: number; live_user_id?: string; search_name?: string; start_time?: string; end_time?: string; type?: number }, metadata?: Metadata): Observable<CmsListResponse>;
+  updateLive(data: {
+    room_id: string;
+    title: string;
+    type: number;
+    start_time: string;
+    duration: number;
+  }): Observable<LiveResponse>;
+  cmsList(
+    data: {
+      page?: number;
+      page_size?: number;
+      status?: number;
+      live_user_id?: string;
+      search_name?: string;
+      start_time?: string;
+      end_time?: string;
+      type?: number;
+    },
+    metadata?: Metadata
+  ): Observable<CmsListResponse>;
   cmsDetail(data: { room_id: string }): Observable<ShowRoomResponse>;
   deleteLive(data: { room_id: string }): Observable<LiveResponse>;
   updateCode(data: { room_id: string }): Observable<UpdateCodeResponse>;
-  getStudentRooms(data: { page?: number; page_size?: number }, metadata?: Metadata): Observable<StudentRoomsResponse>;
+  getStudentRooms(
+    data: { page?: number; page_size?: number },
+    metadata?: Metadata
+  ): Observable<StudentRoomsResponse>;
   leaveRoom(data: { room_id: string }, metadata?: Metadata): Observable<LiveResponse>;
   batchLeave(data: { room_ids: string[] }, metadata?: Metadata): Observable<LiveResponse>;
-  generateTransferCode(data: { room_id: string; target_user_id: string }): Observable<{ code: string; msg: string; transfer_code: string; expires_at: string }>;
-  executeTransfer(data: { room_id: string; transfer_code: string; from_user_id: string }): Observable<{ code: string; msg: string }>;
-  saveVideoRecording(data: { room_id: string; file_path: string; file_name: string; file_size: number; duration: number; record_type: number; teacher_name: string }): Observable<{ code: string; msg: string }>;
-  getVideoList(data: { page?: number; page_size?: number; live_user_id?: string; search_name?: string; start_time?: string; end_time?: string; type?: number }): Observable<{ code: string; msg: string; data: { items: Array<{ room_id: string; title: string; teacher_name: string; type: number; start_time: string; count: number }>; total: number } }>;
-  getVideoDetail(data: { room_id: string; start_time?: string; end_time?: string }): Observable<{ code: string; msg: string; data: { items: Array<{ id: string; room_id: string; file_path: string; file_name: string; file_size: number; duration: number; record_type: number; teacher_name: string; created_at: string }>; total: number } }>;
+  generateTransferCode(data: {
+    room_id: string;
+    target_user_id: string;
+  }): Observable<{ code: string; msg: string; transfer_code: string; expires_at: string }>;
+  executeTransfer(data: {
+    room_id: string;
+    transfer_code: string;
+    from_user_id: string;
+  }): Observable<{ code: string; msg: string }>;
+  saveVideoRecording(data: {
+    room_id: string;
+    file_path: string;
+    file_name: string;
+    file_size: number;
+    duration: number;
+    record_type: number;
+    teacher_name: string;
+  }): Observable<{ code: string; msg: string }>;
+  getVideoList(data: {
+    page?: number;
+    page_size?: number;
+    live_user_id?: string;
+    search_name?: string;
+    start_time?: string;
+    end_time?: string;
+    type?: number;
+  }): Observable<{
+    code: string;
+    msg: string;
+    data: {
+      items: Array<{
+        room_id: string;
+        title: string;
+        teacher_name: string;
+        type: number;
+        start_time: string;
+        count: number;
+      }>;
+      total: number;
+    };
+  }>;
+  getVideoDetail(data: { room_id: string; start_time?: string; end_time?: string }): Observable<{
+    code: string;
+    msg: string;
+    data: {
+      items: Array<{
+        id: string;
+        room_id: string;
+        file_path: string;
+        file_name: string;
+        file_size: number;
+        duration: number;
+        record_type: number;
+        teacher_name: string;
+        created_at: string;
+      }>;
+      total: number;
+    };
+  }>;
   deleteVideoByRoomIds(data: { room_ids: string[] }): Observable<{ code: string; msg: string }>;
   deleteVideoByVideoIds(data: { video_ids: string[] }): Observable<{ code: string; msg: string }>;
-  getUserWatchTimeList(data: { page?: number; page_size?: number; room_id?: string; search_name?: string }): Observable<{ code: string; msg: string; data: { items: Array<{ user_id: string; username: string; watch_time: number; joined_at: string; left_at: string; is_online: boolean }>; total: number; total_time_by_room: number } }>;
-  saveCourseware(data: { room_id: string; filename: string; filext: string; filesize: number; fileurl: string; create_user_id?: string }, metadata?: Metadata): Observable<{ code: string; msg: string }>;
-  listCourseware(data: { room_id: string }): Observable<{ code: string; msg: string; data: { items: Array<{ id: string; room_id: string; filename: string; filext: string; filesize: number; fileurl: string; created_at: string }>; total: number } }>;
+  getUserWatchTimeList(data: {
+    page?: number;
+    page_size?: number;
+    room_id?: string;
+    search_name?: string;
+  }): Observable<{
+    code: string;
+    msg: string;
+    data: {
+      items: Array<{
+        user_id: string;
+        username: string;
+        watch_time: number;
+        joined_at: string;
+        left_at: string;
+        is_online: boolean;
+      }>;
+      total: number;
+      total_time_by_room: number;
+    };
+  }>;
+  saveCourseware(
+    data: {
+      room_id: string;
+      filename: string;
+      filext: string;
+      filesize: number;
+      fileurl: string;
+      create_user_id?: string;
+    },
+    metadata?: Metadata
+  ): Observable<{ code: string; msg: string }>;
+  listCourseware(data: { room_id: string }): Observable<{
+    code: string;
+    msg: string;
+    data: {
+      items: Array<{
+        id: string;
+        room_id: string;
+        filename: string;
+        filext: string;
+        filesize: number;
+        fileurl: string;
+        created_at: string;
+      }>;
+      total: number;
+    };
+  }>;
   deleteCourseware(data: { id: string }): Observable<{ code: string; msg: string }>;
 }
 
@@ -121,8 +269,12 @@ interface UserData {
 
 interface AuthServiceClient {
   getUser(data: { user_id: string }): Observable<{ code: string; msg: string; data?: UserData }>;
-  batchGetUsers(data: { user_ids: string[] }): Observable<{ code: string; msg: string; data?: UserData[] }>;
-  searchTeachers(data: { keyword: string }): Observable<{ code: string; msg: string; data?: UserData[] }>;
+  batchGetUsers(data: {
+    user_ids: string[];
+  }): Observable<{ code: string; msg: string; data?: UserData[] }>;
+  searchTeachers(data: {
+    keyword: string;
+  }): Observable<{ code: string; msg: string; data?: UserData[] }>;
 }
 
 @Controller('live/liveInfo')
@@ -131,7 +283,7 @@ export class LiveController implements OnModuleInit {
 
   constructor(
     @Inject('LIVE_GRPC') private liveClient: ClientGrpc,
-    @Inject('AUTH_GRPC') private authClient: ClientGrpc,
+    @Inject('AUTH_GRPC') private authClient: ClientGrpc
   ) {}
 
   private liveService: LiveServiceClient;
@@ -163,34 +315,43 @@ export class LiveController implements OnModuleInit {
   @UseGuards(JwtAuthGuard)
   create(@Body() dto: CreateLiveDto, @Request() req: { user: { userId: string } }) {
     const metadata = userIdMetadata(req.user.userId);
-    return grpcCall(this.liveService.createLive({
-      title: dto.title,
-      type: dto.type ?? 0,
-      start_time: dto.startTime,
-      duration: dto.duration ?? 0,
-      room_id: dto.roomId ?? '',
-    }, metadata));
+    return grpcCall(
+      this.liveService.createLive(
+        {
+          title: dto.title,
+          type: dto.type ?? 0,
+          start_time: dto.startTime,
+          duration: dto.duration ?? 0,
+          room_id: dto.roomId ?? ''
+        },
+        metadata
+      )
+    );
   }
 
   @Put('updateLive')
   @UseGuards(JwtAuthGuard)
   updateLive(@Body() dto: UpdateLiveDto) {
-    return grpcCall(this.liveService.updateLive({
-      room_id: dto.roomId,
-      title: dto.title ?? '',
-      type: dto.type ?? 0,
-      start_time: dto.startTime ?? '',
-      duration: dto.duration ?? 0,
-    }));
+    return grpcCall(
+      this.liveService.updateLive({
+        room_id: dto.roomId,
+        title: dto.title ?? '',
+        type: dto.type ?? 0,
+        start_time: dto.startTime ?? '',
+        duration: dto.duration ?? 0
+      })
+    );
   }
 
   @Post('joinLive')
   @UseGuards(JwtAuthGuard)
   async join(@Body() dto: JoinLiveDto, @Request() req: { user: { userId: string } }) {
-    return grpcCall(this.liveService.joinLive({
-      join_code: dto.joinCode,
-      live_user_id: req.user.userId,
-    }));
+    return grpcCall(
+      this.liveService.joinLive({
+        join_code: dto.joinCode,
+        live_user_id: req.user.userId
+      })
+    );
   }
 
   @Get('showRoomInfo')
@@ -217,32 +378,54 @@ export class LiveController implements OnModuleInit {
       status: d.status,
       type: d.type,
       videoList: [],
-      liveStartedAt: d.live_started_at || Date.now().toString(),
+      liveStartedAt: d.live_started_at || Date.now().toString()
     };
   }
 
   @Put('changeLiveStatus')
   @UseGuards(JwtAuthGuard)
   changeStatus(@Body() dto: ChangeStatusDto) {
-    return grpcCall(this.liveService.changeStatus({
-      room_id: dto.roomId,
-      status: dto.status,
-    }));
+    return grpcCall(
+      this.liveService.changeStatus({
+        room_id: dto.roomId,
+        status: dto.status
+      })
+    );
   }
 
   @Post('cmsLiveList')
   @UseGuards(JwtAuthGuard)
-  async cmsList(@Body() body: { page?: number; pageNum?: number; pageSize?: number; status?: number; searchName?: string; startTime?: string; endTime?: string; type?: number }, @Request() req: { user: { userId: string } }) {
+  async cmsList(
+    @Body()
+    body: {
+      page?: number;
+      pageNum?: number;
+      pageSize?: number;
+      status?: number;
+      searchName?: string;
+      startTime?: string;
+      endTime?: string;
+      type?: number;
+    },
+    @Request() req: { user: { userId: string } }
+  ) {
     const metadata = userIdMetadata(req.user.userId);
-    const result = await grpcCall(this.liveService.cmsList({
-      ...toGrpcPage(normalizePageQuery({ page: body.page, pageNum: body.pageNum, pageSize: body.pageSize })),
-      status: body.status,
-      live_user_id: req.user.userId,
-      search_name: body.searchName || '',
-      start_time: body.startTime || '',
-      end_time: body.endTime || '',
-      type: body.type ?? -1,
-    }, metadata));
+    const result = await grpcCall(
+      this.liveService.cmsList(
+        {
+          ...toGrpcPage(
+            normalizePageQuery({ page: body.page, pageNum: body.pageNum, pageSize: body.pageSize })
+          ),
+          status: body.status,
+          live_user_id: req.user.userId,
+          search_name: body.searchName || '',
+          start_time: body.startTime || '',
+          end_time: body.endTime || '',
+          type: body.type ?? -1
+        },
+        metadata
+      )
+    );
 
     const userIds = result.data.items.map(r => r.live_user_id).filter(Boolean);
     const usernameMap = await this.resolveUsernames(userIds);
@@ -256,9 +439,9 @@ export class LiveController implements OnModuleInit {
         status: r.status,
         type: r.type,
         startTime: r.start_time,
-        duration: r.duration,
+        duration: r.duration
       })),
-      total: result.data.total,
+      total: result.data.total
     };
   }
 
@@ -286,7 +469,7 @@ export class LiveController implements OnModuleInit {
       status: d.status,
       type: d.type,
       startTime: d.start_time,
-      duration: d.duration,
+      duration: d.duration
     };
   }
 
@@ -306,11 +489,20 @@ export class LiveController implements OnModuleInit {
 
   @Get('studentRooms')
   @UseGuards(JwtAuthGuard)
-  async getStudentRooms(@Query('page') page: string, @Query('pageSize') pageSize: string, @Request() req: { user: { userId: string } }) {
+  async getStudentRooms(
+    @Query('page') page: string,
+    @Query('pageSize') pageSize: string,
+    @Request() req: { user: { userId: string } }
+  ) {
     const metadata = userIdMetadata(req.user.userId);
-    const result = await grpcCall(this.liveService.getStudentRooms({
-      ...toGrpcPage(normalizePageQuery({ page, pageSize })),
-    }, metadata));
+    const result = await grpcCall(
+      this.liveService.getStudentRooms(
+        {
+          ...toGrpcPage(normalizePageQuery({ page, pageSize }))
+        },
+        metadata
+      )
+    );
 
     const userIds = result.data.items.map(r => r.live_user_id).filter(Boolean);
     const usernameMap = await this.resolveUsernames(userIds);
@@ -324,9 +516,9 @@ export class LiveController implements OnModuleInit {
         joinCode: r.join_code,
         status: r.status,
         startTime: r.start_time,
-        type: r.type,
+        type: r.type
       })),
-      total: result.data.total,
+      total: result.data.total
     };
   }
 
@@ -346,21 +538,31 @@ export class LiveController implements OnModuleInit {
 
   @Post('generateTransferCode')
   @UseGuards(JwtAuthGuard)
-  generateTransferCode(@Body() body: { roomId: string }, @Request() req: { user: { userId: string } }) {
-    return grpcCall(this.liveService.generateTransferCode({
-      room_id: body.roomId,
-      target_user_id: req.user.userId,
-    }));
+  generateTransferCode(
+    @Body() body: { roomId: string },
+    @Request() req: { user: { userId: string } }
+  ) {
+    return grpcCall(
+      this.liveService.generateTransferCode({
+        room_id: body.roomId,
+        target_user_id: req.user.userId
+      })
+    );
   }
 
   @Post('executeTransfer')
   @UseGuards(JwtAuthGuard)
-  executeTransfer(@Body() body: { roomId: string; transferCode: string }, @Request() req: { user: { userId: string } }) {
-    return grpcCall(this.liveService.executeTransfer({
-      room_id: body.roomId,
-      transfer_code: body.transferCode,
-      from_user_id: req.user.userId,
-    }));
+  executeTransfer(
+    @Body() body: { roomId: string; transferCode: string },
+    @Request() req: { user: { userId: string } }
+  ) {
+    return grpcCall(
+      this.liveService.executeTransfer({
+        room_id: body.roomId,
+        transfer_code: body.transferCode,
+        from_user_id: req.user.userId
+      })
+    );
   }
 
   @Get('searchTeachers')
@@ -371,37 +573,54 @@ export class LiveController implements OnModuleInit {
 
   @Get('videoList')
   @UseGuards(JwtAuthGuard)
-  async getVideoList(@Query('page') page: string, @Query('pageNum') pageNum: string, @Query('pageSize') pageSize: string, @Query('searchName') searchName: string, @Query('startTime') startTime: string, @Query('endTime') endTime: string, @Query('type') type: string, @Request() req: { user: { userId: string } }) {
-    const result = await grpcCall(this.liveService.getVideoList({
-      ...toGrpcPage(normalizePageQuery({ page, pageNum, pageSize })),
-      live_user_id: req.user.userId,
-      search_name: searchName || '',
-      start_time: startTime || '',
-      end_time: endTime || '',
-      type: parseInt(type) >= 0 ? parseInt(type) : -1,
-    }));
+  async getVideoList(
+    @Query('page') page: string,
+    @Query('pageNum') pageNum: string,
+    @Query('pageSize') pageSize: string,
+    @Query('searchName') searchName: string,
+    @Query('startTime') startTime: string,
+    @Query('endTime') endTime: string,
+    @Query('type') type: string,
+    @Request() req: { user: { userId: string } }
+  ) {
+    const result = await grpcCall(
+      this.liveService.getVideoList({
+        ...toGrpcPage(normalizePageQuery({ page, pageNum, pageSize })),
+        live_user_id: req.user.userId,
+        search_name: searchName || '',
+        start_time: startTime || '',
+        end_time: endTime || '',
+        type: parseInt(type) >= 0 ? parseInt(type) : -1
+      })
+    );
     const items = (result?.data?.items || []).map((item: Record<string, unknown>) => ({
       roomId: item.room_id,
       title: item.title,
       speakerName: item.teacher_name,
       type: item.type,
       time: item.start_time,
-      count: item.count,
+      count: item.count
     }));
     return {
       list: items,
-      pageInfo: { totalElements: result?.data?.total || 0 },
+      pageInfo: { totalElements: result?.data?.total || 0 }
     };
   }
 
   @Get('videoDetail')
   @UseGuards(JwtAuthGuard)
-  async getVideoDetail(@Query('roomId') roomId: string, @Query('startTime') startTime: string, @Query('endTime') endTime: string) {
-    const result = await grpcCall(this.liveService.getVideoDetail({
-      room_id: roomId,
-      start_time: startTime || '',
-      end_time: endTime || '',
-    }));
+  async getVideoDetail(
+    @Query('roomId') roomId: string,
+    @Query('startTime') startTime: string,
+    @Query('endTime') endTime: string
+  ) {
+    const result = await grpcCall(
+      this.liveService.getVideoDetail({
+        room_id: roomId,
+        start_time: startTime || '',
+        end_time: endTime || ''
+      })
+    );
     const items = (result?.data?.items || []).map((item: Record<string, unknown>) => ({
       roomId: item.room_id,
       id: item.id,
@@ -409,11 +628,11 @@ export class LiveController implements OnModuleInit {
       duration: item.duration,
       createTime: item.created_at,
       recordType: item.record_type,
-      filePath: item.file_path,
+      filePath: item.file_path
     }));
     return {
       list: items,
-      pageInfo: { totalElements: result?.data?.total || 0 },
+      pageInfo: { totalElements: result?.data?.total || 0 }
     };
   }
 
@@ -433,14 +652,19 @@ export class LiveController implements OnModuleInit {
   @UseGuards(JwtAuthGuard)
   saveCourseware(@Body() dto: CreateCoursewareDto, @Request() req: { user: { userId: string } }) {
     const metadata = userIdMetadata(req.user.userId);
-    return grpcCall(this.liveService.saveCourseware({
-      room_id: dto.roomId,
-      filename: dto.filename,
-      filext: dto.filext || '',
-      filesize: dto.filesize ?? 0,
-      fileurl: dto.fileUrl,
-      create_user_id: req.user.userId,
-    }, metadata));
+    return grpcCall(
+      this.liveService.saveCourseware(
+        {
+          room_id: dto.roomId,
+          filename: dto.filename,
+          filext: dto.filext || '',
+          filesize: dto.filesize ?? 0,
+          fileurl: dto.fileUrl,
+          create_user_id: req.user.userId
+        },
+        metadata
+      )
+    );
   }
 
   @Get('coursewareList')
@@ -454,11 +678,11 @@ export class LiveController implements OnModuleInit {
       filext: item.filext,
       filesize: item.filesize,
       fileUrl: item.fileurl,
-      createdAt: item.created_at,
+      createdAt: item.created_at
     }));
     return {
       list: items,
-      pageInfo: { totalElements: result?.data?.total || 0 },
+      pageInfo: { totalElements: result?.data?.total || 0 }
     };
   }
 
@@ -471,46 +695,64 @@ export class LiveController implements OnModuleInit {
   @Post('savePlayBackUrl')
   @UseGuards(JwtAuthGuard)
   async savePlayBackUrl(@Body() body: { roomId: string; playBackUrl: string; duration: number }) {
-    await grpcCall(this.liveService.saveVideoRecording({
-      room_id: body.roomId,
-      file_path: body.playBackUrl,
-      file_name: body.playBackUrl,
-      file_size: 0,
-      duration: body.duration || 0,
-      record_type: 2,
-      teacher_name: '',
-    }));
+    await grpcCall(
+      this.liveService.saveVideoRecording({
+        room_id: body.roomId,
+        file_path: body.playBackUrl,
+        file_name: body.playBackUrl,
+        file_size: 0,
+        duration: body.duration || 0,
+        record_type: 2,
+        teacher_name: ''
+      })
+    );
     return { roomId: body.roomId, playBackUrl: body.playBackUrl };
   }
 
-  @Post("getUserWatchTimeList")
+  @Post('getUserWatchTimeList')
   @UseGuards(JwtAuthGuard)
-  async getUserWatchTimeList(@Body() body: { pageNum?: number; pageSize?: number; roomId?: string; searchName?: string }) {
-    const result = await grpcCall(this.liveService.getUserWatchTimeList({
-      ...toGrpcPage(normalizePageQuery({ pageNum: body.pageNum, pageSize: body.pageSize })),
-      room_id: body.roomId || "",
-      search_name: body.searchName || "",
-    }));
+  async getUserWatchTimeList(
+    @Body() body: { pageNum?: number; pageSize?: number; roomId?: string; searchName?: string }
+  ) {
+    const result = await grpcCall(
+      this.liveService.getUserWatchTimeList({
+        ...toGrpcPage(normalizePageQuery({ pageNum: body.pageNum, pageSize: body.pageSize })),
+        room_id: body.roomId || '',
+        search_name: body.searchName || ''
+      })
+    );
     const items = result?.data?.items || [];
     const userIds = items.map((item: { user_id: string }) => item.user_id);
     const usernameMap = await this.resolveUsernames(userIds);
     return {
-      list: items.map((item: { user_id: string; watch_time: number; joined_at: string; left_at: string; is_online: boolean }) => ({
-        userId: item.user_id,
-        nickName: usernameMap.get(item.user_id) || item.user_id,
-        watchTime: item.watch_time,
-        joinedAt: item.joined_at,
-        leftAt: item.left_at,
-        isOnline: item.is_online,
-      })),
+      list: items.map(
+        (item: {
+          user_id: string;
+          watch_time: number;
+          joined_at: string;
+          left_at: string;
+          is_online: boolean;
+        }) => ({
+          userId: item.user_id,
+          nickName: usernameMap.get(item.user_id) || item.user_id,
+          watchTime: item.watch_time,
+          joinedAt: item.joined_at,
+          leftAt: item.left_at,
+          isOnline: item.is_online
+        })
+      ),
       other: { totalTimeByRoomId: result?.data?.total_time_by_room || 0 },
-      pageInfo: { totalElements: result?.data?.total || 0 },
+      pageInfo: { totalElements: result?.data?.total || 0 }
     };
   }
 
   @Get('downloadRecording/:id')
   @UseGuards(JwtAuthGuard)
-  async downloadRecording(@Param('id') id: string, @Query('download') download: string, @Res() res: Response) {
+  async downloadRecording(
+    @Param('id') id: string,
+    @Query('download') download: string,
+    @Res() res: Response
+  ) {
     const hostRecordingsDir = process.env.RECORDINGS_DIR || '/home/janus/recordings';
     const hostVideoMjr = path.join(hostRecordingsDir, `rec-${id}-video.mjr`);
 
@@ -530,7 +772,7 @@ export class LiveController implements OnModuleInit {
       res.set({
         'Content-Type': 'video/mp4',
         'Content-Length': stat.size.toString(),
-        'Content-Disposition': `attachment; filename="${id}.mp4"`,
+        'Content-Disposition': `attachment; filename="${id}.mp4"`
       });
       fs.createReadStream(mp4Path).pipe(res);
       return;
@@ -568,13 +810,12 @@ export class LiveController implements OnModuleInit {
       ? `docker exec ${container} rm -f "${containerVideoWebm}" "${containerAudioOpus}"`
       : `docker exec ${container} rm -f "${containerVideoWebm}"`;
 
-    const script = [step1, step2a, step2b, step4, `rm -f "${markerFile}"`].filter(Boolean).join(' && ');
+    const script = [step1, step2a, step2b, step4, `rm -f "${markerFile}"`]
+      .filter(Boolean)
+      .join(' && ');
     const child = spawn('sh', ['-c', script], { detached: true, stdio: 'ignore' });
     child.unref();
 
     return res.json({ code: 2002, msg: '转码中，请稍后' });
   }
 }
-
-
-

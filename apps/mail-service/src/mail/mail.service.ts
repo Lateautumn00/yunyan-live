@@ -12,7 +12,7 @@ export class MailService {
   constructor(
     private readonly mailerService: MailerService,
     private readonly configService: ConfigService,
-    @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis
   ) {}
 
   private generateCode(): string {
@@ -39,7 +39,7 @@ export class MailService {
             </div>
             <p style="color: #999; font-size: 12px;">验证码 ${this.CODE_EXPIRE / 60} 分钟内有效，请勿泄露给他人。</p>
           </div>
-        `,
+        `
       });
       this.logger.log(`验证码邮件已发送: ${email}`);
     } catch (error: unknown) {

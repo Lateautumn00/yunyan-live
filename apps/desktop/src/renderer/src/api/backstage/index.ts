@@ -48,7 +48,13 @@ export default {
   execute_transfer(params: object) {
     return http.post(`${config.liveApi}/liveInfo/executeTransfer`, params);
   },
-  save_courseware(params: { roomId: string; filename: string; filext?: string; filesize?: number; fileUrl: string }) {
+  save_courseware(params: {
+    roomId: string;
+    filename: string;
+    filext?: string;
+    filesize?: number;
+    fileUrl: string;
+  }) {
     return http.post(`${config.liveApi}/liveInfo/saveCourseware`, params);
   },
   courseware_list(roomId: string) {

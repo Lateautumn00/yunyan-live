@@ -11,7 +11,11 @@ function makeRedis() {
 }
 
 function makeDto(overrides: Partial<UpdateForbidDto> = {}): UpdateForbidDto {
-  return Object.assign(new UpdateForbidDto(), { roomId: 'r1', liveUserId: 'u1', status: 0 }, overrides);
+  return Object.assign(
+    new UpdateForbidDto(),
+    { roomId: 'r1', liveUserId: 'u1', status: 0 },
+    overrides
+  );
 }
 
 describe('PushController.updateForbid', () => {

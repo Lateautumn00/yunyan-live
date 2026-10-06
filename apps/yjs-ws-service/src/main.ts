@@ -7,7 +7,12 @@ import * as Y from 'yjs';
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
 import { YjsClose } from '@yunyan-live/types';
-import { requireJwtSecret, subscribeKick, validateSession, verifyToken } from '@yunyan-live/nest-shared';
+import {
+  requireJwtSecret,
+  subscribeKick,
+  validateSession,
+  verifyToken
+} from '@yunyan-live/nest-shared';
 
 dotenv.config();
 
@@ -41,7 +46,7 @@ const redis = new Redis({
   host: process.env.REDIS_HOST || '127.0.0.1',
   port: Number(process.env.REDIS_PORT) || 6379,
   enableOfflineQueue: false,
-  maxRetriesPerRequest: 1,
+  maxRetriesPerRequest: 1
 });
 redis.on('error', (err: unknown) => {
   console.error('[YjsWS] Redis error:', err instanceof Error ? err.message : String(err));
@@ -79,13 +84,19 @@ subscribeKick(
   },
   (err, stage) => {
     if (stage === 'connection') {
-      console.error('[YjsWS] Redis subscriber error:', err instanceof Error ? err.message : String(err));
+      console.error(
+        '[YjsWS] Redis subscriber error:',
+        err instanceof Error ? err.message : String(err)
+      );
     } else if (stage === 'subscribe') {
-      console.error('[YjsWS] subscribe failed, retrying:', err instanceof Error ? err.message : String(err));
+      console.error(
+        '[YjsWS] subscribe failed, retrying:',
+        err instanceof Error ? err.message : String(err)
+      );
     } else {
       console.error('[YjsWS] bad kick payload:', err);
     }
-  },
+  }
 );
 
 function broadcast(doc: Y.Doc, msg: Uint8Array, origin: WebSocket | null = null) {
@@ -131,15 +142,11 @@ function getYDoc(docName: string): Y.Doc {
           encoding.writeVarUint(encoder, messageAwareness);
           encoding.writeVarUint8Array(
             encoder,
-            awarenessProtocol.encodeAwarenessUpdate(awareness, clients),
+            awarenessProtocol.encodeAwarenessUpdate(awareness, clients)
           );
-          broadcast(
-            d,
-            encoding.toUint8Array(encoder),
-            origin instanceof WebSocket ? origin : null,
-          );
+          broadcast(d, encoding.toUint8Array(encoder), origin instanceof WebSocket ? origin : null);
         }
-      },
+      }
     );
 
     docs.set(docName, doc);
@@ -218,11 +225,11 @@ async function handleYjsConnection(connection: WebSocket, req: http.IncomingMess
     messageListener(connection, doc, bytes);
   });
 
-  const sessionState = await validateSession(
-    redis,
-    payload.sub,
-    payload.sid,
-    (err) => console.error('[YjsWS] session check fail-open:', err instanceof Error ? err.message : String(err)),
+  const sessionState = await validateSession(redis, payload.sub, payload.sid, err =>
+    console.error(
+      '[YjsWS] session check fail-open:',
+      err instanceof Error ? err.message : String(err)
+    )
   );
   if (sessionState === 'kicked') {
     connection.close(YjsClose.SESSION_KICKED, 'Session replaced by another login');
@@ -243,7 +250,7 @@ async function handleYjsConnection(connection: WebSocket, req: http.IncomingMess
   connMeta.set(connection, {
     docName,
     authUserId: payload.sub,
-    sid: payload.sid,
+    sid: payload.sid
   });
 
   connection.binaryType = 'arraybuffer';
@@ -269,7 +276,7 @@ async function handleYjsConnection(connection: WebSocket, req: http.IncomingMess
       encoding.writeVarUint(awarenessEncoder, messageAwareness);
       encoding.writeVarUint8Array(
         awarenessEncoder,
-        awarenessProtocol.encodeAwarenessUpdate(awareness, Array.from(states.keys())),
+        awarenessProtocol.encodeAwarenessUpdate(awareness, Array.from(states.keys()))
       );
       send(liveDoc, connection, encoding.toUint8Array(awarenessEncoder));
     }
@@ -286,7 +293,7 @@ const app = new Koa();
 const server = http.createServer(app.callback());
 const wss = new WebSocketServer({ server });
 
-app.use(async (ctx) => {
+app.use(async ctx => {
   ctx.body = { status: 'ok', service: 'yjs-ws' };
 });
 
@@ -301,7 +308,7 @@ server.listen(port, '0.0.0.0', () => {
 
 process.on('SIGTERM', () => {
   console.log('[YjsWS] Shutting down...');
-  wss.clients.forEach((client) => client.close(1001, 'Server shutting down'));
+  wss.clients.forEach(client => client.close(1001, 'Server shutting down'));
   server.close(() => process.exit(0));
 });
 

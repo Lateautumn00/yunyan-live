@@ -29,7 +29,7 @@ export const DEFAULT_TOOL: ToolState = {
   color: '#000000',
   lineWidth: 1,
   fontSize: 14,
-  opacity: 1,
+  opacity: 1
 };
 
 /** 橡皮白盖显示宽度倍数：拖拽预览与落库渲染同源，lineWidth 存滑杆基值 */
@@ -39,7 +39,15 @@ export const ERASER_WIDTH_MULT = 3;
 export const HIT_STROKE_MIN = 12;
 
 export const PRESET_COLORS = [
-  '#000000', '#818181', '#B3B3B3', '#FFFFFF',
-  '#e1383f', '#f8821a', '#fec726', '#61ba47',
-  '#03cfcc', '#017aff', '#963d95',
+  '#000000',
+  '#818181',
+  '#B3B3B3',
+  '#FFFFFF',
+  '#e1383f',
+  '#f8821a',
+  '#fec726',
+  '#61ba47',
+  '#03cfcc',
+  '#017aff',
+  '#963d95'
 ];

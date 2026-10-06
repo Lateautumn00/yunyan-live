@@ -5,13 +5,7 @@
       <div class="page-header">
         <h3>直播概况</h3>
         <div class="header-actions">
-          <el-button
-            type="primary"
-            plain
-            @click="coursewareVisible = true"
-          >
-            上传课件
-          </el-button>
+          <el-button type="primary" plain @click="coursewareVisible = true"> 上传课件 </el-button>
           <RoomActions
             variant="buttons"
             :room="roomDetail"
@@ -42,11 +36,7 @@
           <div>直播类型:</div>
           <div>{{ roomDetail.type == 0 ? '小班教学' : '大班教学' }}</div>
         </div>
-        <div
-          ref="linksSection"
-          class="links"
-          :class="{ 'is-highlight': linksHighlight }"
-        >
+        <div ref="linksSection" class="links" :class="{ 'is-highlight': linksHighlight }">
           <div>
             <p>登录方式：</p>
             <p>下面为登录链接，您可以将其分享给各角色</p>
@@ -62,10 +52,7 @@
       </div>
     </div>
 
-    <CoursewareUpload
-      v-model="coursewareVisible"
-      :room-id="roomId"
-    />
+    <CoursewareUpload v-model="coursewareVisible" :room-id="roomId" />
   </div>
 </template>
 

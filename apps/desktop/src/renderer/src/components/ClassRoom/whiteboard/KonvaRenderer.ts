@@ -39,7 +39,7 @@ export class KonvaRenderer {
     this.stage = new Konva.Stage({
       container: container as HTMLDivElement,
       width: container.clientWidth,
-      height: container.clientHeight,
+      height: container.clientHeight
     });
     this.layer = new Konva.Layer();
     this.previewLayer = new Konva.Layer();
@@ -72,7 +72,8 @@ export class KonvaRenderer {
 
   showPage(index: number) {
     this.layers.forEach((l, i) => {
-      if (i === index) l.show(); else l.hide();
+      if (i === index) l.show();
+      else l.hide();
     });
     this.layer = this.layers[index]!;
     // 每页是独立 Layer（scale/x/y 各自独立）——切层后重应用全局视图，
@@ -170,7 +171,7 @@ export class KonvaRenderer {
         strokeWidth: 2,
         shadowBlur: 8,
         shadowColor: 'rgba(255, 59, 48, 0.8)',
-        listening: false,
+        listening: false
       });
       this.laserLayer.add(this.laserDot);
     }
@@ -201,7 +202,10 @@ export class KonvaRenderer {
       this.setViewport(0, 0);
       return;
     }
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
     children.forEach((child: any) => {
       const box = child.getClientRect({ relativeTo: this.layer });
       minX = Math.min(minX, box.x);
@@ -363,29 +367,34 @@ export class KonvaRenderer {
     switch (type) {
       case 'brush':
       case 'eraser': {
-        const strokeWidth = ((data.get('lineWidth') as number) || 1) *
-          (type === 'eraser' ? ERASER_WIDTH_MULT : 1);
+        const strokeWidth =
+          ((data.get('lineWidth') as number) || 1) * (type === 'eraser' ? ERASER_WIDTH_MULT : 1);
         return new Konva.Line({
-          x: data.get('x') || 0, y: data.get('y') || 0,
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
           points: (data.get('points') as number[]) || [],
           stroke: type === 'eraser' ? '#ffffff' : (data.get('color') as string),
           strokeWidth,
           // hit 图按 hitStrokeWidth 生成（auto = strokeWidth）：细笔迹须抬下限，选择器才点得中
           hitStrokeWidth: Math.max(strokeWidth, HIT_STROKE_MIN),
-          lineCap: 'round', lineJoin: 'round', tension: 0.5,
-          opacity,
+          lineCap: 'round',
+          lineJoin: 'round',
+          tension: 0.5,
+          opacity
         });
       }
       case 'rect': {
         const strokeWidth = data.get('lineWidth') || 1;
         return new Konva.Rect({
-          x: data.get('x') || 0, y: data.get('y') || 0,
-          width: data.get('width') || 0, height: data.get('height') || 0,
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
+          width: data.get('width') || 0,
+          height: data.get('height') || 0,
           stroke: data.get('color') || '#000',
           strokeWidth,
           hitStrokeWidth: Math.max(strokeWidth, HIT_STROKE_MIN),
           fill: data.get('fill') || undefined,
-          opacity,
+          opacity
         });
       }
       case 'circle': {
@@ -397,7 +406,7 @@ export class KonvaRenderer {
           strokeWidth,
           hitStrokeWidth: Math.max(strokeWidth, HIT_STROKE_MIN),
           fill: data.get('fill') || undefined,
-          opacity,
+          opacity
         };
         const rx = data.get('radiusX');
         const ry = data.get('radiusY');
@@ -410,34 +419,38 @@ export class KonvaRenderer {
       case 'arrow': {
         const strokeWidth = (data.get('lineWidth') as number) || 1;
         return new Konva.Arrow({
-          x: data.get('x') || 0, y: data.get('y') || 0,
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
           points: (data.get('points') as number[]) || [],
           stroke: data.get('color') || '#000',
           strokeWidth,
           hitStrokeWidth: Math.max(strokeWidth, HIT_STROKE_MIN),
           fill: data.get('color') || '#000',
-          opacity,
+          opacity
         });
       }
       case 'line': {
         const strokeWidth = (data.get('lineWidth') as number) || 1;
         return new Konva.Line({
-          x: data.get('x') || 0, y: data.get('y') || 0,
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
           points: (data.get('points') as number[]) || [],
           stroke: data.get('color') || '#000',
           strokeWidth,
           hitStrokeWidth: Math.max(strokeWidth, HIT_STROKE_MIN),
-          lineCap: 'round', lineJoin: 'round',
-          opacity,
+          lineCap: 'round',
+          lineJoin: 'round',
+          opacity
         });
       }
       case 'text':
         return new Konva.Text({
-          x: data.get('x') || 0, y: data.get('y') || 0,
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
           text: data.get('text') || '',
           fontSize: data.get('fontSize') || 14,
           fill: data.get('color') || '#000',
-          opacity,
+          opacity
         });
       case 'ppt-image': {
         const pdfUrl = data.get('pdfUrl') as string | undefined;
@@ -445,7 +458,7 @@ export class KonvaRenderer {
           x: data.get('x') || 0,
           y: data.get('y') || 0,
           width: data.get('width') || 0,
-          height: data.get('height') || 0,
+          height: data.get('height') || 0
         };
         if (pdfUrl) {
           const node = new Konva.Image({ ...base, image: null as unknown as HTMLImageElement });
@@ -466,10 +479,10 @@ export class KonvaRenderer {
             x: data.get('x') || 0,
             y: data.get('y') || 0,
             width: data.get('width') || 0,
-            height: data.get('height') || 0,
+            height: data.get('height') || 0
           },
           data.get('url') as string,
-          opacity,
+          opacity
         );
       default:
         return null;
