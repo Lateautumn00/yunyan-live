@@ -17,8 +17,6 @@ export const ApiCode = {
   CONFLICT: 4004
 } as const;
 
-export type ApiCodeValue = (typeof ApiCode)[keyof typeof ApiCode];
-
 /**
  * chat-ws 关闭码（WebSocket CloseEvent）。
  * 注意：yjs-ws 使用不同的 44xx 段且语义顺序相反，见 YjsClose。

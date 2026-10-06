@@ -7,8 +7,6 @@ export const IpcChannels = {
   recordingSaveBlob: 'recording:save-blob',
 } as const;
 
-export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels];
-
 export interface DesktopSource {
   id: string;
   name: string;

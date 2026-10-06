@@ -22,7 +22,6 @@ export const FORBID_CHANNEL = 'live:forbid';
  * 禁言状态语义（与前端 Chat.vue speechClose 一致）：
  * 0=禁言（输入框禁用），1=可发言；无记录时视为 1。
  */
-export const FORBID_MUTED = 0;
 export const FORBID_ALLOWED = 1;
 
 export interface ForbidPayload {

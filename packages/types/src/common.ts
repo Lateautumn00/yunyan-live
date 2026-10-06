@@ -22,7 +22,3 @@ export interface SessionTokens {
   token: string;
   guid: string;
 }
-
-export type LoginRoleName = 'teacher' | 'student' | string;
-
-export type LiveType = 'smallClass' | 'largeClass' | string;

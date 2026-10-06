@@ -44,14 +44,3 @@ export interface RemoteFeed {
   stream?: MediaStream;
   remoteStream?: MediaStream;
 }
-
-export interface JanusVideoRoomConfig {
-  url: string;
-  room: number | string;
-  username: string;
-  role: string;
-  onConnected?: (handle: JanusPluginHandle) => void;
-  onRemoteFeed?: (feed: RemoteFeed) => void;
-  onRemoteLeaving?: (id: number | string) => void;
-  onError?: (error: string) => void;
-}
