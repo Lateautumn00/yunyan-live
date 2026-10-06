@@ -4,7 +4,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { URL } from 'url';
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
-import { WsClose } from '@yunyan-live/types';
+import { WsClose, type BulletRejectReason } from '@yunyan-live/types';
 import {
   requireJwtSecret,
   subscribeForbid,
@@ -13,6 +13,7 @@ import {
   validateSession,
   verifyToken
 } from '@yunyan-live/nest-shared';
+import { buildBullet, sanitizeName } from './bullet';
 
 dotenv.config();
 
@@ -23,16 +24,22 @@ interface WsClient {
   roomId: string;
   authUserId?: string;
   sid?: string;
+  /** JWT 重建的权威角色（payload.role === 1 为教师） */
+  isTeacher: boolean;
 }
 
 interface LiveMessage {
   type: string;
   data?: Record<string, unknown>;
+  /** 拒发回执（bullet_rejected）原因 */
+  reason?: BulletRejectReason;
 }
 
 const rooms = new Map<string, Map<string, WsClient>>();
 const clientIds = new WeakMap<WebSocket, string>();
 const whiteboardStates = new Map<string, string>();
+/** 房间禁言态缓存（0=禁言 1=可发言）：连接建立时 readForbid 回填、订阅推送时更新 */
+const roomForbid = new Map<string, number>();
 
 const JWT_SECRET = requireJwtSecret();
 
@@ -81,10 +88,11 @@ subscribeKick(
   }
 );
 
-// 禁言状态变更（网关 live/push/updateForbid 写入并 publish）→ 广播给房间内所有客户端
+// 禁言状态变更（网关 live/push/updateForbid 写入并 publish）→ 更新缓存并广播给房间内所有客户端
 subscribeForbid(
   redis,
   (roomId, status) => {
+    roomForbid.set(roomId, status);
     broadcast(roomId, JSON.stringify({ type: 'updateForbid', status }));
   },
   (err, stage) => {
@@ -114,14 +122,23 @@ function registerClient(
   userId: string,
   nickName: string,
   authUserId?: string,
-  sid?: string
+  sid?: string,
+  isTeacher = false
 ): string {
   const clientId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   clientIds.set(client, clientId);
   if (!rooms.has(roomId)) {
     rooms.set(roomId, new Map());
   }
-  rooms.get(roomId)!.set(clientId, { ws: client, userId, nickName, roomId, authUserId, sid });
+  rooms.get(roomId)!.set(clientId, {
+    ws: client,
+    userId,
+    nickName,
+    roomId,
+    authUserId,
+    sid,
+    isTeacher
+  });
   return clientId;
 }
 
@@ -138,22 +155,38 @@ function handleMessage(client: WebSocket, raw: string) {
       }
     }
     if (!roomId) return;
+    const sender = clientId ? rooms.get(roomId)?.get(clientId) : undefined;
 
     switch (msg.type) {
       case 'ping':
         sendTo(client, { type: 'pong' });
         break;
       case 'msg':
+        // 异步回填：若在途期间订阅推送了更新值，旧读可能短暂覆盖新值；下一轮 msg 轮询（客户端心跳周期性触发）自愈，接受该窗口。
         void readForbid(redis, roomId).then(forbid => {
+          roomForbid.set(roomId, forbid);
           sendTo(client, {
             type: 'msg',
             data: { liveMsg: { liveNums: rooms.get(roomId)?.size ?? 0, forbid } }
           });
         });
         break;
-      case 'bullet':
-        broadcast(roomId, raw);
+      case 'bullet': {
+        if (!sender) {
+          sendTo(client, { type: 'bullet_rejected', reason: 'not_joined' });
+          break;
+        }
+        const result = buildBullet(raw, {
+          roomId,
+          nickName: sender.nickName,
+          liveUserId: sender.userId,
+          isTeacher: sender.isTeacher,
+          forbid: roomForbid.get(roomId)
+        });
+        if (result.ok) broadcast(roomId, result.payload);
+        else sendTo(client, { type: 'bullet_rejected', reason: result.reason });
         break;
+      }
       case 'whiteBoard': {
         const wbMsg = JSON.parse(raw);
         if (wbMsg.data?.liveMsg?.msg) {
@@ -226,12 +259,21 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
 
   const roomId = url.searchParams.get('roomId') || 'default';
   const userId = url.searchParams.get('liveUserId') || 'anonymous';
-  const nickName = url.searchParams.get('nickName') || '';
+  const nickName = sanitizeName(url.searchParams.get('nickName') || '');
 
-  const clientId = registerClient(connection, roomId, userId, nickName, payload.sub, payload.sid);
+  const clientId = registerClient(
+    connection,
+    roomId,
+    userId,
+    nickName,
+    payload.sub,
+    payload.sid,
+    payload.role === 1
+  );
 
   sendTo(connection, { type: 'pong' });
   const forbid = await readForbid(redis, roomId);
+  roomForbid.set(roomId, forbid);
   sendTo(connection, {
     type: 'msg',
     data: { liveMsg: { liveNums: rooms.get(roomId)!.size, forbid } }
@@ -250,6 +292,7 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
         clients.delete(cid);
         if (clients.size === 0) {
           rooms.delete(rid);
+          roomForbid.delete(rid);
         }
         console.log(`[ChatWS] Disconnected: roomId=${rid}, id=${cid}`);
         break;
@@ -260,7 +303,8 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
 
 const app = new Koa();
 const server = http.createServer(app.callback());
-const wss = new WebSocketServer({ server });
+// 单条帧上限 256KB：正常弹幕/白板帧远小于此值，防巨帧耗尽内存（默认 100MB）
+const wss = new WebSocketServer({ server, maxPayload: 256 * 1024 });
 
 app.use(async ctx => {
   ctx.body = { status: 'ok', service: 'chat-ws' };

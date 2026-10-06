@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter @yunyan-live/types build && ts-node src/main.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0"
   },
   "dependencies": {
     "@yunyan-live/nest-shared": "workspace:*",
@@ -21,7 +23,8 @@
     "@types/node": "^22.0.0",
     "@types/ws": "^8.18.1",
     "ts-node": "^10.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   },
   "license": "MIT"
 }
