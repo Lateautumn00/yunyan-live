@@ -6,7 +6,7 @@ import { ApiError } from '@yunyan-live/http';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export interface ClassroomRoomOptions {
+interface ClassroomRoomOptions {
   role: 'teacher' | 'student';
   top: Ref<any>;
   video: Ref<any>;

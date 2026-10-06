@@ -2,7 +2,7 @@ import { ref, type Ref } from 'vue';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export interface ClassroomTabsOptions {
+interface ClassroomTabsOptions {
   role: 'teacher' | 'student';
   initialLayoutNum: number;
   withVideosPane: boolean;

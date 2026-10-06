@@ -1,13 +1,13 @@
 type Timer = ReturnType<typeof setTimeout>;
 type FrameHandle = number | Timer;
 
-export interface Cancelable<A extends unknown[]> {
+interface Cancelable<A extends unknown[]> {
   (...args: A): void;
   cancel(): void;
   flush(): void;
 }
 
-export interface DebounceOptions {
+interface DebounceOptions {
   leading?: boolean;
 }
 

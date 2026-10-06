@@ -2,7 +2,7 @@ import { ref, type Ref } from 'vue';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export interface ClassroomWhiteboardOptions {
+interface ClassroomWhiteboardOptions {
   video: Ref<any>;
   chat: Ref<any>;
   roomId: string;

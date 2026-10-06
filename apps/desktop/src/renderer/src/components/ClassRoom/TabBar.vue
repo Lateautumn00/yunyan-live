@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-export interface TabItem {
+interface TabItem {
   key: string;
   label: string;
   badge?: number;

@@ -7,7 +7,7 @@
 } from 'axios';
 import type { ApiResult } from '@yunyan-live/types';
 
-export interface TokenProvider {
+interface TokenProvider {
   token: string | null;
   guid?: string | null;
 }
@@ -22,25 +22,25 @@ export class ApiError extends Error {
   }
 }
 
-export interface RequestInterceptorOptions {
+interface RequestInterceptorOptions {
   tokenProvider?: () => TokenProvider | undefined;
   paramsProvider?: () => Record<string, string | number | boolean | null | undefined>;
 }
 
-export interface ResponseInterceptorOptions {
+interface ResponseInterceptorOptions {
   onMessageError?: (msg: string) => void;
 }
 
-export interface ResponseErrorInterceptorOptions {
+interface ResponseErrorInterceptorOptions {
   onUnauthorized?: (data?: ApiResult) => void;
   onServerError?: (msg: string) => void;
 }
 
-export interface RawRequestConfig extends AxiosRequestConfig {
+interface RawRequestConfig extends AxiosRequestConfig {
   raw?: true;
 }
 
-export interface HttpClientOptions extends RequestInterceptorOptions, ResponseInterceptorOptions {
+interface HttpClientOptions extends RequestInterceptorOptions, ResponseInterceptorOptions {
   baseURL: string;
   timeout?: number;
   withCredentials?: boolean;

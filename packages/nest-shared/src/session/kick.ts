@@ -22,7 +22,7 @@ export async function validateSession(
   }
 }
 
-export type KickErrorStage = 'connection' | 'subscribe' | 'parse';
+type KickErrorStage = 'connection' | 'subscribe' | 'parse';
 
 /**
  * 订阅顶下线频道，返回订阅连接（调用方可在关停时 quit）。

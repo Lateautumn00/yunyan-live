@@ -22,7 +22,7 @@ export type UpdateMessage =
   | 'download-progress'
   | 'update-downloaded';
 
-export type AppMessageLevel = 'info' | 'error' | 'success';
+type AppMessageLevel = 'info' | 'error' | 'success';
 
 export interface AppMessagePayload {
   level: AppMessageLevel;

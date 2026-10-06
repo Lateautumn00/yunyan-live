@@ -44,15 +44,3 @@ export interface PageQuery {
   page?: number;
   pageSize?: number;
 }
-
-/** 规范分页响应：`{ list, total }` */
-export interface PageResult<T> {
-  list: T[];
-  total: number;
-}
-
-/** 分页响应（主流形状）：`{ list, pageInfo: { totalElements } }` */
-export interface PageListResult<T> {
-  list: T[];
-  pageInfo: { totalElements: number };
-}

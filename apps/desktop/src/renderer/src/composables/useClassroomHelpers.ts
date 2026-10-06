@@ -2,7 +2,7 @@ import type { Ref } from 'vue';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export interface ClassroomHelpersOptions {
+interface ClassroomHelpersOptions {
   top: Ref<any>;
   chat: Ref<any>;
   pople: Ref<any>;

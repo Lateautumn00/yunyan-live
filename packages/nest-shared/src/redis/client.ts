@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
 
-export interface RedisClientOptions {
+interface RedisClientOptions {
   host?: string;
   port?: number | string;
 }

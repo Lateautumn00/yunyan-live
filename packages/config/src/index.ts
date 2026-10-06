@@ -1,4 +1,4 @@
-export interface LiveConfig {
+interface LiveConfig {
   version: string;
   liveServer: string;
   messageWs: string;
@@ -8,7 +8,7 @@ export interface LiveConfig {
   smallClassNum: number;
 }
 
-export type EnvRecord = Record<string, string | undefined>;
+type EnvRecord = Record<string, string | undefined>;
 
 export function loadConfig(env: EnvRecord): LiveConfig {
   return {

@@ -2,7 +2,7 @@ import { ref, type Ref } from 'vue';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export interface ClassroomDisplayOptions {
+interface ClassroomDisplayOptions {
   video: Ref<any>;
   rootSelector: string;
   withHoverSwap?: boolean;

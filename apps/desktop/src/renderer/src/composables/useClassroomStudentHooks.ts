@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export interface ClassroomStudentHooksOptions {
+interface ClassroomStudentHooksOptions {
   top: Ref<any>;
   video: Ref<any>;
   videoListComp?: Ref<any>;

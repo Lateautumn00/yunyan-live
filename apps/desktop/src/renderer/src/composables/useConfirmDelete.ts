@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
-export interface ConfirmDeleteOptions<T> {
+interface ConfirmDeleteOptions<T> {
   message: (payload: T) => string;
   action: (payload: T) => Promise<unknown>;
   boxTitle?: string;

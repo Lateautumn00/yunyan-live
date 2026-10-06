@@ -5,7 +5,7 @@ export interface PageQuery {
   pageSize: number;
 }
 
-export interface PagedResult<T> {
+interface PagedResult<T> {
   list: T[];
   total: number;
 }

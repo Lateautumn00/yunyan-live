@@ -1,17 +1,17 @@
 import type { Options as ProtoLoaderOptions } from '@grpc/proto-loader';
 import { GRPC_LOADER_OPTIONS } from './loader';
 
-export interface GrpcEndpoint {
+interface GrpcEndpoint {
   package: string;
   protoPath: string;
   loader?: ProtoLoaderOptions;
 }
 
-export interface GrpcServerEndpoint extends GrpcEndpoint {
+interface GrpcServerEndpoint extends GrpcEndpoint {
   url: string;
 }
 
-export interface GrpcClientEndpoint extends GrpcEndpoint {
+interface GrpcClientEndpoint extends GrpcEndpoint {
   url?: string;
 }
 

@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from '../jwt';
 import { SessionService } from '../session';
 
-export interface AuthUser {
+interface AuthUser {
   userId: string;
   email: string;
   role: number;

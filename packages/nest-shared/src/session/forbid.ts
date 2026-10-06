@@ -26,7 +26,7 @@ export async function writeForbid(redis: Redis, roomId: string, status: number):
   await redis.publish(FORBID_CHANNEL, JSON.stringify({ roomId, status } satisfies ForbidPayload));
 }
 
-export type ForbidErrorStage = 'connection' | 'subscribe' | 'parse';
+type ForbidErrorStage = 'connection' | 'subscribe' | 'parse';
 
 /**
  * 订阅禁言频道，返回订阅连接（范式同 subscribeKick，关停时可 quit）。

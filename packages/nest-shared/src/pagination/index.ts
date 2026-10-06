@@ -1,9 +1,9 @@
-import type { PageListResult, PageQuery, PageResult } from '@yunyan-live/types';
+import type { PageQuery } from '@yunyan-live/types';
 
-export type { PageListResult, PageQuery, PageResult };
+export type { PageQuery };
 
 /** 入口层分页原始入参（接受 page/pageNum/page_size 别名，值可为 query 字符串） */
-export interface PageQueryInput {
+interface PageQueryInput {
   page?: string | number;
   pageSize?: string | number;
   pageNum?: string | number;

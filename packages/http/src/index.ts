@@ -6,11 +6,5 @@ export {
   createResponseErrorInterceptor
 } from './client';
 export type {
-  HttpClient,
-  HttpClientOptions,
-  RawRequestConfig,
-  RequestInterceptorOptions,
-  ResponseInterceptorOptions,
-  ResponseErrorInterceptorOptions,
-  TokenProvider
+  HttpClient
 } from './client';

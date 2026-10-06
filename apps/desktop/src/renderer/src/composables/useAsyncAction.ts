@@ -2,7 +2,7 @@ import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { extractErrorMessage } from '@yunyan-live/utils';
 
-export interface AsyncActionOptions {
+interface AsyncActionOptions {
   fallbackMessage?: string;
   onError?: (e: unknown) => void;
 }

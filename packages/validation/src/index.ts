@@ -1,4 +1,4 @@
-export interface RegexpRules {
+interface RegexpRules {
   passWord: RegExp;
   phone: RegExp;
   email: RegExp;

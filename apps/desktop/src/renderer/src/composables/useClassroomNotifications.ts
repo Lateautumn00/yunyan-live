@@ -1,6 +1,6 @@
 import type { Ref } from 'vue';
 
-export interface ClassNotificationHandle {
+interface ClassNotificationHandle {
   add: (text: string, duration?: number) => void;
 }
 

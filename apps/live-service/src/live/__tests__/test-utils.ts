@@ -3,7 +3,7 @@ import { status as GrpcStatus } from '@grpc/grpc-js';
 import { RpcException } from '@nestjs/microservices';
 import { LiveService } from '../live.service';
 
-export type QbResults = {
+type QbResults = {
   getManyAndCount?: [unknown[], number];
   getRawMany?: unknown[];
   getCount?: number;
@@ -23,9 +23,9 @@ const CHAIN_METHODS = [
 
 type Mock = ReturnType<typeof vi.fn>;
 
-export type MockQb = Record<string, unknown>;
-export type ManagerMock = Record<string, Mock>;
-export type QueryRunnerMock = {
+type MockQb = Record<string, unknown>;
+type ManagerMock = Record<string, Mock>;
+type QueryRunnerMock = {
   connect: Mock;
   startTransaction: Mock;
   commitTransaction: Mock;
@@ -33,15 +33,15 @@ export type QueryRunnerMock = {
   release: Mock;
   manager: ManagerMock;
 };
-export type RepoMock = { qb: MockQb; repo: Record<string, Mock> };
-export type JanusMock = { createRoom: Mock; destroyRoom: Mock };
-export type DataSourceMock = {
+type RepoMock = { qb: MockQb; repo: Record<string, Mock> };
+type JanusMock = { createRoom: Mock; destroyRoom: Mock };
+type DataSourceMock = {
   manager: ManagerMock;
   queryRunner: QueryRunnerMock;
   dataSource: { createQueryRunner: Mock };
 };
 
-export function mockQueryBuilder(results: QbResults = {}): MockQb {
+function mockQueryBuilder(results: QbResults = {}): MockQb {
   const qb: MockQb = {};
   for (const name of CHAIN_METHODS) {
     qb[name] = vi.fn(() => qb);
@@ -74,7 +74,7 @@ export function mockRepo(results: QbResults = {}): RepoMock {
   return { qb, repo };
 }
 
-export function mockDataSource(): DataSourceMock {
+function mockDataSource(): DataSourceMock {
   const manager: ManagerMock = {
     findOne: vi.fn(),
     count: vi.fn().mockResolvedValue(0),
@@ -92,7 +92,7 @@ export function mockDataSource(): DataSourceMock {
   return { manager, queryRunner, dataSource };
 }
 
-export type LiveServiceHarness = {
+type LiveServiceHarness = {
   service: LiveService;
   room: RepoMock;
   participant: RepoMock;

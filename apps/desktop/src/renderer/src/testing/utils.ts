@@ -11,7 +11,7 @@ import ElementPlus from 'element-plus';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import type { Component } from 'vue';
 
-export interface MountPageOptions {
+interface MountPageOptions {
   routes?: RouteRecordRaw[];
   initialRoute?: string | { path: string; query?: LocationQueryRaw };
   beforeMount?: (pinia: Pinia) => void | Promise<void>;

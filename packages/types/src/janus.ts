@@ -14,7 +14,7 @@ export interface JanusSession {
   reconnect: () => void;
 }
 
-export interface JanusPluginHandle {
+interface JanusPluginHandle {
   handleId: number;
   getId: () => number;
   send: (opts: { message?: unknown; jsep?: unknown; success?: (res: unknown) => void }) => void;

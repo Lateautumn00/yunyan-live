@@ -1,7 +1,7 @@
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Observable, map } from 'rxjs';
 
-export interface ApiResponse<T> {
+interface ApiResponse<T> {
   code: number;
   msg?: string;
   data: T;

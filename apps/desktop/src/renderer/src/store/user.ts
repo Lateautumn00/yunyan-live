@@ -14,7 +14,7 @@ interface UserState {
 const emptyUser: UserInfo = { guid: '', token: '', userName: '', email: '', role: 2 };
 const emptyLive: LiveInfo = { liveUserId: '', nickName: '', joinCode: '' };
 
-export type SessionInterrupt = 'kicked' | 'expired';
+type SessionInterrupt = 'kicked' | 'expired';
 
 const SESSION_MESSAGES: Record<SessionInterrupt, string> = {
   kicked: '账号已在其他设备登录',
