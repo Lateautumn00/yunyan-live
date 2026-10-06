@@ -1,5 +1,11 @@
 import Redis from 'ioredis';
-import { FORBID_ALLOWED, FORBID_CHANNEL, ForbidPayload, forbidKey } from './constants';
+import {
+  FORBID_ALLOWED,
+  FORBID_CHANNEL,
+  FORBID_FORBIDDEN,
+  ForbidPayload,
+  forbidKey
+} from './constants';
 
 /**
  * 读取教室禁言状态：无记录视为可发言（FORBID_ALLOWED）；Redis 故障 fail-open 放行。
@@ -9,7 +15,7 @@ export async function readForbid(redis: Redis, roomId: string): Promise<number> 
   try {
     const value = await redis.get(forbidKey(roomId));
     if (value === null) return FORBID_ALLOWED;
-    return value === '0' ? 0 : FORBID_ALLOWED;
+    return value === '0' ? FORBID_FORBIDDEN : FORBID_ALLOWED;
   } catch {
     return FORBID_ALLOWED;
   }

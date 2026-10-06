@@ -23,6 +23,7 @@ export const FORBID_CHANNEL = 'live:forbid';
  * 0=禁言（输入框禁用），1=可发言；无记录时视为 1。
  */
 export const FORBID_ALLOWED = 1;
+export const FORBID_FORBIDDEN = 0;
 
 export interface ForbidPayload {
   roomId: string;
