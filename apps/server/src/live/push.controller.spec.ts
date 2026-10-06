@@ -18,11 +18,15 @@ function makeDto(overrides: Partial<UpdateForbidDto> = {}): UpdateForbidDto {
   );
 }
 
+function makeReq(role: number): { user: { role: number } } {
+  return { user: { role } };
+}
+
 describe('PushController.updateForbid', () => {
-  it('写入教室禁言状态并广播到房间', async () => {
+  it('教师（role 1）写入教室禁言状态并广播到房间', async () => {
     const mock = makeRedis();
     const controller = new PushController(mock as unknown as Redis);
-    const result = await controller.updateForbid(makeDto({ status: 0 }));
+    const result = await controller.updateForbid(makeDto({ status: 0 }), makeReq(1));
     expect(result).toEqual({ updated: true });
     expect(mock.set).toHaveBeenCalledWith(forbidKey('r1'), '0');
     expect(mock.publish).toHaveBeenCalledWith(
@@ -31,11 +35,29 @@ describe('PushController.updateForbid', () => {
     );
   });
 
-  it('解除禁言写入状态 1', async () => {
+  it('教师解除禁言写入状态 1', async () => {
     const mock = makeRedis();
     const controller = new PushController(mock as unknown as Redis);
-    await controller.updateForbid(makeDto({ status: 1 }));
+    await controller.updateForbid(makeDto({ status: 1 }), makeReq(1));
     expect(mock.set).toHaveBeenCalledWith(forbidKey('r1'), '1');
+  });
+
+  it('学生（role 0）被拒且不写入 Redis', async () => {
+    const mock = makeRedis();
+    const controller = new PushController(mock as unknown as Redis);
+    await expect(controller.updateForbid(makeDto({ status: 0 }), makeReq(0))).rejects.toThrow(
+      '仅教师可修改禁言状态'
+    );
+    expect(mock.set).not.toHaveBeenCalled();
+    expect(mock.publish).not.toHaveBeenCalled();
+  });
+
+  it('非 1 角色（role 2）同样被拒', async () => {
+    const mock = makeRedis();
+    const controller = new PushController(mock as unknown as Redis);
+    await expect(controller.updateForbid(makeDto({ status: 1 }), makeReq(2))).rejects.toThrow(
+      '仅教师可修改禁言状态'
+    );
   });
 });
 
