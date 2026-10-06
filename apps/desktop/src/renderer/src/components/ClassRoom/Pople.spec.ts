@@ -2,13 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
 import ElementPlus from 'element-plus';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
+import { createPinia } from 'pinia';
 import Pople from '@/components/ClassRoom/Pople.vue';
+import { useRoomStore } from '@/store/room';
 
 function mountPople(props: { liveUserId: string }) {
-  return mount(Pople, {
+  const pinia = createPinia();
+  const wrapper = mount(Pople, {
     props,
-    global: { plugins: [ElementPlus], components: { ...ElementPlusIconsVue } }
+    global: { plugins: [ElementPlus, pinia], components: { ...ElementPlusIconsVue } }
   });
+  return { wrapper, pinia };
 }
 
 function vmOf(wrapper: ReturnType<typeof mount>) {
@@ -21,7 +25,7 @@ function vmOf(wrapper: ReturnType<typeof mount>) {
 
 describe('ClassRoom Pople.vue', () => {
   it('渲染人员列表', async () => {
-    const wrapper = mountPople({ liveUserId: 'u1' });
+    const { wrapper } = mountPople({ liveUserId: 'u1' });
     vmOf(wrapper).updatePopleList([
       { userName: '老师', opaqueId: 't1', isTeacher: true },
       { userName: '学生', opaqueId: 'u1' }
@@ -34,9 +38,21 @@ describe('ClassRoom Pople.vue', () => {
   });
 
   it('非本人不显示“我”徽标', async () => {
-    const wrapper = mountPople({ liveUserId: 'u1' });
+    const { wrapper } = mountPople({ liveUserId: 'u1' });
     vmOf(wrapper).updatePopleList([{ userName: '其他人', opaqueId: 'u2' }]);
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).not.toContain('我');
+  });
+
+  it('更新名单双写到 room store', () => {
+    const { wrapper, pinia } = mountPople({ liveUserId: 'u1' });
+    vmOf(wrapper).updatePopleList([
+      { userName: '老师', opaqueId: 't1', isTeacher: true },
+      { userName: '学生', opaqueId: 'u1' }
+    ]);
+    expect(useRoomStore(pinia).members).toEqual([
+      { userName: '老师', opaqueId: 't1', isTeacher: true },
+      { userName: '学生', opaqueId: 'u1' }
+    ]);
   });
 });

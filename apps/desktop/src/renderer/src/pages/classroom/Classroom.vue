@@ -72,7 +72,7 @@
               isTeacher
                 ? { key: 'raisehands', label: '举手', badge: badgeNum }
                 : { key: 'playback', label: '回放', badge: badgeNum },
-              { key: 'chat', label: '聊天', badge: chatNum },
+              { key: 'chat', label: '聊天', badge: chatBadge },
               { key: 'people', label: `人数(${num})` }
             ]"
             :active-name="activeName"
@@ -179,7 +179,7 @@
 </template>
 <script lang="ts">
 // @ts-nocheck — TODO: align event-handler types with sub-component emits
-import { defineComponent, ref } from 'vue';
+import { computed, defineComponent, ref } from 'vue';
 import { uid } from '@yunyan-live/utils';
 import Top from '@/components/ClassRoom/Top.vue';
 import History from '@/components/ClassRoom/History.vue';
@@ -255,6 +255,7 @@ export default defineComponent({
     const {
       activeName,
       chatNum,
+      chatMentionNum,
       max,
       num,
       badgeNum,
@@ -272,6 +273,11 @@ export default defineComponent({
       video,
       dotTop: variant === 'large-student' ? top : undefined
     });
+
+    // 聊天页签徽标：有未读提及显示 @N，否则显示普通未读数
+    const chatBadge = computed(() =>
+      chatMentionNum.value > 0 ? `@${chatMentionNum.value}` : chatNum.value
+    );
 
     const {
       router,
@@ -449,6 +455,7 @@ export default defineComponent({
       classNotification,
       badgeNum,
       chatNum,
+      chatBadge,
       max,
       num,
       userName,

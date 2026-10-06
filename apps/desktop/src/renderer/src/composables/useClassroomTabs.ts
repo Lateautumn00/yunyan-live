@@ -18,6 +18,7 @@ export function useClassroomTabs(options: ClassroomTabsOptions) {
 
   const activeName = ref('chat');
   const chatNum = ref(0);
+  const chatMentionNum = ref(0);
   const max = ref(99);
   const num = ref(0);
   const badgeNum = ref(0);
@@ -27,23 +28,32 @@ export function useClassroomTabs(options: ClassroomTabsOptions) {
 
   function updateNum(status: boolean, numArg: number, typeStr: string) {
     if (dotTop && layoutNum.value === 1) dotTop.value?.setIsDotNum(1);
-    if (activeName.value === typeStr) return;
+    // @提及徽标归属聊天页签：聊天可见时同样走早退（防可见仍亮标）
+    const earlyKey = typeStr === 'chatMention' ? 'chat' : typeStr;
+    if (activeName.value === earlyKey) return;
     if (status) {
       if (typeStr === badgeKey) badgeNum.value += numArg;
       if (typeStr === 'chat') chatNum.value += numArg;
+      if (typeStr === 'chatMention') chatMentionNum.value += numArg;
     } else {
       if (numArg === 0) {
         if (typeStr === badgeKey) badgeNum.value = 0;
-        if (typeStr === 'chat') chatNum.value = 0;
+        if (typeStr === 'chat') {
+          chatNum.value = 0;
+          chatMentionNum.value = 0;
+        }
+        if (typeStr === 'chatMention') chatMentionNum.value = 0;
       } else {
         if (typeStr === badgeKey) badgeNum.value -= numArg;
         if (typeStr === 'chat') chatNum.value -= numArg;
+        if (typeStr === 'chatMention') chatMentionNum.value -= numArg;
       }
     }
   }
 
   function handleClick(tab: string) {
     if (tab === 'people') video.value?.listparticipants();
+    // 清零必须在 activeName 赋值前，否则早退分支会让徽标永不清零
     if (tab === badgeKey || tab === 'chat') updateNum(false, 0, tab);
     activeName.value = tab;
   }
@@ -61,6 +71,7 @@ export function useClassroomTabs(options: ClassroomTabsOptions) {
   return {
     activeName,
     chatNum,
+    chatMentionNum,
     max,
     num,
     badgeNum,

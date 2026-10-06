@@ -18,6 +18,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useRoomStore } from '@/store/room';
 
 interface PopleUser {
   userName?: string;
@@ -28,9 +29,12 @@ interface PopleUser {
 defineProps<{ liveUserId?: string }>();
 
 const userList = ref<PopleUser[]>([]);
+const roomStore = useRoomStore();
 
 function updatePopleList(poples: PopleUser[]) {
   userList.value = poples;
+  // 单漏斗双写：局部渲染 ref + room store（@提及选项消费）
+  roomStore.setMembers(poples);
 }
 
 defineExpose({ updatePopleList });
