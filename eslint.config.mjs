@@ -15,12 +15,7 @@ export default tseslint.config(
       '**/build/**',
       '**/vendor/**',
       '**/*.config.js',
-      '**/*.config.mjs',
-      'legacy/**',
-      'src/**',
-      'static/**',
-      'test/**',
-      '.electron-vue/**'
+      '**/*.config.mjs'
     ]
   },
   js.configs.recommended,

@@ -424,9 +424,6 @@ importers:
       '@yunyan-live/nest-shared':
         specifier: workspace:*
         version: link:../../packages/nest-shared
-      '@yunyan-live/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       amqplib:
         specifier: ^2.0.1
         version: 2.0.1
