@@ -464,9 +464,6 @@ importers:
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0
-      jsonwebtoken:
-        specifier: ^9.0.3
-        version: 9.0.3
       koa:
         specifier: ^2.15.0
         version: 2.16.4
@@ -495,6 +492,9 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      jsonwebtoken:
+        specifier: ^9.0.3
+        version: 9.0.3
       ts-node:
         specifier: ^10.0.0
         version: 10.9.2(@types/node@22.20.1)(typescript@5.9.3)
