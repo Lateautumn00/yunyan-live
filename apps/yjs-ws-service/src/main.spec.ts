@@ -78,7 +78,8 @@ beforeAll(async () => {
   token = jwt.sign({ sub: 'user-test', sid: 'sid-test' }, 'test-secret');
   main = await import('./main');
   await waitFor(() => main.server.listening, 'server listening', 5000);
-}, 15000);
+  // 冷加载 nest-shared/koa 模块图在 /mnt/e（DrvFs）上可达 ~30s，覆盖默认 15s hook 预算
+}, 60000);
 
 afterAll(async () => {
   for (const provider of providers.splice(0)) {
@@ -88,7 +89,7 @@ afterAll(async () => {
   for (const client of main.wss.clients) client.terminate();
   await new Promise<void>(resolve => main.wss.close(() => resolve()));
   await new Promise<void>(resolve => main.server.close(() => resolve()));
-}, 15000);
+}, 60000);
 
 describe('yjs-ws realtime sync', () => {
   it('T1: after the room empties, reconnect still receives realtime broadcasts', async () => {
