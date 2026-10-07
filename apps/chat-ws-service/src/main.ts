@@ -401,6 +401,7 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
         if (clients.size === 0) {
           rooms.delete(rid);
           roomForbid.delete(rid);
+          whiteboardStates.delete(rid); // 房间空即释放，防长期驻留泄漏
         }
         console.log(`[ChatWS] Disconnected: roomId=${rid}, id=${cid}`);
         break;
