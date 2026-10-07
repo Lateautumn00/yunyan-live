@@ -25,6 +25,30 @@
     ports:
       - '6379:6379'
 
+  rabbitmq:
+    image: rabbitmq:4.3.6-management-alpine
+    container_name: edu-live-rabbitmq
+    hostname: yunyan-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?}
+    ports:
+      - '127.0.0.1:5672:5672'
+      - '127.0.0.1:15672:15672'
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
   janus-gateway:
     build:
       context: .
@@ -47,4 +71,5 @@
 
 volumes:
   pgdata:
+  rabbitmqdata:
   janus-logs:
