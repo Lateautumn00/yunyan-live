@@ -1,7 +1,7 @@
 <template>
   <div v-click-outside="close" class="emoji">
-    <span class="emoji-btn" aria-label="表情" @click="open = !open">😀</span>
-    <div v-if="open" class="emoji-panel">
+    <span ref="btnRef" class="emoji-btn" aria-label="表情" @click="toggle">😀</span>
+    <div v-if="open" ref="panelRef" class="emoji-panel" :style="panelStyle">
       <span v-for="e in EMOJI_LIST" :key="e" class="emoji-item" @click="emit('select', e)">{{
         e
       }}</span>
@@ -10,16 +10,56 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { nextTick, onBeforeUnmount, ref } from 'vue';
 import { ClickOutside as vClickOutside } from 'element-plus';
 import { EMOJI_LIST } from '@/utils/chatFormat';
 
 const emit = defineEmits<{ (e: 'select', emoji: string): void }>();
+const EDGE = 8;
+const GAP = 4;
 const open = ref(false);
+const btnRef = ref<HTMLElement | null>(null);
+const panelRef = ref<HTMLElement | null>(null);
+const panelStyle = ref<Record<string, string>>({
+  position: 'fixed',
+  left: '0px',
+  top: '0px',
+  zIndex: '2000'
+});
+
+function positionPanel() {
+  const btn = btnRef.value;
+  const panel = panelRef.value;
+  if (!btn || !panel) return;
+  const rect = btn.getBoundingClientRect();
+  const width = panel.offsetWidth;
+  const height = panel.offsetHeight;
+  const maxLeft = Math.max(EDGE, window.innerWidth - width - EDGE);
+  const left = Math.min(Math.max(rect.left, EDGE), maxLeft);
+  let top = rect.top - height - GAP;
+  if (top < EDGE) top = rect.bottom + GAP;
+  const maxTop = Math.max(EDGE, window.innerHeight - height - EDGE);
+  top = Math.min(Math.max(top, EDGE), maxTop);
+  panelStyle.value = { position: 'fixed', left: `${left}px`, top: `${top}px`, zIndex: '2000' };
+}
+
+function toggle() {
+  open.value = !open.value;
+  if (open.value) {
+    void nextTick(positionPanel);
+    window.addEventListener('resize', positionPanel);
+  } else {
+    window.removeEventListener('resize', positionPanel);
+  }
+}
 
 function close() {
+  if (!open.value) return;
   open.value = false;
+  window.removeEventListener('resize', positionPanel);
 }
+
+onBeforeUnmount(close);
 </script>
 
 <style scoped lang="less">
@@ -40,10 +80,8 @@ function close() {
     }
   }
   .emoji-panel {
-    position: absolute;
-    bottom: 40px;
-    left: 0;
-    z-index: 10;
+    position: fixed;
+    z-index: 2000;
     width: 252px;
     padding: 8px;
     background: #fff;
