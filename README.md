@@ -299,6 +299,17 @@ docker compose down -v    # 删除数据卷
 docker compose up -d      # 重新启动，自动执行 schema.sql
 ```
 
+**存量数据库升级（DDL 先行）**：全新库由 `schema.sql` 自动建表（含 `chat_messages`）；**已有库**需先手工执行幂等迁移，再部署依赖该表的服务：
+
+```bash
+docker compose exec -T edu-live-postgres psql -U postgres -d yunyan_live < \
+  apps/chat-ws-service/src/migrations/20261007_create_chat_messages.sql
+```
+
+（迁移为 `IF NOT EXISTS` + 事务，可重复执行。）
+
+> **备份基线（待办）**：当前仓库无定时备份任务，生产部署前需建立 PostgreSQL 备份基线（含 Redis AOF 卷），RPO/RTO 目标待定。
+
 ### 验证服务
 
 ```bash
@@ -342,6 +353,8 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 | 3001 | TCP | Gateway HTTP API |
 | 5432 | TCP | PostgreSQL 数据库 |
 | 6379 | TCP | Redis 缓存 |
+| 5672 | TCP | RabbitMQ AMQP（仅 127.0.0.1 绑定） |
+| 15672 | TCP | RabbitMQ 管理台（仅 127.0.0.1 绑定） |
 | 8088 | TCP | Janus HTTP API（录制控制） |
 | 8188 | WebSocket | Janus 信令（WebRTC 连接） |
 | 50051 | gRPC | Auth Service（认证） |

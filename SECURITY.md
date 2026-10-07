@@ -39,6 +39,7 @@
 - `init/docker-compose.yml` 中的 `POSTGRES_PASSWORD`
 - `init/entrypoint.sh` 中的 Janus `admin_secret` / `token_auth_secret`
 - 数据库与 Redis 端口（`5432` / `6379`）的对外暴露范围
+- `init/.env` 中的 `RABBITMQ_USER` / `RABBITMQ_PASSWORD`（compose 经 `${RABBITMQ_USER:?}` 插值，示例文件不含真实口令；管理台 `15672` 仅绑定 `127.0.0.1`）
 - 邮件服务的 SMTP 授权码
 
 `.env` 文件已由 `.gitignore` 排除，**禁止**将真实凭据提交到仓库。
