@@ -28,7 +28,12 @@ vi.mock('@/store/user', () => ({
 
 class MockWebSocket {
   static instances: MockWebSocket[] = [];
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
   url: string;
+  readyState = 0;
   sent: string[] = [];
   onopen: (() => void) | null = null;
   onmessage: ((e: { data: string }) => void) | null = null;
@@ -42,6 +47,7 @@ class MockWebSocket {
     this.sent.push(data);
   }
   close() {
+    this.readyState = 3;
     this.onclose?.();
   }
 }
@@ -74,6 +80,7 @@ function closeEventWith(code: number): Event {
 async function openSocket(wrapper: ReturnType<typeof mount>): Promise<MockWebSocket> {
   vmOf(wrapper).createTutorSocket();
   const ws = MockWebSocket.instances[0]!;
+  ws.readyState = 1;
   ws.onopen?.();
   await flushPromises();
   return ws;
@@ -106,6 +113,7 @@ describe('ClassRoom Chat.vue', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   function mountChat(overrides: Record<string, unknown> = {}) {
@@ -133,6 +141,7 @@ describe('ClassRoom Chat.vue', () => {
     expect(ws!.url).toBe(
       'ws://test.local/socket?roomId=r1&liveUserId=u1&nickName=%E5%B0%8F%E6%98%8E'
     );
+    ws!.readyState = 1;
     ws!.onopen?.();
     await flushPromises();
     expect(ws!.sent[0]).toContain('getwhiteBoard');
@@ -394,10 +403,67 @@ describe('ClassRoom Chat.vue', () => {
     const vm = vmOf(wrapper);
     vm.createTutorSocket();
     const ws = MockWebSocket.instances[0]!;
+    ws.readyState = 1;
     ws.onopen?.();
 
     wrapper.unmount();
     expect(ws.sent.filter(s => s.includes('ping'))).toHaveLength(0);
     expect(MockWebSocket.instances).toHaveLength(1);
+  });
+
+  it('断开后发送提示网络异常且 4 秒后自动重连', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']
+    });
+    localStorage.setItem('token', 'some-token');
+    try {
+      const wrapper = mountChat();
+      const vm = vmOf(wrapper);
+      const ws = await openSocket(wrapper);
+
+      ws.readyState = 3;
+      vm.liveSocketClose(closeEventWith(1006));
+      await flushPromises();
+
+      vm.sendContent = '掉线时的消息';
+      vm.sendMes(1);
+      await flushPromises();
+      expect(document.body.textContent).toContain('聊天网络异常，发送失败');
+      expect(ws.sent.filter(s => s.includes('掉线时的消息'))).toHaveLength(0);
+
+      vi.advanceTimersByTime(4000);
+      expect(MockWebSocket.instances).toHaveLength(2);
+
+      wrapper.unmount();
+    } finally {
+      vi.useRealTimers();
+      localStorage.removeItem('token');
+    }
+  });
+
+  it('心跳持续无 pong 超时强制断开并重连', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']
+    });
+    localStorage.setItem('token', 'some-token');
+    try {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+
+      vi.advanceTimersByTime(4000);
+      expect(ws.sent.filter(s => s.includes('ping'))).toHaveLength(1);
+      vi.advanceTimersByTime(4000);
+      expect(ws.readyState).toBe(1);
+      vi.advanceTimersByTime(4000);
+      expect(ws.readyState).toBe(3);
+
+      vi.advanceTimersByTime(4000);
+      expect(MockWebSocket.instances).toHaveLength(2);
+
+      wrapper.unmount();
+    } finally {
+      vi.useRealTimers();
+      localStorage.removeItem('token');
+    }
   });
 });

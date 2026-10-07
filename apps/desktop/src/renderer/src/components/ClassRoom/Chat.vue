@@ -283,6 +283,7 @@ function createTutorSocket() {
     stopReconnect();
     return;
   }
+  if (sockets.value.liveSocket) clearLiveSocket();
   const token = props.useToken ? localStorage.getItem('token') || '' : '';
   const tokenParam = token ? `&token=${token}` : '';
   const nickParam = `&nickName=${encodeURIComponent(props.userName ?? '')}`;
@@ -309,16 +310,13 @@ function liveSocketOpen() {
   connectNum++;
   liveHeartCheckFun();
   socketUpdateFun();
-  lockReconnect = true;
+  stopReconnect();
   console.log('聊天网络连接成功');
-  if (time > 0) {
-    clearInterval(time);
-    time = 0;
-  }
 }
 
 function liveSocketError(e: Event) {
   clearLiveSocket();
+  reconnect();
   console.error('聊天网络连接错误', e);
 }
 
@@ -370,6 +368,7 @@ function liveSocketMessage(e: MessageEvent) {
         console.error(redata.data.cause);
         return;
       }
+      clearLiveSocket();
       reconnect();
       break;
     case 'getWhiteBoard':
@@ -409,6 +408,7 @@ function liveSocketClose(e?: Event) {
     return;
   }
   console.error('聊天网络已断开...', e);
+  reconnect();
 }
 
 function stopReconnect() {
@@ -416,12 +416,14 @@ function stopReconnect() {
     clearInterval(time);
     time = 0;
   }
+  lockReconnect = false;
 }
 
 function reconnect() {
   if (sessionClosed) return;
   if (props.useToken && !localStorage.getItem('token')) return;
   if (lockReconnect) return;
+  stopReconnect();
   lockReconnect = true;
   time = setInterval(function () {
     if (props.useToken && !localStorage.getItem('token')) {
@@ -489,11 +491,15 @@ function setSocketSend(data: string) {
 function liveHeartCheckFun() {
   const data = `{"type": "ping","data": {}}`;
   sockets.value.liveSocketTimer = setInterval(function () {
-    const { liveSocket } = sockets.value;
-    if (liveSocket) {
-      sockets.value.startTime = new Date().getTime();
-      liveSocket.send(data);
+    const { liveSocket, startTime, socketHeartTime } = sockets.value;
+    if (!liveSocket) return;
+    const now = Date.now();
+    if (startTime !== 0 && now - startTime >= socketHeartTime * 1.5) {
+      liveSocket.close();
+      return;
     }
+    if (startTime === 0) sockets.value.startTime = now;
+    liveSocket.send(data);
     peopleNum();
   }, sockets.value.socketHeartTime);
 }
@@ -519,11 +525,14 @@ function socketUpdateFun() {
 function clearLiveSocket() {
   const { liveSocketTimer, liveSocket, updateTimer } = sockets.value;
   // Detach before close() so the resulting onclose callback cannot re-enter.
-  sockets.value.liveSocket = null;
   if (liveSocket) {
+    liveSocket.onopen = null;
+    liveSocket.onerror = null;
+    liveSocket.onmessage = null;
+    liveSocket.onclose = null;
     liveSocket.close();
-    lockReconnect = false;
   }
+  sockets.value.liveSocket = null;
   if (liveSocketTimer) clearInterval(liveSocketTimer);
   if (updateTimer) clearInterval(updateTimer);
 }
@@ -537,7 +546,7 @@ function peopleNum() {
 }
 
 async function sendMes(type: number) {
-  if (!lockReconnect) {
+  if (sockets.value.liveSocket?.readyState !== WebSocket.OPEN) {
     ElMessage.error('聊天网络异常，发送失败！');
     return;
   }
