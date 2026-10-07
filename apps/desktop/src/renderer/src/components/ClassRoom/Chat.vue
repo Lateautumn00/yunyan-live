@@ -223,6 +223,7 @@ const { mentionTargets, mentionOptions, onMentionSelect, insertEmoji, onEnter } 
   sendContent,
   mentionRef,
   isTeacher: () => props.isTeacher,
+  selfId: () => props.liveUserId,
   onEnterSend: () => void sendMes(1)
 });
 

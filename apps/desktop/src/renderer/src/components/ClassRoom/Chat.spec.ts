@@ -4,6 +4,7 @@ import ElementPlus from 'element-plus';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import { createPinia } from 'pinia';
 import Chat from '@/components/ClassRoom/Chat.vue';
+import { useRoomStore } from '@/store/room';
 
 const apiMocks = vi.hoisted(() => ({
   updateForbid: vi.fn()
@@ -116,11 +117,11 @@ describe('ClassRoom Chat.vue', () => {
     vi.useRealTimers();
   });
 
-  function mountChat(overrides: Record<string, unknown> = {}) {
+  function mountChat(overrides: Record<string, unknown> = {}, pinia = createPinia()) {
     return mount(Chat, {
       props: { ...baseProps(), ...overrides },
       attachTo: document.body,
-      global: { plugins: [ElementPlus, createPinia()], components: { ...ElementPlusIconsVue } }
+      global: { plugins: [ElementPlus, pinia], components: { ...ElementPlusIconsVue } }
     });
   }
 
@@ -465,5 +466,48 @@ describe('ClassRoom Chat.vue', () => {
       vi.useRealTimers();
       localStorage.removeItem('token');
     }
+  });
+
+  it('@提及补全排除自身，他人与所有人保留', async () => {
+    const pinia = createPinia();
+    useRoomStore(pinia).setMembers([
+      { userName: '小明', opaqueId: 'u1' },
+      { userName: '李四', opaqueId: 'u2' }
+    ]);
+
+    const wrapper = mountChat({}, pinia);
+    await openSocket(wrapper);
+    const mention = wrapper.findComponent({ name: 'ElMention' });
+    const values = (mention.props('options') as Array<{ value: string }>).map(o => o.value);
+    expect(values).toContain('李四');
+    expect(values).not.toContain('小明');
+    wrapper.unmount();
+
+    const teacherWrapper = mountChat({ isTeacher: true }, pinia);
+    const teacherValues = (
+      teacherWrapper.findComponent({ name: 'ElMention' }).props('options') as Array<{
+        value: string;
+      }>
+    ).map(o => o.value);
+    expect(teacherValues[0]).toBe('所有人');
+    expect(teacherValues).toContain('李四');
+    expect(teacherValues).not.toContain('小明');
+    teacherWrapper.unmount();
+  });
+
+  it('正文含自身昵称发送时不产生自身提及载荷', async () => {
+    const pinia = createPinia();
+    useRoomStore(pinia).setMembers([
+      { userName: '小明', opaqueId: 'u1' },
+      { userName: '李四', opaqueId: 'u2' }
+    ]);
+    const wrapper = mountChat({}, pinia);
+    const vm = vmOf(wrapper);
+    const ws = await openSocket(wrapper);
+    vm.sendContent = '@小明 @李四 大家早';
+    vm.sendMes(1);
+    await flushPromises();
+    expect(lastSent(ws).data.liveMsg.mentions).toEqual([{ userId: 'u2', userName: '李四' }]);
+    wrapper.unmount();
   });
 });
