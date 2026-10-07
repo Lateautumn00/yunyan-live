@@ -94,6 +94,18 @@ function pushBullet(
   ws.onmessage?.({ data: JSON.stringify({ type: 'bullet', data }) });
 }
 
+function pushFrame(ws: MockWebSocket, type: string, data: unknown) {
+  ws.onmessage?.({ data: JSON.stringify({ type, data }) });
+}
+
+function scrollEvent(target: HTMLElement): Event {
+  return { target } as unknown as Event;
+}
+
+function historyEntry(msgId: string, name: string, time: number, userId: string) {
+  return { msgId, liveMsg: { msg: `历史${msgId}`, name, time }, info: { liveUserId: userId } };
+}
+
 interface SentBullet {
   data: { liveMsg: Record<string, unknown> };
 }
@@ -509,5 +521,116 @@ describe('ClassRoom Chat.vue', () => {
     await flushPromises();
     expect(lastSent(ws).data.liveMsg.mentions).toEqual([{ userId: 'u2', userName: '李四' }]);
     wrapper.unmount();
+  });
+
+  describe('历史回放（history / historyPage / historyError）', () => {
+    it('进场 history 帧升序渲染且不计未读徽标（gate 不套历史）', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'history', {
+        messages: [
+          historyEntry('h1', '甲', 1700000000000, 'u2'),
+          historyEntry('h2', '乙', 1700000100000, 'u3')
+        ],
+        nextCursor: '1700000100000|h2'
+      });
+      await flushPromises();
+      expect(wrapper.text()).toContain('历史h1');
+      expect(wrapper.text()).toContain('历史h2');
+      expect(wrapper.findAll('li').map(li => li.text())).toEqual([
+        expect.stringContaining('历史h1'),
+        expect.stringContaining('历史h2')
+      ]);
+      expect(wrapper.emitted('updateNum')).toBeUndefined();
+    });
+
+    it('顶部滚动触发 getHistory（带 cursor），响应 prepend 后锚点回填', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'history', {
+        messages: [
+          historyEntry('h1', '甲', 1700000000000, 'u2'),
+          historyEntry('h2', '乙', 1700000100000, 'u3')
+        ],
+        nextCursor: '1700000100000|h2'
+      });
+      await flushPromises();
+
+      const ul = wrapper.find('ul').element as HTMLElement;
+      Object.defineProperty(ul, 'scrollHeight', {
+        get: () => 100 + ul.querySelectorAll('li').length * 300,
+        configurable: true
+      });
+      Object.defineProperty(ul, 'clientHeight', { value: 400, configurable: true });
+      Object.defineProperty(ul, 'scrollTop', { value: 0, configurable: true, writable: true });
+
+      await (wrapper.vm as unknown as { fetchData: (e: Event) => void }).fetchData(scrollEvent(ul));
+      expect(ws.sent.at(-1)).toBe(
+        JSON.stringify({ type: 'getHistory', data: { cursor: '1700000100000|h2' } })
+      );
+
+      const older = Array.from({ length: 10 }, (_, i) =>
+        historyEntry(`o${i}`, '丙', 1700000000000 - (10 - i) * 1000, 'u4')
+      );
+      pushFrame(ws, 'historyPage', { messages: older, nextCursor: '1699999990000|o0' });
+      await flushPromises();
+      await wrapper.vm.$nextTick();
+
+      const lis = wrapper.findAll('li');
+      expect(lis).toHaveLength(12);
+      expect(lis[0]!.text()).toContain('历史o0'); // 服务端 ASC 下发 → 升序合并到头部
+      expect(lis[9]!.text()).toContain('历史o9');
+      expect(lis[10]!.text()).toContain('历史h1'); // 既有消息不动
+      expect(lis[11]!.text()).toContain('历史h2');
+      // 锚点回填：新高 100+12*300=3700，旧高 700 → scrollTop = 0 + 3000
+      expect(ul.scrollTop).toBe(3000);
+      expect(wrapper.emitted('updateNum')).toBeUndefined();
+    });
+
+    it('historyError 终止翻页：invalid_cursor 后不再发请求；unavailable 后可重试', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'history', { messages: [], nextCursor: 'c1' });
+      await flushPromises();
+
+      const ul = wrapper.find('ul').element as HTMLElement;
+      Object.defineProperty(ul, 'scrollHeight', { value: 900, configurable: true });
+      Object.defineProperty(ul, 'clientHeight', { value: 400, configurable: true });
+      Object.defineProperty(ul, 'scrollTop', { value: 0, configurable: true, writable: true });
+
+      const fetch = wrapper.vm as unknown as { fetchData: (e: Event) => void };
+      await fetch.fetchData(scrollEvent(ul));
+      expect(ws.sent.filter(s => s.includes('getHistory'))).toHaveLength(1);
+
+      pushFrame(ws, 'historyError', { reason: 'unavailable' });
+      await flushPromises();
+      await fetch.fetchData(scrollEvent(ul));
+      expect(ws.sent.filter(s => s.includes('getHistory'))).toHaveLength(2);
+
+      pushFrame(ws, 'historyError', { reason: 'invalid_cursor' });
+      await flushPromises();
+      await fetch.fetchData(scrollEvent(ul));
+      expect(ws.sent.filter(s => s.includes('getHistory'))).toHaveLength(2); // 终态不再请求
+    });
+
+    it('未加载历史时顶部滚动发首页 getHistory（无 cursor）', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      const ul = wrapper.find('ul').element as HTMLElement;
+      Object.defineProperty(ul, 'scrollHeight', { value: 900, configurable: true });
+      Object.defineProperty(ul, 'clientHeight', { value: 400, configurable: true });
+      Object.defineProperty(ul, 'scrollTop', { value: 0, configurable: true, writable: true });
+      await (wrapper.vm as unknown as { fetchData: (e: Event) => void }).fetchData(scrollEvent(ul));
+      expect(ws.sent.at(-1)).toBe(JSON.stringify({ type: 'getHistory', data: {} }));
+      wrapper.unmount();
+    });
+
+    it('bullet_rejected rate_limited 显示限流提示', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      ws.onmessage?.({ data: JSON.stringify({ type: 'bullet_rejected', reason: 'rate_limited' }) });
+      await flushPromises();
+      expect(document.body.textContent).toContain('发送过于频繁');
+    });
   });
 });

@@ -13,6 +13,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/renderer/**/*.spec.ts'],
-    setupFiles: [resolve('src/renderer/src/testing/setup.ts')]
+    setupFiles: [resolve('src/renderer/src/testing/setup.ts')],
+    // WSL/drvfs 高 I/O 延迟：16 核默认 15 forks 会超时 worker 启动，限流保证稳定
+    maxWorkers: 4,
+    minWorkers: 1
   }
 });

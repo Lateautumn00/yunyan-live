@@ -5,7 +5,7 @@
   >
     <div class="con">
       <ul ref="dialogueList" @scroll="fetchData">
-        <li v-for="(item, index) in tanmuMessage" :key="index">
+        <li v-for="item in tanmuMessage" :key="item.msgId ?? keyOf(item)">
           <div v-if="item.showTime" class="msg-time">
             {{ formatChatTime(item.time) }}
           </div>
@@ -131,34 +131,26 @@
 </template>
 
 <script setup lang="ts">
-import { onUnmounted, onUpdated, ref } from 'vue';
+import { nextTick, onUnmounted, onUpdated, ref } from 'vue';
 import { ElMessage, type MentionInstance } from 'element-plus';
 import { Top as RaiseHand } from '@element-plus/icons-vue';
-import { ChatMessageItem, WsClose, type MentionTarget } from '@yunyan-live/types';
+import { WsClose, type MentionTarget } from '@yunyan-live/types';
 import api from '@/api';
 import { config } from '@/api';
 import { useUserStore } from '@/store/user';
 import { useAsyncAction } from '@/composables/useAsyncAction';
 import { useChatInput } from '@/composables/useChatInput';
-import EmojiPicker from './EmojiPicker.vue';
 import {
-  CHAT_LIMITS,
-  extractMentions,
-  formatChatTime,
-  segmentMessage,
-  type MessageSegment
-} from '@/utils/chatFormat';
-
-type DisplayMessage = ChatMessageItem & {
-  segments: MessageSegment[];
-  mentionMe: boolean;
-  showTime: boolean;
-};
+  useChatMessages,
+  type ChatEntry,
+  type DisplayMessage
+} from '@/composables/useChatMessages';
+import { useChatHistoryPager } from '@/composables/useChatHistoryPager';
+import EmojiPicker from './EmojiPicker.vue';
+import { CHAT_LIMITS, extractMentions, formatChatTime } from '@/utils/chatFormat';
 
 /** Redis 禁言极性：0=禁言 1=可发言（与服务端 FORBID_FORBIDDEN/FORBID_ALLOWED 一致） */
 const FORBID_FORBIDDEN = 0;
-/** 分组时间间隔：超过该间隔的新消息重新显示时间 */
-const TIME_GAP_MS = 5 * 60 * 1000;
 
 const props = withDefaults(
   defineProps<{
@@ -216,7 +208,21 @@ const sockets = ref<{
   endTime: 0
 });
 const sendContent = ref('');
-const tanmuMessage = ref<DisplayMessage[]>([]);
+const {
+  messages: tanmuMessage,
+  appendLive,
+  mergeHistory,
+  isUnread,
+  keyOf
+} = useChatMessages({
+  self: () => ({ liveUserId: props.liveUserId ?? '', isTeacher: props.isTeacher ?? false })
+});
+const pager = useChatHistoryPager({
+  fetchHistory: (cursor, signal) => {
+    if (signal.aborted) return;
+    setSocketSend(JSON.stringify({ type: 'getHistory', data: cursor ? { cursor } : {} }));
+  }
+});
 const dialogueList = ref<HTMLElement | null>(null);
 const mentionRef = ref<MentionInstance | null>(null);
 const { mentionTargets, mentionOptions, onMentionSelect, insertEmoji, onEnter } = useChatInput({
@@ -237,6 +243,8 @@ function fetchData(e: Event) {
   } else {
     isBottom.value = false;
   }
+  // 顶部阈值翻页（单飞/hasMore/一屏内不触发由 pager 判定）
+  pager.pageRequest({ scrollTop, scrollHeight, clientHeight });
 }
 
 function updateBottom() {
@@ -361,7 +369,17 @@ function liveSocketMessage(e: MessageEvent) {
       if (redata.reason === 'forbidden') ElMessage.warning('当前处于禁言状态，无法发言');
       else if (redata.reason === 'too_long')
         ElMessage.warning(`消息超过${CHAT_LIMITS.MAX_MESSAGE_LENGTH}字`);
+      else if (redata.reason === 'rate_limited') ElMessage.warning('发送过于频繁，请稍后再试');
       else ElMessage.error('消息发送失败');
+      break;
+    case 'history':
+    case 'historyPage': {
+      const page = pager.ingest(redata.type, redata.data);
+      if (page) void applyHistoryPage(page.messages as ChatEntry[]);
+      break;
+    }
+    case 'historyError':
+      pager.ingest('historyError', redata.data);
       break;
     case 'error':
       if (redata.data.cause && redata.data.cause === '被占用') {
@@ -435,7 +453,27 @@ function reconnect() {
   }, 4000);
 }
 
+/** history/historyPage 合并：突变前记 scrollHeight，nextTick 一次回填锚点（prepend 后顶部位置稳定） */
+async function applyHistoryPage(entries: ChatEntry[]) {
+  const el = dialogueList.value;
+  const oldHeight = el?.scrollHeight ?? 0;
+  const oldTop = el?.scrollTop ?? 0;
+  const added = mergeHistory(entries);
+  if (!added || !el) return;
+  await nextTick();
+  const delta = el.scrollHeight - oldHeight;
+  if (delta > 0) el.scrollTop = oldTop + delta;
+}
+
+/** 未读单一漏斗：chat 与 chat-mention 双出口同门（time > maxSeenTime 已在 isUnread 判定） */
+function recordUnread(item: DisplayMessage) {
+  emit('updateNum', true, 1, 'chat');
+  if (item.mentionMe) emit('updateNum', true, 1, 'chat-mention');
+  setNum();
+}
+
 function infoList(data: {
+  msgId?: unknown;
   liveMsg?: {
     info?: { host?: string };
     msg?: string;
@@ -449,37 +487,11 @@ function infoList(data: {
   if (liveMsg && liveMsg.info && liveMsg.info.host) {
     return;
   }
-  const msg = liveMsg?.msg ?? '';
-  const mentions = Array.isArray(liveMsg?.mentions) ? liveMsg.mentions : [];
-  const isMe = data.info?.liveUserId === props.liveUserId;
-  // 渲染/徽标事实源 = 载荷 mentions（与成员名单解耦，离线成员同样高亮）
-  const mentionMe =
-    !isMe && mentions.some(m => m.userId === props.liveUserId || m.userId === 'all');
-  const len = tanmuMessage.value.length;
-  const prev = len > 0 ? tanmuMessage.value[len - 1] : undefined;
-  const liveUser = !!prev && data.info?.liveUserId == prev.liveUserId;
   const time = typeof liveMsg?.time === 'number' ? liveMsg.time : Date.now();
-  const showTime = !prev || !liveUser || time - (prev.time ?? 0) > TIME_GAP_MS;
-  tanmuMessage.value.push({
-    userName: liveMsg?.name,
-    message: msg,
-    isMe,
-    isTeacher: data.info?.isTeacher,
-    liveUserId: data.info?.liveUserId,
-    liveUser,
-    time,
-    mentions: mentions.length ? mentions : undefined,
-    segments: segmentMessage(msg, mentions),
-    mentionMe,
-    showTime
-  });
-  updateNum(true, 1, 'chat');
-  if (mentionMe) emit('updateNum', true, 1, 'chat-mention');
-}
-
-function updateNum(status: boolean, num: number, type: string) {
-  emit('updateNum', status, num, type);
-  setNum();
+  const unread = isUnread(time); // 先取门（append 会推进 maxSeenTime）
+  if (!appendLive(data)) return; // msgId/键去重：重复投递不渲染、不计未读
+  const item = tanmuMessage.value[tanmuMessage.value.length - 1];
+  if (item && unread) recordUnread(item);
 }
 
 function setSocketSend(data: string) {
