@@ -1,7 +1,7 @@
 ﻿services:
   postgres:
     image: postgres:16-alpine
-    container_name: edu-live-postgres
+    container_name: yunyan-live-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: yunyan_live
@@ -20,7 +20,7 @@
 
   redis:
     image: redis:7-alpine
-    container_name: edu-live-redis
+    container_name: yunyan-live-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy noeviction
     ports:
@@ -30,7 +30,7 @@
 
   rabbitmq:
     image: rabbitmq:4.3.6-management-alpine
-    container_name: edu-live-rabbitmq
+    container_name: yunyan-live-rabbitmq
     hostname: yunyan-rabbitmq
     restart: unless-stopped
     environment:
@@ -56,7 +56,7 @@
     build:
       context: .
       dockerfile: Dockerfile
-    image: edu-live-janus:latest
+    image: yunyan-live-janus:latest
     container_name: janus-gateway
     restart: unless-stopped
     ports:

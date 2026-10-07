@@ -1,6 +1,6 @@
 # 云砚直播（Yunyan Live）接口文档总索引
 
-本文档覆盖 `edu-live-electron` monorepo 中全部 6 个微服务的对外接口，按微服务分目录归档。
+本文档覆盖 `yunyan-live-electron` monorepo 中全部 6 个微服务的对外接口，按微服务分目录归档。
 
 ## 服务与端口
 

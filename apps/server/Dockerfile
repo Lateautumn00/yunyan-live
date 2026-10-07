@@ -1,5 +1,5 @@
 # Build from the repo root (context must include packages/ and apps/server):
-#   docker build -f apps/server/Dockerfile -t edu-live-server .
+#   docker build -f apps/server/Dockerfile -t yunyan-live-server .
 FROM node:24-alpine AS builder
 
 WORKDIR /app

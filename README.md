@@ -1,17 +1,17 @@
-﻿# 云砚直播 (Edu Live)
+﻿# 云砚直播 (Yunyan Live)
 
 > 基于 Electron + Vue 3 + Nest.js + Janus WebRTC 的在线直播教学平台
 
 ## 技术栈
 
-| 层级 | 技术 |
-|------|------|
-| 桌面端 | Electron, Vue 3, Vite, Element Plus, Pinia, Konva (白板) |
-| 后端 | Nest.js, TypeORM, PostgreSQL, WebSocket (ws), LibreOffice (PPT转换) |
-| 微服务 | gRPC (认证/直播/邮件), Redis (缓存), FFmpeg (视频转码) |
-| WebRTC | Janus Gateway (Docker), janus-pp-rec (录制转码) |
-| 工具链 | pnpm, Turborepo, TypeScript, ESLint, Prettier, Husky, Commitlint |
-| 部署 | Docker Compose |
+| 层级   | 技术                                                                |
+| ------ | ------------------------------------------------------------------- |
+| 桌面端 | Electron, Vue 3, Vite, Element Plus, Pinia, Konva (白板)            |
+| 后端   | Nest.js, TypeORM, PostgreSQL, WebSocket (ws), LibreOffice (PPT转换) |
+| 微服务 | gRPC (认证/直播/邮件), Redis (缓存), FFmpeg (视频转码)              |
+| WebRTC | Janus Gateway (Docker), janus-pp-rec (录制转码)                     |
+| 工具链 | pnpm, Turborepo, TypeScript, ESLint, Prettier, Husky, Commitlint    |
+| 部署   | Docker Compose                                                      |
 
 ## 目录结构
 
@@ -181,10 +181,10 @@ VITE_UPLOAD_PPT_URL=http://192.168.x.x:3001/upload/ppt
 桌面端（`apps/desktop/`）有两个环境文件，`electron-vite` 按运行模式自动加载，无需手动指定；
 两者都由 `.env.example` 复制而来，键完全一致，只是填入的地址不同：
 
-| 文件 | 触发命令 | 用途 |
-|------|----------|------|
-| `.env.development` | `pnpm dev:desktop`（mode=development） | 日常开发，指向本地/内网服务 |
-| `.env.production` | `pnpm build:desktop` / `pnpm build:desktop:win`（mode=production） | 打包进产物的地址，指向生产服务器 |
+| 文件                 | 触发命令                                                               | 用途                             |
+| -------------------- | ---------------------------------------------------------------------- | -------------------------------- |
+| `.env.development` | `pnpm dev:desktop`（mode=development）                               | 日常开发，指向本地/内网服务      |
+| `.env.production`  | `pnpm build:desktop` / `pnpm build:desktop:win`（mode=production） | 打包进产物的地址，指向生产服务器 |
 
 覆盖规则（优先级从高到低）：`.env.[mode].local` > `.env.[mode]` > `.env.local` > `.env`。
 除 `.env.example` 外均已 gitignore，可放心填真实地址。
@@ -198,10 +198,11 @@ cd init
 docker compose up -d --build
 
 # 查看 PostgreSQL 日志，确认表已创建
-docker logs edu-live-postgres --tail 20
+docker logs yunyan-live-postgres --tail 20
 ```
 
 数据库初始化说明：
+
 - PostgreSQL 容器首次启动时，自动执行 `schema.sql` 创建 6 张表
 - 已有数据的容器不会重复执行（`pgdata` 卷存在时跳过）
 - 重置数据库：`docker compose down -v && docker compose up -d`
@@ -276,13 +277,14 @@ docker compose ps
 
 # 查看日志
 docker logs janus-gateway --tail 20
-docker logs edu-live-postgres --tail 20
-docker logs edu-live-redis --tail 20
+docker logs yunyan-live-postgres --tail 20
+docker logs yunyan-live-redis --tail 20
 ```
 
 ### 数据库自动初始化
 
 PostgreSQL 容器使用 `/docker-entrypoint-initdb.d/` 机制：
+
 - 首次启动时自动执行挂载的 `schema.sql`，创建 6 张表
 - 通过 `docker-compose.yml` 中的 volume 挂载实现：
   ```yaml
@@ -302,7 +304,7 @@ docker compose up -d      # 重新启动，自动执行 schema.sql
 **存量数据库升级（DDL 先行）**：全新库由 `schema.sql` 自动建表（含 `chat_messages`）；**已有库**需先手工执行幂等迁移，再部署依赖该表的服务：
 
 ```bash
-docker compose exec -T edu-live-postgres psql -U postgres -d yunyan_live < \
+docker compose exec -T yunyan-live-postgres psql -U postgres -d yunyan_live < \
   apps/chat-ws-service/src/migrations/20261007_create_chat_messages.sql
 ```
 
@@ -314,10 +316,10 @@ docker compose exec -T edu-live-postgres psql -U postgres -d yunyan_live < \
 
 ```bash
 # PostgreSQL
-docker exec edu-live-postgres pg_isready -U postgres
+docker exec yunyan-live-postgres pg_isready -U postgres
 
 # Redis
-docker exec edu-live-redis redis-cli ping
+docker exec yunyan-live-redis redis-cli ping
 
 # Janus WebSocket（需要 websocat）
 echo '{"janus":"keepalive","transaction":"test1"}' \
@@ -339,30 +341,30 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 
 在 `init/.env` 中配置：
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `GATEWAY_IP` | `0.0.0.0` | Janus 绑定 IP（需改为 VM 实际 IP） |
-| `STUN_SERVER` | `stun.l.google.com` | STUN 服务器（NAT 穿透） |
-| `STUN_PORT` | `19302` | STUN 端口 |
-| `RTP_PORT_RANGE` | `20000-20100` | RTP 媒体流端口范围 |
+| 变量               | 默认值                | 说明                               |
+| ------------------ | --------------------- | ---------------------------------- |
+| `GATEWAY_IP`     | `0.0.0.0`           | Janus 绑定 IP（需改为 VM 实际 IP） |
+| `STUN_SERVER`    | `stun.l.google.com` | STUN 服务器（NAT 穿透）            |
+| `STUN_PORT`      | `19302`             | STUN 端口                          |
+| `RTP_PORT_RANGE` | `20000-20100`       | RTP 媒体流端口范围                 |
 
 ## 端口说明
 
-| 端口 | 协议 | 用途 |
-|------|------|------|
-| 3001 | TCP | Gateway HTTP API |
-| 5432 | TCP | PostgreSQL 数据库 |
-| 6379 | TCP | Redis 缓存 |
-| 5672 | TCP | RabbitMQ AMQP（仅 127.0.0.1 绑定） |
-| 15672 | TCP | RabbitMQ 管理台（仅 127.0.0.1 绑定） |
-| 8088 | TCP | Janus HTTP API（录制控制） |
-| 8188 | WebSocket | Janus 信令（WebRTC 连接） |
-| 50051 | gRPC | Auth Service（认证） |
-| 50052 | gRPC | Live Service（直播） |
-| 50053 | gRPC | Mail Service（邮件） |
-| 50054 | WebSocket | Chat WS Service（聊天） |
-| 50055 | WebSocket | Yjs WS Service（白板） |
-| 20000-20100 | UDP | RTP/RTCP 媒体流 |
+| 端口        | 协议      | 用途                                 |
+| ----------- | --------- | ------------------------------------ |
+| 3001        | TCP       | Gateway HTTP API                     |
+| 5432        | TCP       | PostgreSQL 数据库                    |
+| 6379        | TCP       | Redis 缓存                           |
+| 5672        | TCP       | RabbitMQ AMQP（仅 127.0.0.1 绑定）   |
+| 15672       | TCP       | RabbitMQ 管理台（仅 127.0.0.1 绑定） |
+| 8088        | TCP       | Janus HTTP API（录制控制）           |
+| 8188        | WebSocket | Janus 信令（WebRTC 连接）            |
+| 50051       | gRPC      | Auth Service（认证）                 |
+| 50052       | gRPC      | Live Service（直播）                 |
+| 50053       | gRPC      | Mail Service（邮件）                 |
+| 50054       | WebSocket | Chat WS Service（聊天）              |
+| 50055       | WebSocket | Yjs WS Service（白板）               |
+| 20000-20100 | UDP       | RTP/RTCP 媒体流                      |
 
 ## 环境变量配置
 
@@ -419,63 +421,63 @@ VITE_UPLOAD_PPT_URL=http://192.168.x.x:3001/upload/ppt
 
 ### 用户模块 (`/user`)
 
-| 方法 | 路径 | 说明 | 鉴权 |
-|------|------|------|------|
-| POST | `/user/user/login` | 用户登录 | 否 |
-| POST | `/user/user/register` | 用户注册 | 否 |
-| POST | `/user/user/logout` | 用户登出 | 否 |
-| GET | `/user/user/getUserMsg` | 获取用户信息 | JWT |
-| POST | `/user/user/updatePassword` | 修改密码 | JWT |
-| GET | `/user/user/getNowTime` | 获取服务器时间 | 否 |
+| 方法 | 路径                          | 说明           | 鉴权 |
+| ---- | ----------------------------- | -------------- | ---- |
+| POST | `/user/user/login`          | 用户登录       | 否   |
+| POST | `/user/user/register`       | 用户注册       | 否   |
+| POST | `/user/user/logout`         | 用户登出       | 否   |
+| GET  | `/user/user/getUserMsg`     | 获取用户信息   | JWT  |
+| POST | `/user/user/updatePassword` | 修改密码       | JWT  |
+| GET  | `/user/user/getNowTime`     | 获取服务器时间 | 否   |
 
 ### 直播模块 (`/live`)
 
-| 方法 | 路径 | 说明 | 鉴权 |
-|------|------|------|------|
-| POST | `/live/liveInfo/createLive` | 创建直播 | JWT |
-| POST | `/live/liveInfo/joinLive` | 加入直播（参加码） | 否 |
-| GET | `/live/liveInfo/showRoomInfo` | 获取房间信息 | 否 |
-| PUT | `/live/liveInfo/changeLiveStatus` | 修改直播状态 | 否 |
-| POST | `/live/liveInfo/cmsLiveList` | 直播列表 | 否 |
-| GET | `/live/liveInfo/cmsLiveDetail` | 直播详情 | 否 |
-| DELETE | `/live/liveInfo/deleteLive` | 删除直播 | JWT |
-| PUT | `/live/liveInfo/updateLiveCode` | 更新参加码 | 否 |
-| GET | `/live/liveInfo/getCurrentIp` | 获取当前 IP | 否 |
-| GET | `/live/liveInfo/videoList` | 录制列表 | 否 |
-| GET | `/live/liveInfo/videoDetail` | 录制详情 | 否 |
-| DELETE | `/live/liveInfo/deleteVideo` | 删除录制 | JWT |
-| DELETE | `/live/liveInfo/deleteVideoByIds` | 批量删除录制 | JWT |
-| GET | `/live/liveInfo/downloadRecording/:id` | 检查下载状态 | JWT |
-| GET | `/live/liveInfo/downloadRecording/:id?download=true` | 下载 MP4 文件 | JWT |
+| 方法   | 路径                                                   | 说明               | 鉴权 |
+| ------ | ------------------------------------------------------ | ------------------ | ---- |
+| POST   | `/live/liveInfo/createLive`                          | 创建直播           | JWT  |
+| POST   | `/live/liveInfo/joinLive`                            | 加入直播（参加码） | 否   |
+| GET    | `/live/liveInfo/showRoomInfo`                        | 获取房间信息       | 否   |
+| PUT    | `/live/liveInfo/changeLiveStatus`                    | 修改直播状态       | 否   |
+| POST   | `/live/liveInfo/cmsLiveList`                         | 直播列表           | 否   |
+| GET    | `/live/liveInfo/cmsLiveDetail`                       | 直播详情           | 否   |
+| DELETE | `/live/liveInfo/deleteLive`                          | 删除直播           | JWT  |
+| PUT    | `/live/liveInfo/updateLiveCode`                      | 更新参加码         | 否   |
+| GET    | `/live/liveInfo/getCurrentIp`                        | 获取当前 IP        | 否   |
+| GET    | `/live/liveInfo/videoList`                           | 录制列表           | 否   |
+| GET    | `/live/liveInfo/videoDetail`                         | 录制详情           | 否   |
+| DELETE | `/live/liveInfo/deleteVideo`                         | 删除录制           | JWT  |
+| DELETE | `/live/liveInfo/deleteVideoByIds`                    | 批量删除录制       | JWT  |
+| GET    | `/live/liveInfo/downloadRecording/:id`               | 检查下载状态       | JWT  |
+| GET    | `/live/liveInfo/downloadRecording/:id?download=true` | 下载 MP4 文件      | JWT  |
 
 下载状态码：
 
-| code | 含义 |
-|------|------|
+| code | 含义               |
+| ---- | ------------------ |
 | 1000 | 转码完成，可以下载 |
-| 2002 | 转码中，请稍后 |
+| 2002 | 转码中，请稍后     |
 
 ### WebSocket Chat (`/socket`)
 
-| 消息类型 | 方向 | 说明 |
-|----------|------|------|
-| `ping` / `pong` | 双向 | 心跳保活 |
-| `msg` | 服务端→客户端 | 在线人数 |
-| `bullet` | 双向 | 聊天弹幕 |
-| `whiteBoard` | 双向 | 白板数据同步 |
-| `getwhiteBoard` | 客户端→服务端 | 获取白板历史 |
-| `getWhiteBoard` | 服务端→客户端 | 白板历史数据 |
-| `over` | 双向 | 结束消息 |
-| `live_started` | 双向 | 教师开播通知（触发学生重连 Janus） |
+| 消息类型            | 方向           | 说明                               |
+| ------------------- | -------------- | ---------------------------------- |
+| `ping` / `pong` | 双向           | 心跳保活                           |
+| `msg`             | 服务端→客户端 | 在线人数                           |
+| `bullet`          | 双向           | 聊天弹幕                           |
+| `whiteBoard`      | 双向           | 白板数据同步                       |
+| `getwhiteBoard`   | 客户端→服务端 | 获取白板历史                       |
+| `getWhiteBoard`   | 服务端→客户端 | 白板历史数据                       |
+| `over`            | 双向           | 结束消息                           |
+| `live_started`    | 双向           | 教师开播通知（触发学生重连 Janus） |
 
 ### 直播状态
 
-| 状态码 | 含义 |
-|--------|------|
-| 1 | 已创建（未开始） |
-| 2 | 直播中 |
-| 3 | 已结束 |
-| 4 | 暂停 |
+| 状态码 | 含义             |
+| ------ | ---------------- |
+| 1      | 已创建（未开始） |
+| 2      | 直播中           |
+| 3      | 已结束           |
+| 4      | 暂停             |
 
 ## 录制下载
 
@@ -492,48 +494,50 @@ VITE_UPLOAD_PPT_URL=http://192.168.x.x:3001/upload/ppt
 ### 文件格式
 
 Janus 录制文件命名：
+
 - `rec-{id}-video.mjr` — VP8 视频流
 - `rec-{id}-audio.mjr` — Opus 音频流
 - `{id}.nfo` — 元数据 (JSON)
 
 转码后生成：
+
 - `{id}.mp4` — H.264 + AAC (MP4 容器)
 
 ### 环境变量
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `RECORDINGS_DIR` | 宿主机录制目录 | `/home/janus/recordings` |
-| `JANUS_CONTAINER` | Janus 容器名 | `janus-gateway` |
-| `JANUS_PP_REC` | janus-pp-rec 路径 | `/opt/janus/bin/janus-pp-rec` |
-| `BASE_URL` | 服务器地址（上传回调） | `http://localhost:3001` |
+| 变量                | 说明                   | 默认值                          |
+| ------------------- | ---------------------- | ------------------------------- |
+| `RECORDINGS_DIR`  | 宿主机录制目录         | `/home/janus/recordings`      |
+| `JANUS_CONTAINER` | Janus 容器名           | `janus-gateway`               |
+| `JANUS_PP_REC`    | janus-pp-rec 路径      | `/opt/janus/bin/janus-pp-rec` |
+| `BASE_URL`        | 服务器地址（上传回调） | `http://localhost:3001`       |
 
 ## 可用脚本
 
 在项目根目录执行：
 
-| 命令 | 说明 |
-|------|------|
-| `pnpm dev` | 启动所有包的开发模式 |
-| `pnpm dev:desktop` | 仅启动 Electron 桌面端 |
-| `pnpm dev:server` | 仅启动 Nest.js 后端 |
-| `pnpm dev:all` | 同时启动 Server + Desktop |
-| `pnpm build` | 构建所有包 |
-| `pnpm build:desktop` | 仅构建桌面端 |
+| 命令                       | 说明                       |
+| -------------------------- | -------------------------- |
+| `pnpm dev`               | 启动所有包的开发模式       |
+| `pnpm dev:desktop`       | 仅启动 Electron 桌面端     |
+| `pnpm dev:server`        | 仅启动 Nest.js 后端        |
+| `pnpm dev:all`           | 同时启动 Server + Desktop  |
+| `pnpm build`             | 构建所有包                 |
+| `pnpm build:desktop`     | 仅构建桌面端               |
 | `pnpm build:desktop:win` | 构建 + 打包 Windows 安装包 |
-| `pnpm typecheck` | TypeScript 类型检查 |
-| `pnpm lint` | ESLint 代码检查 |
-| `pnpm test` | 运行所有测试 |
-| `pnpm test:desktop` | 运行桌面端测试 |
-| `pnpm format` | Prettier 格式化代码 |
+| `pnpm typecheck`         | TypeScript 类型检查        |
+| `pnpm lint`              | ESLint 代码检查            |
+| `pnpm test`              | 运行所有测试               |
+| `pnpm test:desktop`      | 运行桌面端测试             |
+| `pnpm format`            | Prettier 格式化代码        |
 
 在 `apps/desktop` 目录下：
 
-| 命令 | 说明 |
-|------|------|
-| `pnpm build:win` | 打包 Windows 安装包 |
-| `pnpm build:mac` | 打包 macOS 安装包 |
-| `pnpm build:linux` | 打包 Linux 安装包 |
+| 命令                 | 说明                |
+| -------------------- | ------------------- |
+| `pnpm build:win`   | 打包 Windows 安装包 |
+| `pnpm build:mac`   | 打包 macOS 安装包   |
+| `pnpm build:linux` | 打包 Linux 安装包   |
 
 ## 直播流程
 
@@ -546,13 +550,13 @@ Janus 录制文件命名：
 
 ## Janus 插件
 
-| 插件 | 用途 |
-|------|------|
-| `janus.plugin.videoroom` | 音视频房间（推流/拉流） |
-| `janus.plugin.textroom` | 文字聊天/数据通道 |
-| `janus.plugin.recordplay` | 录制回放 |
-| `janus.plugin.echotest` | 回声测试 |
-| `janus.plugin.streaming` | 流媒体广播 |
+| 插件                        | 用途                    |
+| --------------------------- | ----------------------- |
+| `janus.plugin.videoroom`  | 音视频房间（推流/拉流） |
+| `janus.plugin.textroom`   | 文字聊天/数据通道       |
+| `janus.plugin.recordplay` | 录制回放                |
+| `janus.plugin.echotest`   | 回声测试                |
+| `janus.plugin.streaming`  | 流媒体广播              |
 
 ## 贡献
 
