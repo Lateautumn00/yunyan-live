@@ -211,6 +211,8 @@ ws://<host>:50054?token=<JWT>&roomId=<roomId>&liveUserId=<userId>&nickName=<nick
 - `status`：`ok`（双依赖可用）/ `degraded`（任一不可用）/ `disabled`（持久化未开启，`mq`/`pg` 恒 0）
 - `queueDepth`/`dlqDepth`：MQ 不可用时为 `null`；结果缓存 60s（排障时以 rabbitmqctl 为准）
 
+**阈值告警（日志级，30s 轮询）**：`[ChatWS][DLQ] depth=N`（DLQ>0 即告警，N>100 追加 `level=critical`）；`[ChatWS][QUEUE] work=N`（>10,000 告警，>100,000 追加 `level=critical`）。配套结构化 tag：`[ChatWS][MQ] publish_failed dropped_total=N`、`state=disconnected/reconnected`、`[ChatWS][PG] insert_failed retry=N`、`poison_row msg_id=…`。
+
 ## 断开
 
 - `close 4001` + reason：token 缺失/无效，或会话过期

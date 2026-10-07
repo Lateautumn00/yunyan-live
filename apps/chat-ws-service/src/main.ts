@@ -19,6 +19,7 @@ import { buildBullet, sanitizeName } from './bullet';
 import { loadPersistenceConfig, requireDatabaseUrl, requireRabbitUrl } from './config';
 import { createPublisher, type Publisher } from './queue';
 import { createConsumer, type ConsumerHandle } from './persist';
+import { startDepthMonitor } from './monitor';
 import { createHistoryStore, decodeCursor, type HistoryStore } from './history';
 
 dotenv.config();
@@ -58,6 +59,7 @@ let pool: Pool | null = null;
 let publisher: Publisher | null = null;
 let consumer: ConsumerHandle | null = null;
 let historyStore: HistoryStore | null = null;
+let stopDepthMonitor: (() => void) | null = null;
 
 if (persistence.enabled) {
   pool = new Pool({ connectionString: requireDatabaseUrl(), max: 5 });
@@ -67,6 +69,9 @@ if (persistence.enabled) {
   historyStore = createHistoryStore(pool, persistence.historyTimeoutMs);
   publisher = createPublisher(requireRabbitUrl());
   consumer = createConsumer(requireRabbitUrl(), pool);
+  stopDepthMonitor = startDepthMonitor({
+    depths: () => consumer?.depths() ?? Promise.resolve(null)
+  });
   console.log('[ChatWS] persistence: enabled');
 } else {
   console.error(
@@ -477,6 +482,7 @@ server.listen(port, '0.0.0.0', () => {
 process.on('SIGTERM', () => {
   console.log('[ChatWS] Shutting down...');
   wss.clients.forEach(client => client.close(1001, 'Server shutting down'));
+  stopDepthMonitor?.();
   void (async () => {
     try {
       await consumer?.stop(); // cancel → 等在途批 → 关连接

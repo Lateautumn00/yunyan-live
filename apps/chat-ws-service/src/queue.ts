@@ -48,6 +48,7 @@ export function createPublisher(url: string, deps: PublisherDeps = {}): Publishe
   let channel: amqp.ConfirmChannel | null = null;
   let closed = false;
   let attempt = 0;
+  let everDisconnected = false;
   let reconnectTimer: NodeJS.Timeout | null = null;
   const stats: PublisherStats = { dropped: 0, droppedWindow: 0, returned: 0 };
 
@@ -91,6 +92,7 @@ export function createPublisher(url: string, deps: PublisherDeps = {}): Publishe
       c.on('close', () => {
         if (closed) return;
         console.error('[ChatWS][MQ] state=disconnected');
+        everDisconnected = true;
         channel = null;
         conn = null;
         scheduleReconnect();
@@ -107,7 +109,9 @@ export function createPublisher(url: string, deps: PublisherDeps = {}): Publishe
       conn = c;
       channel = ch;
       attempt = 0;
-      console.log('[ChatWS][MQ] state=connected');
+      console.log(
+        everDisconnected ? '[ChatWS][MQ] state=reconnected' : '[ChatWS][MQ] state=connected'
+      );
     } catch (err) {
       console.error(`[ChatWS][MQ] state=connect_failed: ${errorMessage(err)}`);
       scheduleReconnect();

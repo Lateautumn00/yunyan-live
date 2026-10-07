@@ -208,13 +208,15 @@ describe('createPublisher（方案 §4.2 发布契约：永不阻断广播）', 
     expect(p.isReady()).toBe(false);
   });
 
-  it('连接 close 事件 → 标记断开并按退避重连', async () => {
+  it('连接 close 事件 → 标记断开并按退避重连（重连成功日志 state=reconnected）', async () => {
     const p = await ready();
     expect(p.isReady()).toBe(true);
+    expect(console.log).toHaveBeenCalledWith('[ChatWS][MQ] state=connected');
     conn.handlers.get('close')!();
     expect(p.isReady()).toBe(false);
     await vi.advanceTimersByTimeAsync(1000);
     expect(p.isReady()).toBe(true);
+    expect(console.log).toHaveBeenCalledWith('[ChatWS][MQ] state=reconnected');
     await p.close();
   });
 });
