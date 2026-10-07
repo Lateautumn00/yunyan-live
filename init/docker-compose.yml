@@ -22,8 +22,11 @@
     image: redis:7-alpine
     container_name: edu-live-redis
     restart: unless-stopped
+    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy noeviction
     ports:
       - '6379:6379'
+    volumes:
+      - redisdata:/data
 
   rabbitmq:
     image: rabbitmq:4.3.6-management-alpine
@@ -72,4 +75,5 @@
 volumes:
   pgdata:
   rabbitmqdata:
+  redisdata:
   janus-logs:
