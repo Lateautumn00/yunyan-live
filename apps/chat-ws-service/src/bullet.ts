@@ -12,6 +12,27 @@ export interface BulletContext {
   isTeacher: boolean;
   /** 房间禁言态：0=禁言 1=可发言；undefined=未知（fail-open 放行，与 readForbid 一致） */
   forbid?: number;
+  /** 服务端注入的消息 UUID（main 传 randomUUID；客户端伪造被覆盖） */
+  msgId: string;
+  /** JWT sub（users.id UUID），落库 sender_id */
+  senderId: string;
+}
+
+/**
+ * 落库行输入（publisher 序列化为队列消息体，consumer 反序列化后批插）。
+ * 字段与 chat_messages 列一一对应；mentions=null 表示"无此字段"（列存 NULL）。
+ */
+export interface PersistRowInput {
+  msgId: string;
+  roomId: string;
+  senderId: string;
+  senderName: string;
+  isTeacher: boolean;
+  content: string;
+  msgType: number;
+  mentions: MentionTarget[] | null;
+  extra: { liveUserId: string; infoType?: number };
+  createdAtMs: number;
 }
 
 /**
@@ -24,6 +45,11 @@ export interface BuildBulletResult {
   payload?: string;
   /** ok=false 时为拒发原因 */
   reason?: BulletRejectReason;
+  /**
+   * ok=true 时的落库行输入。
+   * 白板早退标记消息（liveMsg.info.host 存在，客户端不渲染）不产出 entry（不入队不落库）。
+   */
+  entry?: PersistRowInput;
 }
 
 /** 昵称清洗：仅接受 string，剔除控制字符，截断至 MAX_NAME_LENGTH */
@@ -110,6 +136,7 @@ export function buildBullet(raw: string, ctx: BulletContext): BuildBulletResult 
   const rebuilt = {
     type: 'bullet',
     data: {
+      msgId: ctx.msgId,
       liveMsg: {
         msg: text.slice(0, CHAT_LIMITS.MAX_MESSAGE_LENGTH),
         roomId: ctx.roomId,
@@ -125,5 +152,24 @@ export function buildBullet(raw: string, ctx: BulletContext): BuildBulletResult 
       }
     }
   };
-  return { ok: true, payload: JSON.stringify(rebuilt) };
+  const content = text.slice(0, CHAT_LIMITS.MAX_MESSAGE_LENGTH);
+  const hasHostMarker = liveMsg?.info !== undefined && liveMsg?.info?.host !== undefined;
+  const entry: PersistRowInput | undefined = hasHostMarker
+    ? undefined
+    : {
+        msgId: ctx.msgId,
+        roomId: ctx.roomId,
+        senderId: ctx.senderId,
+        senderName: name,
+        isTeacher: ctx.isTeacher,
+        content,
+        msgType: payloadInfoType ?? 1,
+        mentions: mentions.length > 0 ? mentions : null,
+        extra: {
+          liveUserId,
+          ...(payloadInfoType !== undefined ? { infoType: payloadInfoType } : {})
+        },
+        createdAtMs: rebuilt.data.liveMsg.time
+      };
+  return { ok: true, payload: JSON.stringify(rebuilt), entry };
 }

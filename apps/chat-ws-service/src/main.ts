@@ -1,10 +1,12 @@
 import Koa from 'koa';
 import http from 'http';
+import { randomUUID } from 'crypto';
 import { WebSocket, WebSocketServer } from 'ws';
 import { URL } from 'url';
 import Redis from 'ioredis';
 import dotenv from 'dotenv';
-import { WsClose, type BulletRejectReason } from '@yunyan-live/types';
+import { Pool } from 'pg';
+import { WsClose, CHAT_HISTORY_PAGE_SIZE, type BulletRejectReason } from '@yunyan-live/types';
 import {
   requireJwtSecret,
   subscribeForbid,
@@ -14,6 +16,10 @@ import {
   verifyToken
 } from '@yunyan-live/nest-shared';
 import { buildBullet, sanitizeName } from './bullet';
+import { loadPersistenceConfig, requireDatabaseUrl, requireRabbitUrl } from './config';
+import { createPublisher, type Publisher } from './queue';
+import { createConsumer, type ConsumerHandle } from './persist';
+import { createHistoryStore, decodeCursor, type HistoryStore } from './history';
 
 dotenv.config();
 
@@ -26,11 +32,14 @@ interface WsClient {
   sid?: string;
   /** JWT 重建的权威角色（payload.role === 1 为教师） */
   isTeacher: boolean;
+  /** 令牌桶（方案 §4.6：5 条/s、容量 10，仅计 bullet） */
+  tokens: number;
+  lastRefill: number;
 }
 
 interface LiveMessage {
   type: string;
-  data?: Record<string, unknown>;
+  data?: object;
   /** 拒发回执（bullet_rejected）原因 */
   reason?: BulletRejectReason;
 }
@@ -42,6 +51,47 @@ const whiteboardStates = new Map<string, string>();
 const roomForbid = new Map<string, number>();
 
 const JWT_SECRET = requireJwtSecret();
+
+// —— 持久化（方案 §4.7：单布尔开关、同启同停；半配置 = 配置错误按关闭处理） ——
+const persistence = loadPersistenceConfig();
+let pool: Pool | null = null;
+let publisher: Publisher | null = null;
+let consumer: ConsumerHandle | null = null;
+let historyStore: HistoryStore | null = null;
+
+if (persistence.enabled) {
+  pool = new Pool({ connectionString: requireDatabaseUrl(), max: 5 });
+  pool.on('error', err => {
+    console.error('[ChatWS][PG] pool error:', err instanceof Error ? err.message : String(err));
+  });
+  historyStore = createHistoryStore(pool, persistence.historyTimeoutMs);
+  publisher = createPublisher(requireRabbitUrl());
+  consumer = createConsumer(requireRabbitUrl(), pool);
+  console.log('[ChatWS] persistence: enabled');
+} else {
+  console.error(
+    `[ChatWS] persistence: disabled (${persistence.disabledReason})` +
+      (persistence.disabledReason === 'half_configured'
+        ? ' — DATABASE_URL and RABBITMQ_URL must both be set'
+        : '')
+  );
+}
+
+/** 令牌桶：5 条/s、容量 10（突发后匀速）；仅 bullet 计数 */
+const BULLET_RATE_PER_MS = 5 / 1000;
+const BULLET_BURST = 10;
+
+function allowBullet(client: WsClient, at = Date.now()): boolean {
+  const elapsed = Math.max(0, at - client.lastRefill);
+  client.tokens = Math.min(BULLET_BURST, client.tokens + elapsed * BULLET_RATE_PER_MS);
+  client.lastRefill = at;
+  if (client.tokens < 1) return false;
+  client.tokens -= 1;
+  return true;
+}
+
+/** 连接级 getHistory 单飞（并发重复静默忽略，不回帧） */
+const historyInflight = new WeakSet<WebSocket>();
 
 const redis = new Redis({
   host: process.env.REDIS_HOST || '127.0.0.1',
@@ -137,7 +187,9 @@ function registerClient(
     roomId,
     authUserId,
     sid,
-    isTeacher
+    isTeacher,
+    tokens: BULLET_BURST,
+    lastRefill: Date.now()
   });
   return clientId;
 }
@@ -176,15 +228,59 @@ function handleMessage(client: WebSocket, raw: string) {
           sendTo(client, { type: 'bullet_rejected', reason: 'not_joined' });
           break;
         }
+        if (!allowBullet(sender)) {
+          sendTo(client, { type: 'bullet_rejected', reason: 'rate_limited' });
+          break;
+        }
         const result = buildBullet(raw, {
           roomId,
           nickName: sender.nickName,
           liveUserId: sender.userId,
           isTeacher: sender.isTeacher,
-          forbid: roomForbid.get(roomId)
+          forbid: roomForbid.get(roomId),
+          msgId: randomUUID(),
+          senderId: sender.authUserId ?? ''
         });
-        if (result.ok) broadcast(roomId, result.payload);
-        else sendTo(client, { type: 'bullet_rejected', reason: result.reason });
+        if (result.ok) {
+          // ① 先入持久化链路（fire-forget，confirm 异步，永不阻断广播）
+          if (publisher && result.entry) publisher.publish(result.entry);
+          // ② 再广播（行为与现状一致）
+          broadcast(roomId, result.payload);
+        } else sendTo(client, { type: 'bullet_rejected', reason: result.reason });
+        break;
+      }
+      case 'getHistory': {
+        if (!sender) break;
+        if (!persistence.enabled || !historyStore) {
+          sendTo(client, { type: 'historyError', data: { reason: 'persistence_disabled' } });
+          break;
+        }
+        if (historyInflight.has(client)) break; // 单飞：并发重复静默忽略
+        historyInflight.add(client);
+        const rawCursor = (msg.data as { cursor?: unknown } | undefined)?.cursor;
+        const cursor = rawCursor === undefined ? null : decodeCursor(rawCursor);
+        if (rawCursor !== undefined && cursor === null) {
+          historyInflight.delete(client);
+          sendTo(client, { type: 'historyError', data: { reason: 'invalid_cursor' } });
+          break;
+        }
+        historyStore
+          .page(roomId, cursor, CHAT_HISTORY_PAGE_SIZE)
+          .then(page => {
+            if (client.readyState === WebSocket.OPEN) {
+              sendTo(client, { type: 'historyPage', data: page });
+            }
+          })
+          .catch((err: unknown) => {
+            console.error(
+              '[ChatWS][PG] history_page_failed:',
+              err instanceof Error ? err.message : String(err)
+            );
+            if (client.readyState === WebSocket.OPEN) {
+              sendTo(client, { type: 'historyError', data: { reason: 'unavailable' } });
+            }
+          })
+          .finally(() => historyInflight.delete(client));
         break;
       }
       case 'whiteBoard': {
@@ -258,6 +354,10 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
   if (connection.readyState !== WebSocket.OPEN) return;
 
   const roomId = url.searchParams.get('roomId') || 'default';
+  if (roomId.length < 1 || roomId.length > 50) {
+    connection.close(WsClose.UNAUTHORIZED, 'Invalid roomId');
+    return;
+  }
   const userId = url.searchParams.get('liveUserId') || 'anonymous';
   const nickName = sanitizeName(url.searchParams.get('nickName') || '');
 
@@ -278,6 +378,14 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
     type: 'msg',
     data: { liveMsg: { liveNums: rooms.get(roomId)!.size, forbid } }
   });
+
+  // 进场历史（方案 §4.5：最近 50 条 ASC 推 history 帧；失败不推帧——严禁空 history 覆盖前端状态）
+  if (historyStore) {
+    const page = await historyStore.recent(roomId, CHAT_HISTORY_PAGE_SIZE);
+    if (page && connection.readyState === WebSocket.OPEN) {
+      sendTo(connection, { type: 'history', data: page });
+    }
+  }
 
   console.log(`[ChatWS] Connected: roomId=${roomId}, userId=${userId}, id=${clientId}`);
 
@@ -306,6 +414,52 @@ const server = http.createServer(app.callback());
 // 单条帧上限 256KB：正常弹幕/白板帧远小于此值，防巨帧耗尽内存（默认 100MB）
 const wss = new WebSocketServer({ server, maxPayload: 256 * 1024 });
 
+// /healthz 早于 catch-all（方案 §4.7：mq+pg 双探活、60s 缓存、深度 passive 查询）
+let healthCache: { at: number; body: Record<string, unknown> } | null = null;
+
+async function healthzBody(): Promise<Record<string, unknown>> {
+  if (!persistence.enabled) {
+    return { status: 'disabled', mq: 0, pg: 0, queueDepth: null, dlqDepth: null };
+  }
+  if (healthCache && Date.now() - healthCache.at < 60_000) return healthCache.body;
+  const mq = publisher?.isReady() ? 1 : 0;
+  let pg = 0;
+  const probe = pool!.query('SELECT 1');
+  let probeTimer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      probe,
+      new Promise((_, reject) => {
+        probeTimer = setTimeout(() => reject(new Error('pg probe timeout')), 1000);
+      })
+    ]);
+    pg = 1;
+  } catch {
+    // 保持 0
+  } finally {
+    clearTimeout(probeTimer);
+    probe.catch(() => undefined); // race 先超时后查询才 reject → 防 unhandled
+  }
+  const depths = consumer ? await consumer.depths() : null;
+  const body: Record<string, unknown> = {
+    status: mq && pg ? 'ok' : 'degraded',
+    mq,
+    pg,
+    queueDepth: depths?.work ?? null,
+    dlqDepth: depths?.dlq ?? null
+  };
+  healthCache = { at: Date.now(), body };
+  return body;
+}
+
+app.use(async (ctx, next) => {
+  if (ctx.path === '/healthz') {
+    ctx.body = await healthzBody();
+    return;
+  }
+  await next();
+});
+
 app.use(async ctx => {
   ctx.body = { status: 'ok', service: 'chat-ws' };
 });
@@ -322,5 +476,25 @@ server.listen(port, '0.0.0.0', () => {
 process.on('SIGTERM', () => {
   console.log('[ChatWS] Shutting down...');
   wss.clients.forEach(client => client.close(1001, 'Server shutting down'));
-  server.close(() => process.exit(0));
+  void (async () => {
+    try {
+      await consumer?.stop(); // cancel → 等在途批 → 关连接
+    } catch (err) {
+      console.error('[ChatWS] consumer stop error:', err);
+    }
+    try {
+      await publisher?.close();
+    } catch (err) {
+      console.error('[ChatWS] publisher close error:', err);
+    }
+    try {
+      await pool?.end();
+    } catch (err) {
+      console.error('[ChatWS] pool end error:', err);
+    }
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 5000).unref?.();
+  })();
 });
+
+export { server, wss };

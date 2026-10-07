@@ -16,13 +16,15 @@ function ctx(overrides: Partial<BulletContext> = {}): BulletContext {
     nickName: '连接昵称',
     liveUserId: 'u1',
     isTeacher: false,
+    msgId: '00000000-0000-4000-8000-000000000001',
+    senderId: 's1',
     ...overrides
   };
 }
 
 function parsed(result: ReturnType<typeof buildBullet>): {
   type?: string;
-  data?: { liveMsg?: Record<string, unknown>; info?: Record<string, unknown> };
+  data?: { liveMsg?: Record<string, unknown>; info?: Record<string, unknown>; msgId?: string };
 } {
   if (!result.ok) throw new Error(`expected ok, got ${result.reason}`);
   return JSON.parse(result.payload);
@@ -216,7 +218,7 @@ describe('buildBullet 信封形状与时间戳', () => {
     const out = parsed(buildBullet(liveMsg({ msg: 'hi' }), ctx()));
     expect(Object.keys(out)).toEqual(['type', 'data']);
     expect(out.type).toBe('bullet');
-    expect(Object.keys(out.data ?? {}).sort()).toEqual(['info', 'liveMsg']);
+    expect(Object.keys(out.data ?? {}).sort()).toEqual(['info', 'liveMsg', 'msgId']);
     expect(Object.keys(out.data?.liveMsg ?? {})).toEqual(['msg', 'roomId', 'name', 'time']);
   });
 
@@ -244,5 +246,53 @@ describe('buildBullet 信封形状与时间戳', () => {
     const raw = JSON.stringify({ type: 'bullet', data: { liveMsg: { msg: 'hi' } } });
     const out = parsed(buildBullet(raw, ctx()));
     expect('type' in (out.data?.info ?? {})).toBe(false);
+  });
+});
+
+describe('buildBullet 持久化行（方案 §4.1）', () => {
+  it('data.msgId 注入为连接期权威值', () => {
+    const out = parsed(buildBullet(liveMsg({ msg: 'hi' }), ctx({ msgId: 'mid-1' })));
+    expect(out.data?.msgId).toBe('mid-1');
+  });
+
+  it('客户端伪造 msgId 被连接期权威值覆盖', () => {
+    const raw = rawBullet({ liveMsg: { msg: 'hi' }, msgId: 'forged' });
+    const out = parsed(buildBullet(raw, ctx({ msgId: 'mid-2' })));
+    expect(out.data?.msgId).toBe('mid-2');
+  });
+
+  it('entry 字段齐全：msgId/senderId/extra 结构/createdAtMs 与信封 time 一致', () => {
+    const result = buildBullet(
+      rawBullet({ liveMsg: { msg: 'hi', mentions: [{ userId: 'u2', userName: '小明' }] } }),
+      ctx({ msgId: 'mid-3', senderId: 's3', liveUserId: 'u7' })
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !result.entry) throw new Error('expected entry');
+    const entry = result.entry;
+    expect(entry.msgId).toBe('mid-3');
+    expect(entry.senderId).toBe('s3');
+    expect(entry.roomId).toBe('r1');
+    expect(entry.content).toBe('hi');
+    expect(entry.msgType).toBe(1);
+    expect(entry.mentions).toEqual([{ userId: 'u2', userName: '小明' }]);
+    expect(entry.extra).toEqual({ liveUserId: 'u7' });
+    const envelope = parsed(result);
+    expect(entry.createdAtMs).toBe(envelope.data?.liveMsg?.time as number);
+  });
+
+  it('白板 host 标记消息不落库（entry undefined），但照常广播', () => {
+    const result = buildBullet(
+      rawBullet({ liveMsg: { msg: '{"ops":[]}', info: { host: 'stage' } } }),
+      ctx({ msgId: 'mid-4' })
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected ok');
+    expect(result.entry).toBeUndefined();
+    expect(JSON.parse(result.payload).data.liveMsg.info).toEqual({ host: 'stage' });
+  });
+
+  it('拒发时无 payload 也无 entry（result.ok=false 即终点）', () => {
+    const result = buildBullet(liveMsg({ msg: 'hi' }), ctx({ forbid: 0 }));
+    expect(result).toEqual({ ok: false, reason: 'forbidden' });
   });
 });
