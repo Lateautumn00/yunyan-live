@@ -22,6 +22,20 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   pluginVue.configs['flat/recommended'],
   {
+    // 格式化归 prettier 管：关闭与 prettier 输出冲突的 vue 风格规则
+    // （max-attributes-per-line / singleline-html-element-content-newline /
+    //   html-self-closing / html-closing-bracket-newline / html-indent /
+    //   multiline-html-element-content-newline）
+    rules: {
+      'vue/max-attributes-per-line': 'off',
+      'vue/singleline-html-element-content-newline': 'off',
+      'vue/html-self-closing': 'off',
+      'vue/html-closing-bracket-newline': 'off',
+      'vue/html-indent': 'off',
+      'vue/multiline-html-element-content-newline': 'off'
+    }
+  },
+  {
     files: ['**/*.vue'],
     languageOptions: {
       parserOptions: {
