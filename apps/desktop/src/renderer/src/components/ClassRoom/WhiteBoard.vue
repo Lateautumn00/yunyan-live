@@ -771,15 +771,6 @@ function editTextShape(id: string) {
     if (!before) return;
     if (!applyShapeUpdate(id, { text: val }, before)) return;
     refreshLayer();
-    redoStack.value = [];
-    undoStack.value.push({
-      type: 'updateShape',
-      pageId: provider!.getCurrentPageId(),
-      pageIndex: renderer!.getCurrentPageIndex(),
-      shapeId: id,
-      before,
-      after: { text: val }
-    });
   };
   ta.addEventListener('blur', finish);
   ta.addEventListener('keydown', ke => {
@@ -811,15 +802,6 @@ function commitShapeMove(id: string, x: number, y: number) {
     return;
   }
   refreshLayer();
-  redoStack.value = [];
-  undoStack.value.push({
-    type: 'updateShape',
-    pageId: provider.getCurrentPageId(),
-    pageIndex: renderer.getCurrentPageIndex(),
-    shapeId: id,
-    before,
-    after: { x, y }
-  });
 }
 
 // 写入目标键并清理「对侧」独有的旧形态字段（圆↔椭圆的 radius/radiusX 互斥），
@@ -829,10 +811,18 @@ function applyShapeUpdate(
   target: Record<string, any>,
   other: Record<string, any>
 ): boolean {
-  if (!provider || !provider.updateElement(id, target)) return false;
-  const stale = Object.keys(other).filter(k => !(k in target));
-  if (stale.length) provider.deleteElementKeys(id, stale);
-  return true;
+  if (!provider) return false;
+  // 写字段与清残留键必须同事务：D5 下 Y.UndoManager 逐事务成项，
+  // 拆开会把「圆形转椭圆」一次提交拆成两档撤销（互斥字段还原不完整）
+  const p = provider;
+  let ok = false;
+  p.doc.transact(() => {
+    ok = p.updateElement(id, target);
+    if (!ok) return;
+    const stale = Object.keys(other).filter(k => !(k in target));
+    if (stale.length) p.deleteElementKeys(id, stale);
+  });
+  return ok;
 }
 
 // 选中图形的属性回改：写回 + 键集差清理 + 入 undo 栈（与提交/撤销/重做同一机制）。
@@ -849,15 +839,6 @@ function commitSelectedStyle(patch: Record<string, any>, snapshotKeys?: string[]
   if (keys.length && keys.every(k => before[k] === patch[k])) return;
   if (!applyShapeUpdate(id, patch, before)) return;
   refreshLayer();
-  redoStack.value = [];
-  undoStack.value.push({
-    type: 'updateShape',
-    pageId: provider.getCurrentPageId(),
-    pageIndex: renderer.getCurrentPageIndex(),
-    shapeId: id,
-    before,
-    after: { ...patch }
-  });
 }
 
 // 粗细条当前作用对象：绘制文本模式，或选中的是文本图形 → 字号；否则线宽
@@ -888,15 +869,6 @@ function commitShapeTransform(id: string, attrs: Record<string, any>) {
     return;
   }
   refreshLayer();
-  redoStack.value = [];
-  undoStack.value.push({
-    type: 'updateShape',
-    pageId: provider.getCurrentPageId(),
-    pageIndex: renderer.getCurrentPageIndex(),
-    shapeId: id,
-    before,
-    after: { ...attrs }
-  });
 }
 
 function deleteSelected() {
@@ -914,14 +886,6 @@ function deleteSelected() {
   if (index < 0) return;
   clearSelection();
   refreshLayer();
-  redoStack.value = [];
-  undoStack.value.push({
-    type: 'removeShape',
-    pageId: provider.getCurrentPageId(),
-    pageIndex: renderer.getCurrentPageIndex(),
-    shapeData,
-    index
-  });
 }
 
 // --- Drawing state ---
@@ -1007,13 +971,6 @@ function onPointerDown(e: any) {
           };
           provider?.addShape(shapeData);
           refreshLayer();
-          redoStack.value = [];
-          undoStack.value.push({
-            type: 'addShape',
-            pageId: provider!.getCurrentPageId(),
-            pageIndex: renderer!.getCurrentPageIndex(),
-            shapeData
-          });
         }
         textarea.remove();
       };
@@ -1116,7 +1073,6 @@ function onPointerUp(e: any) {
   renderer!.previewLayer.batchDraw();
   const m = mode.value;
 
-  if (m !== 'move') redoStack.value = [];
   // 同步尚未完成时 pages 可能未播种，否则 addShape 静默丢弃；与图片添加一致先兜底建页
   if (
     provider &&
@@ -1144,12 +1100,6 @@ function onPointerUp(e: any) {
     provider?.addShape(shapeData);
     currentPath = [];
     refreshLayer();
-    undoStack.value.push({
-      type: 'addShape',
-      pageId: provider!.getCurrentPageId(),
-      pageIndex: renderer!.getCurrentPageIndex(),
-      shapeData
-    });
   } else if (m === 'circle' && startPos && pos) {
     const layerStart = toLayerCoords(startPos);
     const layerEnd = toLayerCoords(pos);
@@ -1174,12 +1124,6 @@ function onPointerUp(e: any) {
       };
       provider?.addShape(shapeData);
       refreshLayer();
-      undoStack.value.push({
-        type: 'addShape',
-        pageId: provider!.getCurrentPageId(),
-        pageIndex: renderer!.getCurrentPageIndex(),
-        shapeData
-      });
     }
   } else if (m === 'line' && startPos && pos) {
     const layerStart = toLayerCoords(startPos);
@@ -1203,12 +1147,6 @@ function onPointerUp(e: any) {
       };
       provider?.addShape(shapeData);
       refreshLayer();
-      undoStack.value.push({
-        type: 'addShape',
-        pageId: provider!.getCurrentPageId(),
-        pageIndex: renderer!.getCurrentPageIndex(),
-        shapeData
-      });
     }
   } else if (m === 'rectangle' && startPos && pos) {
     const layerStart = toLayerCoords(startPos);
@@ -1230,12 +1168,6 @@ function onPointerUp(e: any) {
       };
       provider?.addShape(shapeData);
       refreshLayer();
-      undoStack.value.push({
-        type: 'addShape',
-        pageId: provider!.getCurrentPageId(),
-        pageIndex: renderer!.getCurrentPageIndex(),
-        shapeData
-      });
     }
   } else if (m === 'arrows' && startPos && pos) {
     const layerStart = toLayerCoords(startPos);
@@ -1253,12 +1185,6 @@ function onPointerUp(e: any) {
       };
       provider?.addShape(shapeData);
       refreshLayer();
-      undoStack.value.push({
-        type: 'addShape',
-        pageId: provider!.getCurrentPageId(),
-        pageIndex: renderer!.getCurrentPageIndex(),
-        shapeData
-      });
     }
   }
   startPos = null;
@@ -1354,19 +1280,8 @@ function refreshLayer() {
 }
 
 // --- Undo/Redo ---
-interface UndoAction {
-  type: 'addShape' | 'addPage' | 'updateShape' | 'removeShape';
-  pageId: string;
-  pageIndex: number;
-  shapeData?: Record<string, any>;
-  shapeId?: string;
-  before?: Record<string, any>;
-  after?: Record<string, any>;
-  index?: number;
-}
-const undoStack = ref<UndoAction[]>([]);
-const redoStack = ref<UndoAction[]>([]);
-
+// D5：撤销/重做由 Y.UndoManager（provider.undoManager）接管——板书事务自动入栈
+// （captureTransaction 白名单：pages 及各页 elements），此处只负责 toast 与跳页
 function ensurePageIndex(targetIndex: number) {
   if (!renderer) return;
   if (renderer.getCurrentPageIndex() !== targetIndex) {
@@ -1381,66 +1296,42 @@ function ensurePageIndex(targetIndex: number) {
 
 function revocation(type: string) {
   if (!props.isTeacher) return;
-  if (!renderer) return;
+  if (!renderer || !provider) return;
   if (type === 'pre') {
-    const action = undoStack.value.pop();
-    if (!action) {
+    const item = provider.undo();
+    if (!item) {
       toast('没有更多撤销');
       return;
     }
-    if (action.type === 'addShape') {
-      ensurePageIndex(action.pageIndex);
-      provider?.removeLastElement();
-      refreshLayer();
-    } else if (action.type === 'addPage') {
-      provider?.removePage(action.pageIndex);
-      const newIdx = Math.min(action.pageIndex, renderer.getPageCount() - 1);
-      ensurePageIndex(newIdx);
-      layerIndex.value = renderer.getPageCount();
-      refreshLayer();
-    } else if (action.type === 'updateShape') {
-      ensurePageIndex(action.pageIndex);
-      applyShapeUpdate(action.shapeId!, action.before!, action.after!);
-      refreshLayer();
-    } else if (action.type === 'removeShape') {
-      ensurePageIndex(action.pageIndex);
-      provider?.insertElement(action.index!, action.shapeData!);
-      refreshLayer();
-    }
-    redoStack.value.push(action);
+    jumpToUndoMeta(item);
   } else {
-    const action = redoStack.value.pop();
-    if (!action) {
+    const item = provider.redo();
+    if (!item) {
       toast('没有更多重做');
       return;
     }
-    if (action.type === 'addShape') {
-      ensurePageIndex(action.pageIndex);
-      provider?.addShape(action.shapeData!);
-      refreshLayer();
-    } else if (action.type === 'addPage') {
-      provider?.addPage();
-    } else if (action.type === 'updateShape') {
-      ensurePageIndex(action.pageIndex);
-      applyShapeUpdate(action.shapeId!, action.after!, action.before!);
-      refreshLayer();
-    } else if (action.type === 'removeShape') {
-      ensurePageIndex(action.pageIndex);
-      const idx = provider?.removeElement(action.shapeData!.id) ?? -1;
-      if (idx >= 0) action.index = idx;
-      refreshLayer();
-    }
-    undoStack.value.push(action);
+    jumpToUndoMeta(item);
   }
 }
+
+// 撤销/重做后按栈项 meta 跳回操作发生页（meta 由 provider 在 stack-item-added 记录）；
+// 跨页删除后页数已变，按当前页数夹取
+function jumpToUndoMeta(item: { meta: Map<unknown, unknown> }) {
+  const idx = item.meta.get('pageIndex');
+  if (typeof idx === 'number') {
+    ensurePageIndex(Math.min(idx, Math.max(0, renderer!.getPageCount() - 1)));
+  }
+  refreshLayer();
+}
+
 function layerClear() {
   // 学生端守卫：直接操作 Yjs elements，绕过 provider，必须在此拦截
   if (!props.isTeacher) return;
   renderer?.clearCurrentPage();
   const activeEls = provider?.getActiveElements();
   if (activeEls) activeEls.delete(0, activeEls.length);
-  undoStack.value = [];
-  redoStack.value = [];
+  // 与旧栈一致：清空画布后无撤销/重做可言
+  provider?.clearUndoStack();
 }
 
 // --- Zoom ---
@@ -1501,9 +1392,7 @@ function importZoom() {
 
 // --- Pages ---
 function addLayer() {
-  const pageId = provider?.addPage() || uid('local_');
-  redoStack.value = [];
-  undoStack.value.push({ type: 'addPage', pageId, pageIndex: provider!.getCurrentPageIndex() });
+  provider?.addPage();
 }
 
 function showLayer(index: number) {
@@ -1514,7 +1403,8 @@ function showLayer(index: number) {
   curLayerIndex.value = index;
   provider?.setCurrentPageIndex(index - 1);
   refreshLayer();
-  redoStack.value = [];
+  // 与旧栈一致：手动翻页清空重做栈（只清 redo，不清 undo）
+  provider?.undoManager.clear(false, true);
   const newElements = provider?.getActiveElements();
   if (newElements) bindElementsObserver(newElements);
   zoomLevel.value = renderer.getZoom();
@@ -1917,13 +1807,6 @@ async function uploadImage(file: File) {
       }
       provider?.addShape(shapeData);
       refreshLayer();
-      redoStack.value = [];
-      undoStack.value.push({
-        type: 'addShape',
-        pageId: provider!.getCurrentPageId(),
-        pageIndex: renderer!.getCurrentPageIndex(),
-        shapeData
-      });
       toast('图片已添加');
     } else {
       toast('上传失败');

@@ -14,6 +14,7 @@ export class YjsProvider {
   currentPageIndex: Y.Map<number>;
   fileList: Y.Array<Y.Map<any>>;
   viewportOffset: Y.Map<any>;
+  undoManager: Y.UndoManager;
   readOnly: boolean;
 
   constructor(
@@ -31,6 +32,26 @@ export class YjsProvider {
     this.currentPageIndex = this.doc.getMap('currentPageIndex');
     this.fileList = this.doc.getArray('fileList');
     this.viewportOffset = this.doc.getMap('viewportOffset');
+
+    // D5：板书撤销统一走 Y.UndoManager。scope=doc，靠 captureTransaction 白名单收窄到
+    // 「pages 及其子孙（各页 elements）」——视口/工具态/翻页/课件登记的辅助写入不入栈；
+    // captureTimeout=0 逐事务独立成项（与旧手写栈「每笔一档」一致，不按 500ms 合并）；
+    // trackedOrigins 默认 {null} 只捕获本地写入，远端同步（origin=provider 实例）不入栈
+    this.undoManager = new Y.UndoManager(this.doc, {
+      captureTimeout: 0,
+      captureTransaction: tr => {
+        for (const t of tr.changedParentTypes.keys()) {
+          if (t === this.pages) return true;
+        }
+        return false;
+      }
+    });
+    // 记录操作发生页：undo/redo 后 UI 据此跳页；栈项在栈间移动时保留首次记录
+    this.undoManager.on('stack-item-added', ({ stackItem }) => {
+      if (!stackItem.meta.has('pageIndex')) {
+        stackItem.meta.set('pageIndex', this.getCurrentPageIndex());
+      }
+    });
 
     // 只读端不写初始工具状态：否则学生入会会用默认值覆盖教师正在使用的颜色/粗细
     if (!this.readOnly) {
@@ -68,6 +89,7 @@ export class YjsProvider {
     // `sync` is the typed event (ObservableV2). First change is always false→true.
     this.provider.once('sync', () => {
       if (!this.readOnly && this.pages.length === 0) {
+        // origin=this：默认页为系统行为，不进撤销栈（trackedOrigins 只认 null）
         this.doc.transact(() => {
           const page = new Y.Map();
           page.set('id', uid('page_'));
@@ -76,7 +98,7 @@ export class YjsProvider {
           page.set('elements', new Y.Array());
           this.pages.push([page]);
           this.currentPageIndex.set('index', 0);
-        });
+        }, this);
       }
     });
 
@@ -218,6 +240,20 @@ export class YjsProvider {
     };
   }
 
+  undo() {
+    if (this.readOnly) return null;
+    return this.undoManager.undo();
+  }
+
+  redo() {
+    if (this.readOnly) return null;
+    return this.undoManager.redo();
+  }
+
+  clearUndoStack(): void {
+    this.undoManager.clear();
+  }
+
   addShape(shapeData: any) {
     if (this.readOnly) return;
     const elements = this.getActiveElements();
@@ -352,6 +388,7 @@ export class YjsProvider {
     this.awareness.setLocalStateField('cursor', null);
     this.awareness.setLocalStateField('user', null);
     this.provider.disconnect();
+    this.undoManager.destroy();
     this.doc.destroy();
   }
 }

@@ -165,3 +165,148 @@ describe('YjsProvider readOnly', () => {
     ).toBeFalsy();
   });
 });
+
+// D5：Y.UndoManager 迁移的等价性用例（阶段 0，先于迁移写定，见 docs 走查记录）
+describe('YjsProvider undo/redo（D5 Y.UndoManager 等价性）', () => {
+  const providers: YjsProvider[] = [];
+  function create(readOnly = false): YjsProvider {
+    const p = new YjsProvider(
+      `undo-spec-${Math.random().toString(36).slice(2, 8)}`,
+      'u1',
+      'tester',
+      '#000000',
+      undefined,
+      readOnly
+    );
+    providers.push(p);
+    return p;
+  }
+  /** 造页并丢弃建页本身的捕获，等价于「会话开始时页已存在」 */
+  function seedClean(): YjsProvider {
+    const p = create(false);
+    seedPage(p);
+    p.clearUndoStack();
+    return p;
+  }
+
+  afterEach(() => {
+    while (providers.length) providers.pop()!.destroy();
+  });
+
+  it('addShape → undo 移除 → redo 恢复', () => {
+    const p = seedClean();
+    p.addShape({ id: 's1', type: 'rect', x: 0, y: 0, width: 10, height: 10 });
+    expect(p.getActiveElements()!.length).toBe(1);
+    expect(p.undo()).not.toBeNull();
+    expect(p.getActiveElements()!.length).toBe(0);
+    expect(p.redo()).not.toBeNull();
+    expect(p.getActiveElements()!.length).toBe(1);
+  });
+
+  it('连续两次 addShape 独立成项（captureTimeout=0 不合并）', () => {
+    const p = seedClean();
+    p.addShape({ id: 's1', type: 'rect' });
+    p.addShape({ id: 's2', type: 'rect' });
+    expect(p.undoManager.undoStack.length).toBe(2);
+    p.undo();
+    expect(p.getActiveElements()!.length).toBe(1);
+    p.undo();
+    expect(p.getActiveElements()!.length).toBe(0);
+  });
+
+  it('updateElement → undo 还原旧值 → redo 再写入', () => {
+    const p = seedClean();
+    p.addShape({ id: 's1', type: 'rect', x: 0 });
+    p.clearUndoStack();
+    p.updateElement('s1', { x: 50 });
+    expect(p.getActiveElements()!.get(0).get('x')).toBe(50);
+    p.undo();
+    expect(p.getActiveElements()!.get(0).get('x')).toBe(0);
+    p.redo();
+    expect(p.getActiveElements()!.get(0).get('x')).toBe(50);
+  });
+
+  it('removeElement → undo 恢复到原索引位置', () => {
+    const p = seedClean();
+    p.addShape({ id: 's1' });
+    p.addShape({ id: 's2' });
+    p.addShape({ id: 's3' });
+    p.clearUndoStack();
+    expect(p.removeElement('s2')).toBe(1);
+    expect(p.getActiveElements()!.length).toBe(2);
+    p.undo();
+    expect(p.getActiveElements()!.length).toBe(3);
+    expect(p.getActiveElements()!.get(1).get('id')).toBe('s2');
+  });
+
+  it('addPage → undo 删页 → redo 恢复', () => {
+    const p = seedClean();
+    p.addPage();
+    expect(p.getPages().length).toBe(2);
+    p.undo();
+    expect(p.getPages().length).toBe(1);
+    p.redo();
+    expect(p.getPages().length).toBe(2);
+  });
+
+  it('viewport/toolState/翻页写入不入撤销栈', () => {
+    const p = seedClean();
+    p.setViewportOffset(10, 20);
+    p.setViewportZoom(150);
+    p.setToolState({ color: '#ff0000' });
+    p.setCurrentPageIndex(0);
+    expect(p.undoManager.undoStack.length).toBe(0);
+    expect(p.undo()).toBeNull();
+  });
+
+  it('新本地板书操作清空 redo 栈', () => {
+    const p = seedClean();
+    p.addShape({ id: 's1' });
+    p.undo();
+    expect(p.undoManager.redoStack.length).toBe(1);
+    p.addShape({ id: 's2' });
+    expect(p.undoManager.redoStack.length).toBe(0);
+    expect(p.undoManager.undoStack.length).toBe(1);
+  });
+
+  it('stack-item meta 记录操作发生页 pageIndex', () => {
+    const p = seedClean();
+    p.addShape({ id: 's1' });
+    expect(p.undoManager.undoStack[p.undoManager.undoStack.length - 1]!.meta.get('pageIndex')).toBe(
+      0
+    );
+  });
+
+  it('clearUndoStack 清空双栈，undo 返回 null', () => {
+    const p = seedClean();
+    p.addShape({ id: 's1' });
+    p.undo();
+    expect(p.undoManager.redoStack.length).toBe(1);
+    p.clearUndoStack();
+    expect(p.undoManager.undoStack.length).toBe(0);
+    expect(p.undoManager.redoStack.length).toBe(0);
+    expect(p.undo()).toBeNull();
+    expect(p.redo()).toBeNull();
+  });
+
+  it('readOnly undo/redo 返回 null 且不动文档', () => {
+    const p = create(true);
+    seedPage(p);
+    p.clearUndoStack();
+    expect(p.undo()).toBeNull();
+    expect(p.redo()).toBeNull();
+  });
+
+  it('远端 origin 的更新不入撤销栈', () => {
+    const p = seedClean();
+    const remote = new Y.Doc();
+    const remotePage = new Y.Map();
+    remotePage.set('id', 'rp');
+    remotePage.set('elements', new Y.Array());
+    remote.getArray('pages').push([remotePage]);
+    Y.applyUpdate(p.doc, Y.encodeStateAsUpdate(remote), { ctor: 'fake-provider' });
+    expect(p.getPages().length).toBe(2);
+    expect(p.undoManager.undoStack.length).toBe(0);
+    remote.destroy();
+  });
+});
