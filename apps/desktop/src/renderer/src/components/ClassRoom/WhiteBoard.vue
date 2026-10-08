@@ -338,7 +338,7 @@ import { debounce, formatFileSize, frameThrottle, throttle, uid } from '@yunyan-
 import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
-import { PRESET_COLORS, ERASER_WIDTH_MULT, type FileItem } from './whiteboard/types';
+import { PRESET_COLORS, ERASER_WIDTH_MULT, type FileItem, type ToolMode } from './whiteboard/types';
 import { useUserStore } from '@/store/user';
 import Live from '@/api/backstage';
 
@@ -353,7 +353,7 @@ const props = defineProps<{
 
 const route = useRoute();
 const containerId = ref(`wb-container-${Date.now()}`);
-const mode = ref<string>('cur');
+const mode = ref<ToolMode>('cur');
 const currentColor = ref('#000000');
 const currentSize = ref(1);
 const textSize = ref(14);
@@ -612,11 +612,13 @@ function toLayerCoords(pos: { x: number; y: number }): { x: number; y: number } 
 }
 
 // --- Tool selection ---
-function setMode(type: string) {
+function setMode(type: ToolMode) {
   // 激光模式被任何模式切换顶掉时即熄灭（工具栏/课件/激光按钮自关共用此收口）
   if (mode.value === 'laser' && type !== 'laser') laserOff();
   mode.value = type;
   renderer?.setSelectMode(type === 'cur' && props.isTeacher);
+  // toolState.type 的唯一写点：工具态同步随模式切换收口（含 laser/file 等旁路）
+  provider?.setToolState({ type });
 }
 
 // 激光笔：仅教师。点选进入（红点跟指），切走/Esc 熄灭（awareness 瞬时广播，学生端只见红点）
@@ -653,7 +655,7 @@ function onAwarenessLaser() {
   renderer.setLaserPoint(laser ? laser.x : null, laser ? laser.y : 0);
 }
 
-function tool(type: string) {
+function tool(type: ToolMode) {
   setMode(type);
   showEditer.value = ['brush', 'eraser', 'text', 'circle', 'rectangle', 'arrows', 'line'].includes(
     type
@@ -661,7 +663,6 @@ function tool(type: string) {
   showFillToggle.value = false;
   showFillPalette.value = false;
   showFileList.value = type === 'file';
-  provider?.setToolState({ type: type as any });
 }
 
 function toggleFileList() {

@@ -419,7 +419,7 @@ import { mount } from '@vue/test-utils';
 import ElementPlus from 'element-plus';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import { getPdfPageCount, getPdfPageDims } from './whiteboard/pdfAsset';
-import { PRESET_COLORS } from './whiteboard/types';
+import { PRESET_COLORS, MODE_TO_ELEMENT, isElementType } from './whiteboard/types';
 
 // pdf.js 管线在单测中不可用（worker/网络），mock 模块级 API
 vi.mock('./whiteboard/pdfAsset', () => ({
@@ -467,6 +467,7 @@ type WBVM = {
   editZoom: () => void;
   showZoomInput: boolean;
   zoomLevel: number;
+  toggleLaser: () => void;
 };
 
 // ── Tests ───────────────────────────────────────────────────────────────
@@ -594,6 +595,26 @@ describe('WhiteBoard.vue', () => {
     expect(preventDefault).toHaveBeenCalled();
     expect(vm.zoomLevel).toBe(before - 1);
     wrapper.unmount();
+  });
+
+  it('setMode 是 toolState.type 唯一写点，laser 也入态（D3）', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    vm.tool('rectangle');
+    expect(provider.getToolState().type).toBe('rectangle');
+    vm.toggleLaser();
+    expect(vm.mode).toBe('laser');
+    expect(provider.getToolState().type).toBe('laser');
+    vm.tool('cur');
+    expect(provider.getToolState().type).toBe('cur');
+    wrapper.unmount();
+  });
+
+  it('MODE_TO_ELEMENT 取值均为 createNode 注册类型（D3）', () => {
+    const values = Object.values(MODE_TO_ELEMENT);
+    expect(values.length).toBeGreaterThan(0);
+    for (const v of values) expect(isElementType(v)).toBe(true);
   });
 
   it('layerClear is callable without error', () => {

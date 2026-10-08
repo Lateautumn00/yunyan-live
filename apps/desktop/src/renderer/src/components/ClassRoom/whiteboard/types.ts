@@ -1,10 +1,55 @@
+/** UI 工具模式（mode 侧）：工具栏按钮与 setMode 写入的字面量全集 */
+export type ToolMode =
+  | 'cur'
+  | 'brush'
+  | 'eraser'
+  | 'text'
+  | 'circle'
+  | 'rectangle'
+  | 'arrows'
+  | 'line'
+  | 'move'
+  | 'laser'
+  | 'file';
+
 export interface ToolState {
-  type: 'cur' | 'brush' | 'eraser' | 'rect' | 'circle' | 'arrow' | 'text' | 'move' | 'file';
+  type: ToolMode;
   color: string;
   lineWidth: number;
   fontSize: number;
   opacity: number;
 }
+
+/** Yjs 元素 type（element 侧）：KonvaRenderer.createNode 工厂注册的字面量全集 */
+export const ELEMENT_TYPES = [
+  'brush',
+  'eraser',
+  'rect',
+  'circle',
+  'arrow',
+  'line',
+  'text',
+  'ppt-image',
+  'image'
+] as const;
+
+export type ElementType = (typeof ELEMENT_TYPES)[number];
+
+export function isElementType(value: unknown): value is ElementType {
+  return typeof value === 'string' && (ELEMENT_TYPES as readonly string[]).includes(value);
+}
+
+/** mode → element 显式对照：双套命名（rectangle/rect、arrows/arrow）的唯一权威转换。
+ *  cur/move/laser/file 不产出元素，故缺席 */
+export const MODE_TO_ELEMENT: Partial<Record<ToolMode, ElementType>> = {
+  brush: 'brush',
+  eraser: 'eraser',
+  text: 'text',
+  circle: 'circle',
+  rectangle: 'rect',
+  arrows: 'arrow',
+  line: 'line'
+};
 
 export interface CursorData {
   userId: string;

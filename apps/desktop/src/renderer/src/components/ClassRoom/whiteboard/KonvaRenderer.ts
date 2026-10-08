@@ -3,7 +3,7 @@ import Konva from 'konva';
 import * as Y from 'yjs';
 import { uid } from '@yunyan-live/utils';
 import { renderPdfPage } from './pdfAsset';
-import { ERASER_WIDTH_MULT, HIT_STROKE_MIN } from './types';
+import { ERASER_WIDTH_MULT, HIT_STROKE_MIN, isElementType } from './types';
 
 export class KonvaRenderer {
   stage: Konva.Stage;
@@ -362,7 +362,10 @@ export class KonvaRenderer {
   }
 
   private createNode(data: any): Konva.Node | null {
-    const type = data.get('type');
+    const rawType: unknown = data.get('type');
+    // 显式未知分支：未注册类型（历史脏数据/未来新增）不进工厂，也不静默误入 default
+    if (!isElementType(rawType)) return null;
+    const type = rawType;
     const opacity = data.get('opacity') ?? 1;
     switch (type) {
       case 'brush':
@@ -484,8 +487,11 @@ export class KonvaRenderer {
           data.get('url') as string,
           opacity
         );
-      default:
-        return null;
+      default: {
+        // 穷尽性检查：ElementType 新增成员必须在此补齐分支（否则编译报错）
+        const exhaustive: never = type;
+        return exhaustive;
+      }
     }
   }
 
