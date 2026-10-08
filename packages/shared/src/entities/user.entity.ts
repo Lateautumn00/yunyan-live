@@ -17,15 +17,15 @@ export class User {
   @Column({ length: 100, unique: true })
   email: string;
 
-  @Column({ length: 255 })
+  @Column({ name: 'password_hash', length: 255 })
   passwordHash: string;
 
   @Column({ type: 'int', default: 2 })
   role: number; // 1=teacher, 2=student
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
