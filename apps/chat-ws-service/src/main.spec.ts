@@ -163,6 +163,7 @@ const cannedHistory = [
     msg_id: 'm-2',
     id: '2002',
     room_id: 'r-main',
+    sender_id: '22222222-2222-4222-8222-222222222222',
     sender_name: '乙',
     is_teacher: false,
     content: '第二条',
@@ -175,6 +176,7 @@ const cannedHistory = [
     msg_id: 'm-1',
     id: '2001',
     room_id: 'r-main',
+    sender_id: '11111111-1111-4111-8111-111111111111',
     sender_name: '甲',
     is_teacher: true,
     content: '第一条',
@@ -224,9 +226,14 @@ describe('连接握手与进场历史（§4.5：pong → msg → history）', ()
       nextCursor: string | null;
     };
     expect(data.messages.map(m => m.msgId)).toEqual(['m-1', 'm-2']); // ASC（最旧在前）
-    const first = data.messages[0] as { liveMsg: { time: number }; info: { type: number } };
+    const first = data.messages[0] as {
+      liveMsg: { time: number };
+      info: { type: number; senderId: string; liveUserId: string };
+    };
     expect(first.liveMsg.time).toBe(1770000001000); // 毫秒往返
     expect(first.info.type).toBe(3); // msg_type 落 info.type
+    expect(first.info.senderId).toBe('11111111-1111-4111-8111-111111111111'); // sender_id → info.senderId
+    expect(first.info.liveUserId).toBe('u1'); // extra.liveUserId 会话级回放
     expect(data.nextCursor).toBeNull(); // 2 < 50
     c.close();
   });
@@ -263,10 +270,16 @@ describe('bullet 广播与持久化旁路（§4.2 fire-and-forget）', () => {
     await c.next('history');
     c.send({ type: 'bullet', data: { liveMsg: { msg: 'hello' } } });
     const frame = await c.next('bullet');
-    const data = frame.data as { msgId: string; liveMsg: { msg: string; name: string } };
+    const data = frame.data as {
+      msgId: string;
+      liveMsg: { msg: string; name: string };
+      info: { liveUserId: string; senderId: string; isTeacher: boolean };
+    };
     expect(data.msgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     expect(data.liveMsg.msg).toBe('hello');
     expect(data.liveMsg.name).toBe('小明');
+    expect(data.info.senderId).toBe('u-main'); // JWT sub → info.senderId（跨会话 self 判定）
+    expect(data.info.liveUserId).toBe('u1');
     c.close();
   });
 

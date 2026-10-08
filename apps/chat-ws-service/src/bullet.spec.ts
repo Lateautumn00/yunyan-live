@@ -110,6 +110,16 @@ describe('buildBullet 身份重建', () => {
     expect(out.data?.info?.liveUserId).toBe('u1');
   });
 
+  it('广播 info 带稳定 senderId（JWT sub，客户端跨会话 self 判定）', () => {
+    const out = parsed(buildBullet(liveMsg({ msg: 'hi' }), ctx()));
+    expect(out.data?.info?.senderId).toBe('s1');
+  });
+
+  it('senderId 空串（匿名连接）→ info 不带 senderId 字段', () => {
+    const out = parsed(buildBullet(liveMsg({ msg: 'hi' }), ctx({ senderId: '' })));
+    expect('senderId' in (out.data?.info ?? {})).toBe(false);
+  });
+
   it('连接期 nickName 为空时回退 payload name 并清洗', () => {
     const raw = rawBullet({ liveMsg: { msg: 'hi', name: '回退名' } });
     const out = parsed(buildBullet(raw, ctx({ nickName: '' })));

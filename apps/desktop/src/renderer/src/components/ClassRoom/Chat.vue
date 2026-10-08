@@ -208,6 +208,7 @@ const sockets = ref<{
   endTime: 0
 });
 const sendContent = ref('');
+const userStore = useUserStore();
 const {
   messages: tanmuMessage,
   appendLive,
@@ -215,7 +216,11 @@ const {
   isUnread,
   keyOf
 } = useChatMessages({
-  self: () => ({ liveUserId: props.liveUserId ?? '', isTeacher: props.isTeacher ?? false })
+  self: () => ({
+    liveUserId: props.liveUserId ?? '',
+    isTeacher: props.isTeacher ?? false,
+    guid: userStore.guid
+  })
 });
 const pager = useChatHistoryPager({
   fetchHistory: (cursor, signal) => {

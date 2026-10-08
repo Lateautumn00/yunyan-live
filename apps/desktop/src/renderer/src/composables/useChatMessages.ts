@@ -19,7 +19,7 @@ export interface ChatEntry {
     mentions?: unknown;
     info?: { host?: unknown };
   };
-  info?: { liveUserId?: unknown; isTeacher?: unknown };
+  info?: { liveUserId?: unknown; isTeacher?: unknown; senderId?: unknown };
 }
 
 /** 消息列表硬上限：头部裁剪（index key + 裁剪 = 全量重渲染，故 :key 必须绑定 msgId/keyOf） */
@@ -55,8 +55,8 @@ export function keyOf(source: ChatEntry | DisplayMessage): string {
 }
 
 export interface ChatMessagesDeps {
-  /** 自身身份（每次构建时读取，保持 props 响应性） */
-  self: () => { liveUserId: string; isTeacher: boolean };
+  /** 自身身份（每次构建时读取，保持 props 响应性）；guid = 稳定账号 ID（userStore.guid），优先用于跨会话 self 判定 */
+  self: () => { liveUserId: string; isTeacher: boolean; guid: string };
 }
 
 export interface ChatMessages {
@@ -75,13 +75,18 @@ export interface ChatMessages {
 
 function toDisplay(
   entry: ChatEntry,
-  self: { liveUserId: string; isTeacher: boolean }
+  self: { liveUserId: string; isTeacher: boolean; guid: string }
 ): DisplayMessage {
   const liveMsg = entry.liveMsg ?? {};
   const msg = str(liveMsg.msg);
   const rawMentions = Array.isArray(liveMsg.mentions) ? (liveMsg.mentions as MentionTarget[]) : [];
   const mentions = rawMentions.filter(m => m && typeof m.userId === 'string');
-  const isMe = str(entry.info?.liveUserId) === self.liveUserId && self.liveUserId !== '';
+  // self 判定：优先稳定 senderId（JWT sub，跨会话可比）；旧服务端不带时回退会话级 liveUserId
+  const senderId = str(entry.info?.senderId);
+  const isMe =
+    senderId !== ''
+      ? self.guid !== '' && senderId === self.guid
+      : str(entry.info?.liveUserId) === self.liveUserId && self.liveUserId !== '';
   const mentionMe = !isMe && mentions.some(m => m.userId === self.liveUserId || m.userId === 'all');
   return {
     msgId: typeof entry.msgId === 'string' ? entry.msgId : undefined,
@@ -89,7 +94,7 @@ function toDisplay(
     message: msg,
     isMe,
     isTeacher: entry.info?.isTeacher === true,
-    liveUserId: str(entry.info?.liveUserId),
+    liveUserId: senderId !== '' ? senderId : str(entry.info?.liveUserId),
     time: num(liveMsg.time) ?? Date.now(),
     mentions: mentions.length ? mentions : undefined,
     segments: segmentMessage(msg, mentions),

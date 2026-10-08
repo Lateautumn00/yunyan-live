@@ -24,6 +24,7 @@ export function decodeCursor(raw: unknown): { ms: number; id: string } | null {
 export function rowToEntry(row: {
   msg_id: string;
   room_id: string;
+  sender_id: string;
   sender_name: string;
   is_teacher: boolean;
   content: string;
@@ -49,14 +50,15 @@ export function rowToEntry(row: {
     info: {
       type: row.msg_type,
       isTeacher: row.is_teacher,
-      liveUserId: typeof extra.liveUserId === 'string' ? extra.liveUserId : ''
+      liveUserId: typeof extra.liveUserId === 'string' ? extra.liveUserId : '',
+      ...(row.sender_id !== '' ? { senderId: row.sender_id } : {})
     }
   };
 }
 
 /** 最近一页：SQL DESC 取最新 50 → 应用层 reverse 成 ASC（直接 ASC LIMIT 会取到最早 50 条） */
 export const SQL_RECENT = `
-SELECT msg_id, id::text AS id, room_id, sender_name, is_teacher, content, msg_type, mentions, extra,
+SELECT msg_id, id::text AS id, room_id, sender_id::text AS sender_id, sender_name, is_teacher, content, msg_type, mentions, extra,
        floor(EXTRACT(EPOCH FROM created_at) * 1000)::bigint AS time_ms
 FROM chat_messages
 WHERE room_id = $1
@@ -65,7 +67,7 @@ LIMIT $2`.trim();
 
 /** keyset 翻页：行比较 + 参数化（前导 room_id 等值 + 两列 DESC → 索引前向扫描无 Sort） */
 export const SQL_PAGE = `
-SELECT msg_id, id::text AS id, room_id, sender_name, is_teacher, content, msg_type, mentions, extra,
+SELECT msg_id, id::text AS id, room_id, sender_id::text AS sender_id, sender_name, is_teacher, content, msg_type, mentions, extra,
        floor(EXTRACT(EPOCH FROM created_at) * 1000)::bigint AS time_ms
 FROM chat_messages
 WHERE room_id = $1
@@ -88,6 +90,7 @@ interface HistoryRow {
   msg_id: string;
   id: string;
   room_id: string;
+  sender_id: string;
   sender_name: string;
   is_teacher: boolean;
   content: string;

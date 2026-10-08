@@ -11,7 +11,8 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 const storeMocks = vi.hoisted(() => ({
-  sessionInterrupted: vi.fn()
+  sessionInterrupted: vi.fn(),
+  guid: 'guid-me'
 }));
 
 vi.mock('@/api', () => ({
@@ -24,7 +25,10 @@ vi.mock('@/api', () => ({
 }));
 
 vi.mock('@/store/user', () => ({
-  useUserStore: () => ({ sessionInterrupted: storeMocks.sessionInterrupted })
+  useUserStore: () => ({
+    guid: storeMocks.guid,
+    sessionInterrupted: storeMocks.sessionInterrupted
+  })
 }));
 
 class MockWebSocket {
@@ -102,8 +106,18 @@ function scrollEvent(target: HTMLElement): Event {
   return { target } as unknown as Event;
 }
 
-function historyEntry(msgId: string, name: string, time: number, userId: string) {
-  return { msgId, liveMsg: { msg: `历史${msgId}`, name, time }, info: { liveUserId: userId } };
+function historyEntry(
+  msgId: string,
+  name: string,
+  time: number,
+  userId: string,
+  info: Record<string, unknown> = {}
+) {
+  return {
+    msgId,
+    liveMsg: { msg: `历史${msgId}`, name, time },
+    info: { liveUserId: userId, ...info }
+  };
 }
 
 interface SentBullet {
@@ -542,6 +556,29 @@ describe('ClassRoom Chat.vue', () => {
         expect.stringContaining('历史h2')
       ]);
       expect(wrapper.emitted('updateNum')).toBeUndefined();
+    });
+
+    it('历史 isMe：senderId 匹配本人 → message-me；他人即使 liveUserId 相同也不算；缺 senderId 回退 liveUserId', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'history', {
+        messages: [
+          // 稳定 senderId 匹配本人（liveUserId 为旧会话随机值 → 修复前必误判为他人）
+          historyEntry('h1', '甲', 1700000000000, '旧会话-甲', { senderId: 'guid-me' }),
+          // senderId 为他人 → 即使 liveUserId == props.liveUserId 也不算本人
+          historyEntry('h2', '乙', 1700000001000, 'u1', { senderId: 'guid-other' }),
+          // 旧服务端条目（无 senderId）→ 回退会话级 liveUserId 比较
+          historyEntry('h3', '丙', 1700000002000, 'u1')
+        ],
+        nextCursor: null
+      });
+      await flushPromises();
+      expect(wrapper.findAll('.message-me')).toHaveLength(2); // h1 + h3
+      const meBadges = wrapper.findAll('li').map(li => li.find('.span.me').exists());
+      expect(meBadges).toEqual([true, false, true]);
+      const aligned = wrapper.findAll('li').map(li => li.find('.user').classes().includes('end'));
+      expect(aligned).toEqual([true, false, true]);
+      wrapper.unmount();
     });
 
     it('顶部滚动触发 getHistory（带 cursor），响应 prepend 后锚点回填', async () => {

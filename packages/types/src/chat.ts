@@ -33,6 +33,8 @@ export interface BulletSenderInfo {
   type?: number;
   isTeacher?: boolean;
   liveUserId?: string;
+  /** 稳定发送者身份（JWT sub = users.id UUID）；用于跨会话 self 判定，旧服务端/匿名连接不带 */
+  senderId?: string;
 }
 
 /** bullet 广播信封：外层结构保持不变，liveMsg/info 增量字段 + data 层 msgId */

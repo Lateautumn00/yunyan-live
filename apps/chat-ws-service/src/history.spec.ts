@@ -13,6 +13,7 @@ interface FakeRow {
   msg_id: string;
   id: string;
   room_id: string;
+  sender_id: string;
   sender_name: string;
   is_teacher: boolean;
   content: string;
@@ -27,6 +28,7 @@ function makeRow(i: number, overrides: Partial<FakeRow> = {}): FakeRow {
     msg_id: `m-${i}`,
     id: String(1000 + i),
     room_id: 'r1',
+    sender_id: `guid-${i}`,
     sender_name: `用户${i}`,
     is_teacher: i === 2,
     content: `内容${i}`,
@@ -96,8 +98,18 @@ describe('rowToEntry 映射（方案 §4.1 映射表）', () => {
         time: 1770000000555,
         mentions: [{ userId: 'u2', userName: '小明' }]
       },
-      info: { type: 1, isTeacher: true, liveUserId: 'u1' }
+      info: { type: 1, isTeacher: true, liveUserId: 'u1', senderId: 'guid-1' }
     });
+  });
+
+  it('sender_id → info.senderId（稳定账号身份，跨会话 self 判定）', () => {
+    const entry = rowToEntry(makeRow(6));
+    expect(entry.info.senderId).toBe('guid-6');
+  });
+
+  it('sender_id 空串 → 不带 senderId 字段', () => {
+    const entry = rowToEntry(makeRow(7, { sender_id: '' }));
+    expect('senderId' in entry.info).toBe(false);
   });
 
   it('mentions 非数组 → 不带 mentions 字段', () => {
@@ -135,6 +147,8 @@ describe('createHistoryStore.recent（进场页：DESC 取 → 应用层 reverse
     expect(SQL_RECENT).toContain('ORDER BY created_at DESC, id DESC');
     expect(SQL_RECENT).toContain('LIMIT $2');
     expect(SQL_RECENT).not.toContain('ASC');
+    expect(SQL_RECENT).toContain('sender_id::text AS sender_id');
+    expect(SQL_PAGE).toContain('sender_id::text AS sender_id');
   });
 
   it('DESC 行集返回时 reverse 为 ASC，nextCursor 指向最旧一条', async () => {

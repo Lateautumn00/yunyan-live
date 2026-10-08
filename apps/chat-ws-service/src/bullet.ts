@@ -148,7 +148,8 @@ export function buildBullet(raw: string, ctx: BulletContext): BuildBulletResult 
       info: {
         ...(payloadInfoType !== undefined ? { type: payloadInfoType } : {}),
         isTeacher: ctx.isTeacher,
-        liveUserId
+        liveUserId,
+        ...(ctx.senderId !== '' ? { senderId: ctx.senderId } : {})
       }
     }
   };

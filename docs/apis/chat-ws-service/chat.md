@@ -60,15 +60,15 @@ ws://<host>:50054?token=<JWT>&roomId=<roomId>&liveUserId=<userId>&nickName=<nick
 
 服务端处理（`bullet.ts`，纯函数 + 连接期身份上下文）：
 
-| 步骤     | 规则                                                                                                                                        |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 解析     | JSON 非法 / 非对象 / `type !== "bullet"` / `msg` 非字符串或空 → 拒发 `invalid`                                                              |
-| 禁言     | 房间禁言态为 `0`（`FORBID_FORBIDDEN`）且 JWT 角色非教师 → 拒发 `forbidden`；未设置（`undefined`）fail-open 放行                             |
-| mentions | 缺省视为 `[]`；非数组 → 整条拒发 `invalid`；非法条目丢弃；单条 `userName` 截断至 64；总数超 50 截断；`userId === "all"` 且非教师 → 该条剥离 |
-| 昵称     | 连接期 `nickName`（URL 查询参数）优先，其次 `liveMsg.name`；剔除控制字符并截断至 64                                                         |
-| 身份     | `info.isTeacher` 以 JWT `payload.role === 1` 为权威重建；`liveUserId` 以连接 URL 为权威                                                     |
-| 长度     | `msg` 超过 200（UTF-16 code unit）**截断至 200**（不拒发，兼容无 maxlength 的旧客户端）                                                     |
-| 注入     | `time = Date.now()`（服务端权威）；`msgId =` 服务端 UUID v4（**覆盖客户端传入值**）；`mentions` 为空数组时省略该键                          |
+| 步骤     | 规则                                                                                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 解析     | JSON 非法 / 非对象 / `type !== "bullet"` / `msg` 非字符串或空 → 拒发 `invalid`                                                                               |
+| 禁言     | 房间禁言态为 `0`（`FORBID_FORBIDDEN`）且 JWT 角色非教师 → 拒发 `forbidden`；未设置（`undefined`）fail-open 放行                                              |
+| mentions | 缺省视为 `[]`；非数组 → 整条拒发 `invalid`；非法条目丢弃；单条 `userName` 截断至 64；总数超 50 截断；`userId === "all"` 且非教师 → 该条剥离                  |
+| 昵称     | 连接期 `nickName`（URL 查询参数）优先，其次 `liveMsg.name`；剔除控制字符并截断至 64                                                                          |
+| 身份     | `info.isTeacher` 以 JWT `payload.role === 1` 为权威重建；`liveUserId` 以连接 URL 为权威；`info.senderId` 注入 JWT `sub`（= `users.id` UUID，跨会话稳定身份） |
+| 长度     | `msg` 超过 200（UTF-16 code unit）**截断至 200**（不拒发，兼容无 maxlength 的旧客户端）                                                                      |
+| 注入     | `time = Date.now()`（服务端权威）；`msgId =` 服务端 UUID v4（**覆盖客户端传入值**）；`mentions` 为空数组时省略该键                                           |
 
 广播信封（服务端重建后）：
 
@@ -83,7 +83,11 @@ ws://<host>:50054?token=<JWT>&roomId=<roomId>&liveUserId=<userId>&nickName=<nick
       "time": 1793300000000,
       "mentions": [{ "userId": "u2", "userName": "李四" }]
     },
-    "info": { "isTeacher": false, "liveUserId": "u1" },
+    "info": {
+      "isTeacher": false,
+      "liveUserId": "u1",
+      "senderId": "550e8400-e29b-41d4-a716-446655440000"
+    },
     "msgId": "550e8400-e29b-41d4-a716-446655440000"
   }
 }
@@ -92,7 +96,7 @@ ws://<host>:50054?token=<JWT>&roomId=<roomId>&liveUserId=<userId>&nickName=<nick
 - `msgId`：服务端生成的 UUID v4，客户端去重与消息列表稳定键的事实源；落库主键，历史回放条目同构
 - `time`：消息时间戳，客户端展示与 5 分钟分组的唯一事实源（缺失时客户端回退本地接收时刻）
 - `mentions`：仅含通过清洗的条目；渲染高亮与 `@我` 徽标均以该数组为准（与在线成员名单解耦，离线成员同样高亮）
-- `data.info` 中不含客户端传入的 `type` 之外的可伪造字段：`isTeacher` 恒为 JWT 权威值
+- `data.info` 中不含客户端传入的 `type` 之外的可伪造字段：`isTeacher` 恒为 JWT 权威值，`senderId` 恒为 JWT `sub`（匿名/未认证连接省略该键；客户端在 `senderId` 缺失时回退会话级 `liveUserId` 比较）
 
 拒发回执（仅回发送者，不广播）：
 
@@ -163,7 +167,11 @@ ws://<host>:50054?token=<JWT>&roomId=<roomId>&liveUserId=<userId>&nickName=<nick
       {
         "msgId": "m-1",
         "liveMsg": { "msg": "第一条", "name": "甲", "time": 1770000001000 },
-        "info": { "isTeacher": false, "liveUserId": "u1" }
+        "info": {
+          "isTeacher": false,
+          "liveUserId": "u1",
+          "senderId": "550e8400-e29b-41d4-a716-446655440000"
+        }
       }
     ],
     "nextCursor": "1770000001000|2001"

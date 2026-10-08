@@ -8,7 +8,7 @@ import {
   type ChatEntry
 } from './useChatMessages';
 
-const SELF = { liveUserId: 'u1', isTeacher: false };
+const SELF = { liveUserId: 'u1', isTeacher: false, guid: 'guid-self' };
 
 function msgs() {
   return useChatMessages({ self: () => SELF });
@@ -203,5 +203,63 @@ describe('分组边界重算（showTime / liveUser）', () => {
     expect(m.messages.value[1]!.liveUser).toBe(false);
     expect(m.messages.value[1]!.showTime).toBe(true);
     expect(TIME_GAP_MS).toBe(300000);
+  });
+});
+
+describe('self 判定（isMe：优先稳定 senderId，缺失回退会话 liveUserId）', () => {
+  function selfEntry(info: Record<string, unknown>): ChatEntry {
+    return {
+      msgId: `s-${JSON.stringify(info)}`,
+      liveMsg: { msg: '内容', name: '某人', time: 1700000000000 },
+      info
+    };
+  }
+
+  it('senderId === self.guid 且 liveUserId 为旧会话值 → isMe（重入房间历史判定，修复前必 false）', () => {
+    const m = msgs();
+    m.appendLive(
+      selfEntry({ liveUserId: '旧会话-随机串', isTeacher: false, senderId: 'guid-self' })
+    );
+    expect(m.messages.value[0]!.isMe).toBe(true);
+  });
+
+  it('senderId 为他人 guid → isMe=false，即使 liveUserId 恰好等于 self', () => {
+    const m = msgs();
+    m.appendLive(selfEntry({ liveUserId: 'u1', isTeacher: false, senderId: 'guid-other' }));
+    expect(m.messages.value[0]!.isMe).toBe(false);
+  });
+
+  it('无 senderId（旧服务端）→ 回退 liveUserId 比较', () => {
+    const m = msgs();
+    m.appendLive(selfEntry({ liveUserId: 'u1', isTeacher: false }));
+    m.appendLive(selfEntry({ liveUserId: 'u9', isTeacher: false }));
+    expect(m.messages.value[0]!.isMe).toBe(true);
+    expect(m.messages.value[1]!.isMe).toBe(false);
+  });
+
+  it('senderId 空串 → 回退 liveUserId 比较', () => {
+    const m = msgs();
+    m.appendLive(selfEntry({ liveUserId: 'u1', isTeacher: false, senderId: '' }));
+    expect(m.messages.value[0]!.isMe).toBe(true);
+  });
+
+  it('self.guid 为空（未登录）→ 即使 senderId 存在也不判 isMe', () => {
+    const m = useChatMessages({
+      self: () => ({ liveUserId: 'u1', isTeacher: false, guid: '' })
+    });
+    m.appendLive(selfEntry({ liveUserId: 'u1', isTeacher: false, senderId: 'guid-self' }));
+    expect(m.messages.value[0]!.isMe).toBe(false);
+  });
+
+  it('分组身份优先取 senderId（跨会话同一账号可连发分组）', () => {
+    const m = msgs();
+    m.appendLive(selfEntry({ liveUserId: '会话甲', isTeacher: false, senderId: 'guid-peer' }));
+    m.appendLive(selfEntry({ liveUserId: '会话乙', isTeacher: false, senderId: 'guid-peer' }));
+    m.appendLive(selfEntry({ liveUserId: '会话丙', isTeacher: false, senderId: 'guid-other2' }));
+    expect(m.messages.value.map(x => [x.liveUserId, x.liveUser])).toEqual([
+      ['guid-peer', false],
+      ['guid-peer', true],
+      ['guid-other2', false]
+    ]);
   });
 });
