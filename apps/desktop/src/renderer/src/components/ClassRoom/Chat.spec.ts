@@ -160,7 +160,7 @@ describe('ClassRoom Chat.vue', () => {
     expect(hand).toHaveLength(1);
   });
 
-  it('createTutorSocket 建立连接并发送白板请求', async () => {
+  it('createTutorSocket 建立连接，不再发送白板握手（恢复走 Yjs sync）', async () => {
     const wrapper = mountChat();
     vmOf(wrapper).createTutorSocket();
     const ws = MockWebSocket.instances[0];
@@ -171,7 +171,7 @@ describe('ClassRoom Chat.vue', () => {
     ws!.readyState = 1;
     ws!.onopen?.();
     await flushPromises();
-    expect(ws!.sent[0]).toContain('getwhiteBoard');
+    expect(ws!.sent.some(s => String(s).includes('getwhiteBoard'))).toBe(false);
   });
 
   it('sendMes 经 WebSocket 发送弹幕并清空输入', async () => {

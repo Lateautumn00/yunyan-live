@@ -410,48 +410,16 @@ describe('/healthz（§4.7）', () => {
   });
 });
 
-describe('白板状态生命周期（房间空 → 释放 whiteboardStates）', () => {
-  /** 服务端 close 处理在客户端 close() 返回后异步进行，留窗口让 Disconnected 日志落定 */
-  const settle = () => new Promise(r => setTimeout(r, 200));
-
-  async function wbState(roomId: string): Promise<string | null> {
-    const c = await connect({ roomId });
+describe('白板状态消息已移除（legacy paint-log 链路 D4）', () => {
+  it('whiteBoard/getwhiteBoard 被忽略且连接仍可用', async () => {
+    const room = 'r-wb-removed';
+    const c = await connect({ roomId: room });
     await c.next('history');
+    c.send({ type: 'whiteBoard', data: { liveMsg: { msg: 'WB-STATE' } } });
     c.send({ type: 'getwhiteBoard' });
-    const f = await c.next('getWhiteBoard');
+    c.send({ type: 'ping' });
+    const pong = await c.next('pong');
+    expect(pong.type).toBe('pong');
     c.close();
-    await settle();
-    return ((f.data?.liveMsg ?? {}) as { msg?: string | null }).msg ?? null;
-  }
-
-  it('有人时状态保留；最后一人离开后 getwhiteBoard 回 null（不泄漏）', async () => {
-    const room = 'r-wb-lifecycle';
-
-    const c1 = await connect({ roomId: room });
-    await c1.next('history');
-    c1.send({ type: 'whiteBoard', data: { liveMsg: { msg: 'WB-STATE' } } });
-    c1.send({ type: 'getwhiteBoard' });
-    expect(((await c1.next('getWhiteBoard')).data?.liveMsg as { msg: string }).msg).toBe(
-      'WB-STATE'
-    );
-
-    const c2 = await connect({ roomId: room });
-    await c2.next('history');
-    c2.send({ type: 'getwhiteBoard' });
-    expect(((await c2.next('getWhiteBoard')).data?.liveMsg as { msg: string }).msg).toBe(
-      'WB-STATE'
-    );
-
-    c1.close();
-    await settle();
-    c2.send({ type: 'getwhiteBoard' }); // 房间未空 → 状态保留
-    expect(((await c2.next('getWhiteBoard')).data?.liveMsg as { msg: string }).msg).toBe(
-      'WB-STATE'
-    );
-
-    c2.close();
-    await settle(); // 最后一人离开 → whiteboardStates.delete(room)
-
-    expect(await wbState(room)).toBeNull();
-  }, 20_000);
+  }, 10_000);
 });

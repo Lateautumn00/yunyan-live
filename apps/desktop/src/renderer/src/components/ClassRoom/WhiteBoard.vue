@@ -348,80 +348,9 @@ const props = defineProps<{
   isTeacher: boolean;
   isDisplay?: boolean;
   opaqueId?: string;
-  teacherStage?: any;
   userName?: string;
   layouts?: number;
 }>();
-
-const emit = defineEmits<{ (e: 'paint-log', data: any): void }>();
-
-function serializeStage(): Record<string, unknown> | null {
-  const stage = renderer?.getStage();
-  if (!stage) return null;
-  const obj: Record<string, unknown> = {
-    attrs: {
-      width: stage.width(),
-      height: stage.height(),
-      x: stage.x(),
-      y: stage.y(),
-      scaleX: stage.scaleX(),
-      scaleY: stage.scaleY()
-    },
-    className: 'Stage',
-    children: [] as unknown[]
-  };
-  for (const child of stage.getChildren()) {
-    if (child.className === 'Layer') {
-      const layerObj: Record<string, unknown> = {
-        attrs: {
-          width: child.width(),
-          height: child.height(),
-          x: child.x(),
-          y: child.y(),
-          visible: child.visible(),
-          scaleX: child.scaleX(),
-          scaleY: child.scaleY(),
-          offsetX: child.offsetX(),
-          offsetY: child.offsetY()
-        },
-        className: 'Layer',
-        id: (child as any)._id,
-        children: [] as unknown[]
-      };
-      for (const node of child.getChildren()) {
-        const visible = node.visible !== undefined ? node.visible() : true;
-        if (!visible) continue;
-        const className = node.getClassName?.() || node.className;
-        if (['Line', 'Rect', 'Circle', 'Ellipse', 'Text', 'Arrow', 'Image'].includes(className)) {
-          const nodeObj: Record<string, unknown> = {
-            attrs: node.getAttrs(),
-            className,
-            zIndex: node.zIndex(),
-            id: (node as any)._id
-          };
-          if (className === 'Image') {
-            try {
-              const imgAttr = node.getAttrs('image');
-              if (imgAttr?.image?.src) nodeObj.imagesrc = imgAttr.image.src;
-            } catch {
-              /* skip */
-            }
-          }
-          layerObj.children.push(nodeObj);
-        }
-      }
-      obj.children.push(layerObj);
-    }
-  }
-  return obj;
-}
-
-function emitPaintLog() {
-  const stageData = serializeStage();
-  if (stageData) {
-    emit('paint-log', { stage: JSON.stringify(stageData) });
-  }
-}
 
 const route = useRoute();
 const containerId = ref(`wb-container-${Date.now()}`);
@@ -849,7 +778,6 @@ function editTextShape(id: string) {
       before,
       after: { text: val }
     });
-    emitPaintLog();
   };
   ta.addEventListener('blur', finish);
   ta.addEventListener('keydown', ke => {
@@ -890,7 +818,6 @@ function commitShapeMove(id: string, x: number, y: number) {
     before,
     after: { x, y }
   });
-  emitPaintLog();
 }
 
 // 写入目标键并清理「对侧」独有的旧形态字段（圆↔椭圆的 radius/radiusX 互斥），
@@ -929,7 +856,6 @@ function commitSelectedStyle(patch: Record<string, any>, snapshotKeys?: string[]
     before,
     after: { ...patch }
   });
-  emitPaintLog();
 }
 
 // 粗细条当前作用对象：绘制文本模式，或选中的是文本图形 → 字号；否则线宽
@@ -969,7 +895,6 @@ function commitShapeTransform(id: string, attrs: Record<string, any>) {
     before,
     after: { ...attrs }
   });
-  emitPaintLog();
 }
 
 function deleteSelected() {
@@ -995,7 +920,6 @@ function deleteSelected() {
     shapeData,
     index
   });
-  emitPaintLog();
 }
 
 // --- Drawing state ---
@@ -1088,7 +1012,6 @@ function onPointerDown(e: any) {
           });
         }
         textarea.remove();
-        emitPaintLog();
       };
       textarea.addEventListener('blur', commitText);
       textarea.addEventListener('keydown', ke => {
@@ -1331,7 +1254,6 @@ function onPointerUp(e: any) {
     }
   }
   startPos = null;
-  emitPaintLog();
 }
 
 function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
@@ -1502,7 +1424,6 @@ function revocation(type: string) {
     }
     undoStack.value.push(action);
   }
-  emitPaintLog();
 }
 function layerClear() {
   // 学生端守卫：直接操作 Yjs elements，绕过 provider，必须在此拦截
@@ -1511,7 +1432,6 @@ function layerClear() {
   provider?.getActiveElements()?.delete(0, provider.getActiveElements().length);
   undoStack.value = [];
   redoStack.value = [];
-  emitPaintLog();
 }
 
 // --- Zoom ---
@@ -1553,7 +1473,6 @@ function layerZoomChange(type: string) {
     zoomLevel.value = renderer.getZoom();
   }
   syncViewportToYjs();
-  emitPaintLog();
 }
 
 function editZoom() {
@@ -1569,7 +1488,6 @@ function importZoom() {
   zoomLevel.value = Math.max(1, Math.min(200, val));
   renderer?.setZoom(zoomLevel.value);
   syncViewportToYjs();
-  emitPaintLog();
 }
 
 // --- Pages ---
@@ -1577,7 +1495,6 @@ function addLayer() {
   const pageId = provider?.addPage() || uid('local_');
   redoStack.value = [];
   undoStack.value.push({ type: 'addPage', pageId, pageIndex: provider!.getCurrentPageIndex() });
-  emitPaintLog();
 }
 
 function showLayer(index: number) {
@@ -1592,7 +1509,6 @@ function showLayer(index: number) {
   const newElements = provider?.getActiveElements();
   if (newElements) bindElementsObserver(newElements);
   zoomLevel.value = renderer.getZoom();
-  emitPaintLog();
 }
 
 function delLayer(index: number) {
@@ -1612,7 +1528,6 @@ function delLayer(index: number) {
     provider?.setFileItemId(deckIdx, '');
     fileList.value = provider!.getFileList();
     toast('已删除课件页');
-    emitPaintLog();
     return;
   }
   if (renderer.getPageCount() <= 1) {
@@ -1621,7 +1536,6 @@ function delLayer(index: number) {
   }
   provider?.removePage(index - 1);
   toast('已删除画布');
-  emitPaintLog();
 }
 
 // --- Color ---
@@ -2001,7 +1915,6 @@ async function uploadImage(file: File) {
         pageIndex: renderer!.getCurrentPageIndex(),
         shapeData
       });
-      emitPaintLog();
       toast('图片已添加');
     } else {
       toast('上传失败');

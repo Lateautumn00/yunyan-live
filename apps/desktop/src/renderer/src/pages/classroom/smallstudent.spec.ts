@@ -11,7 +11,7 @@ const stubs = {
   },
   WhiteBoard: {
     template: '<div class="wb-stub" />',
-    props: ['isTeacher', 'isDisplay', 'roomId', 'opaqueId', 'teacherStage', 'userName', 'layouts']
+    props: ['isTeacher', 'isDisplay', 'roomId', 'opaqueId', 'userName', 'layouts']
   },
   Video: {
     template: '<div class="video-stub" />',
@@ -83,16 +83,6 @@ describe('Classroom small-student', () => {
     expect(vm.activeName).toBe('people');
     vm.handleClick('playback');
     expect(vm.activeName).toBe('playback');
-  });
-
-  it('act processes whiteboard data chunks', async () => {
-    const wrapper = createWrapper();
-    await flushPromises();
-    const vm = wrapper.vm as unknown as { act: (data: string) => void; teacherStage: unknown };
-    vm.act('{"key":"value"}');
-    expect(vm.teacherStage).toBeNull();
-    vm.act('|WBDATAEND|');
-    expect(vm.teacherStage).toEqual({ key: 'value' });
   });
 
   it('onBroadcastStop stop 显示暂停直播', async () => {

@@ -176,12 +176,10 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'apply', status: boolean, num: number): void;
   (e: 'sendTime', time: number): void;
-  (e: 'getWhiteBoard', data: unknown): void;
   (e: 'updateNum', status: boolean, num: number, type: string): void;
   (e: 'liveStarted'): void;
 }>();
 
-let connectNum = 0;
 const isBottom = ref(true);
 const noSpeakMessageNum = ref(0);
 let lockReconnect = false;
@@ -310,18 +308,6 @@ function createTutorSocket() {
 }
 
 function liveSocketOpen() {
-  if (connectNum === 0) {
-    const dataWhiteBoard = `{
-                "type": "getwhiteBoard",
-                "data": {
-                    "liveMsg": {
-                      "roomId":"${props.roomId}"
-                    }
-                }
-            }`;
-    setSocketSend(dataWhiteBoard);
-  }
-  connectNum++;
   liveHeartCheckFun();
   socketUpdateFun();
   stopReconnect();
@@ -343,10 +329,6 @@ function getTime() {
 
 function sendTime(time: number) {
   emit('sendTime', time);
-}
-
-function getWhiteBoard(data: unknown) {
-  emit('getWhiteBoard', data);
 }
 
 function liveSocketMessage(e: MessageEvent) {
@@ -394,19 +376,6 @@ function liveSocketMessage(e: MessageEvent) {
       }
       clearLiveSocket();
       reconnect();
-      break;
-    case 'getWhiteBoard':
-      if (redata) {
-        console.log('getwhiteboard redata', redata);
-        if (
-          redata.data !== null &&
-          redata.data !== undefined &&
-          redata.data.liveMsg !== undefined
-        ) {
-          const stageData = redata.data.liveMsg.msg;
-          getWhiteBoard(stageData);
-        }
-      }
       break;
     case 'live_started':
       emit('liveStarted');

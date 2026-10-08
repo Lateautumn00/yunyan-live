@@ -265,7 +265,6 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  (e: 'act', data: unknown): void;
   (e: 'popleNum', num: number): void;
   (e: 'updatePopleList', poples: unknown): void;
   (e: 'onLookLive', status: boolean, type: string, liveTimeLen: number): void;
@@ -497,19 +496,13 @@ function endClassSpeakAll(liveTimeLen: number, status: 'end' | 'stop' = 'end') {
   );
 }
 
-function act(data: unknown) {
-  emit('act', data);
-}
-
 async function fromMessage(json: { from?: string; text: string }) {
   if (json['from'] != props.opaqueId) {
     const obj = JSON.parse(json.text) as {
       type: number;
       data: { type?: string; liveTimeLen?: number } & string;
     };
-    if (obj.type === 0) {
-      act(obj.data);
-    } else if (obj.type === 1) {
+    if (obj.type === 1) {
       void stopApplication();
     } else if (obj.type === 2) {
       isTalking(obj.data as string, 'ST');

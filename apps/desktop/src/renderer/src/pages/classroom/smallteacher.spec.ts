@@ -11,7 +11,7 @@ const stubs = {
   },
   WhiteBoard: {
     template: '<div class="wb-stub" />',
-    props: ['isTeacher', 'isDisplay', 'roomId', 'opaqueId', 'teacherStage', 'layouts']
+    props: ['isTeacher', 'isDisplay', 'roomId', 'opaqueId', 'layouts']
   },
   Video: {
     template: '<div class="video-stub" />',

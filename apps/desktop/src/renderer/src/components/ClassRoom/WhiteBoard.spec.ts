@@ -466,7 +466,6 @@ type WBVM = {
   layerClear: () => void;
   editZoom: () => void;
   showZoomInput: boolean;
-  emitPaintLog: () => void;
 };
 
 // ── Tests ───────────────────────────────────────────────────────────────
@@ -596,14 +595,6 @@ describe('WhiteBoard.vue', () => {
     const vm = wrapper.vm as unknown as WBVM;
     vm.editZoom();
     expect(vm.showZoomInput).toBe(true);
-    wrapper.unmount();
-  });
-
-  it('emitPaintLog emits paint-log event', () => {
-    const wrapper = mountWB();
-    const vm = wrapper.vm as unknown as WBVM;
-    vm.emitPaintLog();
-    expect(wrapper.emitted('paint-log')).toBeTruthy();
     wrapper.unmount();
   });
 });

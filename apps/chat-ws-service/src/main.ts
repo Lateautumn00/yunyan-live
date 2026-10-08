@@ -47,7 +47,6 @@ interface LiveMessage {
 
 const rooms = new Map<string, Map<string, WsClient>>();
 const clientIds = new WeakMap<WebSocket, string>();
-const whiteboardStates = new Map<string, string>();
 /** 房间禁言态缓存（0=禁言 1=可发言）：连接建立时 readForbid 回填、订阅推送时更新 */
 const roomForbid = new Map<string, number>();
 
@@ -288,22 +287,6 @@ function handleMessage(client: WebSocket, raw: string) {
           .finally(() => historyInflight.delete(client));
         break;
       }
-      case 'whiteBoard': {
-        const wbMsg = JSON.parse(raw);
-        if (wbMsg.data?.liveMsg?.msg) {
-          whiteboardStates.set(roomId, wbMsg.data.liveMsg.msg);
-        }
-        broadcast(roomId, raw, clientId);
-        break;
-      }
-      case 'getwhiteBoard': {
-        const storedMsg = whiteboardStates.get(roomId) || null;
-        sendTo(client, {
-          type: 'getWhiteBoard',
-          data: { liveMsg: { msg: storedMsg } }
-        });
-        break;
-      }
       case 'live_started':
         broadcast(roomId, raw);
         break;
@@ -330,7 +313,7 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
   }
 
   // Buffer frames that arrive while the async session check is in flight, so the
-  // client's first message (e.g. getwhiteBoard) is not dropped.
+  // client's first message is not dropped.
   const pending: string[] = [];
   let registered = false;
   connection.on('message', (raw: Buffer | string) => {
@@ -406,7 +389,6 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
         if (clients.size === 0) {
           rooms.delete(rid);
           roomForbid.delete(rid);
-          whiteboardStates.delete(rid); // 房间空即释放，防长期驻留泄漏
         }
         console.log(`[ChatWS] Disconnected: roomId=${rid}, id=${cid}`);
         break;

@@ -34,9 +34,7 @@
                 :is-display="isDisplay"
                 :room-id="roomId"
                 :opaque-id="opaqueId"
-                :teacher-stage="teacherStage"
                 :layouts="3"
-                @paint-log="paintLog"
               />
             </div>
             <div v-show="false" id="div3" />
@@ -54,10 +52,8 @@
                   :is-display="isDisplay"
                   :room-id="roomId"
                   :opaque-id="opaqueId"
-                  :teacher-stage="teacherStage"
                   :user-name="isStudent ? userName : undefined"
                   :layouts="3"
-                  @paint-log="paintLog"
                 />
               </div>
               <div v-show="false" id="div3" />
@@ -109,7 +105,6 @@
               @apply="apply"
               @update-num="updateNum"
               @send-time="sendTime"
-              @get-white-board="getWhiteBoard"
               @live-started="onLiveStarted"
             />
             <Pople v-show="activeName === 'people'" ref="pople" :live-user-id="opaqueId" />
@@ -153,7 +148,6 @@
       @student-media-stream="studentMediaStream"
       @del-user-list="delUserList"
       @set-hires="setHires"
-      @act="act"
       @set-live-type="setLiveType"
       @set-dia-bla="setDiaBla"
       @room-created="onRoomCreated"
@@ -199,16 +193,8 @@ import { useClassroomTabs } from '@/composables/useClassroomTabs';
 import { useClassroomHelpers } from '@/composables/useClassroomHelpers';
 import { useClassroomRoom } from '@/composables/useClassroomRoom';
 import { useClassroomDisplay } from '@/composables/useClassroomDisplay';
-import { useClassroomWhiteboard } from '@/composables/useClassroomWhiteboard';
 import { useClassroomTeacherHooks } from '@/composables/useClassroomTeacherHooks';
 import { useClassroomStudentHooks } from '@/composables/useClassroomStudentHooks';
-
-const ACT_LOG_TEXT: Record<string, string> = {
-  'small-teacher': '白板实时接收消息',
-  'large-teacher': '白板实时接收消息...',
-  'small-student': '白板实时接收消息',
-  'large-student': '1白板实时接收消息'
-};
 
 export default defineComponent({
   name: 'Classroom',
@@ -301,17 +287,6 @@ export default defineComponent({
     const liveType = ref('');
     const type = ref('');
     const btn = ref(false);
-
-    const { teacherStage, wbdata, getWhiteBoard, act, sendWhiteboardNews } = useClassroomWhiteboard(
-      {
-        video,
-        chat,
-        roomId,
-        actMode: isTeacher ? 'log' : 'assemble',
-        actLogText: ACT_LOG_TEXT[variant],
-        actLogData: variant !== 'small-student'
-      }
-    );
 
     const { isDisplay, dis, setDisplay, setDisplay2, pall } = useClassroomDisplay({
       video,
@@ -413,7 +388,6 @@ export default defineComponent({
     const applyList = teacherHooks?.applyList;
     const onRoomCreated = teacherHooks?.onRoomCreated;
     const agree = teacherHooks?.agree;
-    const paintLog = isTeacher ? sendWhiteboardNews : undefined;
     const videoList = isStudent ? roomVideoList : undefined;
     const studentMediaStream = isLargeTeacher ? undefined : hooks?.studentMediaStream;
     const delUserList = isSmall ? hooks?.delUserList : undefined;
@@ -471,8 +445,6 @@ export default defineComponent({
       type,
       btn,
       dis,
-      teacherStage,
-      wbdata,
       openLive,
       lookLive,
       setLayouts,
@@ -482,7 +454,6 @@ export default defineComponent({
       applyList,
       onRoomCreated,
       agree,
-      paintLog,
       videoList,
       studentMediaStream,
       delUserList,
@@ -506,8 +477,6 @@ export default defineComponent({
       onSelfJoined,
       onVideosVisibleChange,
       onChatVisibleChange,
-      act,
-      getWhiteBoard,
       sendTime,
       updateNum,
       socketClose,
@@ -520,7 +489,6 @@ export default defineComponent({
       setDisplay2,
       setDisplay,
       pall,
-      sendWhiteboardNews,
       onParticipantJoin,
       onParticipantLeave,
       onBroadcastStart,
