@@ -929,6 +929,8 @@ let currentPath: number[] = [];
 // 激光广播节流（50ms）与远端状态去重（同坐标不重复渲染）
 let lastLaserSend = 0;
 let lastLaserKey = '';
+// 教师光标 awareness 写侧节流（50ms，对齐 laser；渲染归 F7.1）
+let lastCursorSend = 0;
 
 function onSelectionKeydown(e: KeyboardEvent) {
   const ae = document.activeElement;
@@ -1096,7 +1098,11 @@ function onPointerMove(e: any) {
     startPos = pos;
   }
 
-  provider?.updateCursor({ userId, userName: displayName, x: pos.x, y: pos.y, color: userColor });
+  const cursorNow = Date.now();
+  if (cursorNow - lastCursorSend >= 50) {
+    lastCursorSend = cursorNow;
+    provider?.updateCursor({ userId, userName: displayName, x: pos.x, y: pos.y, color: userColor });
+  }
 }
 
 function onPointerUp(e: any) {
