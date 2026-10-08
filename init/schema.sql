@@ -12,44 +12,44 @@ CREATE TABLE users (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- 2. 直播房间表
+-- 2. 直播房间表（驼峰列名必须加双引号，PostgreSQL 会把未引号标识符折叠为小写）
 CREATE TABLE live_rooms (
-  room_id VARCHAR(50) PRIMARY KEY,
+  "roomId" VARCHAR(50) PRIMARY KEY,
   title VARCHAR(200) NOT NULL,
-  join_code VARCHAR(20) NOT NULL UNIQUE,
+  "joinCode" VARCHAR(20) NOT NULL UNIQUE,
   type INTEGER NOT NULL DEFAULT 0,
   status INTEGER NOT NULL DEFAULT 1,
-  start_time TIMESTAMPTZ NOT NULL,
+  "startTime" TIMESTAMPTZ NOT NULL,
   duration INTEGER NOT NULL DEFAULT 60,
-  live_user_id VARCHAR(50) NOT NULL,
-  live_nums INTEGER NOT NULL DEFAULT 0,
-  live_started_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  deleted_at TIMESTAMPTZ
+  "liveUserId" VARCHAR(50) NOT NULL,
+  "liveNums" INTEGER NOT NULL DEFAULT 0,
+  "liveStartedAt" TIMESTAMPTZ,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "deletedAt" TIMESTAMPTZ
 );
 
 -- 3. 直播参与者表
 CREATE TABLE live_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id VARCHAR NOT NULL,
-  room_id VARCHAR NOT NULL,
-  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT UQ_live_participants_user_room UNIQUE (user_id, room_id)
+  "userId" VARCHAR NOT NULL,
+  "roomId" VARCHAR NOT NULL,
+  "joinedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT UQ_live_participants_user_room UNIQUE ("userId", "roomId")
 );
 
 -- 4. 视频录制表
 CREATE TABLE video_recordings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  room_id VARCHAR(50) NOT NULL,
-  file_path VARCHAR(500) NOT NULL,
-  file_name VARCHAR(200) NOT NULL,
-  file_size BIGINT NOT NULL DEFAULT 0,
+  "roomId" VARCHAR(50) NOT NULL,
+  "filePath" VARCHAR(500) NOT NULL,
+  "fileName" VARCHAR(200) NOT NULL,
+  "fileSize" BIGINT NOT NULL DEFAULT 0,
   duration INTEGER NOT NULL DEFAULT 0,
-  record_type INTEGER NOT NULL DEFAULT 1,
-  teacher_name VARCHAR(50) NOT NULL DEFAULT '',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  "recordType" INTEGER NOT NULL DEFAULT 1,
+  "teacherName" VARCHAR(50) NOT NULL DEFAULT '',
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 5. 用户观看时长表
@@ -66,11 +66,11 @@ CREATE TABLE user_watch_times (
 CREATE TABLE live_transfer_codes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code VARCHAR(20) NOT NULL UNIQUE,
-  room_id VARCHAR(50) NOT NULL,
-  target_user_id VARCHAR(50) NOT NULL,
+  "roomId" VARCHAR(50) NOT NULL,
+  "targetUserId" VARCHAR(50) NOT NULL,
   status INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  expires_at TIMESTAMPTZ NOT NULL
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "expiresAt" TIMESTAMPTZ NOT NULL
 );
 
 -- 7. 聊天消息落库（chat-ws-service，见 docs/plans/chat-persistence-plan.md）
@@ -92,3 +92,15 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 CREATE UNIQUE INDEX IF NOT EXISTS UQ_chat_messages_msg_id    ON chat_messages (msg_id);
 CREATE INDEX        IF NOT EXISTS IDX_chat_messages_room_time ON chat_messages (room_id, created_at DESC, id DESC);
 COMMIT;
+
+-- 8. 课件表（live-service，TypeORM Courseware 实体）
+CREATE TABLE coursewares (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "roomId" VARCHAR(50) NOT NULL,
+  filename VARCHAR(255) NOT NULL,
+  filext VARCHAR(20) NOT NULL DEFAULT '',
+  filesize BIGINT NOT NULL DEFAULT 0,
+  fileurl TEXT NOT NULL,
+  "createUserId" VARCHAR(50) NOT NULL DEFAULT '',
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

@@ -203,7 +203,7 @@ docker logs yunyan-live-postgres --tail 20
 
 数据库初始化说明：
 
-- PostgreSQL 容器首次启动时，自动执行 `schema.sql` 创建 6 张表
+- PostgreSQL 容器首次启动时，自动执行 `schema.sql` 创建 8 张表
 - 已有数据的容器不会重复执行（`pgdata` 卷存在时跳过）
 - 重置数据库：`docker compose down -v && docker compose up -d`
 
@@ -285,7 +285,7 @@ docker logs yunyan-live-redis --tail 20
 
 PostgreSQL 容器使用 `/docker-entrypoint-initdb.d/` 机制：
 
-- 首次启动时自动执行挂载的 `schema.sql`，创建 6 张表
+- 首次启动时自动执行挂载的 `schema.sql`，创建 8 张表
 - 通过 `docker-compose.yml` 中的 volume 挂载实现：
   ```yaml
   volumes:
