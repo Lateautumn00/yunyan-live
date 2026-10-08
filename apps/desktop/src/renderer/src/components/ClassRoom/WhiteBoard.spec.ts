@@ -466,6 +466,7 @@ type WBVM = {
   layerClear: () => void;
   editZoom: () => void;
   showZoomInput: boolean;
+  zoomLevel: number;
 };
 
 // ── Tests ───────────────────────────────────────────────────────────────
@@ -580,6 +581,18 @@ describe('WhiteBoard.vue', () => {
     const vm = wrapper.vm as unknown as WBVM;
     vm.layerZoomChange('add');
     expect(vm.mode).toBe('cur');
+    wrapper.unmount();
+  });
+
+  it('教师滚轮缩放经 Konva 事件对象走 e.evt（D6 摘 nocheck 回归）', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+    const stage = vm.renderer!.getStage();
+    const preventDefault = vi.fn();
+    const before = vm.zoomLevel;
+    stage.fire('wheel', { target: stage, evt: { deltaY: 100, preventDefault } });
+    expect(preventDefault).toHaveBeenCalled();
+    expect(vm.zoomLevel).toBe(before - 1);
     wrapper.unmount();
   });
 

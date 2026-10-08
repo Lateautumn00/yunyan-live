@@ -330,7 +330,6 @@
 </template>
 
 <script setup lang="ts">
-// @ts-nocheck
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
@@ -508,8 +507,9 @@ onMounted(() => {
     }
     // Add pages missing locally
     for (let i = 0; i < yPageIds.length; i++) {
-      if (!renderer.pageIds.includes(yPageIds[i])) {
-        renderer.addPage(i, yPageIds[i]);
+      const pageId = yPageIds[i];
+      if (pageId !== undefined && !renderer.pageIds.includes(pageId)) {
+        renderer.addPage(i, pageId);
       }
     }
 
@@ -643,9 +643,10 @@ function laserOff() {
 function onAwarenessLaser() {
   if (!renderer || !provider) return;
   let laser: { x: number; y: number } | null = null;
-  provider.awareness.getStates().forEach((s: any) => {
+  // for-of 而非 forEach：同作用域赋值可被类型收窄跟踪（闭包内赋值会丢）
+  for (const s of provider.awareness.getStates().values()) {
     if (s && s.laser) laser = s.laser;
-  });
+  }
   const key = laser ? `${laser.x},${laser.y}` : '';
   if (key === lastLaserKey) return;
   lastLaserKey = key;
@@ -1338,11 +1339,11 @@ function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
   }
 }
 
-function onWheel(e: WheelEvent) {
+function onWheel(e: Konva.KonvaEventObject<WheelEvent>) {
   // 学生端白板只读：视图固定 100%，禁止滚轮缩放
   if (!props.isTeacher) return;
-  e.preventDefault();
-  const delta = e.deltaY > 0 ? -10 : 10;
+  e.evt.preventDefault();
+  const delta = e.evt.deltaY > 0 ? -10 : 10;
   layerZoomChange(delta > 0 ? 'add' : 'sub');
 }
 
@@ -1435,7 +1436,8 @@ function layerClear() {
   // 学生端守卫：直接操作 Yjs elements，绕过 provider，必须在此拦截
   if (!props.isTeacher) return;
   renderer?.clearCurrentPage();
-  provider?.getActiveElements()?.delete(0, provider.getActiveElements().length);
+  const activeEls = provider?.getActiveElements();
+  if (activeEls) activeEls.delete(0, activeEls.length);
   undoStack.value = [];
   redoStack.value = [];
 }
@@ -1636,7 +1638,7 @@ function sampleWheelAt(canvas: HTMLCanvasElement, clientX: number, clientY: numb
     1
   ).data;
   const hex =
-    '#' + [pixel[0], pixel[1], pixel[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+    '#' + [pixel[0], pixel[1], pixel[2]].map(v => v!.toString(16).padStart(2, '0')).join('');
   const size = Math.min(cssW, cssH);
   return {
     hex,
@@ -2123,12 +2125,14 @@ async function openCourseware(item: FileItem, index: number) {
     const box = document.getElementById(containerId.value);
     const cw = box?.clientWidth || 800;
     const ch = box?.clientHeight || 600;
-    const startIdx = provider.getPages().length;
+    // TS 对闭包外层 let 收窄在嵌套函数内失效：捕获为 const 供事务闭包使用
+    const p = provider;
+    const startIdx = p.getPages().length;
     let layerIds: string[] = [];
     // 单事务建页并落到首张幻灯片：观察者提交时触发一次，直接切到目标页不闪页
-    provider.doc.transact(() => {
-      layerIds = importPptPages(provider, cw, ch, fileUrl, meta);
-      provider.setCurrentPageIndex(startIdx);
+    p.doc.transact(() => {
+      layerIds = importPptPages(p, cw, ch, fileUrl, meta);
+      p.setCurrentPageIndex(startIdx);
     });
     if (layerIds.length === 0) {
       toast('PPT页面创建失败');
