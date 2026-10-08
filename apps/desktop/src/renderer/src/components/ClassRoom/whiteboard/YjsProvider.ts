@@ -1,5 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
@@ -66,7 +64,9 @@ export class YjsProvider {
     // After sync completes, if pages is still empty (student joined before teacher),
     // create a default page. This avoids creating a local page that conflicts with
     // the teacher's synced page (different Y.Map IDs cause duplicate pages).
-    this.provider.once('synced', () => {
+    // y-websocket emits `sync`/`synced` together on each sync-state change;
+    // `sync` is the typed event (ObservableV2). First change is always false→true.
+    this.provider.once('sync', () => {
       if (!this.readOnly && this.pages.length === 0) {
         this.doc.transact(() => {
           const page = new Y.Map();
@@ -85,7 +85,8 @@ export class YjsProvider {
   }
 
   onSynced(cb: () => void) {
-    this.provider.on('synced', cb);
+    // 每次同步状态变更都回调（含重连），与原 'synced' 行为一致
+    this.provider.on('sync', () => cb());
   }
 
   getCurrentPageIndex(): number {
