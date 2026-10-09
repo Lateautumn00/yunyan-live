@@ -429,6 +429,12 @@ vi.mock('./whiteboard/pdfAsset', () => ({
   renderPdfPage: vi.fn(() => Promise.reject(new Error('test: pdf render unavailable')))
 }));
 
+// F6.1 导出：runExport 是外部管线（离屏 Konva/jsPDF/jszip），组件用例只验证接线与状态
+const exportMocks = vi.hoisted(() => ({ runExport: vi.fn() }));
+vi.mock('./whiteboard/exportBoard', () => ({
+  runExport: exportMocks.runExport
+}));
+
 function mountWB(props: Record<string, unknown> = {}) {
   // WhiteBoard mounted() queries #container for width/height
   let container = document.getElementById('container');
@@ -2758,5 +2764,156 @@ describe('WhiteBoard.vue 快照状态帧横幅', () => {
     await nextTick();
     expect(wrapper.find('.snapshot-banner').exists()).toBe(false);
     wrapper.unmount();
+  });
+});
+
+describe('WhiteBoard.vue 板书导出（F6.1）', () => {
+  type ExportReq = {
+    format: string;
+    scope: string;
+    currentPage: number;
+    pageCount: number;
+    getElementsAt: (i: number) => unknown;
+    width: number;
+    height: number;
+    fileNameBase: string;
+    onProgress?: (done: number, total: number) => void;
+  };
+
+  beforeEach(() => {
+    exportMocks.runExport.mockResolvedValue('saved');
+  });
+
+  it('教师工具栏提供导出入口', () => {
+    const wrapper = mountWB();
+    expect(wrapper.find('.tools .export').exists()).toBe(true);
+  });
+
+  it('学生端无导出入口，手动调用也提示仅教师可导出', async () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as {
+      openExportDialog: () => void;
+      exportDialogVisible: boolean;
+      toastMsg: string;
+    };
+    expect(wrapper.find('.tools .export').exists()).toBe(false);
+    vm.openExportDialog();
+    await nextTick();
+    expect(vm.exportDialogVisible).toBe(false);
+    expect(vm.toastMsg).toBe('仅教师可导出');
+    expect(exportMocks.runExport).not.toHaveBeenCalled();
+  });
+
+  it('点击入口打开导出弹窗（默认当前页 PNG）', async () => {
+    const wrapper = mountWB();
+    await wrapper.find('.tools .export').trigger('click');
+    await nextTick();
+    const vm = wrapper.vm as unknown as {
+      exportDialogVisible: boolean;
+      exportScope: string;
+      exportFormat: string;
+    };
+    expect(vm.exportDialogVisible).toBe(true);
+    expect(vm.exportScope).toBe('current');
+    expect(vm.exportFormat).toBe('png');
+    expect(wrapper.find('.el-dialog__title').text()).toBe('导出板书');
+  });
+
+  it('确认导出：按当前页 PNG 组装请求，成功后关弹窗并提示', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as {
+      openExportDialog: () => void;
+      confirmExport: () => Promise<void>;
+      exportDialogVisible: boolean;
+      toastMsg: string;
+    };
+    vm.openExportDialog();
+    await nextTick();
+    await vm.confirmExport();
+
+    expect(exportMocks.runExport).toHaveBeenCalledTimes(1);
+    const req = exportMocks.runExport.mock.calls[0]![0] as ExportReq;
+    expect(req.format).toBe('png');
+    expect(req.scope).toBe('current');
+    // 测试环境无 ws sync，provider 无默认页（pageCount=0 由 runExport 判空并给出可读错误）
+    expect(req.pageCount).toBeGreaterThanOrEqual(0);
+    expect(req.currentPage).toBeGreaterThanOrEqual(0);
+    expect(req.width).toBe(800);
+    expect(req.height).toBe(600);
+    expect(req.fileNameBase).toBe('板书-1001');
+    expect(typeof req.getElementsAt).toBe('function');
+    expect(typeof req.onProgress).toBe('function');
+    expect(vm.exportDialogVisible).toBe(false);
+    expect(vm.toastMsg).toBe('导出成功');
+  });
+
+  it('用户取消保存：关闭弹窗且不提示成功', async () => {
+    exportMocks.runExport.mockResolvedValue('cancelled');
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as {
+      openExportDialog: () => void;
+      confirmExport: () => Promise<void>;
+      exportDialogVisible: boolean;
+      toastMsg: string;
+    };
+    vm.openExportDialog();
+    await nextTick();
+    await vm.confirmExport();
+    expect(vm.exportDialogVisible).toBe(false);
+    expect(vm.toastMsg).toBe('');
+  });
+
+  it('导出失败：toast 可读错误，弹窗保留可重试', async () => {
+    exportMocks.runExport.mockRejectedValue(new Error('第2页图片加载超时'));
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as {
+      openExportDialog: () => void;
+      confirmExport: () => Promise<void>;
+      exportDialogVisible: boolean;
+      exporting: boolean;
+      toastMsg: string;
+    };
+    vm.openExportDialog();
+    await nextTick();
+    await vm.confirmExport();
+    expect(vm.toastMsg).toBe('导出失败：第2页图片加载超时');
+    expect(vm.exportDialogVisible).toBe(true);
+    expect(vm.exporting).toBe(false);
+  });
+
+  it('进度回调写入 exportProgress（页 n/m）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as {
+      openExportDialog: () => void;
+      confirmExport: () => Promise<void>;
+      exportProgress: { done: number; total: number } | null;
+    };
+    vm.openExportDialog();
+    await nextTick();
+    let seen: { done: number; total: number } | null = null;
+    exportMocks.runExport.mockImplementation(async (req: ExportReq) => {
+      req.onProgress?.(2, 5);
+      seen = vm.exportProgress;
+      return 'saved';
+    });
+    await vm.confirmExport();
+    expect(seen).toEqual({ done: 2, total: 5 });
+  });
+
+  it('全部页 PNG 在弹窗内提示打包 ZIP', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as {
+      openExportDialog: () => void;
+      exportScope: string;
+      exportFormat: string;
+    };
+    vm.openExportDialog();
+    await nextTick();
+    expect(wrapper.find('.export-hint').exists()).toBe(false);
+    vm.exportScope = 'all';
+    vm.exportFormat = 'png';
+    await nextTick();
+    expect(wrapper.find('.export-hint').exists()).toBe(true);
+    expect(wrapper.find('.export-hint').text()).toContain('ZIP');
   });
 });

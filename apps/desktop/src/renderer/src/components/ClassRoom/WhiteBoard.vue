@@ -69,6 +69,11 @@
             <el-icon><FolderOpened /></el-icon>
           </div>
         </el-tooltip>
+        <el-tooltip content="导出板书 · PNG/PDF（仅教师）" placement="right">
+          <div class="export" @click="openExportDialog">
+            <el-icon><Download /></el-icon>
+          </div>
+        </el-tooltip>
       </div>
 
       <!-- 底部控制栏（仅教师：撤销/清空/缩放均写入或影响共享白板） -->
@@ -326,6 +331,40 @@
         板书暂存失败，重试中(第 {{ snapshotRetry }} 次)
       </div>
 
+      <!-- 板书导出（F6.1，仅教师）：范围/格式 + 逐页进度 + 失败留弹窗可重试 -->
+      <el-dialog
+        v-model="exportDialogVisible"
+        title="导出板书"
+        width="380px"
+        append-to-body
+        :close-on-click-modal="!exporting"
+      >
+        <div class="export-row">
+          <span class="export-label">范围</span>
+          <el-radio-group v-model="exportScope" :disabled="exporting">
+            <el-radio :value="'current'">当前页（第 {{ curLayerIndex }} 页）</el-radio>
+            <el-radio :value="'all'">全部（{{ layerIndex }} 页）</el-radio>
+          </el-radio-group>
+        </div>
+        <div class="export-row">
+          <span class="export-label">格式</span>
+          <el-radio-group v-model="exportFormat" :disabled="exporting">
+            <el-radio :value="'png'">PNG</el-radio>
+            <el-radio :value="'pdf'">PDF</el-radio>
+          </el-radio-group>
+        </div>
+        <div v-if="exportScope === 'all' && exportFormat === 'png'" class="export-hint">
+          全部页 PNG 将打包为 ZIP 保存
+        </div>
+        <div v-if="exporting && exportProgress" class="export-progress">
+          导出中 {{ exportProgress.done }}/{{ exportProgress.total }}…
+        </div>
+        <template #footer>
+          <el-button :disabled="exporting" @click="exportDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="exporting" @click="confirmExport">导出</el-button>
+        </template>
+      </el-dialog>
+
       <!-- Toast -->
       <div v-show="toastMsg" class="alert">
         {{ toastMsg }}
@@ -343,6 +382,7 @@ import { debounce, formatFileSize, frameThrottle, throttle, uid } from '@yunyan-
 import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
+import { runExport, type ExportFormat, type ExportScope } from './whiteboard/exportBoard';
 import { PRESET_COLORS, ERASER_WIDTH_MULT, type FileItem, type ToolMode } from './whiteboard/types';
 import { useUserStore } from '@/store/user';
 import Live from '@/api/backstage';
@@ -376,6 +416,12 @@ const loading = ref(false);
 const toastMsg = ref('');
 /** §4.9 F6.2 快照暂存失败横幅：null=正常；数字=服务端重试次数（state 0 恢复时清空） */
 const snapshotRetry = ref<number | null>(null);
+/** F6.1 板书导出：弹窗/选项/进度；exporting 期间禁用选项与重复提交 */
+const exportDialogVisible = ref(false);
+const exportScope = ref<ExportScope>('current');
+const exportFormat = ref<ExportFormat>('png');
+const exporting = ref(false);
+const exportProgress = ref<{ done: number; total: number } | null>(null);
 const curLayerIndex = ref(1);
 const layerIndex = ref(1);
 const fileList = ref<any[]>([]);
@@ -2104,6 +2150,52 @@ async function delFile(i: number) {
   if (hadPages) showLayer(1);
 }
 
+function openExportDialog() {
+  // 权限防线（D8 口径）：入口已随 isTeacher 隐藏，readOnly 场景（学生身份进房）仍拦截
+  if (!props.isTeacher || provider?.readOnly) {
+    toast('仅教师可导出');
+    return;
+  }
+  exportScope.value = 'current';
+  exportFormat.value = 'png';
+  exportProgress.value = null;
+  exportDialogVisible.value = true;
+}
+
+async function confirmExport() {
+  // 导出期间禁用按钮防双开；无 provider/renderer（未挂载）不弹错误直接结束
+  if (exporting.value || !provider || !renderer) return;
+  const p = provider;
+  const r = renderer;
+  const total = exportScope.value === 'current' ? 1 : p.getPages().length;
+  exporting.value = true;
+  exportProgress.value = { done: 0, total };
+  try {
+    const stage = r.getStage();
+    const outcome = await runExport({
+      format: exportFormat.value,
+      scope: exportScope.value,
+      currentPage: p.getCurrentPageIndex(),
+      pageCount: p.getPages().length,
+      getElementsAt: index => p.getElementsAtPage(index),
+      width: stage.width(),
+      height: stage.height(),
+      fileNameBase: `板书-${props.roomId}`,
+      onProgress: (done, count) => {
+        exportProgress.value = { done, total: count };
+      }
+    });
+    exportDialogVisible.value = false;
+    if (outcome === 'saved') toast('导出成功');
+  } catch (err) {
+    // 失败留在弹窗内：toast 可读错误，用户改选项或直接重试（§4.9 失败态）
+    toast(`导出失败：${(err as Error).message}`);
+  } finally {
+    exporting.value = false;
+    exportProgress.value = null;
+  }
+}
+
 defineExpose({
   layerClear,
   tool,
@@ -2113,6 +2205,13 @@ defineExpose({
   openCourseware,
   delFile,
   delLayer,
+  openExportDialog,
+  confirmExport,
+  exportDialogVisible,
+  exportScope,
+  exportFormat,
+  exporting,
+  exportProgress,
   setFileItemId: (index: number, fileid: string) => {
     provider?.setFileItemId(index, fileid);
     fileList.value = provider!.getFileList();
@@ -2764,5 +2863,32 @@ defineExpose({
   z-index: 200;
   white-space: nowrap;
   pointer-events: none;
+}
+
+/* F6.1 导出弹窗（teleport 到 body，scoped 属性随编译落在内容节点上仍生效） */
+.export-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  .export-label {
+    width: 36px;
+    flex-shrink: 0;
+    color: #666;
+  }
+}
+
+.export-hint {
+  margin-top: -4px;
+  margin-bottom: 8px;
+  color: #999;
+  font-size: 12px;
+}
+
+.export-progress {
+  margin-top: 8px;
+  color: #409eff;
+  font-size: 13px;
 }
 </style>
