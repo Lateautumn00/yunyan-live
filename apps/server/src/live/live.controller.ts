@@ -12,7 +12,9 @@
   Request,
   Inject,
   OnModuleInit,
-  Logger
+  Logger,
+  HttpException,
+  HttpStatus
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { Metadata } from '@grpc/grpc-js';
@@ -33,6 +35,9 @@ import {
   UpdateLiveDto,
   userIdMetadata
 } from '@yunyan-live/nest-shared';
+
+/** 与 push.controller 口径一致：1 = 教师 */
+const TEACHER_ROLE = 1;
 
 interface LiveResponse {
   code: string;
@@ -258,6 +263,39 @@ interface LiveServiceClient {
     };
   }>;
   deleteCourseware(data: { id: string }): Observable<{ code: string; msg: string }>;
+  saveBoardSnapshot(data: {
+    room_id: string;
+    lesson_id?: string;
+    format_version?: number;
+    data: Uint8Array;
+  }): Observable<{ code: string; msg: string }>;
+  listBoardSnapshots(data: { room_id: string; cursor?: string; limit?: number }): Observable<{
+    code: string;
+    msg: string;
+    data: {
+      items: Array<{
+        id: string;
+        room_id: string;
+        lesson_id: string;
+        format_version: number;
+        size: number;
+        created_at: string;
+      }>;
+      has_more: boolean;
+    };
+  }>;
+  getBoardSnapshot(data: { id: string }): Observable<{
+    code: string;
+    msg: string;
+    data: {
+      id: string;
+      room_id: string;
+      lesson_id: string;
+      format_version: number;
+      data: Uint8Array;
+      created_at: string;
+    };
+  }>;
 }
 
 interface UserData {
@@ -292,6 +330,20 @@ export class LiveController implements OnModuleInit {
   onModuleInit() {
     this.liveService = this.liveClient.getService<LiveServiceClient>('LiveService');
     this.authService = this.authClient.getService<AuthServiceClient>('AuthService');
+  }
+
+  /** 房间级 403：仅教师（role=1）且为该房间 liveUserId 所有者可访问板书快照（5.9.2，Q4 MVP 仅教师） */
+  private async assertRoomTeacher(
+    user: { userId: string; role?: number },
+    roomId: string
+  ): Promise<void> {
+    if (user.role !== TEACHER_ROLE) {
+      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+    }
+    const room = await grpcCall(this.liveService.showRoom({ room_id: roomId }));
+    if (room?.data?.live_user_id !== user.userId) {
+      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+    }
   }
 
   private async resolveUsernames(userIds: string[]): Promise<Map<string, string>> {
@@ -690,6 +742,71 @@ export class LiveController implements OnModuleInit {
   @UseGuards(JwtAuthGuard)
   deleteCourseware(@Body('id') id: string) {
     return grpcCall(this.liveService.deleteCourseware({ id }));
+  }
+
+  @Post('boardSnapshot')
+  @UseGuards(JwtAuthGuard)
+  async saveBoardSnapshot(
+    @Body() body: { roomId: string; lessonId?: string; data: string },
+    @Request() req: { user: { userId: string; role?: number } }
+  ) {
+    await this.assertRoomTeacher(req.user, body.roomId);
+    await grpcCall(
+      this.liveService.saveBoardSnapshot({
+        room_id: body.roomId,
+        lesson_id: body.lessonId,
+        format_version: 1,
+        data: Buffer.from(body.data || '', 'base64')
+      })
+    );
+    return { success: true };
+  }
+
+  @Get('boardHistory')
+  @UseGuards(JwtAuthGuard)
+  async boardHistory(
+    @Query('roomId') roomId: string,
+    @Query('cursor') cursor: string | undefined,
+    @Query('limit') limit: string | undefined,
+    @Request() req: { user: { userId: string; role?: number } }
+  ) {
+    await this.assertRoomTeacher(req.user, roomId);
+    const result = await grpcCall(
+      this.liveService.listBoardSnapshots({
+        room_id: roomId,
+        cursor: cursor || undefined,
+        limit: limit ? Number(limit) : undefined
+      })
+    );
+    return {
+      items: (result?.data?.items || []).map(item => ({
+        id: item.id,
+        roomId: item.room_id,
+        lessonId: item.lesson_id,
+        formatVersion: item.format_version,
+        size: item.size,
+        createdAt: item.created_at
+      })),
+      hasMore: result?.data?.has_more ?? false
+    };
+  }
+
+  @Get('boardSnapshot/:id')
+  @UseGuards(JwtAuthGuard)
+  async getBoardSnapshot(
+    @Param('id') id: string,
+    @Request() req: { user: { userId: string; role?: number } }
+  ) {
+    const snapshot = await grpcCall(this.liveService.getBoardSnapshot({ id }));
+    await this.assertRoomTeacher(req.user, snapshot.data.room_id);
+    return {
+      id: snapshot.data.id,
+      roomId: snapshot.data.room_id,
+      lessonId: snapshot.data.lesson_id,
+      formatVersion: snapshot.data.format_version,
+      createdAt: snapshot.data.created_at,
+      data: Buffer.from(snapshot.data.data).toString('base64')
+    };
   }
 
   @Post('savePlayBackUrl')

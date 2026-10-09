@@ -95,6 +95,67 @@ function createController() {
     ),
     deleteVideoByRoomIds: vi.fn(() => of({ code: '0', msg: 'ok' })),
     deleteVideoByVideoIds: vi.fn(() => of({ code: '0', msg: 'ok' })),
+    saveBoardSnapshot: vi.fn(() => of({ code: '0', msg: 'ok' })),
+    listBoardSnapshots: vi.fn(
+      (): Observable<{
+        code: string;
+        msg: string;
+        data?: {
+          items: Array<{
+            id: string;
+            room_id: string;
+            lesson_id: string;
+            format_version: number;
+            size: number;
+            created_at: string;
+          }>;
+          has_more: boolean;
+        };
+      }> =>
+        of({
+          code: '0',
+          msg: 'ok',
+          data: {
+            items: [
+              {
+                id: 's1',
+                room_id: 'r1',
+                lesson_id: '',
+                format_version: 1,
+                size: 64,
+                created_at: '1704067200000'
+              }
+            ],
+            has_more: true
+          }
+        })
+    ),
+    getBoardSnapshot: vi.fn(
+      (): Observable<{
+        code: string;
+        msg: string;
+        data?: {
+          id: string;
+          room_id: string;
+          lesson_id: string;
+          format_version: number;
+          data: Uint8Array;
+          created_at: string;
+        };
+      }> =>
+        of({
+          code: '0',
+          msg: 'ok',
+          data: {
+            id: 's1',
+            room_id: 'r1',
+            lesson_id: 'L-9',
+            format_version: 1,
+            data: Buffer.from([7, 8]),
+            created_at: '1704067200000'
+          }
+        })
+    ),
     getUserWatchTimeList: vi.fn(
       (): Observable<{
         code: string;
@@ -764,5 +825,99 @@ describe('LiveController savePlayBackUrl / getUserWatchTimeList', () => {
     const res = await controller.getUserWatchTimeList({});
     expect(res.list[0]?.nickName).toBe('u1');
     expect(res.other).toEqual({ totalTimeByRoomId: 900 });
+  });
+});
+
+describe('LiveController board snapshot（房间级 403，Q4 MVP 仅教师）', () => {
+  const reqRole = (userId: string, role?: number) => ({ user: { userId, role } });
+
+  it('非教师（role=2）访问 boardHistory 直接 403，不发起 gRPC', async () => {
+    const { controller, liveService } = createController();
+    await expect(
+      controller.boardHistory('r1', undefined, undefined, reqRole('t1', 2))
+    ).rejects.toMatchObject({ status: 403 });
+    expect(liveService.listBoardSnapshots).not.toHaveBeenCalled();
+  });
+
+  it('教师非房间所有者（liveUserId 不匹配）403', async () => {
+    const { controller, liveService } = createController();
+    await expect(
+      controller.boardHistory('r1', undefined, undefined, reqRole('t2', 1))
+    ).rejects.toMatchObject({ status: 403 });
+    expect(liveService.showRoom).toHaveBeenCalledWith({ room_id: 'r1' });
+    expect(liveService.listBoardSnapshots).not.toHaveBeenCalled();
+  });
+
+  it('房间不存在时 showRoom 的 NOT_FOUND 映射 404 透出', async () => {
+    const { controller, liveService } = createController();
+    liveService.showRoom.mockReturnValueOnce(
+      throwError(() => ({ code: 5, details: '房间不存在' }))
+    );
+    await expect(
+      controller.boardHistory('missing', undefined, undefined, reqRole('t1', 1))
+    ).rejects.toMatchObject({ status: 404 });
+    expect(liveService.listBoardSnapshots).not.toHaveBeenCalled();
+  });
+
+  it('房间所有者教师可读：snake_case 映射为 camelCase + hasMore', async () => {
+    const { controller, liveService } = createController();
+    const res = await controller.boardHistory('r1', '1704067200000', '20', reqRole('t1', 1));
+    expect(liveService.listBoardSnapshots).toHaveBeenCalledWith({
+      room_id: 'r1',
+      cursor: '1704067200000',
+      limit: 20
+    });
+    expect(res).toEqual({
+      items: [
+        {
+          id: 's1',
+          roomId: 'r1',
+          lessonId: '',
+          formatVersion: 1,
+          size: 64,
+          createdAt: '1704067200000'
+        }
+      ],
+      hasMore: true
+    });
+  });
+
+  it('saveBoardSnapshot：base64 解码为字节、format_version=1、鉴权先行', async () => {
+    const { controller, liveService } = createController();
+    const res = await controller.saveBoardSnapshot(
+      { roomId: 'r1', data: Buffer.from([1, 2, 3]).toString('base64') },
+      reqRole('t1', 1)
+    );
+    expect(liveService.saveBoardSnapshot).toHaveBeenCalledWith({
+      room_id: 'r1',
+      lesson_id: undefined,
+      format_version: 1,
+      data: Buffer.from([1, 2, 3])
+    });
+    expect(res).toEqual({ success: true });
+
+    liveService.saveBoardSnapshot.mockClear();
+    await expect(
+      controller.saveBoardSnapshot({ roomId: 'r1', data: '' }, reqRole('u1', 2))
+    ).rejects.toMatchObject({ status: 403 });
+    expect(liveService.saveBoardSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('boardSnapshot/:id：先取详情再按其 roomId 鉴权，data 回 base64', async () => {
+    const { controller, liveService } = createController();
+    const res = await controller.getBoardSnapshot('s1', reqRole('t1', 1));
+    expect(liveService.getBoardSnapshot).toHaveBeenCalledWith({ id: 's1' });
+    expect(res).toEqual({
+      id: 's1',
+      roomId: 'r1',
+      lessonId: 'L-9',
+      formatVersion: 1,
+      createdAt: '1704067200000',
+      data: Buffer.from([7, 8]).toString('base64')
+    });
+
+    await expect(controller.getBoardSnapshot('s1', reqRole('t2', 1))).rejects.toMatchObject({
+      status: 403
+    });
   });
 });
