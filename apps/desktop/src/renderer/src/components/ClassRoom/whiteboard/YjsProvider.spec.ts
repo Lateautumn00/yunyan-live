@@ -167,6 +167,26 @@ describe('YjsProvider readOnly', () => {
     ).toBeFalsy();
   });
 
+  it('readOnly updateCursor 不广播（F7.1 学生端只渲染不可写）', () => {
+    const p = create(true);
+    p.updateCursor({ userId: 'u1', userName: 'S', x: 1, y: 2, color: '#f00' });
+    expect(
+      (p.awareness.getLocalState() as Record<string, unknown> | null)?.cursor ?? null
+    ).toBeFalsy();
+  });
+
+  it('可写 updateCursor 写入 awareness（对照）', () => {
+    const p = create(false);
+    p.updateCursor({ userId: 'u1', userName: 'T', x: 3, y: 4, color: '#0f0' });
+    expect((p.awareness.getLocalState() as Record<string, unknown> | null)?.cursor).toEqual({
+      userId: 'u1',
+      userName: 'T',
+      x: 3,
+      y: 4,
+      color: '#0f0'
+    });
+  });
+
   it('可写 setLaser/setLaserOff 写入 awareness 并可清除（对照）', () => {
     const p = create(false);
     p.setLaser(30, 40);

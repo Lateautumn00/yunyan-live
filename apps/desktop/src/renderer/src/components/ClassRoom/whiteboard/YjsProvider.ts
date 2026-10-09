@@ -416,7 +416,9 @@ export class YjsProvider {
     }));
   }
 
+  // 光标：瞬时广播（awareness，不进 Yjs 文档/undo 栈），仅教师可写（学生端只渲染）
   updateCursor(cursor: CursorData) {
+    if (this.readOnly) return;
     this.awareness.setLocalStateField('cursor', cursor);
   }
 
