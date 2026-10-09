@@ -193,12 +193,18 @@ importers:
       element-plus:
         specifier: ^2.14.4
         version: 2.14.5(vue@3.5.41(typescript@5.9.3))
+      html2canvas:
+        specifier: ^1.4.1
+        version: 1.4.1
       jspdf:
         specifier: ^4.2.1
         version: 4.2.1
       jszip:
         specifier: ^3.10.2
         version: 3.10.2
+      katex:
+        specifier: ^0.19.0
+        version: 0.19.0
       konva:
         specifier: ^10.3.1
         version: 10.3.1
@@ -4352,6 +4358,10 @@ packages:
 
   jws@4.0.1:
     resolution: {integrity: sha512-EKI/M/yqPncGUUh44xz0PxSidXFr/+r0pA70+gIYhjv+et7yxM+s29Y+VGDkovRofQem0fs7Uvf4+YmAdyRduA==}
+
+  katex@0.19.0:
+    resolution: {integrity: sha512-v6Tznz3zJ7u3niRCoDTsumM2+HA2XXcCu+WAacCeHD2z3p9A9Ks987o5FzfTGBN0e8A0vjEgIDvLbICrXpdw/Q==}
+    hasBin: true
 
   keygrip@1.1.0:
     resolution: {integrity: sha512-iYSchDJ+liQ8iwbSI2QqsQOvqv58eJCEanyJPJi+Khyu8smkcKSFUCbPwzFcL7YVtZ6eONjqRX/38caJ7QjRAQ==}
@@ -8879,8 +8889,7 @@ snapshots:
 
   balanced-match@4.0.4: {}
 
-  base64-arraybuffer@1.0.2:
-    optional: true
+  base64-arraybuffer@1.0.2: {}
 
   base64-js@1.5.1: {}
 
@@ -9212,8 +9221,7 @@ snapshots:
   commander@12.1.0:
     optional: true
 
-  commander@15.0.0:
-    optional: true
+  commander@15.0.0: {}
 
   commander@2.20.3: {}
 
@@ -9357,7 +9365,6 @@ snapshots:
   css-line-break@2.1.0:
     dependencies:
       utrie: 1.0.2
-    optional: true
 
   css-select@5.2.2:
     dependencies:
@@ -10500,7 +10507,6 @@ snapshots:
     dependencies:
       css-line-break: 2.1.0
       text-segmentation: 1.0.3
-    optional: true
 
   htmlnano@3.4.0(cssnano@7.1.9(postcss@8.5.26))(postcss@8.5.26)(svgo@4.1.0)(terser@5.50.0)(typescript@5.9.3):
     dependencies:
@@ -10967,6 +10973,10 @@ snapshots:
     dependencies:
       jwa: 2.0.1
       safe-buffer: 5.2.1
+
+  katex@0.19.0:
+    dependencies:
+      commander: 15.0.0
 
   keygrip@1.1.0:
     dependencies:
@@ -13134,7 +13144,6 @@ snapshots:
   text-segmentation@1.0.3:
     dependencies:
       utrie: 1.0.2
-    optional: true
 
   through@2.3.8: {}
 
@@ -13517,7 +13526,6 @@ snapshots:
   utrie@1.0.2:
     dependencies:
       base64-arraybuffer: 1.0.2
-    optional: true
 
   uuid@11.1.1: {}
 
