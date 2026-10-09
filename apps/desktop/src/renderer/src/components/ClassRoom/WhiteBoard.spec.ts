@@ -2916,4 +2916,35 @@ describe('WhiteBoard.vue 板书导出（F6.1）', () => {
     expect(wrapper.find('.export-hint').exists()).toBe(true);
     expect(wrapper.find('.export-hint').text()).toContain('ZIP');
   });
+
+  it('导出进行中显示页进度（n/m）并防重复提交', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as {
+      openExportDialog: () => void;
+      confirmExport: () => Promise<void>;
+      exporting: boolean;
+    };
+    vm.openExportDialog();
+    await nextTick();
+    let release!: (outcome: string) => void;
+    exportMocks.runExport.mockImplementation((req: ExportReq) => {
+      req.onProgress?.(1, 3);
+      return new Promise(resolve => {
+        release = resolve;
+      });
+    });
+    const first = vm.confirmExport();
+    await nextTick();
+    await nextTick();
+    expect(vm.exporting).toBe(true);
+    const progress = wrapper.find('.export-progress');
+    expect(progress.exists()).toBe(true);
+    expect(progress.text()).toContain('1/3');
+    await vm.confirmExport();
+    expect(exportMocks.runExport).toHaveBeenCalledTimes(1);
+    release('saved');
+    await first;
+    expect(vm.exporting).toBe(false);
+    expect(wrapper.find('.export-progress').exists()).toBe(false);
+  });
 });
