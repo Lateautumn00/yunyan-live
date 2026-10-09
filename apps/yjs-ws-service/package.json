@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@grpc/grpc-js": "~1.10.0",
+    "@grpc/proto-loader": "^0.8.1",
     "@yunyan-live/nest-shared": "workspace:*",
     "@yunyan-live/types": "workspace:*",
     "dotenv": "^16.0.0",

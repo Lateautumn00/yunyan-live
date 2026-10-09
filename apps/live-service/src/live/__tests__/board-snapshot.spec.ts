@@ -163,3 +163,41 @@ describe('LiveService.getBoardSnapshot', () => {
     );
   });
 });
+
+describe('LiveService.getLatestBoardSnapshot', () => {
+  it('按 createdAt 倒序取该房间最新一条并映射', async () => {
+    const { service, boardSnapshot } = createLiveService();
+    boardSnapshot.repo.findOne.mockResolvedValue({
+      id: 'snap9',
+      roomId: 'r1',
+      lessonId: null,
+      formatVersion: 1,
+      data: Buffer.from([1]),
+      createdAt: new Date(1704067200000)
+    } as never);
+    const res = await service.getLatestBoardSnapshot('r1');
+    const args = boardSnapshot.repo.findOne.mock.calls[0][0] as Record<string, unknown>;
+    expect(args.where).toEqual({ roomId: 'r1' });
+    expect(args.order).toEqual({ createdAt: 'DESC' });
+    expect(res).toMatchObject({ id: 'snap9', createdAt: '1704067200000' });
+  });
+
+  it('房间无快照抛 NOT_FOUND（yjs-ws 视为可新建空文档）', async () => {
+    const { service, boardSnapshot } = createLiveService();
+    boardSnapshot.repo.findOne.mockResolvedValue(null as never);
+    await expectGrpcError(
+      service.getLatestBoardSnapshot('fresh'),
+      GrpcStatus.NOT_FOUND,
+      'board snapshot not found'
+    );
+  });
+
+  it('roomId 缺失抛 INVALID_ARGUMENT', async () => {
+    const { service } = createLiveService();
+    await expectGrpcError(
+      service.getLatestBoardSnapshot(''),
+      GrpcStatus.INVALID_ARGUMENT,
+      'roomId is required'
+    );
+  });
+});

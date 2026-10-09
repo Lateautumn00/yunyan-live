@@ -34,6 +34,7 @@ function makeService(): ServiceMock {
     saveBoardSnapshot: vi.fn(),
     listBoardSnapshots: vi.fn(),
     getBoardSnapshot: vi.fn(),
+    getLatestBoardSnapshot: vi.fn(),
     getUserWatchTimeList: vi.fn()
   };
 }
@@ -690,6 +691,28 @@ describe('LiveController gRPC 映射', () => {
       format_version: 1,
       data: bytes,
       created_at: '1704067200000'
+    });
+  });
+
+  it('GetLatestBoardSnapshot：room_id 映射并复用详情信封', async () => {
+    const { controller, service } = makeController();
+    service.getLatestBoardSnapshot.mockResolvedValue({
+      id: 's2',
+      roomId: 'r1',
+      lessonId: null,
+      formatVersion: 1,
+      data: Buffer.from([1]),
+      createdAt: '1704067200001'
+    });
+    const res = await controller.getLatestBoardSnapshot({ room_id: 'r1' });
+    expect(service.getLatestBoardSnapshot).toHaveBeenCalledWith('r1');
+    expect(res.data).toEqual({
+      id: 's2',
+      room_id: 'r1',
+      lesson_id: '',
+      format_version: 1,
+      data: Buffer.from([1]),
+      created_at: '1704067200001'
     });
   });
 

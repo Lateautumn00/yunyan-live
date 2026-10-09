@@ -29,6 +29,7 @@ service LiveService {
   rpc SaveBoardSnapshot (SaveBoardSnapshotRequest) returns (CommonResponse) {}
   rpc ListBoardSnapshots (ListBoardSnapshotsRequest) returns (BoardSnapshotListResponse) {}
   rpc GetBoardSnapshot (GetBoardSnapshotRequest) returns (BoardSnapshotDetailResponse) {}
+  rpc GetLatestBoardSnapshot (GetLatestBoardSnapshotRequest) returns (BoardSnapshotDetailResponse) {}
 }
 
 message CreateLiveRequest {
@@ -386,6 +387,10 @@ message BoardSnapshotItem {
 
 message GetBoardSnapshotRequest {
   string id = 1;
+}
+
+message GetLatestBoardSnapshotRequest {
+  string room_id = 1;
 }
 
 message BoardSnapshotDetailResponse {

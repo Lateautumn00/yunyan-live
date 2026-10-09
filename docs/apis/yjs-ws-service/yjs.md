@@ -46,8 +46,10 @@ ws://<host>:50055?token=<JWT>&roomId=<docName>
 
 ## 状态
 
-- 文档按 `roomId` 在服务端内存中缓存（`Map<string, Y.Doc>`），无人连接时（`conns.size === 0`）销毁。
-- 断开连接时移除该连接的 awareness 状态。
+- 文档按 `roomId` 在服务端内存中缓存（`Map<string, Y.Doc>`）。房间创建/首次写入时从 board_snapshot 服务拉取最新快照恢复（`LIVE_GRPC_URL` 为空则禁用恢复）；快照拉取失败仍可进房（fail-open），但该房间禁止写入快照，避免空文档覆盖历史。
+- 空房（`conns.size === 0`）在宽限期（`SNAPSHOT_EMPTY_GRACE_MS`，默认 60s）后：**先把脏文档写入快照，成功后销毁内存文档**；写入失败则保留内存并按 `SNAPSHOT_FAIL_RETRY_MS` 退避重试。
+- 定时（`SNAPSHOT_INTERVAL_MS`，默认 5min）与进程退出（SIGTERM）也会把脏文档写入快照。
+- 断开连接时移除该连接的 awareness 状态；空房宽限期内重连会取消销毁。
 
 ## 断开
 
@@ -57,9 +59,13 @@ ws://<host>:50055?token=<JWT>&roomId=<docName>
 
 ## 相关环境变量
 
-| 变量        | 说明                                           |
-| ----------- | ---------------------------------------------- |
-| YJS_WS_PORT | 端口，默认 50055                               |
-| JWT_SECRET  | JWT 密钥，**必填**（未设置时服务拒绝启动）     |
-| REDIS_HOST  | Redis 地址，用于会话校验与踢出，默认 127.0.0.1 |
-| REDIS_PORT  | Redis 端口，默认 6379                          |
+| 变量                    | 说明                                                        |
+| ----------------------- | ----------------------------------------------------------- |
+| YJS_WS_PORT             | 端口，默认 50055                                            |
+| JWT_SECRET              | JWT 密钥，**必填**（未设置时服务拒绝启动）                  |
+| REDIS_HOST              | Redis 地址，用于会话校验与踢出，默认 127.0.0.1              |
+| REDIS_PORT              | Redis 端口，默认 6379                                       |
+| LIVE_GRPC_URL           | board_snapshot 所在 live-service 的 gRPC 地址；置空禁用快照 |
+| SNAPSHOT_INTERVAL_MS    | 定时快照间隔，默认 300000（下限 1000）                      |
+| SNAPSHOT_EMPTY_GRACE_MS | 空房销毁前宽限期，默认 60000                                |
+| SNAPSHOT_FAIL_RETRY_MS  | 快照写入失败的退避重试间隔，默认 10000                      |

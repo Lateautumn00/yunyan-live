@@ -685,6 +685,20 @@ export class LiveService {
     if (!id) throw grpcError(GrpcStatus.INVALID_ARGUMENT, 'snapshot id is required');
     const snapshot = await this.boardSnapshotRepo.findOne({ where: { id } });
     if (!snapshot) throw grpcError(GrpcStatus.NOT_FOUND, 'board snapshot not found');
+    return this.mapBoardSnapshot(snapshot);
+  }
+
+  async getLatestBoardSnapshot(roomId: string) {
+    if (!roomId) throw grpcError(GrpcStatus.INVALID_ARGUMENT, 'roomId is required');
+    const snapshot = await this.boardSnapshotRepo.findOne({
+      where: { roomId },
+      order: { createdAt: 'DESC' }
+    });
+    if (!snapshot) throw grpcError(GrpcStatus.NOT_FOUND, 'board snapshot not found');
+    return this.mapBoardSnapshot(snapshot);
+  }
+
+  private mapBoardSnapshot(snapshot: BoardSnapshot) {
     return {
       id: snapshot.id,
       roomId: snapshot.roomId,

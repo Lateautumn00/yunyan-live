@@ -464,6 +464,12 @@ importers:
 
   apps/yjs-ws-service:
     dependencies:
+      '@grpc/grpc-js':
+        specifier: ~1.10.0
+        version: 1.10.12
+      '@grpc/proto-loader':
+        specifier: ^0.8.1
+        version: 0.8.1
       '@yunyan-live/nest-shared':
         specifier: workspace:*
         version: link:../../packages/nest-shared

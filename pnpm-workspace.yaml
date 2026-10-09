@@ -6,3 +6,6 @@ onlyBuiltDependencies:
   - electron
   - esbuild
   - electron-winstaller
+
+overrides:
+  '@grpc/grpc-js': '~1.10.0'

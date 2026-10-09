@@ -489,6 +489,24 @@ export class LiveController {
   async getBoardSnapshot(data: { id: string }) {
     this.logger.log(`gRPC GetBoardSnapshot: ${data.id}`);
     const snapshot = await this.liveService.getBoardSnapshot(data.id);
+    return this.boardSnapshotEnvelope(snapshot);
+  }
+
+  @GrpcMethod('LiveService', 'GetLatestBoardSnapshot')
+  async getLatestBoardSnapshot(data: { room_id: string }) {
+    this.logger.log(`gRPC GetLatestBoardSnapshot: room=${data.room_id}`);
+    const snapshot = await this.liveService.getLatestBoardSnapshot(data.room_id);
+    return this.boardSnapshotEnvelope(snapshot);
+  }
+
+  private boardSnapshotEnvelope(snapshot: {
+    id: string;
+    roomId: string;
+    lessonId: string | null;
+    formatVersion: number;
+    data: Uint8Array;
+    createdAt: string;
+  }) {
     return ok({
       data: {
         id: snapshot.id,

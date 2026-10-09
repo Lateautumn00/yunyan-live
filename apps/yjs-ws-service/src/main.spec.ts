@@ -23,6 +23,24 @@ vi.mock('ioredis', () => {
   return { default: FakeRedis };
 });
 
+const mockSnap = vi.hoisted(() => ({
+  store: new Map<string, Uint8Array>(),
+  saveFails: false,
+  loadFails: false
+}));
+
+vi.mock('./snapshot', () => ({
+  SNAPSHOT_FORMAT_VERSION: 1,
+  async saveSnapshot(roomId: string, bytes: Uint8Array) {
+    if (mockSnap.saveFails) throw new Error('mock save failed');
+    mockSnap.store.set(roomId, bytes);
+  },
+  async loadLatestSnapshot(roomId: string) {
+    if (mockSnap.loadFails) return { ok: false as const };
+    return { ok: true as const, bytes: mockSnap.store.get(roomId) ?? null };
+  }
+}));
+
 const runId = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 const providers: WebsocketProvider[] = [];
 let port = 0;
@@ -73,6 +91,14 @@ const elementsOf = (doc: Y.Doc): unknown[] => doc.getArray('elements').toArray()
 beforeAll(async () => {
   process.env.JWT_SECRET = 'test-secret';
   process.env.TEST_SESSION_SID = 'sid-test';
+  // 必须在动态 import('./main') 之前注入：常量在模块求值时读取
+  process.env.LIVE_GRPC_URL = '';
+  process.env.SNAPSHOT_EMPTY_GRACE_MS = '100';
+  process.env.SNAPSHOT_FAIL_RETRY_MS = '150';
+  process.env.SNAPSHOT_INTERVAL_MS = '60000';
+  mockSnap.store.clear();
+  mockSnap.saveFails = false;
+  mockSnap.loadFails = false;
   port = await freePort();
   process.env.YJS_WS_PORT = String(port);
   token = jwt.sign({ sub: 'user-test', sid: 'sid-test' }, 'test-secret');
@@ -92,7 +118,7 @@ afterAll(async () => {
 }, 60000);
 
 describe('yjs-ws realtime sync', () => {
-  it('T1: after the room empties, reconnect still receives realtime broadcasts', async () => {
+  it('T1: history is restored from the persisted snapshot after empty-room cleanup', async () => {
     const room = `t1-${runId}`;
 
     const docA = new Y.Doc();
@@ -101,12 +127,14 @@ describe('yjs-ws realtime sync', () => {
     docA.getArray('elements').push(['shape1']);
     await sleep(400);
     pA.disconnect();
-    await sleep(400);
+    // grace(100ms) 内完成 flush + 释放
+    await waitFor(() => !main.roomAlive(room), 'room flushed and released', 4000);
+    expect(mockSnap.store.has(room)).toBe(true);
 
     const docB = new Y.Doc();
     const pB = connect(room, docB);
     await untilSynced(pB);
-    await waitFor(() => elementsOf(docB).includes('shape1'), 'B receives history');
+    await waitFor(() => elementsOf(docB).includes('shape1'), 'B receives snapshot history');
     expect(elementsOf(docB)).toContain('shape1');
 
     const docA2 = new Y.Doc();
@@ -182,5 +210,75 @@ describe('yjs-ws realtime sync', () => {
       () => !pB.awareness.getStates().has(docA.clientID),
       'stale awareness removed after abrupt disconnect'
     );
+  }, 20000);
+
+  it('T5: failed flush keeps the room in memory and retry eventually persists it', async () => {
+    const room = `t5-${runId}`;
+
+    const docA = new Y.Doc();
+    const pA = connect(room, docA);
+    await untilSynced(pA);
+    docA.getArray('elements').push(['shape5']);
+    await sleep(400);
+
+    mockSnap.saveFails = true;
+    pA.disconnect();
+    // grace(100) + 至少一次失败重试(150) 都失败 → 房间必须保留
+    await sleep(300);
+    expect(main.roomAlive(room)).toBe(true);
+    expect(mockSnap.store.has(room)).toBe(false);
+
+    mockSnap.saveFails = false;
+    await waitFor(() => !main.roomAlive(room), 'retry flush succeeds and releases room', 6000);
+    const bytes = mockSnap.store.get(room);
+    expect(bytes).toBeDefined();
+    const restored = new Y.Doc();
+    Y.applyUpdate(restored, bytes!);
+    expect(elementsOf(restored)).toContain('shape5');
+  }, 20000);
+
+  it('T6: flushAllRooms persists dirty rooms without waiting for cleanup (SIGTERM path)', async () => {
+    const room = `t6-${runId}`;
+
+    const docA = new Y.Doc();
+    const pA = connect(room, docA);
+    await untilSynced(pA);
+    docA.getArray('elements').push(['shape6']);
+    await sleep(400);
+    expect(mockSnap.store.has(room)).toBe(false);
+
+    await main.flushAllRooms();
+    const bytes = mockSnap.store.get(room);
+    expect(bytes).toBeDefined();
+    const restored = new Y.Doc();
+    Y.applyUpdate(restored, bytes!);
+    expect(elementsOf(restored)).toContain('shape6');
+    // 有人在线的房间只落库不销毁
+    expect(main.roomAlive(room)).toBe(true);
+    pA.disconnect();
+  }, 20000);
+
+  it('T7: snapshot load failure fails open for realtime but never overwrites storage', async () => {
+    const room = `t7-${runId}`;
+    mockSnap.loadFails = true;
+    try {
+      const docB = new Y.Doc();
+      const pB = connect(room, docB);
+      await untilSynced(pB);
+      const docC = new Y.Doc();
+      const pC = connect(room, docC);
+      await untilSynced(pC);
+
+      docB.getArray('elements').push(['shape7']);
+      await waitFor(() => elementsOf(docC).includes('shape7'), 'realtime works despite load fail');
+
+      pB.disconnect();
+      pC.disconnect();
+      // hydrated=false → 清理时跳过 flush，禁止空文档覆盖存储
+      await waitFor(() => !main.roomAlive(room), 'load-failed room released without save', 6000);
+      expect(mockSnap.store.has(room)).toBe(false);
+    } finally {
+      mockSnap.loadFails = false;
+    }
   }, 20000);
 });
