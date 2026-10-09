@@ -5,7 +5,8 @@
     "paths": {
       "@/*": ["src/renderer/src/*"],
       "~@/*": ["src/renderer/src/*"],
-      "@yunyan-live/*": ["../../packages/*/src"]
+      "@yunyan-live/*": ["../../packages/*/src"],
+      "jszip": ["src/renderer/src/types/jszip.d.ts"]
     },
     "types": ["vite/client", "element-plus/global"]
   },

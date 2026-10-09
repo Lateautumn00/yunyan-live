@@ -26,6 +26,8 @@
     "electron-log": "^5.4.4",
     "electron-updater": "^6.8.9",
     "element-plus": "^2.14.4",
+    "jspdf": "^4.2.1",
+    "jszip": "^3.10.2",
     "konva": "^10.3.1",
     "pdfjs-dist": "6.3.289",
     "pinia": "^4.0.3",
