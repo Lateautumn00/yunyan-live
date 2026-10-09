@@ -321,6 +321,11 @@
         </el-icon>
       </div>
 
+      <!-- 快照暂存失败横幅（§4.9 F6.2 失败态：可见提示+服务端自动重试） -->
+      <div v-if="snapshotRetry !== null" class="snapshot-banner">
+        板书暂存失败，重试中(第 {{ snapshotRetry }} 次)
+      </div>
+
       <!-- Toast -->
       <div v-show="toastMsg" class="alert">
         {{ toastMsg }}
@@ -369,6 +374,8 @@ const showZoomInput = ref(false);
 const zoomInputValue = ref(100);
 const loading = ref(false);
 const toastMsg = ref('');
+/** §4.9 F6.2 快照暂存失败横幅：null=正常；数字=服务端重试次数（state 0 恢复时清空） */
+const snapshotRetry = ref<number | null>(null);
 const curLayerIndex = ref(1);
 const layerIndex = ref(1);
 const fileList = ref<any[]>([]);
@@ -448,6 +455,10 @@ onMounted(() => {
     },
     !props.isTeacher
   );
+  // 快照状态帧（服务端仅教师连接推送）：state 1 显示暂存失败横幅，0 恢复后隐藏
+  provider.onSnapshotStatus(status => {
+    snapshotRetry.value = status.state === 1 ? status.attempt : null;
+  });
   renderer = new KonvaRenderer(document.getElementById(containerId.value)!);
   renderer.onShapeClick = selectShape;
   renderer.onShapeDblClick = editTextShape;
@@ -2110,6 +2121,7 @@ defineExpose({
   layerIndex,
   curLayerIndex,
   toastMsg,
+  snapshotRetry,
   rendererPageCount: () => renderer?.getPageCount() ?? 0,
   renderedShapeCount: () => renderer?.getNodeCount() ?? 0,
   getCurrentPageShapes,
@@ -2736,5 +2748,21 @@ defineExpose({
   font-size: 14px;
   z-index: 200;
   white-space: nowrap;
+}
+
+.snapshot-banner {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  background: #fdf6ec;
+  color: #e6a23c;
+  border: 1px solid #faecd8;
+  border-radius: 4px;
+  font-size: 13px;
+  z-index: 200;
+  white-space: nowrap;
+  pointer-events: none;
 }
 </style>

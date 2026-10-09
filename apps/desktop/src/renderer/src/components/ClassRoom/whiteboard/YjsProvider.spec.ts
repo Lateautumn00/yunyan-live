@@ -310,3 +310,57 @@ describe('YjsProvider undo/redo（D5 Y.UndoManager 等价性）', () => {
     remote.destroy();
   });
 });
+
+describe('YjsProvider 快照状态帧（type=4，§4.9 F6.2 横幅数据源）', () => {
+  const providers: YjsProvider[] = [];
+  function create(): YjsProvider {
+    const p = new YjsProvider(
+      `snapshot-spec-${Math.random().toString(36).slice(2, 8)}`,
+      'u1',
+      'tester',
+      '#000000',
+      undefined,
+      false
+    );
+    providers.push(p);
+    return p;
+  }
+
+  afterEach(() => {
+    while (providers.length) providers.pop()!.destroy();
+  });
+
+  type FrameHandler = (e: unknown, d: { arr: Uint8Array; pos: number }) => void;
+  const frameHandler = (p: YjsProvider): FrameHandler =>
+    p.provider.messageHandlers[4] as unknown as FrameHandler;
+  const frame = (bytes: number[]) => ({ arr: new Uint8Array(bytes), pos: 0 });
+
+  it('构造时注册 type=4 handler（早于任何网络消息）', () => {
+    const p = create();
+    expect(typeof frameHandler(p)).toBe('function');
+  });
+
+  it('state/attempt 按 varuint 解析并分发；无订阅者不崩溃', () => {
+    const p = create();
+    // 尚无订阅者：直接分发不抛错
+    frameHandler(p)(null, frame([1, 1]));
+
+    const seen: Array<{ state: 0 | 1; attempt: number }> = [];
+    p.onSnapshotStatus(s => seen.push(s));
+    frameHandler(p)(null, frame([1, 3]));
+    expect(seen).toEqual([{ state: 1, attempt: 3 }]);
+    // 300 的 varuint 编码 = [0xAC, 0x02]（7bit 续位），state=0
+    frameHandler(p)(null, frame([0, 0xac, 0x02]));
+    expect(seen[1]).toEqual({ state: 0, attempt: 300 });
+  });
+
+  it('退订后不再收到分发', () => {
+    const p = create();
+    const seen: number[] = [];
+    const off = p.onSnapshotStatus(s => seen.push(s.attempt));
+    frameHandler(p)(null, frame([1, 1]));
+    off();
+    frameHandler(p)(null, frame([1, 2]));
+    expect(seen).toEqual([1]);
+  });
+});

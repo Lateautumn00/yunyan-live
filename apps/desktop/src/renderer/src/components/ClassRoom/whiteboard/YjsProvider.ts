@@ -5,6 +5,25 @@ import { uid } from '@yunyan-live/utils';
 import { YjsClose } from '@yunyan-live/types';
 import { DEFAULT_TOOL, ToolState, FileItem, CursorData } from './types';
 
+/** 快照状态帧（服务端 type 4，仅教师连接推送）：state 0=暂存已恢复 1=暂存失败重试中 */
+export type SnapshotStatus = {
+  state: 0 | 1;
+  attempt: number;
+};
+
+/** lib0 Decoder 的最小 varuint 读取：桌面未直接依赖 lib0，按其公开字段 (arr, pos) 实现 */
+function readVarUintFrom(d: { arr: Uint8Array; pos: number }): number {
+  let num = 0;
+  let mult = 1;
+  while (d.pos < d.arr.length) {
+    const r = d.arr[d.pos++] ?? 0;
+    num += (r & 0x7f) * mult;
+    if (r < 0x80) return num;
+    mult *= 128;
+  }
+  return num;
+}
+
 export class YjsProvider {
   doc: Y.Doc;
   provider: WebsocketProvider;
@@ -16,6 +35,7 @@ export class YjsProvider {
   viewportOffset: Y.Map<any>;
   undoManager: Y.UndoManager;
   readOnly: boolean;
+  private snapshotStatusCbs: Array<(status: SnapshotStatus) => void> = [];
 
   constructor(
     roomId: string,
@@ -82,6 +102,18 @@ export class YjsProvider {
       }
     });
 
+    // 自定义 type=4 快照状态帧：messageHandlers 是实例副本（slice），可安全扩展；
+    // 构造内同步注册，早于任何网络消息到达
+    this.provider.messageHandlers[4] = (_encoder, decoder) => {
+      const state = readVarUintFrom(decoder);
+      const attempt = readVarUintFrom(decoder);
+      const status: SnapshotStatus = {
+        state: state as SnapshotStatus['state'],
+        attempt
+      };
+      for (const cb of [...this.snapshotStatusCbs]) cb(status);
+    };
+
     // After sync completes, if pages is still empty (student joined before teacher),
     // create a default page. This avoids creating a local page that conflicts with
     // the teacher's synced page (different Y.Map IDs cause duplicate pages).
@@ -109,6 +141,15 @@ export class YjsProvider {
   onSynced(cb: () => void) {
     // 每次同步状态变更都回调（含重连），与原 'synced' 行为一致
     this.provider.on('sync', () => cb());
+  }
+
+  /** 订阅快照状态帧（§4.9 F6.2 教师端横幅）；返回退订函数 */
+  onSnapshotStatus(cb: (status: SnapshotStatus) => void): () => void {
+    this.snapshotStatusCbs.push(cb);
+    return () => {
+      const i = this.snapshotStatusCbs.indexOf(cb);
+      if (i >= 0) this.snapshotStatusCbs.splice(i, 1);
+    };
   }
 
   getCurrentPageIndex(): number {

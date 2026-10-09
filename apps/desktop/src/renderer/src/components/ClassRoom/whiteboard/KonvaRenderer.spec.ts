@@ -967,3 +967,37 @@ describe('KonvaRenderer laser', () => {
     renderer.destroy();
   });
 });
+
+describe('KonvaRenderer 未知元素类型（F6.2 前向兼容）', () => {
+  it('未注册类型被跳过且不崩溃，同批已知类型正常渲染', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const known: Record<string, unknown> = {
+      id: 'k1',
+      type: 'rect',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10
+    };
+    const unknown: Record<string, unknown> = { id: 'x1', type: 'hologram-3d', x: 5, y: 5 };
+    const elements = [known, unknown].map(d => ({
+      get: (k: string) => d[k]
+    })) as unknown as Parameters<typeof renderer.bindElements>[0];
+
+    expect(() => renderer.bindElements(elements)).not.toThrow();
+    expect(renderer.layer.getChildren().length).toBe(1);
+    renderer.destroy();
+  });
+
+  it('全未知类型批次 → 空层不崩溃', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const u: Record<string, unknown> = { id: 'x1', type: 'future-widget' };
+    const elements = [{ get: (k: string) => u[k] }] as unknown as Parameters<
+      typeof renderer.bindElements
+    >[0];
+
+    expect(() => renderer.bindElements(elements)).not.toThrow();
+    expect(renderer.layer.getChildren().length).toBe(0);
+    renderer.destroy();
+  });
+});

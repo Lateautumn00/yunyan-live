@@ -2728,3 +2728,35 @@ describe('WhiteBoard.vue 激光笔', () => {
     wrapper.unmount();
   });
 });
+
+// ── 快照暂存失败横幅（§4.9 F6.2 失败态：可见提示 + 服务端自动重试） ──────
+describe('WhiteBoard.vue 快照状态帧横幅', () => {
+  type BannerVM = {
+    snapshotRetry: number | null | { value: number | null };
+    provider: {
+      provider: {
+        messageHandlers: Array<(e: unknown, d: { arr: Uint8Array; pos: number }) => void>;
+      };
+    };
+  };
+
+  it('state=1 显示「板书暂存失败，重试中(第 n 次)」，state=0 恢复后隐藏', async () => {
+    const wrapper = mountWB();
+    await nextTick();
+    const vm = wrapper.vm as unknown as BannerVM;
+    const handler = vm.provider.provider.messageHandlers[4]!;
+    expect(typeof handler).toBe('function');
+
+    // 服务端 type=4 帧：varuint(4) 已被 y-websocket 消费，此处为 payload = state + attempt
+    handler(null, { arr: new Uint8Array([1, 2]), pos: 0 });
+    await nextTick();
+    const banner = wrapper.find('.snapshot-banner');
+    expect(banner.exists()).toBe(true);
+    expect(banner.text()).toBe('板书暂存失败，重试中(第 2 次)');
+
+    handler(null, { arr: new Uint8Array([0, 0]), pos: 0 });
+    await nextTick();
+    expect(wrapper.find('.snapshot-banner').exists()).toBe(false);
+    wrapper.unmount();
+  });
+});

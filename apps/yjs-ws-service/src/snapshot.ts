@@ -97,9 +97,27 @@ export async function saveSnapshot(
 }
 
 /**
+ * 快照响应 → 加载结果映射（导出以便单测）。
+ * format_version 高于本服务支持版本（新快照 × 旧服务降级场景）时返回 ok:false，
+ * 调用方据此禁用该房间 flush，避免用 v1 字节覆盖无法理解的新版快照。
+ */
+export function toLoadResult(res: DetailResponse | null | undefined): LoadLatestResult {
+  if (res?.code !== '0' || !res.data?.id) return { ok: true, bytes: null };
+  const version = res.data.format_version || 1;
+  if (version > SNAPSHOT_FORMAT_VERSION) {
+    console.error(
+      `[YjsWS] snapshot format v${version} unsupported (max v${SNAPSHOT_FORMAT_VERSION}), ` +
+        'storage write disabled for this room'
+    );
+    return { ok: false };
+  }
+  return { ok: true, bytes: res.data.data ?? null };
+}
+
+/**
  * 拉取房间最新快照。
  * - ok:true + bytes:null = 无历史（正常新房间）
- * - ok:false = 存储不可达/异常 → 调用方必须跳过该房间的 flush，避免用空文档覆盖新快照
+ * - ok:false = 存储不可达/异常/版本过新 → 调用方必须跳过该房间的 flush，避免用空文档覆盖新快照
  */
 export async function loadLatestSnapshot(roomId: string): Promise<LoadLatestResult> {
   if (DISABLED) return { ok: true, bytes: null };
@@ -107,8 +125,7 @@ export async function loadLatestSnapshot(roomId: string): Promise<LoadLatestResu
     const res = await call<DetailResponse>(cb =>
       getClient().GetLatestBoardSnapshot({ room_id: roomId }, cb)
     );
-    if (res?.code !== '0' || !res.data?.id) return { ok: true, bytes: null };
-    return { ok: true, bytes: res.data.data ?? null };
+    return toLoadResult(res);
   } catch (err) {
     const code = (err as { code?: number })?.code;
     // NOT_FOUND = 该房间从未存过快照，属正常空态
