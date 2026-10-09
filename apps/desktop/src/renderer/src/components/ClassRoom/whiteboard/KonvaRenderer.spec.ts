@@ -224,6 +224,10 @@ const konvaMocks = vi.hoisted(() => {
       if (v !== undefined) this._points = v;
       return this._points;
     }
+    strokeWidth(v?: number) {
+      if (v !== undefined) this.attrs.strokeWidth = v;
+      return typeof this.attrs.strokeWidth === 'number' ? this.attrs.strokeWidth : 1;
+    }
     getClassName() {
       return 'Shape';
     }
@@ -1109,6 +1113,99 @@ describe('KonvaRenderer 导出模式与图片就绪（F6.1）', () => {
     const renderer = new KonvaRenderer(document.createElement('div'), { exportMode: true });
     bindOneImage(renderer, { pdfUrl: 'http://test.local/deck.pdf', page: 1 });
     await expect(renderer.whenImagesReady(3000)).resolves.toBeUndefined();
+    renderer.destroy();
+  });
+});
+
+describe('KonvaRenderer 荧光笔混合与橡皮按元素命中（F4.1）', () => {
+  function bindStrokes(renderer: KonvaRenderer, strokes: Array<Record<string, unknown>>) {
+    const elements = strokes.map(data => ({
+      get: (k: string) => data[k]
+    })) as unknown as Parameters<typeof renderer.bindElements>[0];
+    renderer.bindElements(elements);
+  }
+
+  it('blend=multiply 挂节点 globalCompositeOperation，缺省不挂', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    bindStrokes(renderer, [
+      {
+        id: 'hl1',
+        type: 'brush',
+        points: [0, 0, 10, 10],
+        color: '#ffeb3b',
+        lineWidth: 2,
+        opacity: 1,
+        blend: 'multiply'
+      },
+      {
+        id: 'pen1',
+        type: 'brush',
+        points: [0, 0, 10, 10],
+        color: '#000000',
+        lineWidth: 1,
+        opacity: 1
+      }
+    ]);
+    const hl = renderer.layer.getChildren()[0] as unknown as InstanceType<
+      typeof konvaMocks.MockLineShape
+    >;
+    const pen = renderer.layer.getChildren()[1] as unknown as InstanceType<
+      typeof konvaMocks.MockLineShape
+    >;
+    expect(hl.attrs.globalCompositeOperation).toBe('multiply');
+    expect(pen.attrs.globalCompositeOperation).toBeUndefined();
+    renderer.destroy();
+  });
+
+  it('hitStroke 折线在容差内命中、远离未命中', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    bindStrokes(renderer, [
+      { id: 'b1', type: 'brush', points: [0, 0, 100, 0], color: '#000', lineWidth: 2, opacity: 1 }
+    ]);
+    // 笔画半宽 1 + 橡皮半径 2 → 容差 3；(50,2) 在线段上
+    expect(renderer.hitStroke(50, 2, 2)).toBe('b1');
+    expect(renderer.hitStroke(50, 40, 2)).toBeNull();
+    renderer.destroy();
+  });
+
+  it('hitStroke 重叠笔迹取顶层，非折线类型跳过', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    bindStrokes(renderer, [
+      {
+        id: 'under',
+        type: 'brush',
+        points: [0, 0, 100, 0],
+        color: '#000',
+        lineWidth: 2,
+        opacity: 1
+      },
+      { id: 'top', type: 'brush', points: [0, 0, 100, 0], color: '#f00', lineWidth: 2, opacity: 1 },
+      {
+        id: 'r1',
+        type: 'rect',
+        x: 0,
+        y: 0,
+        width: 50,
+        height: 50,
+        color: '#000',
+        lineWidth: 1,
+        opacity: 1
+      }
+    ]);
+    expect(renderer.hitStroke(50, 0, 2)).toBe('top');
+    // (25,25) 只落在矩形内部：非折线类型不参与橡皮命中
+    expect(renderer.hitStroke(25, 25, 2)).toBeNull();
+    renderer.destroy();
+  });
+
+  it('hitStroke 空层与单点轨迹不崩溃', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    expect(renderer.hitStroke(1, 1, 2)).toBeNull();
+    bindStrokes(renderer, [
+      { id: 'dot', type: 'brush', points: [5, 5], color: '#000', lineWidth: 2, opacity: 1 }
+    ]);
+    expect(renderer.hitStroke(6, 6, 2)).toBe('dot');
+    expect(renderer.hitStroke(60, 60, 2)).toBeNull();
     renderer.destroy();
   });
 });

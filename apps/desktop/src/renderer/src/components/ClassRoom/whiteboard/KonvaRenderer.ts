@@ -5,6 +5,17 @@ import { uid } from '@yunyan-live/utils';
 import { renderPdfPage } from './pdfAsset';
 import { ERASER_WIDTH_MULT, HIT_STROKE_MIN, isElementType } from './types';
 
+/** 点到线段距离（F4.1 橡皮按元素命中判定） */
+function distToSeg(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / len2;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
 export class KonvaRenderer {
   stage: Konva.Stage;
   layer: Konva.Layer;
@@ -332,6 +343,37 @@ export class KonvaRenderer {
     return this.selectedId;
   }
 
+  /** F4.1 橡皮按元素命中：仅折线类（Line/Arrow，含白盖与荧光笔迹），自顶向下逐段判定，
+   *  命中条件为点到线段距离 ≤ 笔画半宽 + 橡皮半径（重叠即整笔擦除的入口） */
+  hitStroke(x: number, y: number, radius: number): string | null {
+    const entries = [...this.nodeMap.entries()].reverse();
+    for (const [id, node] of entries) {
+      const cls = node.getClassName();
+      if (cls !== 'Line' && cls !== 'Arrow') continue;
+      const n = node as any;
+      const pts: number[] = n.points ? n.points() : [];
+      const tol = ((n.strokeWidth ? Number(n.strokeWidth()) : 0) || 0) / 2 + radius;
+      const nx = Number(node.x()) || 0;
+      const ny = Number(node.y()) || 0;
+      if (pts.length >= 4) {
+        for (let i = 0; i + 3 < pts.length; i += 2) {
+          const d = distToSeg(
+            x,
+            y,
+            pts[i]! + nx,
+            pts[i + 1]! + ny,
+            pts[i + 2]! + nx,
+            pts[i + 3]! + ny
+          );
+          if (d <= tol) return id;
+        }
+      } else if (pts.length >= 2 && Math.hypot(x - (pts[0]! + nx), y - (pts[1]! + ny)) <= tol) {
+        return id;
+      }
+    }
+    return null;
+  }
+
   // 把 transformer 施加的 scale 烘焙进节点属性（Yjs 只存绝对属性）
   private bakeTransform(node: any): Record<string, any> {
     const sx = Number(node.scaleX()) || 1;
@@ -375,6 +417,8 @@ export class KonvaRenderer {
       case 'eraser': {
         const strokeWidth =
           ((data.get('lineWidth') as number) || 1) * (type === 'eraser' ? ERASER_WIDTH_MULT : 1);
+        // F4.1 荧光笔：blend=multiply 走 Konva 节点属性（场景绘制与 toDataURL 导出同源生效）
+        const blend = data.get('blend');
         return new Konva.Line({
           x: data.get('x') || 0,
           y: data.get('y') || 0,
@@ -386,7 +430,8 @@ export class KonvaRenderer {
           lineCap: 'round',
           lineJoin: 'round',
           tension: 0.5,
-          opacity
+          opacity,
+          ...(blend === 'multiply' ? { globalCompositeOperation: 'multiply' } : {})
         });
       }
       case 'rect': {
