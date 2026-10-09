@@ -26,6 +26,9 @@ service LiveService {
   rpc SaveCourseware (SaveCoursewareRequest) returns (CommonResponse) {}
   rpc ListCourseware (ListCoursewareRequest) returns (CoursewareListResponse) {}
   rpc DeleteCourseware (DeleteCoursewareRequest) returns (CommonResponse) {}
+  rpc SaveBoardSnapshot (SaveBoardSnapshotRequest) returns (CommonResponse) {}
+  rpc ListBoardSnapshots (ListBoardSnapshotsRequest) returns (BoardSnapshotListResponse) {}
+  rpc GetBoardSnapshot (GetBoardSnapshotRequest) returns (BoardSnapshotDetailResponse) {}
 }
 
 message CreateLiveRequest {
@@ -346,4 +349,56 @@ message CoursewareItem {
 
 message DeleteCoursewareRequest {
   string id = 1;
+}
+
+message SaveBoardSnapshotRequest {
+  string room_id = 1;
+  string lesson_id = 2;
+  int32 format_version = 3;
+  bytes data = 4;
+}
+
+message ListBoardSnapshotsRequest {
+  string room_id = 1;
+  string cursor = 2;
+  int32 limit = 3;
+}
+
+message BoardSnapshotListResponse {
+  string code = 1;
+  string msg = 2;
+  BoardSnapshotListData data = 3;
+}
+
+message BoardSnapshotListData {
+  repeated BoardSnapshotItem items = 1;
+  bool has_more = 2;
+}
+
+message BoardSnapshotItem {
+  string id = 1;
+  string room_id = 2;
+  string lesson_id = 3;
+  int32 format_version = 4;
+  int32 size = 5;
+  string created_at = 6;
+}
+
+message GetBoardSnapshotRequest {
+  string id = 1;
+}
+
+message BoardSnapshotDetailResponse {
+  string code = 1;
+  string msg = 2;
+  BoardSnapshotDetailData data = 3;
+}
+
+message BoardSnapshotDetailData {
+  string id = 1;
+  string room_id = 2;
+  string lesson_id = 3;
+  int32 format_version = 4;
+  bytes data = 5;
+  string created_at = 6;
 }

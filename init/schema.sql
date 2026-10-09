@@ -104,3 +104,16 @@ CREATE TABLE coursewares (
   "createUserId" VARCHAR(50) NOT NULL DEFAULT '',
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- 9. 板书快照表（live-service，TypeORM BoardSnapshot 实体，F6.2 板书服务端持久化）
+CREATE TABLE board_snapshots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "roomId" VARCHAR(50) NOT NULL,
+  "lessonId" VARCHAR(50),
+  "formatVersion" INT NOT NULL DEFAULT 1,
+  data BYTEA NOT NULL,
+  size INT NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS IDX_board_snapshots_room_created
+  ON board_snapshots ("roomId", "createdAt");

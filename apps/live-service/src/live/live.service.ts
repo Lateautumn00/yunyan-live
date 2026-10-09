@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, LessThan, Not, In } from 'typeorm';
 import { grpcError } from '@yunyan-live/nest-shared';
 import { status as GrpcStatus } from '@grpc/grpc-js';
 import {
+  BoardSnapshot,
   Courseware,
   LiveParticipant,
   LiveRoom,
@@ -12,6 +13,9 @@ import {
   VideoRecording
 } from '@yunyan-live/shared';
 import { JanusService } from '../janus/janus.service';
+
+// 快照滚动保留：每房间保留最近 N 条（Q8 拍板后固化口径，暂按报告默认 10）
+const BOARD_SNAPSHOT_KEEP = Math.max(1, Number(process.env.BOARD_SNAPSHOT_KEEP) || 10);
 
 @Injectable()
 export class LiveService {
@@ -30,6 +34,8 @@ export class LiveService {
     private watchTimeRepo: Repository<UserWatchTime>,
     @InjectRepository(Courseware)
     private coursewareRepo: Repository<Courseware>,
+    @InjectRepository(BoardSnapshot)
+    private boardSnapshotRepo: Repository<BoardSnapshot>,
     private dataSource: DataSource,
     private janusService: JanusService
   ) {}
@@ -615,6 +621,81 @@ export class LiveService {
     // affected=0 视为「没删到」，抛错让调用方看到失败，避免静默成功
     if (!result?.affected) throw new Error('courseware not found or already deleted');
     return { success: true };
+  }
+
+  async saveBoardSnapshot(dto: {
+    roomId: string;
+    lessonId?: string;
+    formatVersion?: number;
+    data: Uint8Array;
+  }) {
+    if (!dto.roomId) throw grpcError(GrpcStatus.INVALID_ARGUMENT, 'roomId is required');
+    const bytes = Buffer.from(dto.data);
+    const snapshot = this.boardSnapshotRepo.create({
+      roomId: dto.roomId,
+      lessonId: dto.lessonId || null,
+      formatVersion: dto.formatVersion || 1,
+      data: bytes,
+      size: bytes.length
+    });
+    await this.boardSnapshotRepo.save(snapshot);
+
+    // 滚动保留：仅当达到上限才裁剪，裁掉「同房间且不在最新 N 条内」的旧快照
+    const keep = await this.boardSnapshotRepo.find({
+      where: { roomId: dto.roomId },
+      order: { createdAt: 'DESC' },
+      select: ['id'],
+      take: BOARD_SNAPSHOT_KEEP
+    });
+    if (keep.length >= BOARD_SNAPSHOT_KEEP) {
+      await this.boardSnapshotRepo.delete({
+        roomId: dto.roomId,
+        id: Not(In(keep.map(s => s.id)))
+      });
+    }
+
+    return { id: snapshot.id };
+  }
+
+  async listBoardSnapshots(dto: { roomId: string; cursor?: string; limit?: number }) {
+    if (!dto.roomId) throw grpcError(GrpcStatus.INVALID_ARGUMENT, 'roomId is required');
+    const limit = Math.min(Math.max(Number(dto.limit) || 20, 1), 100);
+    const where: Record<string, unknown> = { roomId: dto.roomId };
+    if (dto.cursor) where.createdAt = LessThan(new Date(dto.cursor));
+    const rows = await this.boardSnapshotRepo.find({
+      where,
+      order: { createdAt: 'DESC' },
+      select: ['id', 'roomId', 'lessonId', 'formatVersion', 'size', 'createdAt'],
+      take: limit + 1
+    });
+    const hasMore = rows.length > limit;
+    const items = (hasMore ? rows.slice(0, limit) : rows).map(s => ({
+      id: s.id,
+      roomId: s.roomId,
+      lessonId: s.lessonId,
+      formatVersion: s.formatVersion,
+      size: s.size,
+      createdAt:
+        s.createdAt instanceof Date ? s.createdAt.getTime().toString() : String(s.createdAt || '')
+    }));
+    return { items, hasMore };
+  }
+
+  async getBoardSnapshot(id: string) {
+    if (!id) throw grpcError(GrpcStatus.INVALID_ARGUMENT, 'snapshot id is required');
+    const snapshot = await this.boardSnapshotRepo.findOne({ where: { id } });
+    if (!snapshot) throw grpcError(GrpcStatus.NOT_FOUND, 'board snapshot not found');
+    return {
+      id: snapshot.id,
+      roomId: snapshot.roomId,
+      lessonId: snapshot.lessonId,
+      formatVersion: snapshot.formatVersion,
+      data: snapshot.data,
+      createdAt:
+        snapshot.createdAt instanceof Date
+          ? snapshot.createdAt.getTime().toString()
+          : String(snapshot.createdAt || '')
+    };
   }
 
   async getUserWatchTimeList(dto: {

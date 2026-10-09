@@ -445,6 +445,62 @@ export class LiveController {
     return ok();
   }
 
+  @GrpcMethod('LiveService', 'SaveBoardSnapshot')
+  async saveBoardSnapshot(data: {
+    room_id: string;
+    lesson_id?: string;
+    format_version?: number;
+    data: Uint8Array;
+  }) {
+    this.logger.log(`gRPC SaveBoardSnapshot: room=${data.room_id} bytes=${data.data?.length}`);
+    await this.liveService.saveBoardSnapshot({
+      roomId: data.room_id,
+      lessonId: data.lesson_id,
+      formatVersion: data.format_version,
+      data: data.data
+    });
+    return ok();
+  }
+
+  @GrpcMethod('LiveService', 'ListBoardSnapshots')
+  async listBoardSnapshots(data: { room_id: string; cursor?: string; limit?: number }) {
+    this.logger.log(`gRPC ListBoardSnapshots: room=${data.room_id} cursor=${data.cursor || ''}`);
+    const result = await this.liveService.listBoardSnapshots({
+      roomId: data.room_id,
+      cursor: data.cursor,
+      limit: data.limit
+    });
+    return ok({
+      data: {
+        items: result.items.map(item => ({
+          id: item.id,
+          room_id: item.roomId,
+          lesson_id: item.lessonId || '',
+          format_version: item.formatVersion,
+          size: item.size,
+          created_at: item.createdAt
+        })),
+        has_more: result.hasMore
+      }
+    });
+  }
+
+  @GrpcMethod('LiveService', 'GetBoardSnapshot')
+  async getBoardSnapshot(data: { id: string }) {
+    this.logger.log(`gRPC GetBoardSnapshot: ${data.id}`);
+    const snapshot = await this.liveService.getBoardSnapshot(data.id);
+    return ok({
+      data: {
+        id: snapshot.id,
+        room_id: snapshot.roomId,
+        lesson_id: snapshot.lessonId || '',
+        format_version: snapshot.formatVersion,
+        data: snapshot.data,
+        created_at: snapshot.createdAt
+      }
+    });
+  }
+
   @GrpcMethod('LiveService', 'GetUserWatchTimeList')
   async getUserWatchTimeList(data: {
     page?: number;

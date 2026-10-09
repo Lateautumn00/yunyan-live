@@ -31,6 +31,9 @@ function makeService(): ServiceMock {
     saveCourseware: vi.fn(),
     listCoursewares: vi.fn(),
     deleteCourseware: vi.fn(),
+    saveBoardSnapshot: vi.fn(),
+    listBoardSnapshots: vi.fn(),
+    getBoardSnapshot: vi.fn(),
     getUserWatchTimeList: vi.fn()
   };
 }
@@ -600,6 +603,94 @@ describe('LiveController gRPC 映射', () => {
     const res = await controller.deleteCourseware({ id: 'c1' });
     expect(service.deleteCourseware).toHaveBeenCalledWith('c1');
     expect(res).toEqual({ code: '0', msg: 'success' });
+  });
+
+  it('SaveBoardSnapshot：snake_case 入参映射，返回空成功信封', async () => {
+    const { controller, service } = makeController();
+    service.saveBoardSnapshot.mockResolvedValue({ id: 's1' });
+    const bytes = new Uint8Array([1, 2]);
+    const res = await controller.saveBoardSnapshot({
+      room_id: 'r1',
+      lesson_id: 'L-9',
+      format_version: 1,
+      data: bytes
+    });
+    expect(service.saveBoardSnapshot).toHaveBeenCalledWith({
+      roomId: 'r1',
+      lessonId: 'L-9',
+      formatVersion: 1,
+      data: bytes
+    });
+    expect(res).toEqual({ code: '0', msg: 'success' });
+
+    // lesson_id/format_version 缺省时透传 undefined，由 service 层回填默认值
+    await controller.saveBoardSnapshot({ room_id: 'r1', data: bytes });
+    expect(service.saveBoardSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ lessonId: undefined, formatVersion: undefined })
+    );
+  });
+
+  it('ListBoardSnapshots：条目 snake_case 映射，lessonId 空值转空串', async () => {
+    const { controller, service } = makeController();
+    service.listBoardSnapshots.mockResolvedValue({
+      items: [
+        {
+          id: 's1',
+          roomId: 'r1',
+          lessonId: null,
+          formatVersion: 1,
+          size: 64,
+          createdAt: '1704067200000'
+        }
+      ],
+      hasMore: true
+    });
+    const res = await controller.listBoardSnapshots({
+      room_id: 'r1',
+      cursor: '1704067200000',
+      limit: 20
+    });
+    expect(service.listBoardSnapshots).toHaveBeenCalledWith({
+      roomId: 'r1',
+      cursor: '1704067200000',
+      limit: 20
+    });
+    expect(res.data).toEqual({
+      items: [
+        {
+          id: 's1',
+          room_id: 'r1',
+          lesson_id: '',
+          format_version: 1,
+          size: 64,
+          created_at: '1704067200000'
+        }
+      ],
+      has_more: true
+    });
+  });
+
+  it('GetBoardSnapshot：id 透传，data 字节与 snake_case 元信息回传', async () => {
+    const { controller, service } = makeController();
+    const bytes = Buffer.from([7, 8]);
+    service.getBoardSnapshot.mockResolvedValue({
+      id: 's1',
+      roomId: 'r1',
+      lessonId: 'L-9',
+      formatVersion: 1,
+      data: bytes,
+      createdAt: '1704067200000'
+    });
+    const res = await controller.getBoardSnapshot({ id: 's1' });
+    expect(service.getBoardSnapshot).toHaveBeenCalledWith('s1');
+    expect(res.data).toEqual({
+      id: 's1',
+      room_id: 'r1',
+      lesson_id: 'L-9',
+      format_version: 1,
+      data: bytes,
+      created_at: '1704067200000'
+    });
   });
 
   it('GetUserWatchTimeList：watch_time 秒数计算与在线 left_at 空串', async () => {

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
+  BoardSnapshot,
   Courseware,
   LiveParticipant,
   LiveRoom,
@@ -26,7 +27,8 @@ import { LiveModule } from './live/live.module';
           LiveTransferCode,
           VideoRecording,
           UserWatchTime,
-          Courseware
+          Courseware,
+          BoardSnapshot
         ],
         synchronize: true,
         timezone: '+08:00'

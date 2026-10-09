@@ -1,6 +1,7 @@
 ﻿import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
+  BoardSnapshot,
   Courseware,
   LiveParticipant,
   LiveRoom,
@@ -19,7 +20,8 @@ import { LiveService } from './live.service';
       LiveTransferCode,
       VideoRecording,
       UserWatchTime,
-      Courseware
+      Courseware,
+      BoardSnapshot
     ])
   ],
   controllers: [LiveController],

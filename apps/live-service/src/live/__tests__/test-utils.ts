@@ -100,6 +100,7 @@ type LiveServiceHarness = {
   video: RepoMock;
   watchTime: RepoMock;
   courseware: RepoMock;
+  boardSnapshot: RepoMock;
   janus: JanusMock;
   manager: ManagerMock;
   queryRunner: QueryRunnerMock;
@@ -114,6 +115,7 @@ export function createLiveService(
     video?: RepoMock;
     watchTime?: RepoMock;
     courseware?: RepoMock;
+    boardSnapshot?: RepoMock;
     janus?: JanusMock;
     database?: DataSourceMock;
   } = {}
@@ -124,6 +126,7 @@ export function createLiveService(
   const video = opts.video ?? mockRepo();
   const watchTime = opts.watchTime ?? mockRepo();
   const courseware = opts.courseware ?? mockRepo();
+  const boardSnapshot = opts.boardSnapshot ?? mockRepo();
   const janus = opts.janus ?? { createRoom: vi.fn(), destroyRoom: vi.fn() };
   const database = opts.database ?? mockDataSource();
   const service = new LiveService(
@@ -133,10 +136,22 @@ export function createLiveService(
     video.repo as never,
     watchTime.repo as never,
     courseware.repo as never,
+    boardSnapshot.repo as never,
     database.dataSource as never,
     janus as never
   );
-  return { service, room, participant, transfer, video, watchTime, courseware, janus, ...database };
+  return {
+    service,
+    room,
+    participant,
+    transfer,
+    video,
+    watchTime,
+    courseware,
+    boardSnapshot,
+    janus,
+    ...database
+  };
 }
 
 export async function expectGrpcError(
