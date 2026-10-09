@@ -170,6 +170,7 @@ const konvaMocks = vi.hoisted(() => {
     _sx = 1;
     _sy = 1;
     _points: number[] = [];
+    _opacity = 1;
     constructor(attrs: Record<string, unknown>) {
       this.attrs = attrs;
       if (attrs.x !== undefined) this._x = attrs.x as number;
@@ -177,6 +178,7 @@ const konvaMocks = vi.hoisted(() => {
       if (attrs.width !== undefined) this._w = attrs.width as number;
       if (attrs.height !== undefined) this._h = attrs.height as number;
       if (attrs.points !== undefined) this._points = attrs.points as number[];
+      if (attrs.opacity !== undefined) this._opacity = attrs.opacity as number;
     }
     getLayer() {
       return this._layer;
@@ -241,6 +243,10 @@ const konvaMocks = vi.hoisted(() => {
     visible(v?: boolean) {
       if (v !== undefined) this._visible = v;
       return this._visible;
+    }
+    opacity(v?: number) {
+      if (v !== undefined) this._opacity = v;
+      return this._opacity;
     }
   }
 
@@ -984,6 +990,99 @@ describe('KonvaRenderer laser', () => {
     expect(laser.scaleX()).toBe(1.5);
     expect(laser.x()).toBe(10);
     expect(dot.visible()).toBe(false);
+    renderer.destroy();
+  });
+});
+
+describe('KonvaRenderer 远端光标（F7.1）', () => {
+  type Shape = InstanceType<typeof konvaMocks.MockShape>;
+
+  it('cursorLayer 镜像视口变换，z 序介于笔迹层与激光层之间', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    renderer.setZoom(150);
+    renderer.setViewport(10, -20);
+
+    const cursor = renderer.cursorLayer as unknown as InstanceType<typeof konvaMocks.MockLayer>;
+    expect(cursor.scaleX()).toBe(1.5);
+    expect(cursor.scaleY()).toBe(1.5);
+    expect(cursor.x()).toBe(10);
+    expect(cursor.y()).toBe(-20);
+
+    renderer.showPage(0);
+    expect(cursor.scaleX()).toBe(1.5);
+    expect(cursor.x()).toBe(10);
+
+    // z 序（stage 添加序）：笔迹层 < cursorLayer < laserLayer
+    const stage = renderer.stage as unknown as { children: unknown[] };
+    expect(stage.children.indexOf(cursor)).toBeGreaterThan(stage.children.indexOf(renderer.layer));
+    expect(stage.children.indexOf(cursor)).toBeLessThan(
+      stage.children.indexOf(renderer.laserLayer)
+    );
+    renderer.destroy();
+  });
+
+  it('setRemoteCursor 渲染光标点与姓名标签（右下偏移 12px），尾迹封顶 5 帧渐隐', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    renderer.setRemoteCursor(10, 20, '#ff0000', 'Teacher');
+
+    const layer = renderer.cursorLayer as unknown as InstanceType<typeof konvaMocks.MockLayer>;
+    // 节点序：5 尾迹 → 光标点 → 姓名标签
+    expect(layer.getChildren().length).toBe(7);
+    const dot = layer.getChildren()[5] as unknown as InstanceType<typeof konvaMocks.MockCircle>;
+    const label = layer.getChildren()[6] as unknown as Shape;
+    expect(dot.x()).toBe(10);
+    expect(dot.y()).toBe(20);
+    expect(dot.visible()).toBe(true);
+    expect(label.x()).toBe(22);
+    expect(label.y()).toBe(32);
+    expect((label as unknown as { attrs: Record<string, unknown> }).attrs.text).toBe('Teacher');
+
+    // 首帧不产生尾迹（无历史位置）
+    for (let i = 0; i < 5; i++) {
+      expect((layer.getChildren()[i] as unknown as Shape).visible()).toBe(false);
+    }
+
+    // 连续移动 7 帧 → 仅保留最近 5 帧，最新一帧为上一帧位置 (16,20)
+    for (let i = 1; i <= 7; i++) {
+      renderer.setRemoteCursor(10 + i, 20, '#ff0000', 'Teacher');
+    }
+    const trails = layer.getChildren().slice(0, 5) as unknown as Shape[];
+    trails.forEach(t => expect(t.visible()).toBe(true));
+    expect(trails[0]!.x()).toBe(12);
+    expect(trails[4]!.x()).toBe(16);
+    expect(trails[0]!.opacity()).toBeCloseTo(0.08);
+    expect(trails[4]!.opacity()).toBeCloseTo(0.4);
+    expect(dot.x()).toBe(17);
+    renderer.destroy();
+  });
+
+  it('setRemoteCursorLabel 切换标签透明度；clearRemoteCursor 隐藏全部并重置尾迹', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    renderer.setRemoteCursor(1, 2, '#00ff00', 'T');
+    renderer.setRemoteCursor(2, 2, '#00ff00', 'T');
+    const layer = renderer.cursorLayer as unknown as InstanceType<typeof konvaMocks.MockLayer>;
+    const dot = layer.getChildren()[5] as unknown as InstanceType<typeof konvaMocks.MockCircle>;
+    const label = layer.getChildren()[6] as unknown as Shape;
+
+    renderer.setRemoteCursorLabel(false);
+    expect(label.opacity()).toBe(0);
+    renderer.setRemoteCursorLabel(true);
+    expect(label.opacity()).toBe(1);
+
+    renderer.clearRemoteCursor();
+    expect(dot.visible()).toBe(false);
+    expect(label.visible()).toBe(false);
+    (layer.getChildren().slice(0, 5) as unknown as Shape[]).forEach(t =>
+      expect(t.visible()).toBe(false)
+    );
+
+    // 清除后重新放置：无陈旧尾迹、标签恢复可见
+    renderer.setRemoteCursor(5, 6, '#00ff00', 'T');
+    expect(dot.visible()).toBe(true);
+    expect(label.visible()).toBe(true);
+    (layer.getChildren().slice(0, 5) as unknown as Shape[]).forEach(t =>
+      expect(t.visible()).toBe(false)
+    );
     renderer.destroy();
   });
 });

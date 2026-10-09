@@ -16,6 +16,9 @@ function distToSeg(px: number, py: number, x1: number, y1: number, x2: number, y
   return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
 }
 
+// 远端光标尾迹各帧透明度（索引 0=最旧 … 末=上一帧，渐亮）；数组长度即尾迹帧数（F7.1 写死 5 帧）
+const CURSOR_TRAIL_ALPHA = [0.08, 0.16, 0.24, 0.32, 0.4];
+
 export class KonvaRenderer {
   stage: Konva.Stage;
   layer: Konva.Layer;
@@ -26,7 +29,15 @@ export class KonvaRenderer {
   // 激光红点专用层：与 previewLayer 同步视口变换（教师跟指/远端广播共用单点，
   // 层局部坐标；不进 layers 列表，不参与翻页/绑定）
   laserLayer: Konva.Layer;
+  // 远端光标专用层：与 previewLayer 同步视口变换（层局部坐标；z 序高于笔迹、低于激光）
+  cursorLayer: Konva.Layer;
   private laserDot: Konva.Circle | null = null;
+  private cursorDot: Konva.Circle | null = null;
+  private cursorLabel: Konva.Text | null = null;
+  private cursorTrailDots: Konva.Circle[] = [];
+  // 尾迹历史位置（索引 0=最旧 … 末=上一帧点位），null=无帧；cursorPlaced=false 的首帧不挤入历史
+  private cursorTrailPos: Array<{ x: number; y: number } | null> = [];
+  private cursorPlaced = false;
   private layers: Konva.Layer[] = [];
   private layerMap = new Map<number, Konva.Layer>();
   private nodeMap = new Map<string, Konva.Node>();
@@ -58,10 +69,12 @@ export class KonvaRenderer {
     this.layer = new Konva.Layer();
     this.previewLayer = new Konva.Layer();
     this.tempLayer = new Konva.Layer();
+    this.cursorLayer = new Konva.Layer();
     this.laserLayer = new Konva.Layer();
     this.stage.add(this.layer);
     this.stage.add(this.previewLayer);
     this.stage.add(this.tempLayer);
+    this.stage.add(this.cursorLayer);
     this.stage.add(this.laserLayer);
     this.layers = [this.layer];
     this.layerMap.set(0, this.layer);
@@ -100,6 +113,10 @@ export class KonvaRenderer {
     this.previewLayer.scaleY(this.zoomLevel / 100);
     this.previewLayer.x(this.viewX);
     this.previewLayer.y(this.viewY);
+    this.cursorLayer.scaleX(this.zoomLevel / 100);
+    this.cursorLayer.scaleY(this.zoomLevel / 100);
+    this.cursorLayer.x(this.viewX);
+    this.cursorLayer.y(this.viewY);
     this.laserLayer.scaleX(this.zoomLevel / 100);
     this.laserLayer.scaleY(this.zoomLevel / 100);
     this.laserLayer.x(this.viewX);
@@ -107,6 +124,7 @@ export class KonvaRenderer {
     this.clearSelection();
     this.previewLayer.moveToTop();
     this.tempLayer.moveToTop();
+    this.cursorLayer.moveToTop();
     this.laserLayer.moveToTop();
     this.rebuildLayerMap();
     this.stage.batchDraw();
@@ -120,10 +138,13 @@ export class KonvaRenderer {
     this.layer.y(y);
     this.previewLayer.x(x);
     this.previewLayer.y(y);
+    this.cursorLayer.x(x);
+    this.cursorLayer.y(y);
     this.laserLayer.x(x);
     this.laserLayer.y(y);
     this.layer.batchDraw();
     this.previewLayer.batchDraw();
+    this.cursorLayer.batchDraw();
     this.laserLayer.batchDraw();
   }
 
@@ -168,10 +189,13 @@ export class KonvaRenderer {
     this.layer.scaleY(scale);
     this.previewLayer.scaleX(scale);
     this.previewLayer.scaleY(scale);
+    this.cursorLayer.scaleX(scale);
+    this.cursorLayer.scaleY(scale);
     this.laserLayer.scaleX(scale);
     this.laserLayer.scaleY(scale);
     this.layer.batchDraw();
     this.previewLayer.batchDraw();
+    this.cursorLayer.batchDraw();
     this.laserLayer.batchDraw();
   }
 
@@ -197,6 +221,91 @@ export class KonvaRenderer {
       this.laserDot.show();
     }
     this.laserLayer.batchDraw();
+  }
+
+  // 远端光标（层局部坐标）：姓名标签 + 光标点 + 5 帧渐隐尾迹，与激光共用视口镜像。
+  // 颜色/名字按会话常量在首帧构造（教师 color/name 不变）；每次调用恢复标签可见，
+  // 静止 3s 的淡出由 WhiteBoard 定时器调 setRemoteCursorLabel(false)
+  setRemoteCursor(x: number, y: number, color: string, name: string) {
+    if (!this.cursorDot) {
+      // 节点序：5 尾迹（最旧→最新）→ 光标点 → 姓名标签（标签最上）
+      for (let i = 0; i < CURSOR_TRAIL_ALPHA.length; i++) {
+        const t = new Konva.Circle({ radius: 5, fill: color, opacity: 0, listening: false });
+        t.hide();
+        this.cursorTrailDots.push(t);
+        this.cursorTrailPos.push(null);
+        this.cursorLayer.add(t);
+      }
+      this.cursorDot = new Konva.Circle({
+        radius: 6,
+        fill: color,
+        stroke: '#ffffff',
+        strokeWidth: 1.5,
+        listening: false
+      });
+      this.cursorLayer.add(this.cursorDot);
+      this.cursorLabel = new Konva.Text({
+        text: name,
+        fontSize: 12,
+        fontStyle: 'bold',
+        fill: color,
+        stroke: '#ffffff',
+        strokeWidth: 3,
+        lineJoin: 'round',
+        x: x + 12,
+        y: y + 12,
+        listening: false
+      });
+      this.cursorLayer.add(this.cursorLabel);
+    }
+    const prev = { x: this.cursorDot.x(), y: this.cursorDot.y() };
+    if (this.cursorPlaced && (prev.x !== x || prev.y !== y)) {
+      // 尾迹：上一帧点位挤入历史，超 5 帧丢最旧；按旧→新赋透明度渐亮
+      this.cursorTrailPos.shift();
+      this.cursorTrailPos.push(prev);
+      for (let i = 0; i < CURSOR_TRAIL_ALPHA.length; i++) {
+        const p = this.cursorTrailPos[i];
+        const node = this.cursorTrailDots[i]!;
+        if (p) {
+          node.x(p.x);
+          node.y(p.y);
+          node.opacity(CURSOR_TRAIL_ALPHA[i]!);
+          node.show();
+        } else {
+          node.opacity(0);
+          node.hide();
+        }
+      }
+    }
+    this.cursorPlaced = true;
+    this.cursorDot.x(x);
+    this.cursorDot.y(y);
+    this.cursorDot.show();
+    if (this.cursorLabel) {
+      this.cursorLabel.x(x + 12);
+      this.cursorLabel.y(y + 12);
+      this.cursorLabel.opacity(1);
+      this.cursorLabel.show();
+    }
+    this.cursorLayer.batchDraw();
+  }
+
+  // 姓名标签显隐（F7.1：静止 3s 后 false 淡出，新光标帧由 setRemoteCursor 恢复）
+  setRemoteCursorLabel(show: boolean) {
+    if (!this.cursorLabel) return;
+    if (show) this.cursorLabel.show();
+    this.cursorLabel.opacity(show ? 1 : 0);
+    this.cursorLayer.batchDraw();
+  }
+
+  // 清除远端光标（peer 离开 / cursor:null）：隐藏全部节点并清空尾迹历史，防幽灵光标
+  clearRemoteCursor() {
+    this.cursorDot?.hide();
+    this.cursorLabel?.hide();
+    this.cursorTrailDots.forEach(n => n.hide());
+    this.cursorTrailPos.fill(null);
+    this.cursorPlaced = false;
+    this.cursorLayer.batchDraw();
   }
 
   zoomIn(): number {
