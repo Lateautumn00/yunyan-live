@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { enableAutoUnmount } from '@vue/test-utils';
 import { nextTick } from 'vue';
+import * as Y from 'yjs';
 import { YjsProvider } from './whiteboard/YjsProvider';
 
 // 失败用例也必须卸载组件（onUnmounted 会 destroy Yjs provider），避免跨测试状态泄漏
@@ -3717,5 +3718,171 @@ describe('F1.1 公式浮层', () => {
     const wrapper = mountWB({ isTeacher: false });
     expect(wrapper.find('.formula-tool').exists()).toBe(false);
     wrapper.unmount();
+  });
+});
+
+// ── F7.5 学生端跟随打磨 ────────────────────────────────────────────────────
+describe('WhiteBoard.vue 跟随打磨（F7.5）', () => {
+  type F75Renderer = {
+    getStage: () => { fire: (evt: string, e?: unknown) => void };
+    getCurrentPageIndex: () => number;
+    getPageCount: () => number;
+    getZoom: () => number;
+    showPage: (i: number) => void;
+    layer: { x: () => number; y: () => number };
+  };
+
+  function studentRenderer(vm: PPTVM): F75Renderer {
+    return vm.renderer as unknown as F75Renderer;
+  }
+
+  function fireStudentWheel(vm: PPTVM, deltaY = 100) {
+    const stage = vm.renderer!.getStage();
+    const preventDefault = vi.fn();
+    stage.fire('wheel', { target: stage, evt: { deltaY, preventDefault } });
+    return preventDefault;
+  }
+
+  it('正向：学生滚轮本地只读缩放，进入手动模式且不写 Yjs 视口', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    provider.viewportOffset.set('zoom', 100); // 教师视口种子（raw 绕过只读守卫）
+    const before = vm.zoomLevel;
+    const preventDefault = fireStudentWheel(vm);
+    expect(preventDefault).toHaveBeenCalled();
+    expect(vm.zoomLevel).toBe(before - 1);
+    expect(provider.viewportOffset.get('zoom')).toBe(100); // 本地缩放不回写
+    wrapper.unmount();
+  });
+
+  it('正向：学生手动缩放后教师视口优先，冲突横幅 5s 自动消失', async () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    provider.viewportOffset.set('zoom', 100);
+    fireStudentWheel(vm); // 进入手动模式（本地 99）
+    vi.useFakeTimers();
+    try {
+      provider.viewportOffset.set('zoom', 150); // 教师改视口 → 冲突
+      await nextTick();
+      expect(wrapper.find('.follow-banner').text()).toContain('已回到教师视角');
+      // 教师视口优先：插值收敛到教师目标（250ms + 帧余量）
+      vi.advanceTimersByTime(300);
+      expect(vm.viewState().zoom).toBe(150);
+      expect(vm.zoomLevel).toBe(150);
+      // 横幅 5s 自动消失：4999ms 仍在，5000ms 消失
+      vi.advanceTimersByTime(4699);
+      expect(wrapper.find('.follow-banner').exists()).toBe(true);
+      vi.advanceTimersByTime(1);
+      await nextTick();
+      expect(wrapper.find('.follow-banner').exists()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+      wrapper.unmount();
+    }
+  });
+
+  it('正向：横幅点击恢复手动，后续教师冲突再次提示', async () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    provider.viewportOffset.set('zoom', 100);
+    fireStudentWheel(vm); // 手动模式
+    vi.useFakeTimers();
+    try {
+      provider.viewportOffset.set('zoom', 150);
+      await nextTick();
+      const banner = wrapper.find('.follow-banner');
+      expect(banner.exists()).toBe(true);
+      await banner.trigger('click');
+      expect(wrapper.find('.follow-banner').exists()).toBe(false);
+      vi.advanceTimersByTime(300);
+      expect(vm.viewState().zoom).toBe(150);
+      // 恢复手动：再滚轮为本地 149，教师数据仍 150（不回写）
+      fireStudentWheel(vm);
+      expect(vm.viewState().zoom).toBe(149);
+      expect(provider.viewportOffset.get('zoom')).toBe(150);
+      // 教师再次更新 → 手动冲突 → 横幅重现
+      provider.viewportOffset.set('zoom', 160);
+      await nextTick();
+      expect(wrapper.find('.follow-banner').exists()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      wrapper.unmount();
+    }
+  });
+
+  it('负向：学生未手动缩放时教师视口更新不出现横幅', async () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    vi.useFakeTimers();
+    try {
+      provider.viewportOffset.set('zoom', 130);
+      await nextTick();
+      expect(wrapper.find('.follow-banner').exists()).toBe(false);
+      vi.advanceTimersByTime(300);
+      expect(vm.viewState().zoom).toBe(130); // 跟随仍正常应用
+    } finally {
+      vi.useRealTimers();
+      wrapper.unmount();
+    }
+  });
+
+  it('边界：小步视口切换 250ms 插值平滑，大跳变直切不滑行', async () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    vi.useFakeTimers();
+    try {
+      provider.viewportOffset.set('x', 10);
+      expect(vm.viewState().x).toBe(0); // 小步：插值待帧，不直切
+      vi.advanceTimersByTime(300);
+      expect(vm.viewState().x).toBe(10);
+      provider.viewportOffset.set('x', 3000); // 跳变 2990 ≥ 阈值 → 直切
+      expect(vm.viewState().x).toBe(3000);
+    } finally {
+      vi.useRealTimers();
+      wrapper.unmount();
+    }
+  });
+
+  it('正向：教师快速翻页学生端 200ms 节流合并（首帧即刻、尾帧取最新）', async () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as PPTVM;
+    const provider = vm.provider!;
+    const r = studentRenderer(vm);
+    // 只读端本地播种 4 页（raw 绕过 addPage 只读守卫），观察器先完成页表对账
+    const rawPages = [1, 2, 3, 4].map(i => {
+      const p = new Y.Map();
+      p.set('id', `page_${i}`);
+      p.set('name', `Page ${i}`);
+      p.set('visible', true);
+      p.set('elements', new Y.Array());
+      return p;
+    });
+    provider.pages.push(rawPages);
+    await nextTick();
+    expect(r.getPageCount()).toBe(4);
+    const showSpy = vi.spyOn(r, 'showPage');
+    vi.useFakeTimers();
+    try {
+      provider.currentPageIndex.set('index', 1);
+      provider.currentPageIndex.set('index', 2);
+      provider.currentPageIndex.set('index', 3);
+      // 首帧立即应用，窗口内其余合并
+      expect(showSpy).toHaveBeenCalledTimes(1);
+      expect(r.getCurrentPageIndex()).toBe(1);
+      vi.advanceTimersByTime(199);
+      expect(showSpy).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(1);
+      expect(showSpy).toHaveBeenCalledTimes(2);
+      expect(r.getCurrentPageIndex()).toBe(3); // 尾帧取最新页
+    } finally {
+      vi.useRealTimers();
+      showSpy.mockRestore();
+      wrapper.unmount();
+    }
   });
 });

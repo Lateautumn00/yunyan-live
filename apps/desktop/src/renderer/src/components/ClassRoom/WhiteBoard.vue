@@ -377,6 +377,11 @@
         板书暂存失败，重试中(第 {{ snapshotRetry }} 次)
       </div>
 
+      <!-- F7.5 跟随冲突横幅：学生手动缩放被教师视口覆盖时提示，5s 自动消失；点击恢复手动 -->
+      <div v-if="followBanner" class="snapshot-banner follow-banner" @click="onFollowBannerClick">
+        已回到教师视角（点击恢复手动）
+      </div>
+
       <!-- 板书导出（F6.1，仅教师）：范围/格式 + 逐页进度 + 失败留弹窗可重试 -->
       <el-dialog
         v-model="exportDialogVisible"
@@ -618,8 +623,10 @@ onMounted(() => {
   // Sync viewport (move pan / zoom / fit-all pan) — register once.
   // 本地写入与远端更新走同一观察器，幂等应用；zoomLevel 同步仅供教师端显示（学生端 UI 隐藏）。
   // 平移（移动工具 + 全览）统一走 x/y 通道，stage 保持恒等——否则选择器缩放坐标系错位
+  // F7.5：学生端走冲突判定 + 插值平滑（教师端保持直应用，本地写入幂等）
   provider!.viewportOffset.observe(() => {
-    applyRemoteViewport();
+    if (props.isTeacher) applyRemoteViewport();
+    else applyStudentViewport();
   });
 
   // Sync page count when teacher adds/removes pages — register once
@@ -655,16 +662,42 @@ onMounted(() => {
   });
 
   // Sync page switching — register once
+  // F7.5：教师本地翻页已由 showLayer 即时应用（观察器经相等判断空转）；学生端快速翻页
+  // 按 200ms 窗口合并——首帧即刻、窗口内尾帧取最新，避免连续翻页抖动
   provider!.currentPageIndex.observe(() => {
     if (!renderer) return;
     const teacherIdx = provider!.getCurrentPageIndex();
     const localIdx = renderer.getCurrentPageIndex();
-    if (teacherIdx !== localIdx && teacherIdx < renderer.getPageCount()) {
-      renderer.showPage(teacherIdx);
-      curLayerIndex.value = teacherIdx + 1;
-      refreshLayer();
-      const els = provider!.getActiveElements();
-      if (els) bindElementsObserver(els);
+    if (teacherIdx === localIdx || teacherIdx >= renderer.getPageCount()) return;
+    if (props.isTeacher) {
+      applyRemotePage(teacherIdx);
+      return;
+    }
+    const now = Date.now();
+    if (now - pageApplyLastAt >= 200) {
+      pageApplyLastAt = now;
+      pendingPageIndex = null;
+      if (pageApplyTimer) {
+        clearTimeout(pageApplyTimer);
+        pageApplyTimer = null;
+      }
+      applyRemotePage(teacherIdx);
+      return;
+    }
+    pendingPageIndex = teacherIdx;
+    if (!pageApplyTimer) {
+      pageApplyTimer = setTimeout(
+        () => {
+          pageApplyTimer = null;
+          if (pendingPageIndex !== null) {
+            pageApplyLastAt = Date.now();
+            const idx = pendingPageIndex;
+            pendingPageIndex = null;
+            applyRemotePage(idx);
+          }
+        },
+        200 - (now - pageApplyLastAt)
+      );
     }
   });
 
@@ -711,6 +744,16 @@ onUnmounted(() => {
   if (cursorLabelTimer) {
     clearTimeout(cursorLabelTimer);
     cursorLabelTimer = null;
+  }
+  // F7.5：跟随插值 / 翻页节流尾帧 / 冲突横幅计时随卸载清除
+  stopViewportAnim();
+  if (pageApplyTimer) {
+    clearTimeout(pageApplyTimer);
+    pageApplyTimer = null;
+  }
+  if (followBannerTimer) {
+    clearTimeout(followBannerTimer);
+    followBannerTimer = null;
   }
   renderer?.destroy();
   provider?.destroy();
@@ -1625,8 +1668,16 @@ function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
 }
 
 function onWheel(e: Konva.KonvaEventObject<WheelEvent>) {
-  // 学生端白板只读：视图固定 100%，禁止滚轮缩放
-  if (!props.isTeacher) return;
+  if (!props.isTeacher) {
+    // F7.5：学生端本地只读缩放（不写 Yjs），进入手动模式——与教师视口冲突时教师优先
+    e.evt.preventDefault();
+    if (!renderer) return;
+    stopViewportAnim(); // 手动缩放打断进行中的跟随插值
+    studentManual = true;
+    const delta = e.evt.deltaY > 0 ? -10 : 10;
+    zoomLevel.value = delta > 0 ? renderer.zoomIn() : renderer.zoomOut();
+    return;
+  }
   e.evt.preventDefault();
   const delta = e.evt.deltaY > 0 ? -10 : 10;
   layerZoomChange(delta > 0 ? 'add' : 'sub');
@@ -1693,23 +1744,131 @@ function layerClear() {
 }
 
 // --- Zoom ---
-// 按视口数据应用本地视图：远端带 stage 尺寸时按 contain 比例适配（教师取景框等比套入本地屏幕，
-// 宽高比不同处留白），否则原样应用。教师端自身 stage 即远端尺寸 → k=1，与直写等价（幂等）
-function applyRemoteViewport() {
-  if (!renderer || !provider) return;
-  const o = provider.getViewportOffset();
-  const zoom = provider.getViewportZoom();
-  const remote = provider.getViewportStageSize();
-  const stage = renderer.getStage();
+// F7.5 学生端跟随状态：手动缩放模式 / 冲突横幅 / 跟随插值与翻页节流定时器
+let studentManual = false;
+const followBanner = ref(false);
+let followBannerTimer: ReturnType<typeof setTimeout> | null = null;
+let viewportAnimTimer: ReturnType<typeof setTimeout> | null = null;
+let pageApplyTimer: ReturnType<typeof setTimeout> | null = null;
+let pageApplyLastAt = -Infinity;
+let pendingPageIndex: number | null = null;
+
+// 按视口数据计算本地目标视图：远端带 stage 尺寸时按 contain 比例适配（教师取景框等比套入本地屏幕，
+// 宽高比不同处留白），否则原样应用。zoom 钳制与 renderer.setZoom 一致（1~200），供插值目标与冲突比对
+function computeRemoteView(): { x: number; y: number; zoom: number } {
+  const o = provider!.getViewportOffset();
+  const zoom = provider!.getViewportZoom();
+  const remote = provider!.getViewportStageSize();
+  const stage = renderer!.getStage();
   const sw = stage.width();
   const sh = stage.height();
   let k = 1;
   if (remote && remote.w > 0 && remote.h > 0 && sw > 0 && sh > 0) {
     k = Math.min(sw / remote.w, sh / remote.h);
   }
-  renderer.setViewport(o.x * k, o.y * k);
-  renderer.setZoom(zoom * k);
-  zoomLevel.value = zoom * k;
+  return { x: o.x * k, y: o.y * k, zoom: Math.max(1, Math.min(200, zoom * k)) };
+}
+
+// 直应用目标视图：教师端观察器 / 学生端本地 resize 重适配 / 插值终帧共用
+function applyView(v: { x: number; y: number; zoom: number }) {
+  renderer!.setViewport(v.x, v.y);
+  renderer!.setZoom(v.zoom);
+  zoomLevel.value = v.zoom;
+}
+
+function applyRemoteViewport() {
+  if (!renderer || !provider) return;
+  const t = computeRemoteView();
+  if (!props.isTeacher && studentManual) {
+    // 学生手动模式下的本地 resize 重适配：保留学生本地缩放，只跟随教师平移
+    renderer.setViewport(t.x, t.y);
+    return;
+  }
+  applyView(t);
+}
+
+// F7.5：学生端视口观察器入口——手动冲突判定 + 250ms ease-out 插值（大跳变直切）
+function applyStudentViewport() {
+  if (!renderer || !provider) return;
+  const t = computeRemoteView();
+  if (studentManual) {
+    studentManual = false;
+    const diverged =
+      Math.abs(renderer.layer.x() - t.x) > 1e-6 ||
+      Math.abs(renderer.layer.y() - t.y) > 1e-6 ||
+      Math.abs(renderer.getZoom() - t.zoom) > 1e-6;
+    // 教师视口优先；学生视图与目标一致（未分歧）则静默，不误报横幅
+    if (diverged) showFollowBanner();
+  }
+  interpolateViewport(t);
+}
+
+// 视口切换插值：250ms ease-out 逐帧应用；弱网堆积的大跳变（平移 ≥2000px 或缩放 ≥2×）
+// 直接切换，避免长时间滑行
+function interpolateViewport(target: { x: number; y: number; zoom: number }) {
+  if (!renderer) return;
+  stopViewportAnim();
+  const from = { x: renderer.layer.x(), y: renderer.layer.y(), zoom: renderer.getZoom() };
+  const dx = target.x - from.x;
+  const dy = target.y - from.y;
+  const dz = target.zoom - from.zoom;
+  const ratio = target.zoom / Math.max(from.zoom, 1e-6);
+  if (Math.hypot(dx, dy) >= 2000 || ratio >= 2 || ratio <= 0.5) {
+    applyView(target);
+    return;
+  }
+  if (dx === 0 && dy === 0 && dz === 0) return;
+  const start = Date.now();
+  const step = () => {
+    viewportAnimTimer = null;
+    const p = Math.min(1, (Date.now() - start) / 250);
+    if (p >= 1) {
+      applyView(target); // 终帧取精确目标，避免浮点累积误差
+      return;
+    }
+    const e = 1 - Math.pow(1 - p, 3); // ease-out
+    applyView({ x: from.x + dx * e, y: from.y + dy * e, zoom: from.zoom + dz * e });
+    viewportAnimTimer = setTimeout(step, 16);
+  };
+  viewportAnimTimer = setTimeout(step, 16);
+}
+
+function stopViewportAnim() {
+  if (viewportAnimTimer) {
+    clearTimeout(viewportAnimTimer);
+    viewportAnimTimer = null;
+  }
+}
+
+// F7.5：冲突横幅——教师视口覆盖学生手动视图时提示，5s 自动消失
+function showFollowBanner() {
+  followBanner.value = true;
+  if (followBannerTimer) clearTimeout(followBannerTimer);
+  followBannerTimer = setTimeout(() => {
+    followBanner.value = false;
+    followBannerTimer = null;
+  }, 5000);
+}
+
+function onFollowBannerClick() {
+  if (followBannerTimer) {
+    clearTimeout(followBannerTimer);
+    followBannerTimer = null;
+  }
+  followBanner.value = false;
+  studentManual = true; // 恢复手动模式
+}
+
+// F7.5：远端翻页单次应用（教师直调 / 学生节流尾帧共用；相等与越界守卫幂等）
+function applyRemotePage(teacherIdx: number) {
+  if (!renderer || !provider) return;
+  if (teacherIdx === renderer.getCurrentPageIndex() || teacherIdx >= renderer.getPageCount())
+    return;
+  renderer.showPage(teacherIdx);
+  curLayerIndex.value = teacherIdx + 1;
+  refreshLayer();
+  const els = provider.getActiveElements();
+  if (els) bindElementsObserver(els);
 }
 
 // 把教师端当前视口（缩放 + 平移，移动工具与全览共用 x/y 通道 + stage 尺寸）写入 Yjs，学生端观察器跟随适配
@@ -2540,6 +2699,9 @@ defineExpose({
   toLayerCoords,
   applyRemoteViewport,
   syncViewportToYjs,
+  // F7.5：学生端跟随冲突横幅（模板渲染与点击恢复手动）
+  followBanner,
+  onFollowBannerClick,
   // 测试钩子：直接访问底层 Yjs provider / Konva renderer / 当前视口快照（供同步类用例断言）
   get provider() {
     return provider;
@@ -3198,6 +3360,14 @@ defineExpose({
   z-index: 200;
   white-space: nowrap;
   pointer-events: none;
+}
+
+/* F7.5 跟随冲突横幅：底部常驻可点击（点击恢复手动），需接收点击事件 */
+.follow-banner {
+  top: auto;
+  bottom: 8px;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 /* F6.1 导出弹窗（teleport 到 body，scoped 属性随编译落在内容节点上仍生效） */
