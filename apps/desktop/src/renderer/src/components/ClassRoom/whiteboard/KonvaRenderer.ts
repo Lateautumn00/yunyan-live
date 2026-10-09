@@ -197,6 +197,8 @@ export class KonvaRenderer {
     this.previewLayer.batchDraw();
     this.cursorLayer.batchDraw();
     this.laserLayer.batchDraw();
+    // F1.1：缩放变化 → 公式按新过采样重栅格（5.7.1 实测 S=clamp(2×zoom,1,8)，防抖合并连续缩放）
+    this.scheduleFormulaRasterRefresh();
   }
 
   // 激光红点（层局部坐标）：x=null 熄灭。与 previewLayer 同视口，任意缩放/平移下位置一致
@@ -612,6 +614,23 @@ export class KonvaRenderer {
           fill: data.get('color') || '#000',
           opacity
         });
+      case 'formula': {
+        const latex = String(data.get('latex') ?? '');
+        const color = String(data.get('color') || '#000000');
+        const node = new Konva.Image({
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
+          width: data.get('width') || 0,
+          height: data.get('height') || 0,
+          image: null as unknown as HTMLCanvasElement,
+          opacity
+        });
+        // 自定义属性：latex 供缩放重栅格识别公式节点（Image 类通用），formulaColor 供换色重栅格
+        node.setAttr('latex', latex);
+        node.setAttr('formulaColor', color);
+        this.rasterizeFormulaNode(node, latex, color);
+        return node;
+      }
       case 'ppt-image': {
         const pdfUrl = data.get('pdfUrl') as string | undefined;
         const base = {
@@ -667,6 +686,78 @@ export class KonvaRenderer {
     return node;
   }
 
+  // --- F1.1 公式光栅（5.7.1 B1 路线）：懒加载 katex+html2canvas 独立 chunk ---
+  private formulaRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** 过采样系数（5.7.1 实测 S=clamp(2×zoom,1,8)）。此处内联而非 import formulaRaster 的
+   *  formulaOversample：静态引用会把 katex/html2canvas 拖进主包，破坏懒加载 chunk 边界 */
+  private formulaScale(): number {
+    return Math.max(1, Math.min(8, 2 * (this.zoomLevel / 100)));
+  }
+
+  /** 单节点光栅化：按当前缩放过采样建位图；节点已随重建销毁则丢弃过期结果。
+   *  width 未落库（0）时采纳自然尺寸，保证远端首绘与本地一致 */
+  private rasterizeFormulaNode(node: Konva.Image, latex: string, color: string): void {
+    const scale = this.formulaScale();
+    import('./formulaRaster')
+      .then(({ rasterizeFormula }) => rasterizeFormula(latex, color, scale))
+      .then(r => {
+        const layer = node.getLayer();
+        if (!layer) return;
+        node.image(r.canvas);
+        if (!(Number(node.width()) > 0)) {
+          node.width(r.width);
+          node.height(r.height);
+        }
+        layer.batchDraw();
+      })
+      .catch(err => console.error('[whiteboard] 公式光栅失败', latex, err));
+  }
+
+  private scheduleFormulaRasterRefresh(): void {
+    if (this.formulaRefreshTimer) clearTimeout(this.formulaRefreshTimer);
+    this.formulaRefreshTimer = setTimeout(() => {
+      this.formulaRefreshTimer = null;
+      void this.refreshFormulaRasters();
+    }, 250);
+  }
+
+  /** 缩放后全量重栅格公式（S=clamp(2×zoom,1,8)，5.7.1：固定 S 高倍缩放发糊）。缓存按新 S
+   *  换键，提交态共享的旧键光栅不作废 */
+  private async refreshFormulaRasters(): Promise<void> {
+    const scale = this.formulaScale();
+    const targets: Array<{ node: Konva.Image; latex: string; color: string }> = [];
+    this.nodeMap.forEach(node => {
+      if (node.getClassName() !== 'Image') return;
+      const latex = node.getAttr('latex');
+      if (typeof latex !== 'string' || !latex) return;
+      targets.push({
+        node: node as Konva.Image,
+        latex,
+        color: String(node.getAttr('formulaColor') || '#000000')
+      });
+    });
+    if (!targets.length) return;
+    try {
+      const mod = await import('./formulaRaster');
+      await Promise.all(
+        targets.map(async t => {
+          try {
+            const r = await mod.rasterizeFormula(t.latex, t.color, scale);
+            const layer = t.node.getLayer();
+            if (!layer) return;
+            t.node.image(r.canvas);
+            layer.batchDraw();
+          } catch (err) {
+            console.error('[whiteboard] 公式缩放重栅格失败', t.latex, err);
+          }
+        })
+      );
+    } catch (err) {
+      console.error('[whiteboard] 公式渲染模块加载失败', err);
+    }
+  }
+
   // 导出管线专用：等待本层全部图片类节点就绪（HTML 图片加载完成 / ppt 的 PDF 页渲染落位）。
   // image 为 null = PDF 仍在渲染；complete=false = 图片加载中；naturalWidth=0 = 加载失败。
   // 任一失败或超时抛错（文案可直接展示），不静默产出缺底图的图。
@@ -709,6 +800,8 @@ export class KonvaRenderer {
   }
 
   destroy() {
+    if (this.formulaRefreshTimer) clearTimeout(this.formulaRefreshTimer);
+    this.formulaRefreshTimer = null;
     this.stage.destroy();
   }
 }

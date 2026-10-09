@@ -56,6 +56,11 @@
             <el-icon><Minus /></el-icon>
           </div>
         </el-tooltip>
+        <el-tooltip content="公式 · LaTeX 输入（Enter 提交，Esc 取消）" placement="right">
+          <div class="formula-tool" @click="openFormula">
+            <span class="formula-tool-icon">∑</span>
+          </div>
+        </el-tooltip>
         <el-tooltip content="橡皮擦 · 按整笔擦除（含荧光笔迹）" placement="right">
           <div :class="['eraser', { on: mode === 'eraser' }]" @click="tool('eraser')" />
         </el-tooltip>
@@ -332,6 +337,34 @@
         </div>
       </div>
 
+      <!-- F1.1 公式输入浮层（状态机：默认→输入中→非法红框→渲染中→已提交自动关闭；
+           面板互斥：与属性面板/课件页签互斥单开） -->
+      <div v-if="formulaVisible" class="formula-overlay" @mousedown.self="closeFormula">
+        <div class="formula-panel">
+          <div class="formula-title">{{ editingFormulaId ? '编辑公式' : '插入公式' }}（LaTeX）</div>
+          <textarea
+            ref="formulaInputRef"
+            v-model="formulaInput"
+            class="formula-textarea"
+            :class="{ invalid: !!formulaError }"
+            rows="3"
+            placeholder="例：\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}"
+            @input="formulaError = ''"
+            @keydown.enter.exact.prevent="submitFormula"
+            @keydown.esc.stop.prevent="closeFormula"
+          />
+          <div v-if="formulaError" class="formula-error">{{ formulaError }}</div>
+          <div v-else-if="formulaLoading" class="formula-loading">渲染中…</div>
+          <div class="formula-actions">
+            <el-button size="small" @click="closeFormula">取消</el-button>
+            <el-button size="small" type="primary" :loading="formulaLoading" @click="submitFormula">
+              {{ formulaError ? '重试' : '提交' }}
+            </el-button>
+          </div>
+          <div class="formula-hint">Enter 提交 · Esc 取消 · 双击已有公式重新编辑</div>
+        </div>
+      </div>
+
       <!-- Loading -->
       <div v-show="loading" class="loading-div" @click.stop>
         <el-icon class="loading-gif is-loading" :size="48">
@@ -465,6 +498,15 @@ const penType = ref<PenType>('pen');
 /** 笔型档位存根（会话内）：切走时存当前色宽，切回读回——首次进荧光按钢笔 1.5× 预设 */
 const penStash = ref<{ color: string; lineWidth: number } | null>(null);
 const highlightStash = ref<{ color: string; lineWidth: number } | null>(null);
+
+// --- F1.1 公式输入浮层状态机：默认 → 输入中 →（非法：红框+行内文案）→ 渲染中 → 已提交 ---
+const formulaVisible = ref(false);
+const formulaInput = ref('');
+const formulaError = ref('');
+const formulaLoading = ref(false);
+/** 双击重编辑时锁定的目标元素 id；null = 新建 */
+const editingFormulaId = ref<string | null>(null);
+const formulaInputRef = ref<HTMLTextAreaElement>();
 
 // Color panel drag state
 const colorPanelCollapsed = ref(true);
@@ -707,6 +749,8 @@ function toLayerCoords(pos: { x: number; y: number }): { x: number; y: number } 
 function setMode(type: ToolMode) {
   // 激光模式被任何模式切换顶掉时即熄灭（工具栏/课件/激光按钮自关共用此收口）
   if (mode.value === 'laser' && type !== 'laser') laserOff();
+  // 面板互斥矩阵：切工具即收公式浮层（开浮层不切工具，故浮层侧另行收属性/课件面板）
+  closeFormula();
   mode.value = type;
   renderer?.setSelectMode(type === 'cur' && props.isTeacher);
   // toolState.type 的唯一写点：工具态同步随模式切换收口（含 laser/file 等旁路）
@@ -892,7 +936,14 @@ function editTextShape(id: string) {
     .getActiveElements()
     ?.toArray()
     .find(x => x.get('id') === id);
-  if (!m || m.get('type') !== 'text') return;
+  if (!m) return;
+  const elType = m.get('type');
+  // 双击已有公式（F1.1）：预填源码重编辑，提交走 updateElement 同一通道
+  if (elType === 'formula') {
+    openFormulaFor(id, String(m.get('latex') ?? ''));
+    return;
+  }
+  if (elType !== 'text') return;
 
   const layer = renderer.layer;
   const s = layer.scaleX() || 1;
@@ -939,6 +990,109 @@ function editTextShape(id: string) {
 
 function getSelectedShapeId(): string | null {
   return renderer?.getSelectedId() ?? null;
+}
+
+// --- F1.1 公式输入浮层（交互写死：∑/双击呼出，Enter 提交、Esc 取消，提交后自动关闭） ---
+function openFormula() {
+  if (!props.isTeacher || !renderer) return;
+  if (formulaVisible.value) return;
+  // 面板互斥矩阵：公式浮层/属性面板/素材页签三者互斥单开
+  showEditer.value = false;
+  showFillToggle.value = false;
+  showFillPalette.value = false;
+  showFileList.value = false;
+  editingFormulaId.value = null;
+  formulaInput.value = '';
+  formulaError.value = '';
+  formulaLoading.value = false;
+  formulaVisible.value = true;
+  nextTick(() => formulaInputRef.value?.focus());
+}
+
+function openFormulaFor(id: string, latex: string) {
+  if (!props.isTeacher || formulaVisible.value) return;
+  showEditer.value = false;
+  showFillToggle.value = false;
+  showFillPalette.value = false;
+  showFileList.value = false;
+  editingFormulaId.value = id;
+  formulaInput.value = latex;
+  formulaError.value = '';
+  formulaLoading.value = false;
+  formulaVisible.value = true;
+  nextTick(() => {
+    formulaInputRef.value?.focus();
+    formulaInputRef.value?.select();
+  });
+}
+
+function closeFormula() {
+  formulaVisible.value = false;
+  editingFormulaId.value = null;
+  formulaInput.value = '';
+  formulaError.value = '';
+  formulaLoading.value = false;
+}
+
+async function submitFormula() {
+  if (formulaLoading.value || !formulaVisible.value) return;
+  const latex = formulaInput.value.trim();
+  if (!latex) {
+    formulaError.value = '请输入 LaTeX 公式';
+    return;
+  }
+  formulaLoading.value = true;
+  formulaError.value = '';
+  try {
+    // 懒加载 katex+html2canvas 独立 chunk（§4.9：加载失败 → 可读文案 + 按钮转重试）
+    const mod = await import('./whiteboard/formulaRaster');
+    const check = mod.validateLatex(latex);
+    if (!check.ok) {
+      formulaError.value = check.message || mod.FORMULA_INVALID_MSG;
+      return;
+    }
+    // 渲染中：量自然尺寸（katex 排版）；位图光栅由节点创建路径带缓存完成
+    const box = mod.measureFormula(latex, currentColor.value);
+    if (!box || box.width <= 0 || box.height <= 0) {
+      formulaError.value = '公式渲染失败，请检查内容后重试';
+      return;
+    }
+    if (editingFormulaId.value) {
+      const before = snapshotShape(editingFormulaId.value, ['latex', 'width', 'height']);
+      if (
+        before &&
+        applyShapeUpdate(
+          editingFormulaId.value,
+          { latex, width: box.width, height: box.height },
+          before
+        )
+      ) {
+        refreshLayer();
+      }
+    } else if (renderer && provider) {
+      // 无点击落点 → 视口中心放置（元素存自然尺寸，缩放由 layer 与 width/height 承担）
+      const stage = renderer.getStage();
+      const lp = toLayerCoords({ x: stage.width() / 2, y: stage.height() / 2 });
+      provider.addShape({
+        id: uid(),
+        type: 'formula',
+        latex,
+        x: Math.round(lp.x - box.width / 2),
+        y: Math.round(lp.y - box.height / 2),
+        width: box.width,
+        height: box.height,
+        color: currentColor.value,
+        opacity: currentOpacity.value
+      });
+      refreshLayer();
+    }
+    closeFormula();
+  } catch (err) {
+    console.error('[whiteboard] 公式组件加载失败', err);
+    formulaError.value = '公式组件加载失败，点击重试';
+  } finally {
+    formulaLoading.value = false;
+  }
 }
 
 function commitShapeMove(id: string, x: number, y: number) {
@@ -3059,5 +3213,89 @@ defineExpose({
   margin-top: 8px;
   color: #409eff;
   font-size: 13px;
+}
+
+/* F1.1 公式工具按钮（∑ 字形，尺寸/悬停沿用 .tools div 通用规则） */
+.formula-tool {
+  .formula-tool-icon {
+    font-size: 17px;
+    font-weight: 600;
+    color: #555;
+    line-height: 1;
+  }
+  &:hover .formula-tool-icon {
+    color: #409eff;
+  }
+}
+
+/* F1.1 公式输入浮层（状态机：默认→输入中→红框错误→渲染中→已提交） */
+.formula-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.formula-panel {
+  width: 380px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 16px 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.22);
+}
+
+.formula-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.formula-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 8px;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  outline: none;
+  resize: vertical;
+  &:focus {
+    border-color: #409eff;
+  }
+  &.invalid {
+    border-color: #e1383f;
+    background: #fff5f5;
+  }
+}
+
+.formula-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #e1383f;
+}
+
+.formula-loading {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #409eff;
+}
+
+.formula-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.formula-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #999;
 }
 </style>

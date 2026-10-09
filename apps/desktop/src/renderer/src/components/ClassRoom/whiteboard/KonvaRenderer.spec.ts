@@ -156,6 +156,13 @@ const konvaMocks = vi.hoisted(() => {
       }
       return this.attrs.image;
     }
+    setAttr(k: string, v: unknown) {
+      this.attrs[k] = v;
+      return this;
+    }
+    getAttr(k: string) {
+      return this.attrs[k];
+    }
   }
 
   class MockShape {
@@ -346,6 +353,28 @@ vi.mock('konva', () => ({
 // 导出就绪用例需可控的 PDF 渲染：默认挂起（image 保持 null），单测内按需覆写结果
 vi.mock('./pdfAsset', () => ({
   renderPdfPage: vi.fn(() => new Promise(() => {}))
+}));
+
+// F1.1 公式光栅（katex+html2canvas chunk）：单测只验接线/时序，光栅实现由 formulaRaster.spec 覆盖
+const formulaMocks = vi.hoisted(() => ({
+  rasterizeFormula: vi.fn(async (_latex: string, _color: string, scale: number) => ({
+    canvas: {
+      __formulaCanvas: true,
+      width: Math.round(120 * scale),
+      height: Math.round(48 * scale)
+    },
+    width: 120,
+    height: 48
+  }))
+}));
+
+vi.mock('./formulaRaster', () => ({
+  rasterizeFormula: formulaMocks.rasterizeFormula,
+  measureFormula: vi.fn(),
+  validateLatex: vi.fn(),
+  clearFormulaCache: vi.fn(),
+  formulaOversample: vi.fn(() => 2),
+  FORMULA_INVALID_MSG: 'LaTeX 语法有误'
 }));
 
 import { KonvaRenderer } from './KonvaRenderer';
@@ -1306,5 +1335,127 @@ describe('KonvaRenderer 荧光笔混合与橡皮按元素命中（F4.1）', () =
     expect(renderer.hitStroke(6, 6, 2)).toBe('dot');
     expect(renderer.hitStroke(60, 60, 2)).toBeNull();
     renderer.destroy();
+  });
+});
+
+// ── F1.1 公式元素（5.7.1 B1 光栅接线：懒 chunk、自然尺寸采纳、缩放重栅格） ──
+describe('KonvaRenderer formula', () => {
+  function formulaElement(overrides: Record<string, unknown> = {}) {
+    const data: Record<string, unknown> = {
+      id: 'f1',
+      type: 'formula',
+      latex: 'E=mc^2',
+      x: 10,
+      y: 20,
+      width: 120,
+      height: 48,
+      color: '#123456',
+      opacity: 1,
+      ...overrides
+    };
+    return { get: (k: string) => data[k] };
+  }
+
+  function formulaNode(renderer: KonvaRenderer) {
+    return renderer.layer.getChildren()[0] as unknown as InstanceType<typeof konvaMocks.MockImage>;
+  }
+
+  const flush = () => new Promise(r => setTimeout(r, 0));
+
+  it('creates a formula Image node with latex attrs and lands the raster async', async () => {
+    formulaMocks.rasterizeFormula.mockClear();
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const elements = [formulaElement()] as unknown as Parameters<typeof renderer.bindElements>[0];
+    renderer.bindElements(elements);
+
+    const node = formulaNode(renderer);
+    expect(node.getAttr('latex')).toBe('E=mc^2');
+    expect(node.getAttr('formulaColor')).toBe('#123456');
+    expect(node.width()).toBe(120);
+    expect(node.image()).toBeNull();
+
+    await flush();
+    expect(formulaMocks.rasterizeFormula).toHaveBeenCalledWith('E=mc^2', '#123456', 2);
+    expect(node.image()).toMatchObject({ __formulaCanvas: true });
+    renderer.destroy();
+  });
+
+  it('adopts natural raster size when element has no stored width/height', async () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const elements = [formulaElement({ width: 0, height: 0 })] as unknown as Parameters<
+      typeof renderer.bindElements
+    >[0];
+    renderer.bindElements(elements);
+    const node = formulaNode(renderer);
+    expect(node.width()).toBe(0);
+    await flush();
+    expect(node.width()).toBe(120);
+    expect(node.height()).toBe(48);
+    renderer.destroy();
+  });
+
+  it('whenImagesReady stays pending until the formula raster lands', async () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const elements = [formulaElement()] as unknown as Parameters<typeof renderer.bindElements>[0];
+    renderer.bindElements(elements);
+    const node = formulaNode(renderer);
+    // 光栅未落位前不可判定就绪
+    expect(node.image()).toBeNull();
+    await renderer.whenImagesReady(2000);
+    expect(node.image()).toBeTruthy();
+    renderer.destroy();
+  });
+
+  it('debounced zoom re-rasters formulas at the new oversample, leaves other images alone', async () => {
+    formulaMocks.rasterizeFormula.mockClear();
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const imageData: Record<string, unknown> = {
+      id: 'i1',
+      type: 'image',
+      url: 'http://test.local/img/a.png',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      opacity: 1
+    };
+    const elements = [
+      formulaElement(),
+      { get: (k: string) => imageData[k] }
+    ] as unknown as Parameters<typeof renderer.bindElements>[0];
+    renderer.bindElements(elements);
+    await flush();
+    expect(formulaMocks.rasterizeFormula).toHaveBeenCalledTimes(1);
+
+    vi.useFakeTimers();
+    try {
+      // 连续缩放被防抖合并为一次重栅格
+      renderer.setZoom(150);
+      renderer.setZoom(200);
+      await vi.advanceTimersByTimeAsync(300);
+    } finally {
+      vi.useRealTimers();
+    }
+    // setZoom 上限 200% → S=clamp(2×200,1,8)=4；非公式图片不触发重栅格
+    expect(formulaMocks.rasterizeFormula).toHaveBeenCalledTimes(2);
+    expect(formulaMocks.rasterizeFormula).toHaveBeenLastCalledWith('E=mc^2', '#123456', 4);
+    renderer.destroy();
+  });
+
+  it('destroy cancels the pending zoom re-raster timer', async () => {
+    formulaMocks.rasterizeFormula.mockClear();
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const elements = [formulaElement()] as unknown as Parameters<typeof renderer.bindElements>[0];
+    renderer.bindElements(elements);
+    await flush();
+    vi.useFakeTimers();
+    try {
+      renderer.setZoom(200);
+      renderer.destroy();
+      await vi.advanceTimersByTimeAsync(300);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(formulaMocks.rasterizeFormula).toHaveBeenCalledTimes(1);
   });
 });

@@ -34,7 +34,8 @@ export const ELEMENT_TYPES = [
   'line',
   'text',
   'ppt-image',
-  'image'
+  'image',
+  'formula'
 ] as const;
 
 export type ElementType = (typeof ELEMENT_TYPES)[number];

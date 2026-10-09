@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { enableAutoUnmount } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import type { YjsProvider } from './whiteboard/YjsProvider';
+import { YjsProvider } from './whiteboard/YjsProvider';
 
 // 失败用例也必须卸载组件（onUnmounted 会 destroy Yjs provider），避免跨测试状态泄漏
 enableAutoUnmount(afterEach);
@@ -224,6 +224,18 @@ const konvaMocks = vi.hoisted(() => {
       };
     }
     setAttrs(_a: unknown) {}
+    setAttr(key: string, v: unknown) {
+      this._attrs[key] = v;
+      return this;
+    }
+    // F1.1 公式节点：光栅回调写入 canvas（其余节点走 image() 取图的路径同用）
+    image(v?: unknown) {
+      if (v !== undefined) {
+        this._attrs.image = v;
+        return this;
+      }
+      return this._attrs.image;
+    }
     zIndex(_val?: unknown) {
       return 0;
     }
@@ -238,9 +250,10 @@ const konvaMocks = vi.hoisted(() => {
       if (_val !== undefined) this._scaleY = _val as number;
       return this._scaleY;
     }
-    getAttr(_key: string) {
-      if (_key === 'visible') return true;
-      if (_key === 'image') return { currentSrc: '' };
+    getAttr(key: string) {
+      if (key in this._attrs) return this._attrs[key];
+      if (key === 'visible') return true;
+      if (key === 'image') return { currentSrc: '' };
       return 0;
     }
     getClassName() {
@@ -457,6 +470,26 @@ const exportMocks = vi.hoisted(() => ({ runExport: vi.fn() }));
 vi.mock('./whiteboard/exportBoard', () => ({
   runExport: exportMocks.runExport
 }));
+
+// F1.1 公式：katex/html2canvas chunk 的光栅实现由 formulaRaster.spec 覆盖，此处只验浮层接线
+const formulaMocks = vi.hoisted(() => {
+  const FORMULA_INVALID_MSG = 'LaTeX 语法有误，请检查括号与命令是否完整';
+  return {
+    FORMULA_INVALID_MSG,
+    validateLatex: vi.fn((latex: string) =>
+      latex.includes('INVALID') ? { ok: false, message: FORMULA_INVALID_MSG } : { ok: true }
+    ),
+    measureFormula: vi.fn(() => ({ width: 130, height: 40 })),
+    rasterizeFormula: vi.fn(async () => ({
+      canvas: { __formulaCanvas: true },
+      width: 130,
+      height: 40
+    })),
+    clearFormulaCache: vi.fn(),
+    formulaOversample: vi.fn(() => 2)
+  };
+});
+vi.mock('./whiteboard/formulaRaster', () => formulaMocks);
 
 function mountWB(props: Record<string, unknown> = {}) {
   // WhiteBoard mounted() queries #container for width/height
@@ -3306,5 +3339,147 @@ describe('WhiteBoard.vue 板书导出（F6.1）', () => {
     await first;
     expect(vm.exporting).toBe(false);
     expect(wrapper.find('.export-progress').exists()).toBe(false);
+  });
+
+  // ── F1.1 公式浮层（5.7.1 B1：∑ 按钮 → 源码框 → Enter 提交 / Esc 取消 / 双击重编辑） ──
+  describe('F1.1 公式浮层', () => {
+    type FormulaVM = PPTVM & {
+      formulaVisible: boolean;
+      formulaInput: string;
+      formulaError: string;
+      formulaLoading: boolean;
+      openFormula: () => void;
+      closeFormula: () => void;
+      submitFormula: () => Promise<void>;
+      editTextShape: (id: string) => void;
+    };
+
+    it('教师工具栏提供 ∑ 按钮，点击呼出源码浮层', async () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as FormulaVM;
+      const btn = wrapper.find('.formula-tool');
+      expect(btn.exists()).toBe(true);
+      expect(btn.text()).toContain('∑');
+      await btn.trigger('click');
+      await nextTick();
+      expect(vm.formulaVisible).toBe(true);
+      expect(wrapper.find('.formula-overlay').exists()).toBe(true);
+      expect(wrapper.find('.formula-textarea').exists()).toBe(true);
+      expect(wrapper.find('.formula-hint').text()).toContain('Enter');
+      wrapper.unmount();
+    });
+
+    it('非法 LaTeX → 行内红框文案，浮层不关闭', async () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as FormulaVM;
+      vm.openFormula();
+      vm.formulaInput = 'INVALID';
+      await vm.submitFormula();
+      await nextTick();
+      expect(vm.formulaError).toBe(formulaMocks.FORMULA_INVALID_MSG);
+      expect(wrapper.find('.formula-error').exists()).toBe(true);
+      expect(wrapper.find('.formula-textarea').classes()).toContain('invalid');
+      expect(vm.formulaVisible).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('空输入 → 提示必填，不调渲染管线', async () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as FormulaVM;
+      formulaMocks.measureFormula.mockClear();
+      vm.openFormula();
+      vm.formulaInput = '   ';
+      await vm.submitFormula();
+      expect(vm.formulaError).toBe('请输入 LaTeX 公式');
+      expect(formulaMocks.measureFormula).not.toHaveBeenCalled();
+      wrapper.unmount();
+    });
+
+    it('合法提交 → addShape(type=formula, 自然尺寸) 且浮层关闭', async () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as FormulaVM;
+      const addSpy = vi.spyOn(YjsProvider.prototype, 'addShape').mockClear();
+      vm.openFormula();
+      vm.formulaInput = 'E=mc^2';
+      await vm.submitFormula();
+      await nextTick();
+      expect(addSpy).toHaveBeenCalledTimes(1);
+      const data = addSpy.mock.calls[0]![0] as Record<string, unknown>;
+      expect(data.type).toBe('formula');
+      expect(data.latex).toBe('E=mc^2');
+      expect(data.width).toBe(130);
+      expect(data.height).toBe(40);
+      expect(typeof data.id).toBe('string');
+      expect(vm.formulaVisible).toBe(false);
+      expect(wrapper.find('.formula-overlay').exists()).toBe(false);
+      addSpy.mockRestore();
+      wrapper.unmount();
+    });
+
+    it('切换工具即收起浮层（面板互斥，setMode 单一收口）', async () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as FormulaVM;
+      vm.openFormula();
+      expect(vm.formulaVisible).toBe(true);
+      vm.tool('brush');
+      await nextTick();
+      expect(vm.formulaVisible).toBe(false);
+      expect(wrapper.find('.formula-overlay').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('渲染模块加载失败 → 可读降级文案（§4.9）', async () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as FormulaVM;
+      formulaMocks.measureFormula.mockImplementationOnce(() => {
+        throw new Error('chunk down');
+      });
+      vm.openFormula();
+      vm.formulaInput = 'E=mc^2';
+      await vm.submitFormula();
+      await nextTick();
+      expect(vm.formulaError).toBe('公式组件加载失败，点击重试');
+      expect(vm.formulaVisible).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('双击已有公式 → 预填源码重编辑，提交走 updateElement', async () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as FormulaVM;
+      const updateSpy = vi.spyOn(YjsProvider.prototype, 'updateElement');
+      // 与生产路径一致：WS 未同步时无页，先建页（onPointerUp 兜底建页的等价测试前置）
+      if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+      vm.provider!.addShape({
+        id: 'fx1',
+        type: 'formula',
+        latex: 'a+b',
+        x: 0,
+        y: 0,
+        width: 130,
+        height: 40,
+        color: '#000000',
+        opacity: 1
+      });
+      await nextTick();
+      vm.editTextShape('fx1');
+      await nextTick();
+      expect(vm.formulaVisible).toBe(true);
+      expect(vm.formulaInput).toBe('a+b');
+      vm.formulaInput = 'c+d';
+      await vm.submitFormula();
+      await nextTick();
+      expect(updateSpy).toHaveBeenCalledTimes(1);
+      expect(updateSpy.mock.calls[0]![0]).toBe('fx1');
+      expect(updateSpy.mock.calls[0]![1]).toMatchObject({ latex: 'c+d', width: 130, height: 40 });
+      expect(vm.formulaVisible).toBe(false);
+      updateSpy.mockRestore();
+      wrapper.unmount();
+    });
+
+    it('学生端不渲染公式按钮（工具栏仅教师可见的回归延伸）', () => {
+      const wrapper = mountWB({ isTeacher: false });
+      expect(wrapper.find('.formula-tool').exists()).toBe(false);
+      wrapper.unmount();
+    });
   });
 });
