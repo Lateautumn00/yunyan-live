@@ -459,9 +459,23 @@ export class KonvaRenderer {
   hitStroke(x: number, y: number, radius: number): string | null {
     const entries = [...this.nodeMap.entries()].reverse();
     for (const [id, node] of entries) {
-      const cls = node.getClassName();
+      let cls = node.getClassName();
+      let target: any = node;
+      // F3.1：受力箭头（Group）经内部 Arrow 杆身命中，偏移取 Group 自身
+      if (cls === 'Group') {
+        const arrow = (
+          node as unknown as {
+            getChildren: () => { find: (fn: (c: unknown) => boolean) => unknown };
+          }
+        )
+          .getChildren()
+          .find(c => (c as { getClassName: () => string }).getClassName() === 'Arrow');
+        if (!arrow) continue;
+        target = arrow;
+        cls = 'Arrow';
+      }
       if (cls !== 'Line' && cls !== 'Arrow') continue;
-      const n = node as any;
+      const n = target as any;
       const pts: number[] = n.points ? n.points() : [];
       const tol = ((n.strokeWidth ? Number(n.strokeWidth()) : 0) || 0) / 2 + radius;
       const nx = Number(node.x()) || 0;
@@ -590,6 +604,41 @@ export class KonvaRenderer {
           fill: data.get('color') || '#000',
           opacity
         });
+      }
+      // F3.1 复合单元素：Group = 箭头杆身 + 标签（单 Yjs 元素/单节点，选择/移动/撤销天然成对）
+      case 'force-arrow': {
+        const strokeWidth = (data.get('lineWidth') as number) || 1;
+        const color = data.get('color') || '#000';
+        const points = (data.get('points') as number[]) || [];
+        const label = String(data.get('label') ?? '');
+        const group = new Konva.Group({
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
+          opacity
+        });
+        group.add(
+          new Konva.Arrow({
+            points,
+            stroke: color,
+            fill: color,
+            strokeWidth,
+            hitStrokeWidth: Math.max(strokeWidth, HIT_STROKE_MIN)
+          })
+        );
+        if (label) {
+          const mx = ((points[0] as number) || 0) + ((points[2] as number) || 0);
+          const my = ((points[1] as number) || 0) + ((points[3] as number) || 0);
+          group.add(
+            new Konva.Text({
+              x: mx / 2 + 6,
+              y: my / 2 - 18,
+              text: label,
+              fontSize: 16,
+              fill: color
+            })
+          );
+        }
+        return group;
       }
       case 'line': {
         const strokeWidth = (data.get('lineWidth') as number) || 1;

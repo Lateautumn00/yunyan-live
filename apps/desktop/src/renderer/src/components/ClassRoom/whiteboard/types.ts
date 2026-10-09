@@ -8,6 +8,7 @@ export type ToolMode =
   | 'rectangle'
   | 'arrows'
   | 'line'
+  | 'force'
   | 'move'
   | 'laser'
   | 'file';
@@ -35,7 +36,8 @@ export const ELEMENT_TYPES = [
   'text',
   'ppt-image',
   'image',
-  'formula'
+  'formula',
+  'force-arrow'
 ] as const;
 
 export type ElementType = (typeof ELEMENT_TYPES)[number];
@@ -53,6 +55,7 @@ export const MODE_TO_ELEMENT: Partial<Record<ToolMode, ElementType>> = {
   circle: 'circle',
   rectangle: 'rect',
   arrows: 'arrow',
+  force: 'force-arrow',
   line: 'line'
 };
 

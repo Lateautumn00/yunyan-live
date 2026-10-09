@@ -360,6 +360,26 @@ const konvaMocks = vi.hoisted(() => {
   }
   class MockRect extends MockNode {}
   class MockImage extends MockNode {}
+  // F3.1 复合元素：Group 持有子节点（Arrow+Text），橡皮 hitStroke 经 getChildren 命中杆身
+  class MockGroup extends MockNode {
+    _children: MockNode[] = [];
+    override add(child: MockNode) {
+      this._children.push(child);
+    }
+    getChildren() {
+      const children = this._children;
+      return {
+        find: (fn: (c: MockNode) => boolean) => children.find(fn),
+        toArray: () => [...children],
+        get length() {
+          return children.length;
+        }
+      };
+    }
+    override getClassName() {
+      return 'Group';
+    }
+  }
   class MockEllipse extends MockNode {
     _rx = 0;
     _ry = 0;
@@ -384,7 +404,6 @@ const konvaMocks = vi.hoisted(() => {
       return this._keepRatio;
     }
   }
-  class MockGroup extends MockNode {}
 
   return {
     MockStage,
@@ -1661,6 +1680,88 @@ describe('WhiteBoard.vue PPT 课件', () => {
       expect(shapes.length).toBe(2);
       expect(shapes[0]).toMatchObject({ type: 'ppt-image' });
       expect(shapes[1]).toMatchObject({ type: 'brush', blend: 'multiply' });
+      wrapper.unmount();
+    });
+  });
+
+  // ── F3.1 受力分析箭头模板 ──────────────────────────────────────────────────
+  describe('WhiteBoard.vue 受力箭头模板（F3.1）', () => {
+    type F31VM = PPTVM & {
+      selectForceLabel: (label: string) => void;
+      armedForceLabel: string;
+      renderer: {
+        previewLayer: { getChildren: () => unknown[] };
+        layer: { getChildren: () => unknown[] };
+        bindElements: (els: unknown) => void;
+      } | null;
+    };
+
+    function drawForce(vm: F31VM, x1: number, y1: number, x2: number, y2: number) {
+      const stage = konvaMocks.MockStage.last()!;
+      vm.tool('force');
+      stage._pointer = { x: x1, y: y1 };
+      stage.fire('mousedown', { target: stage, evt: {} });
+      stage._pointer = { x: x2, y: y2 };
+      stage.fire('mousemove', { target: stage, evt: {} });
+      stage.fire('mouseup', { target: stage, evt: {} });
+    }
+
+    it('正向：预设标签拖出受力箭头，标签与坐标写入 Yjs', () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as F31VM;
+      vm.selectForceLabel('G');
+      drawForce(vm, 100, 100, 200, 140);
+      const shapes = vm.getCurrentPageShapes().filter(s => s.type === 'force-arrow');
+      expect(shapes.length).toBe(1);
+      const s = shapes[0]!;
+      expect(s.label).toBe('G');
+      expect(s.points).toEqual([100, 100, 200, 140]);
+      wrapper.unmount();
+    });
+
+    it('正向：双击改标签，Enter 提交并可撤销/重做', () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as F31VM;
+      vm.selectForceLabel('F₁');
+      drawForce(vm, 100, 100, 200, 140);
+      vm.tool('cur'); // 双击编辑仅选择器模式下可用（与文本一致）
+      const node = vm.renderer!.layer.getChildren()[0] as { fire: (e: string) => void };
+
+      node.fire('dblclick');
+      const ta = document.querySelector('textarea') as HTMLTextAreaElement;
+      expect(ta).toBeTruthy();
+      expect(ta.value).toBe('F₁');
+      ta.value = 'N';
+      ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+      expect(ta.isConnected).toBe(false);
+      const s = vm.getCurrentPageShapes().filter(x => x.type === 'force-arrow')[0]!;
+      expect(s.label).toBe('N');
+      vm.revocation('pre');
+      expect(vm.getCurrentPageShapes().filter(x => x.type === 'force-arrow')[0]!.label).toBe('F₁');
+      vm.revocation('next');
+      expect(vm.getCurrentPageShapes().filter(x => x.type === 'force-arrow')[0]!.label).toBe('N');
+      wrapper.unmount();
+    });
+
+    it('负向：微小拖拽（<5px）不落受力箭头', () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as F31VM;
+      drawForce(vm, 100, 100, 102, 101);
+      expect(vm.getCurrentPageShapes().filter(s => s.type === 'force-arrow').length).toBe(0);
+      wrapper.unmount();
+    });
+
+    it('正向：橡皮命中受力箭头杆身整件删除', () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as F31VM;
+      drawForce(vm, 100, 100, 200, 140);
+      expect(vm.getCurrentPageShapes().filter(s => s.type === 'force-arrow').length).toBe(1);
+
+      vm.tool('eraser');
+      const stage = konvaMocks.MockStage.last()!;
+      stage._pointer = { x: 150, y: 120 }; // 杆身中点
+      stage.fire('mousedown', { target: stage, evt: {} });
+      expect(vm.getCurrentPageShapes().filter(s => s.type === 'force-arrow').length).toBe(0);
       wrapper.unmount();
     });
   });

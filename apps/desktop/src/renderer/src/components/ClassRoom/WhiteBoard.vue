@@ -51,6 +51,25 @@
             <el-icon><Promotion /></el-icon>
           </div>
         </el-tooltip>
+        <el-tooltip content="受力箭头 · 预设标签拖出方向，双击改标签" placement="right">
+          <div :class="['force', { on: mode === 'force' }]">
+            <el-popover placement="right-end" :width="176" trigger="click">
+              <template #reference>
+                <span class="force-icon">F</span>
+              </template>
+              <div class="force-presets">
+                <span
+                  v-for="p in FORCE_PRESETS"
+                  :key="p"
+                  class="force-preset"
+                  @click="selectForceLabel(p)"
+                >
+                  {{ p }}
+                </span>
+              </div>
+            </el-popover>
+          </div>
+        </el-tooltip>
         <el-tooltip content="直线工具 · 按住 Shift 锁定水平/垂直" placement="right">
           <div :class="['line', { on: mode === 'line' }]" @click="tool('line')">
             <el-icon><Minus /></el-icon>
@@ -885,12 +904,27 @@ function onAwarenessChange() {
 
 function tool(type: ToolMode) {
   setMode(type);
-  showEditer.value = ['brush', 'eraser', 'text', 'circle', 'rectangle', 'arrows', 'line'].includes(
-    type
-  );
+  showEditer.value = [
+    'brush',
+    'eraser',
+    'text',
+    'circle',
+    'rectangle',
+    'arrows',
+    'line',
+    'force'
+  ].includes(type);
   showFillToggle.value = false;
   showFillPalette.value = false;
   showFileList.value = type === 'file';
+}
+
+// F3.1 受力箭头预设标签：素材面板点选武装 → 拖拽绘制恒带该标签（双击可再改）
+const FORCE_PRESETS = ['F₁', 'F₂', 'F₃', 'G', 'N', 'f', 'T'] as const;
+const armedForceLabel = ref('F₁');
+function selectForceLabel(label: string) {
+  armedForceLabel.value = label;
+  tool('force');
 }
 
 function toggleFileList() {
@@ -1001,6 +1035,50 @@ function editTextShape(id: string) {
   // 双击已有公式（F1.1）：预填源码重编辑，提交走 updateElement 同一通道
   if (elType === 'formula') {
     openFormulaFor(id, String(m.get('latex') ?? ''));
+    return;
+  }
+  // F3.1：受力箭头双击改标签——定位标签中点偏移（与 createNode 同款），仅写 label 键
+  if (elType === 'force-arrow') {
+    const layer = renderer.layer;
+    const s = layer.scaleX() || 1;
+    const pts = (m.get('points') as number[]) || [];
+    const mx = ((pts[0] as number) || 0) + ((pts[2] as number) || 0);
+    const my = ((pts[1] as number) || 0) + ((pts[3] as number) || 0);
+    const screenX = layer.x() + (mx / 2 + 6) * s;
+    const screenY = layer.y() + (my / 2 - 18) * s;
+    const original = String(m.get('label') ?? '');
+    const ta = document.createElement('textarea');
+    ta.value = original;
+    ta.style.cssText = `position:fixed; left:${screenX}px; top:${screenY}px; font-size:16px; color:${String(m.get('color') || '#000')}; border:1px dashed #88b8cc; background:rgba(255,255,255,0.9); outline:none; resize:none; padding:2px 4px; margin:0; overflow:hidden; z-index:999; min-width:32px; min-height:24px; font-family:sans-serif; line-height:1.2;`;
+    editingTextId = id;
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      editingTextId = null;
+      const val = ta.value.trim();
+      ta.remove();
+      if (!val || val === original) return;
+      const before = snapshotShape(id, ['label']);
+      if (!before) return;
+      if (!applyShapeUpdate(id, { label: val }, before)) return;
+      refreshLayer();
+    };
+    ta.addEventListener('keydown', ke => {
+      if (ke.key === 'Enter') {
+        ke.preventDefault();
+        finish();
+      } else if (ke.key === 'Escape') {
+        ke.preventDefault();
+        done = true;
+        editingTextId = null;
+        ta.remove();
+      }
+    });
+    ta.addEventListener('blur', finish);
     return;
   }
   if (elType !== 'text') return;
@@ -1359,7 +1437,7 @@ function onPointerDown(e: any) {
   } else if (m === 'eraser') {
     isDrawing = true;
     eraseAt(pos);
-  } else if (['circle', 'rectangle', 'arrows', 'line'].includes(m)) {
+  } else if (['circle', 'rectangle', 'arrows', 'line', 'force'].includes(m)) {
     isDrawing = true;
     startPos = pos;
   } else if (m === 'text') {
@@ -1465,7 +1543,7 @@ function onPointerMove(e: any) {
     renderer!.previewLayer.batchDraw();
   } else if (m === 'eraser') {
     eraseAt(pos);
-  } else if (['circle', 'rectangle', 'arrows', 'line'].includes(m) && startPos) {
+  } else if (['circle', 'rectangle', 'arrows', 'line', 'force'].includes(m) && startPos) {
     renderer!.previewLayer.destroyChildren();
     drawTempShape(pos, !!e?.evt?.shiftKey);
     renderer!.previewLayer.batchDraw();
@@ -1493,7 +1571,7 @@ function onPointerUp(e: any) {
   if (
     provider &&
     !provider.getActiveElements() &&
-    ['brush', 'circle', 'rectangle', 'arrows', 'line'].includes(m)
+    ['brush', 'circle', 'rectangle', 'arrows', 'line', 'force'].includes(m)
   ) {
     provider.addPage();
   }
@@ -1586,7 +1664,7 @@ function onPointerUp(e: any) {
       provider?.addShape(shapeData);
       refreshLayer();
     }
-  } else if (m === 'arrows' && startPos && pos) {
+  } else if ((m === 'arrows' || m === 'force') && startPos && pos) {
     const layerStart = toLayerCoords(startPos);
     const layerEnd = toLayerCoords(pos);
     let dx = layerEnd.x - layerStart.x;
@@ -1600,11 +1678,13 @@ function onPointerUp(e: any) {
     if (Math.sqrt(dx * dx + dy * dy) > 5) {
       const shapeData: Record<string, any> = {
         id: uid(),
-        type: 'arrow',
+        type: m === 'force' ? 'force-arrow' : 'arrow',
         points: [layerStart.x, layerStart.y, layerStart.x + dx, layerStart.y + dy],
         color: currentColor.value,
         lineWidth: currentSize.value,
-        opacity: currentOpacity.value
+        opacity: currentOpacity.value,
+        // F3.1：受力箭头恒带标签（预设武装），普通箭头无此键
+        ...(m === 'force' ? { label: armedForceLabel.value } : {})
       };
       provider?.addShape(shapeData);
       refreshLayer();
@@ -1677,7 +1757,7 @@ function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
         lineJoin: 'round'
       })
     );
-  } else if (m === 'arrows') {
+  } else if (m === 'arrows' || m === 'force') {
     let dx = le.x - ls.x;
     let dy = le.y - ls.y;
     if (shift) {
@@ -1692,6 +1772,18 @@ function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
         fill: currentColor.value
       })
     );
+    // F3.1：受力箭头预览同步展示标签（与落盘节点同款中点偏移）
+    if (m === 'force') {
+      renderer.previewLayer.add(
+        new Konva.Text({
+          x: (ls.x + ls.x + dx) / 2 + 6,
+          y: (ls.y + ls.y + dy) / 2 - 18,
+          text: armedForceLabel.value,
+          fontSize: 16,
+          fill: currentColor.value
+        })
+      );
+    }
   }
 }
 
@@ -2870,6 +2962,10 @@ defineExpose({
   // F7.5：学生端跟随冲突横幅（模板渲染与点击恢复手动）
   followBanner,
   onFollowBannerClick,
+  // F3.1：受力箭头预设武装（spec 与模板共用）
+  FORCE_PRESETS,
+  armedForceLabel,
+  selectForceLabel,
   // 测试钩子：直接访问底层 Yjs provider / Konva renderer / 当前视口快照（供同步类用例断言）
   get provider() {
     return provider;
@@ -3035,6 +3131,16 @@ defineExpose({
   }
   .circle {
     background-position: -68px -34px;
+  }
+  /* F3.1 受力箭头：文字图标 + 预设面板 */
+  .force-icon {
+    font-size: 15px;
+    font-weight: 600;
+    color: #555;
+    font-style: italic;
+  }
+  &.force.on .force-icon {
+    color: #409eff;
   }
   input[type='file'] {
     position: absolute;
@@ -3536,6 +3642,28 @@ defineExpose({
   bottom: 8px;
   pointer-events: auto;
   cursor: pointer;
+}
+
+/* F3.1 受力箭头预设面板（el-popover 内容）：标签芯片点选武装 */
+.force-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  .force-preset {
+    min-width: 32px;
+    padding: 2px 8px;
+    border: 1px solid #dcdfe6;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 13px;
+    cursor: pointer;
+
+    &:hover {
+      background-color: rgba(64, 158, 255, 0.1);
+      border-color: #409eff;
+    }
+  }
 }
 
 /* F4.6 截图框选遮罩：铺满白板区，展示屏幕捕获并支持拖拽框选 */
