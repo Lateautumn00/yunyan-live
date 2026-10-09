@@ -1518,13 +1518,19 @@ function onPointerUp(e: any) {
   } else if (m === 'arrows' && startPos && pos) {
     const layerStart = toLayerCoords(startPos);
     const layerEnd = toLayerCoords(pos);
-    const dx = layerEnd.x - layerStart.x;
-    const dy = layerEnd.y - layerStart.y;
+    let dx = layerEnd.x - layerStart.x;
+    let dy = layerEnd.y - layerStart.y;
+    const shift = !!e?.evt?.shiftKey;
+    // Shift 锁定水平/垂直（按主方向取舍，与直线一致，F5.1 回归修复 P1）
+    if (shift) {
+      if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
+      else dx = 0;
+    }
     if (Math.sqrt(dx * dx + dy * dy) > 5) {
       const shapeData: Record<string, any> = {
         id: uid(),
         type: 'arrow',
-        points: [layerStart.x, layerStart.y, layerEnd.x, layerEnd.y],
+        points: [layerStart.x, layerStart.y, layerStart.x + dx, layerStart.y + dy],
         color: currentColor.value,
         lineWidth: currentSize.value,
         opacity: currentOpacity.value
@@ -1601,9 +1607,15 @@ function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
       })
     );
   } else if (m === 'arrows') {
+    let dx = le.x - ls.x;
+    let dy = le.y - ls.y;
+    if (shift) {
+      if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
+      else dx = 0;
+    }
     renderer.previewLayer.add(
       new Konva.Arrow({
-        points: [ls.x, ls.y, le.x, le.y],
+        points: [ls.x, ls.y, ls.x + dx, ls.y + dy],
         stroke: currentColor.value,
         strokeWidth: currentSize.value,
         fill: currentColor.value
