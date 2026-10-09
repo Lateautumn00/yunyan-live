@@ -82,6 +82,11 @@
             />
           </div>
         </el-tooltip>
+        <el-tooltip content="截图 · Ctrl+Shift+X 框选屏幕区域插入" placement="right">
+          <div class="screenshot-tool" @click="startScreenshot">
+            <el-icon><Crop /></el-icon>
+          </div>
+        </el-tooltip>
         <el-tooltip content="我的课件" placement="right">
           <div :class="['file', { on: mode === 'file' }]" @click="toggleFileList">
             <el-icon><FolderOpened /></el-icon>
@@ -382,6 +387,18 @@
         已回到教师视角（点击恢复手动）
       </div>
 
+      <!-- F4.6 截图框选遮罩：全窗展示屏幕捕获，拖拽框选后按框选原位插入图片元素 -->
+      <div
+        v-if="screenshotVisible"
+        class="screenshot-overlay"
+        @mousedown="onShotMouseDown"
+        @mousemove="onShotMouseMove"
+        @mouseup="onShotMouseUp"
+      >
+        <img :src="screenshotImg" class="screenshot-bg" draggable="false" alt="" />
+        <div v-if="shotSel" class="screenshot-sel" :style="shotSelStyle" />
+      </div>
+
       <!-- 板书导出（F6.1，仅教师）：范围/格式 + 逐页进度 + 失败留弹窗可重试 -->
       <el-dialog
         v-model="exportDialogVisible"
@@ -426,7 +443,7 @@
 
 <script setup lang="ts">
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import Konva from 'konva';
 import { debounce, formatFileSize, frameThrottle, throttle, uid } from '@yunyan-live/utils';
@@ -1260,6 +1277,12 @@ function onSelectionKeydown(e: KeyboardEvent) {
 
   const mod = e.ctrlKey || e.metaKey;
   const key = e.key.toLowerCase();
+  // F4.6：Ctrl+Shift+X 截图框选（startScreenshot 自带学生端守卫）
+  if (mod && e.shiftKey && key === 'x') {
+    e.preventDefault();
+    void startScreenshot();
+    return;
+  }
   if (mod && key === 'z' && !e.shiftKey) {
     e.preventDefault();
     revocation('pre');
@@ -1271,6 +1294,11 @@ function onSelectionKeydown(e: KeyboardEvent) {
     return;
   }
   if (e.key === 'Escape') {
+    // F4.6：截图框选中 Esc = 取消框选（先于选中清理，不透传）
+    if (screenshotVisible.value) {
+      resetScreenshot();
+      return;
+    }
     // Esc：取消选中并中止进行中的绘制/拖拽（学生端由 revocation/clearSelection 自身守卫）；
     // 激光模式 → 回选择器并熄灭
     clearSelection();
@@ -2273,7 +2301,8 @@ function loadImageEl(url: string): Promise<HTMLImageElement> {
   });
 }
 
-async function uploadImage(file: File) {
+// pos：F4.6 截图按框选原位落点；缺省（文件上传）保持页面左上默认位
+async function uploadImage(file: File, pos?: { x: number; y: number }) {
   if (!uploadImageApi) {
     toast('未配置图片上传接口');
     return;
@@ -2312,8 +2341,8 @@ async function uploadImage(file: File) {
         id: uid(),
         type: 'image',
         url: fileUrl,
-        x: 50,
-        y: 50,
+        x: pos?.x ?? 50,
+        y: pos?.y ?? 50,
         width: w,
         height: h,
         opacity: currentOpacity.value
@@ -2332,6 +2361,145 @@ async function uploadImage(file: File) {
     toast(`上传出错: ${(e as Error).message}`);
   }
   loading.value = false;
+}
+
+// --- F4.6 截图插入 ---
+// 框选遮罩状态：visible=遮罩在显；img=屏幕捕获 dataURL；sel=框选矩形（容器显示坐标）
+const screenshotVisible = ref(false);
+const screenshotImg = ref('');
+const shotSel = ref<{ x: number; y: number; w: number; h: number } | null>(null);
+let shotStart: { x: number; y: number } | null = null;
+
+const shotSelStyle = computed(() => {
+  const s = shotSel.value;
+  return s
+    ? { left: `${s.x}px`, top: `${s.y}px`, width: `${s.w}px`, height: `${s.h}px` }
+    : undefined;
+});
+
+function resetScreenshot() {
+  screenshotVisible.value = false;
+  screenshotImg.value = '';
+  shotSel.value = null;
+  shotStart = null;
+}
+
+// dataURL → Blob：F4.6 裁剪结果 / 剪贴板降级统一走 uploadImage（复用上传+Yjs 管线）
+function dataUrlToBlob(dataUrl: string): Blob {
+  const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: 'image/png' });
+}
+
+async function startScreenshot() {
+  if (!props.isTeacher) return;
+  if (!window.electronAPI?.captureScreen) {
+    toast('截图需在桌面客户端中使用');
+    return;
+  }
+  loading.value = true;
+  let capUrl: string;
+  try {
+    capUrl = await window.electronAPI.captureScreen();
+  } catch {
+    capUrl = '';
+  } finally {
+    loading.value = false;
+  }
+  if (!capUrl) {
+    toast('截屏权限被拒，请在系统设置中允许屏幕录制后重试');
+    // 降级：剪贴板图片直接插入（§4.9 权限被拒路径）
+    try {
+      const clipUrl = await window.electronAPI.clipboardReadImage();
+      if (!clipUrl) {
+        toast('剪贴板无图片');
+        return;
+      }
+      await uploadImage(
+        new File([dataUrlToBlob(clipUrl)], '剪贴板截图.png', { type: 'image/png' })
+      );
+    } catch (err) {
+      toast(`剪贴板图片读取失败: ${(err as Error).message}`);
+    }
+    return;
+  }
+  screenshotImg.value = capUrl;
+  screenshotVisible.value = true;
+}
+
+function shotLocalPos(e: MouseEvent): { x: number; y: number } {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function onShotMouseDown(e: MouseEvent) {
+  if (e.button !== 0) return;
+  shotStart = shotLocalPos(e);
+  shotSel.value = null;
+}
+
+function onShotMouseMove(e: MouseEvent) {
+  if (!shotStart) return;
+  const cur = shotLocalPos(e);
+  shotSel.value = {
+    x: Math.min(shotStart.x, cur.x),
+    y: Math.min(shotStart.y, cur.y),
+    w: Math.abs(cur.x - shotStart.x),
+    h: Math.abs(cur.y - shotStart.y)
+  };
+}
+
+function onShotMouseUp() {
+  if (!shotStart) {
+    resetScreenshot();
+    return;
+  }
+  shotStart = null;
+  const sel = shotSel.value;
+  const capUrl = screenshotImg.value;
+  resetScreenshot();
+  // 微小拖拽/框外点击视为取消（不落元素）
+  if (!sel || sel.w < 4 || sel.h < 4) return;
+  void insertScreenshotCrop(sel, capUrl);
+}
+
+async function insertScreenshotCrop(
+  sel: { x: number; y: number; w: number; h: number },
+  capUrl: string
+) {
+  loading.value = true;
+  try {
+    const img = await loadImageEl(capUrl);
+    const capW = img.naturalWidth || img.width;
+    const capH = img.naturalHeight || img.height;
+    const el = document.getElementById(containerId.value);
+    // 遮罩 stretch 铺满容器：显示坐标 → 捕获像素按比例换算（v1 不做 letterbox 保原位心智）
+    const cw = el?.clientWidth || 800;
+    const ch = el?.clientHeight || 600;
+    const sx = (sel.x / cw) * capW;
+    const sy = (sel.y / ch) * capH;
+    const sw = (sel.w / cw) * capW;
+    const sh = (sel.h / ch) * capH;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(sw));
+    canvas.height = Math.max(1, Math.round(sh));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      toast('截屏裁剪失败');
+      return;
+    }
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    const blob = dataUrlToBlob(canvas.toDataURL('image/png'));
+    // 原位对齐：框选左上角显示坐标 → 层坐标（评审否决"落入当前页中心"）
+    const pos = toLayerCoords({ x: sel.x, y: sel.y });
+    await uploadImage(new File([blob], '屏幕截图.png', { type: 'image/png' }), pos);
+  } catch (err) {
+    toast(`截屏插入失败: ${(err as Error).message}`);
+  } finally {
+    loading.value = false;
+  }
 }
 
 // 预载全部页尺寸（阶段1）已抽至 whiteboard/pptImport.ts:loadPptMeta
@@ -3368,6 +3536,32 @@ defineExpose({
   bottom: 8px;
   pointer-events: auto;
   cursor: pointer;
+}
+
+/* F4.6 截图框选遮罩：铺满白板区，展示屏幕捕获并支持拖拽框选 */
+.screenshot-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 300;
+  cursor: crosshair;
+  user-select: none;
+  overflow: hidden;
+
+  .screenshot-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: fill; /* stretch 铺满：显示坐标按比例直映捕获像素（v1 简化映射） */
+    pointer-events: none;
+  }
+
+  .screenshot-sel {
+    position: absolute;
+    border: 2px solid #409eff;
+    background: rgba(64, 158, 255, 0.15);
+    pointer-events: none;
+  }
 }
 
 /* F6.1 导出弹窗（teleport 到 body，scoped 属性随编译落在内容节点上仍生效） */

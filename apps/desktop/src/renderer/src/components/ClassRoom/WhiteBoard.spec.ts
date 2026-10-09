@@ -3886,3 +3886,185 @@ describe('WhiteBoard.vue 跟随打磨（F7.5）', () => {
     }
   });
 });
+
+// ── F4.6 截图插入 ──────────────────────────────────────────────────────────
+describe('WhiteBoard.vue 截图插入（F4.6）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv('VITE_UPLOAD_IMAGE_URL', 'http://mock.test/img');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            code: 1000,
+            data: { fileUrl: 'http://mock.test/img/shot1.png' }
+          })
+      })
+    );
+    stubShotFakeImage();
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'electronAPI');
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function stubElectronShot(opts: { cap?: string | Error; clip?: string } = {}) {
+    const captureScreen = vi
+      .fn()
+      .mockImplementation(() =>
+        opts.cap instanceof Error
+          ? Promise.reject(opts.cap)
+          : Promise.resolve(opts.cap ?? `data:image/png;base64,${btoa('shot')}`)
+      );
+    const clipboardReadImage = vi.fn().mockResolvedValue(opts.clip ?? '');
+    Object.assign(window, { electronAPI: { captureScreen, clipboardReadImage } });
+    return { captureScreen, clipboardReadImage };
+  }
+
+  // 捕获 dataURL → 1600×900 自然尺寸；上传后的裁剪图 http URL → 200×90（贴近真实链路：
+  // 裁剪画布尺寸即上传图自然尺寸，jsdom 无解码只能按 src 类型区分）
+  function stubShotFakeImage() {
+    class FakeImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      naturalWidth = 1600;
+      naturalHeight = 900;
+      width = 1600;
+      height = 900;
+      complete = false;
+      private _src = '';
+      get src() {
+        return this._src;
+      }
+      set src(val: string) {
+        this._src = val;
+        queueMicrotask(() => {
+          if (!val.startsWith('data:')) {
+            this.naturalWidth = 200;
+            this.naturalHeight = 90;
+            this.width = 200;
+            this.height = 90;
+          }
+          this.complete = true;
+          this.onload?.();
+        });
+      }
+    }
+    vi.stubGlobal('Image', FakeImage);
+  }
+
+  function stubShotCanvas() {
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue(
+      `data:image/png;base64,${btoa('crop')}`
+    );
+    return { drawImage };
+  }
+
+  function fireShotShortcut() {
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'x',
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true
+      })
+    );
+  }
+
+  it('正向：框选截图裁剪上传并按框选原位写入 Yjs', async () => {
+    const { captureScreen } = stubElectronShot();
+    const { drawImage } = stubShotCanvas();
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+
+    fireShotShortcut();
+    await vi.waitFor(() => expect(wrapper.find('.screenshot-overlay').exists()).toBe(true), {
+      timeout: 2000
+    });
+    expect(captureScreen).toHaveBeenCalledTimes(1);
+
+    const overlay = wrapper.find('.screenshot-overlay');
+    await overlay.trigger('mousedown', { clientX: 100, clientY: 100 });
+    await overlay.trigger('mousemove', { clientX: 200, clientY: 160 });
+    await overlay.trigger('mouseup', { clientX: 200, clientY: 160 });
+    expect(wrapper.find('.screenshot-overlay').exists()).toBe(false);
+
+    await vi.waitFor(() => expect(imageShapes(vm).length).toBe(1), { timeout: 3000 });
+    const s = imageShapes(vm)[0]!;
+    // 原位对齐：框选左上角 (100,100) → 层坐标同值（默认视口 scale=1、无平移）
+    expect(s.x).toBe(100);
+    expect(s.y).toBe(100);
+    // 裁剪：显示 100×60 → 捕获像素 (200,150,200,90)（容器回退 800×600，捕获 1600×900）
+    expect(drawImage).toHaveBeenCalledWith(expect.anything(), 200, 150, 200, 90, 0, 0, 200, 90);
+    expect(s.width).toBe(200);
+    expect(s.height).toBe(90);
+    expect(s.url).toBe('http://mock.test/img/shot1.png');
+    wrapper.unmount();
+  });
+
+  it('负向：Esc 取消框选，不落任何元素', async () => {
+    stubElectronShot();
+    stubShotCanvas();
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+
+    fireShotShortcut();
+    await vi.waitFor(() => expect(wrapper.find('.screenshot-overlay').exists()).toBe(true), {
+      timeout: 2000
+    });
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    );
+    await nextTick();
+    expect(wrapper.find('.screenshot-overlay').exists()).toBe(false);
+    expect(imageShapes(vm).length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('正向：截屏权限被拒提示并降级剪贴板图片插入', async () => {
+    // 剪贴板读取挂起：让"截屏权限被拒"toast 在降级完成前可观测（否则被"图片已添加"覆盖）
+    let releaseClip!: (v: string) => void;
+    const clipPromise = new Promise<string>(r => {
+      releaseClip = r;
+    });
+    const captureScreen = vi.fn().mockRejectedValue(new Error('denied'));
+    const clipboardReadImage = vi.fn().mockReturnValue(clipPromise);
+    Object.assign(window, { electronAPI: { captureScreen, clipboardReadImage } });
+    stubShotCanvas();
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as PPTVM;
+
+    fireShotShortcut();
+    await vi.waitFor(() => expect(String(unwrapVal(vm.toastMsg))).toContain('截屏权限被拒'), {
+      timeout: 2000
+    });
+    expect(clipboardReadImage).toHaveBeenCalledTimes(1);
+    releaseClip(`data:image/png;base64,${btoa('clip')}`);
+    await vi.waitFor(() => expect(imageShapes(vm).length).toBe(1), { timeout: 3000 });
+    const s = imageShapes(vm)[0]!;
+    expect(s.x).toBe(50); // 降级插入走默认位置
+    expect(s.y).toBe(50);
+    wrapper.unmount();
+  });
+
+  it('负向：学生端 Ctrl+Shift+X 不触发截屏', async () => {
+    const { captureScreen } = stubElectronShot();
+    const wrapper = mountWB({ isTeacher: false });
+
+    fireShotShortcut();
+    await nextTick();
+    await new Promise(r => setTimeout(r, 10));
+    expect(captureScreen).not.toHaveBeenCalled();
+    expect(wrapper.find('.screenshot-overlay').exists()).toBe(false);
+    wrapper.unmount();
+  });
+});

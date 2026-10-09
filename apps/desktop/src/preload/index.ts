@@ -22,8 +22,14 @@ const api: ElectronApi = {
   getSources: () => {
     return ipcRenderer.invoke(IpcChannels.getSources) as Promise<DesktopSource[]>;
   },
+  captureScreen: () => {
+    return ipcRenderer.invoke(IpcChannels.captureScreen) as Promise<string>;
+  },
   clipboardWriteText: (text: string) => {
     return ipcRenderer.invoke(IpcChannels.clipboardWrite, text) as Promise<void>;
+  },
+  clipboardReadImage: () => {
+    return ipcRenderer.invoke(IpcChannels.clipboardReadImage) as Promise<string>;
   },
   recordingGetFileUrl: (filePath: string) => {
     return ipcRenderer.invoke(IpcChannels.recordingGetFileUrl, filePath) as Promise<string>;
