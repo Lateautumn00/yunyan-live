@@ -499,6 +499,17 @@ export class LiveController {
     return this.boardSnapshotEnvelope(snapshot);
   }
 
+  @GrpcMethod('LiveService', 'CheckRoomAccess')
+  async checkRoomAccess(data: { room_id: string; user_id: string }) {
+    const access = await this.liveService.checkRoomAccess(data.room_id, data.user_id);
+    return ok({
+      data: {
+        allowed: access.allowed,
+        is_teacher: access.isTeacher
+      }
+    });
+  }
+
   private boardSnapshotEnvelope(snapshot: {
     id: string;
     roomId: string;

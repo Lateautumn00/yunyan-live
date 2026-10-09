@@ -41,6 +41,20 @@ vi.mock('./snapshot', () => ({
   }
 }));
 
+// D8 房间访问校验 mock：默认 null（同 LIVE_GRPC_URL='' 跳过，回退 JWT 角色）
+const mockAccess = vi.hoisted(() => ({
+  denyRooms: new Set<string>(),
+  studentRooms: new Set<string>()
+}));
+
+vi.mock('./access', () => ({
+  checkRoomAccess: async (roomId: string) => {
+    if (mockAccess.denyRooms.has(roomId)) return { allowed: false, isTeacher: false };
+    if (mockAccess.studentRooms.has(roomId)) return { allowed: true, isTeacher: false };
+    return null;
+  }
+}));
+
 const runId = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 const providers: WebsocketProvider[] = [];
 let port = 0;
@@ -75,11 +89,11 @@ async function untilSynced(provider: WebsocketProvider, timeout = 5000): Promise
   await waitFor(() => provider.synced, 'provider synced', timeout);
 }
 
-function connect(roomId: string, doc: Y.Doc): WebsocketProvider {
+function connect(roomId: string, doc: Y.Doc, useToken = token): WebsocketProvider {
   const provider = new WebsocketProvider(`ws://127.0.0.1:${port}`, roomId, doc, {
     connect: true,
     disableBc: true,
-    params: { roomId, token },
+    params: { roomId, token: useToken },
     WebSocketPolyfill: NodeWebSocket as unknown as typeof WebSocket
   });
   providers.push(provider);
@@ -99,9 +113,12 @@ beforeAll(async () => {
   mockSnap.store.clear();
   mockSnap.saveFails = false;
   mockSnap.loadFails = false;
+  mockAccess.denyRooms.clear();
+  mockAccess.studentRooms.clear();
   port = await freePort();
   process.env.YJS_WS_PORT = String(port);
-  token = jwt.sign({ sub: 'user-test', sid: 'sid-test' }, 'test-secret');
+  // role:1 = 教师（D8 写过滤后，测试默认连接须具备写权限）
+  token = jwt.sign({ sub: 'user-test', sid: 'sid-test', role: 1 }, 'test-secret');
   main = await import('./main');
   await waitFor(() => main.server.listening, 'server listening', 5000);
   // 冷加载 nest-shared/koa 模块图在 /mnt/e（DrvFs）上可达 ~30s，覆盖默认 15s hook 预算
@@ -279,6 +296,72 @@ describe('yjs-ws realtime sync', () => {
       expect(mockSnap.store.has(room)).toBe(false);
     } finally {
       mockSnap.loadFails = false;
+    }
+  }, 20000);
+
+  it('T8: student (JWT role fallback) reads and relays awareness but its doc writes are dropped', async () => {
+    const room = `t8-${runId}`;
+    const studentToken = jwt.sign({ sub: 'user-student', sid: 'sid-test', role: 2 }, 'test-secret');
+
+    const docT = new Y.Doc();
+    const pT = connect(room, docT);
+    await untilSynced(pT);
+    const docS = new Y.Doc();
+    const pS = connect(room, docS, studentToken);
+    await untilSynced(pS);
+
+    // 读同步方向正常：学生能收到教师内容
+    docT.getArray('elements').push(['shapeT']);
+    await waitFor(() => elementsOf(docS).includes('shapeT'), 'student receives teacher content');
+
+    // 学生写入本地生效，但服务端拒绝且不广播
+    docS.getArray('elements').push(['shapeS']);
+    await sleep(600);
+    expect(elementsOf(docS)).toContain('shapeS');
+    expect(elementsOf(docT)).not.toContain('shapeS');
+
+    // awareness（光标/激光笔）不受写过滤限制
+    pS.awareness.setLocalStateField('laser', { x: 3, y: 4 });
+    await waitFor(
+      () => pT.awareness.getStates().get(docS.clientID)?.laser?.x === 3,
+      'student awareness relayed'
+    );
+  }, 20000);
+
+  it('T9: non-member handshake is rejected with close code 4403', async () => {
+    const room = `t9-${runId}`;
+    mockAccess.denyRooms.add(room);
+    try {
+      const code = await new Promise<number>((resolve, reject) => {
+        const ws = new NodeWebSocket(`ws://127.0.0.1:${port}/?roomId=${room}&token=${token}`);
+        ws.on('close', (c: number) => resolve(c));
+        ws.on('error', err => reject(err));
+      });
+      expect(code).toBe(4403);
+    } finally {
+      mockAccess.denyRooms.delete(room);
+    }
+  }, 20000);
+
+  it('T10: room-level access outranks JWT role — JWT teacher without room teachership cannot write', async () => {
+    const room = `t10-${runId}`;
+    mockAccess.studentRooms.add(room);
+    try {
+      const docA = new Y.Doc();
+      const pA = connect(room, docA);
+      await untilSynced(pA);
+      docA.getArray('elements').push(['shape10']);
+      await sleep(600);
+
+      // 后连的观察者从服务端全量同步：服务端从未接收 A 的写入
+      const docB = new Y.Doc();
+      const pB = connect(room, docB);
+      await untilSynced(pB);
+      await sleep(300);
+      expect(elementsOf(docB)).not.toContain('shape10');
+      expect(elementsOf(docA)).toContain('shape10');
+    } finally {
+      mockAccess.studentRooms.delete(room);
     }
   }, 20000);
 });

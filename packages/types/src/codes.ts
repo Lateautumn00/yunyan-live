@@ -30,13 +30,15 @@ export const WsClose = {
 
 /**
  * yjs-ws 关闭码（y-websocket 将 44xx 视为终止码，不自动重连）。
- * 语义顺序与 chat-ws 相反：4401=顶下线、4402=会话无效。
+ * 语义顺序与 chat-ws 相反：4401=顶下线、4402=会话无效、4403=非房间成员。
  */
 export const YjsClose = {
   /** 被顶下线 */
   SESSION_KICKED: 4401,
   /** 会话无效/过期 */
-  SESSION_INVALID: 4402
+  SESSION_INVALID: 4402,
+  /** 非房间成员（D8 握手房间校验拒绝） */
+  NOT_IN_ROOM: 4403
 } as const;
 
 /** 规范分页请求（入口层负责把 pageNum/page/page_size 别名归一化到该形状） */

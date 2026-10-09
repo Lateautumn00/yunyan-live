@@ -712,6 +712,21 @@ export class LiveService {
     };
   }
 
+  /**
+   * D8 白板房间访问校验：教师 = rooms.liveUserId 匹配，学生 = live_participants 存在。
+   * 房间不存在（含软删）或两者皆不匹配 → 拒绝；调用方（yjs-ws）用于握手 4403 与写权限判定。
+   */
+  async checkRoomAccess(roomId: string, userId: string) {
+    if (!roomId || !userId) {
+      throw grpcError(GrpcStatus.INVALID_ARGUMENT, 'roomId and userId are required');
+    }
+    const room = await this.repo.findOne({ where: { roomId } });
+    if (!room) return { allowed: false, isTeacher: false };
+    if (room.liveUserId === userId) return { allowed: true, isTeacher: true };
+    const participant = await this.participantRepo.findOne({ where: { roomId, userId } });
+    return { allowed: Boolean(participant), isTeacher: false };
+  }
+
   async getUserWatchTimeList(dto: {
     page?: number;
     pageSize?: number;

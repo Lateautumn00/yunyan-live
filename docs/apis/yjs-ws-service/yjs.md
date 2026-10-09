@@ -15,6 +15,8 @@ ws://<host>:50055?token=<JWT>&roomId=<docName>
 
 连接建立时会校验 JWT 中的会话 `sid`（Redis `session:<guid>`）：不匹配 → `close 4401`，会话过期/不存在 → `close 4402`，Redis 故障时放行（fail-open）。
 
+随后进行 **D8 房间成员校验**（gRPC `CheckRoomAccess`，2s 超时）：非该房间成员（既不是 `rooms.liveUserId` 也不在 `live_participants`）→ `close 4403`；gRPC 不可达或 `LIVE_GRPC_URL` 为空时放行（fail-open），仅保留消息级写过滤。
+
 > **关闭码落在 4400–4499 区间是刻意设计**：y-websocket 的 `defaultShouldReconnect` 对该区间的关闭码停止重连并发出 `closed` 事件，客户端据此区分「被踢/过期」与可重试的网络错误。
 
 `connection.binaryType = 'arraybuffer'`。
@@ -38,6 +40,8 @@ ws://<host>:50055?token=<JWT>&roomId=<docName>
 
 编码：`writeVarUint(0) + syncProtocol 载荷`。服务端处理 `syncProtocol.readSyncMessage` 后回写需要的同步增量；文档 `update` 事件触发时向其它连接广播同步消息。
 
+**写权限过滤（D8）**：服务端按连接的有效角色过滤 sync 子类型——非房间教师的 `syncStep2`/`update` 被静默丢弃（防学生直写污染持久化快照），`syncStep1`（状态向量请求）与 awareness 消息不受限。有效角色 = 房间校验返回的房间角色（校验可用时），否则回退 JWT `role`（1=教师）。
+
 ### messageAwareness (1)
 
 编码：`writeVarUint(1) + writeVarUint8Array(awarenessUpdate)`。服务端应用后向其它连接广播相同负载。
@@ -55,17 +59,18 @@ ws://<host>:50055?token=<JWT>&roomId=<docName>
 
 - `close 4401`：**单端登录踢出**（服务端订阅 `session:kick` 频道后主动断开）
 - `close 4402`：token 缺失/无效，或会话过期
+- `close 4403`：**非房间成员**（D8 握手房间校验拒绝）
 - `close 1001`：服务端关闭
 
 ## 相关环境变量
 
-| 变量                    | 说明                                                        |
-| ----------------------- | ----------------------------------------------------------- |
-| YJS_WS_PORT             | 端口，默认 50055                                            |
-| JWT_SECRET              | JWT 密钥，**必填**（未设置时服务拒绝启动）                  |
-| REDIS_HOST              | Redis 地址，用于会话校验与踢出，默认 127.0.0.1              |
-| REDIS_PORT              | Redis 端口，默认 6379                                       |
-| LIVE_GRPC_URL           | board_snapshot 所在 live-service 的 gRPC 地址；置空禁用快照 |
-| SNAPSHOT_INTERVAL_MS    | 定时快照间隔，默认 300000（下限 1000）                      |
-| SNAPSHOT_EMPTY_GRACE_MS | 空房销毁前宽限期，默认 60000                                |
-| SNAPSHOT_FAIL_RETRY_MS  | 快照写入失败的退避重试间隔，默认 10000                      |
+| 变量                    | 说明                                               |
+| ----------------------- | -------------------------------------------------- |
+| YJS_WS_PORT             | 端口，默认 50055                                   |
+| JWT_SECRET              | JWT 密钥，**必填**（未设置时服务拒绝启动）         |
+| REDIS_HOST              | Redis 地址，用于会话校验与踢出，默认 127.0.0.1     |
+| REDIS_PORT              | Redis 端口，默认 6379                              |
+| LIVE_GRPC_URL           | live-service gRPC 地址；置空禁用快照与房间成员校验 |
+| SNAPSHOT_INTERVAL_MS    | 定时快照间隔，默认 300000（下限 1000）             |
+| SNAPSHOT_EMPTY_GRACE_MS | 空房销毁前宽限期，默认 60000                       |
+| SNAPSHOT_FAIL_RETRY_MS  | 快照写入失败的退避重试间隔，默认 10000             |

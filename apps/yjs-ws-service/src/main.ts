@@ -14,6 +14,7 @@ import {
   verifyToken
 } from '@yunyan-live/nest-shared';
 import { loadLatestSnapshot, saveSnapshot } from './snapshot';
+import { checkRoomAccess } from './access';
 import * as syncProtocol from 'y-protocols/sync';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
@@ -26,8 +27,12 @@ const messageAwareness = 1;
 /** 自定义状态帧：服务端 → 教师端推送快照落库状态（客户端 provider 注册 handler 消费） */
 const messageSnapshotStatus = 4;
 
-/** 与网关口径一致：1 = 教师（状态帧只推教师） */
+/** 与网关口径一致：1 = 教师、2 = 学生（packages/types UserInfo.role） */
 const TEACHER_ROLE = 1;
+const STUDENT_ROLE = 2;
+
+/** y-protocols sync 子类型：0=syncStep1（状态向量请求）、1=syncStep2、2=update */
+const SYNC_STEP1 = 0;
 
 const SNAPSHOT_INTERVAL_MS = Math.max(1000, Number(process.env.SNAPSHOT_INTERVAL_MS) || 300000);
 const SNAPSHOT_EMPTY_GRACE_MS = Math.max(0, Number(process.env.SNAPSHOT_EMPTY_GRACE_MS) || 60000);
@@ -42,7 +47,10 @@ interface ConnMeta {
   docName: string;
   authUserId?: string;
   sid?: string;
+  /** 房间内有效角色（房间校验可用时为房间角色，否则回退 JWT role） */
   role?: number;
+  /** D8 写权限：仅房间教师可写 syncStep2/update（syncStep1 与 awareness 不受限） */
+  canWrite: boolean;
 }
 
 interface RoomMeta {
@@ -373,6 +381,13 @@ function messageListener(conn: WebSocket, doc: Y.Doc, message: Uint8Array) {
     const messageType = decoding.readVarUint(dec);
 
     if (messageType === messageSync) {
+      // D8 写权限过滤：非教师丢弃 syncStep2/update（防学生直写污染快照），放行 syncStep1
+      const meta = connMeta.get(conn);
+      if (!meta?.canWrite) {
+        const probe = decoding.createDecoder(message);
+        decoding.readVarUint(probe);
+        if (decoding.readVarUint(probe) !== SYNC_STEP1) return;
+      }
       const encoder = encoding.createEncoder();
       encoding.writeVarUint(encoder, messageSync);
       syncProtocol.readSyncMessage(dec, encoder, doc, conn);
@@ -433,6 +448,16 @@ async function handleYjsConnection(connection: WebSocket, req: http.IncomingMess
 
   const docName = url.searchParams.get('roomId') || 'default';
 
+  // D8 房间成员校验：非成员直接 4403；校验不可用（未启用/故障）时退回 JWT 角色
+  const access = await checkRoomAccess(docName, payload.sub);
+  if (access && !access.allowed) {
+    connection.close(YjsClose.NOT_IN_ROOM, 'Not a room member');
+    return;
+  }
+  if (connection.readyState !== WebSocket.OPEN) return;
+  const role = access ? (access.isTeacher ? TEACHER_ROLE : STUDENT_ROLE) : payload.role;
+  const canWrite = role === TEACHER_ROLE;
+
   doc = await ensureDoc(docName);
   const liveDoc = doc;
   (liveDoc as any).conns = (liveDoc as any).conns || new Map();
@@ -441,7 +466,8 @@ async function handleYjsConnection(connection: WebSocket, req: http.IncomingMess
     docName,
     authUserId: payload.sub,
     sid: payload.sid,
-    role: payload.role
+    role,
+    canWrite
   });
 
   connection.binaryType = 'arraybuffer';

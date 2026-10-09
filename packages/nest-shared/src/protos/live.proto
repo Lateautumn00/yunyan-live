@@ -30,6 +30,7 @@ service LiveService {
   rpc ListBoardSnapshots (ListBoardSnapshotsRequest) returns (BoardSnapshotListResponse) {}
   rpc GetBoardSnapshot (GetBoardSnapshotRequest) returns (BoardSnapshotDetailResponse) {}
   rpc GetLatestBoardSnapshot (GetLatestBoardSnapshotRequest) returns (BoardSnapshotDetailResponse) {}
+  rpc CheckRoomAccess (CheckRoomAccessRequest) returns (CheckRoomAccessResponse) {}
 }
 
 message CreateLiveRequest {
@@ -406,4 +407,20 @@ message BoardSnapshotDetailData {
   int32 format_version = 4;
   bytes data = 5;
   string created_at = 6;
+}
+
+message CheckRoomAccessRequest {
+  string room_id = 1;
+  string user_id = 2;
+}
+
+message CheckRoomAccessResponse {
+  string code = 1;
+  string msg = 2;
+  CheckRoomAccessData data = 3;
+}
+
+message CheckRoomAccessData {
+  bool allowed = 1;
+  bool is_teacher = 2;
 }

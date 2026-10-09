@@ -35,6 +35,7 @@ function makeService(): ServiceMock {
     listBoardSnapshots: vi.fn(),
     getBoardSnapshot: vi.fn(),
     getLatestBoardSnapshot: vi.fn(),
+    checkRoomAccess: vi.fn(),
     getUserWatchTimeList: vi.fn()
   };
 }
@@ -714,6 +715,15 @@ describe('LiveController gRPC 映射', () => {
       data: Buffer.from([1]),
       created_at: '1704067200001'
     });
+  });
+
+  it('CheckRoomAccess：room_id/user_id 透传，data 映射 snake_case', async () => {
+    const { controller, service } = makeController();
+    service.checkRoomAccess.mockResolvedValue({ allowed: true, isTeacher: false });
+    const res = await controller.checkRoomAccess({ room_id: 'r1', user_id: 'u1' });
+    expect(service.checkRoomAccess).toHaveBeenCalledWith('r1', 'u1');
+    expect(res.code).toBe('0');
+    expect(res.data).toEqual({ allowed: true, is_teacher: false });
   });
 
   it('GetUserWatchTimeList：watch_time 秒数计算与在线 left_at 空串', async () => {
