@@ -9,6 +9,7 @@ export type ToolMode =
   | 'arrows'
   | 'line'
   | 'force'
+  | 'leader'
   | 'move'
   | 'laser'
   | 'file';
@@ -37,7 +38,8 @@ export const ELEMENT_TYPES = [
   'ppt-image',
   'image',
   'formula',
-  'force-arrow'
+  'force-arrow',
+  'leader-label'
 ] as const;
 
 export type ElementType = (typeof ELEMENT_TYPES)[number];
@@ -56,6 +58,7 @@ export const MODE_TO_ELEMENT: Partial<Record<ToolMode, ElementType>> = {
   rectangle: 'rect',
   arrows: 'arrow',
   force: 'force-arrow',
+  leader: 'leader-label',
   line: 'line'
 };
 

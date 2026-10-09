@@ -461,18 +461,21 @@ export class KonvaRenderer {
     for (const [id, node] of entries) {
       let cls = node.getClassName();
       let target: any = node;
-      // F3.1：受力箭头（Group）经内部 Arrow 杆身命中，偏移取 Group 自身
+      // F3.1/F3.2：复合元素（Group）经内部 Arrow/Line 杆身命中，偏移取 Group 自身
       if (cls === 'Group') {
-        const arrow = (
+        const child = (
           node as unknown as {
             getChildren: () => { find: (fn: (c: unknown) => boolean) => unknown };
           }
         )
           .getChildren()
-          .find(c => (c as { getClassName: () => string }).getClassName() === 'Arrow');
-        if (!arrow) continue;
-        target = arrow;
-        cls = 'Arrow';
+          .find(c => {
+            const k = (c as { getClassName: () => string }).getClassName();
+            return k === 'Arrow' || k === 'Line';
+          });
+        if (!child) continue;
+        target = child;
+        cls = (child as { getClassName: () => string }).getClassName();
       }
       if (cls !== 'Line' && cls !== 'Arrow') continue;
       const n = target as any;
@@ -495,6 +498,20 @@ export class KonvaRenderer {
       } else if (pts.length >= 2 && Math.hypot(x - (pts[0]! + nx), y - (pts[1]! + ny)) <= tol) {
         return id;
       }
+    }
+    return null;
+  }
+
+  // F3.2：bounding-box 命中——返回 (x,y) 落在哪个元素的包围盒内（引线锚点选取被指对象）
+  hitElementAt(x: number, y: number): string | null {
+    const entries = [...this.nodeMap.entries()].reverse();
+    for (const [id, node] of entries) {
+      const box = (
+        node as unknown as {
+          getClientRect: () => { x: number; y: number; width: number; height: number };
+        }
+      ).getClientRect();
+      if (x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height) return id;
     }
     return null;
   }
@@ -634,6 +651,39 @@ export class KonvaRenderer {
               y: my / 2 - 18,
               text: label,
               fontSize: 16,
+              fill: color
+            })
+          );
+        }
+        return group;
+      }
+      // F3.2 复合单元素：Group = 引线(Line) + 标签(Text)，锚点跟随被指对象
+      case 'leader-label': {
+        const strokeWidth = (data.get('lineWidth') as number) || 2;
+        const color = data.get('color') || '#000';
+        const pts = (data.get('points') as number[]) || [];
+        const label = String(data.get('label') ?? '');
+        const group = new Konva.Group({
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
+          opacity
+        });
+        group.add(
+          new Konva.Line({
+            points: pts,
+            stroke: color,
+            strokeWidth,
+            hitStrokeWidth: Math.max(strokeWidth, HIT_STROKE_MIN),
+            lineCap: 'round'
+          })
+        );
+        if (label) {
+          group.add(
+            new Konva.Text({
+              x: (pts[2] as number) || 0,
+              y: ((pts[3] as number) || 0) - 18,
+              text: label,
+              fontSize: (data.get('fontSize') as number) || 14,
               fill: color
             })
           );

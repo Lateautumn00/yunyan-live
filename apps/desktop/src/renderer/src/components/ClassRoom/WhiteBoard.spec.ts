@@ -4169,3 +4169,130 @@ describe('WhiteBoard.vue 截图插入（F4.6）', () => {
     wrapper.unmount();
   });
 });
+
+// ── F3.2 引线标签（复合单元素：Line+Text，锚点跟随被指对象） ────────────────
+describe('WhiteBoard.vue 引线标签（F3.2）', () => {
+  type F32VM = PPTVM & {
+    selectLeader: () => void;
+    commitShapeMove: (id: string, x: number, y: number) => void;
+    renderer: {
+      previewLayer: { getChildren: () => unknown[] };
+      layer: { getChildren: () => unknown[] };
+      bindElements: (els: unknown) => void;
+    } | null;
+  };
+
+  function leaderShapes(vm: F32VM) {
+    return vm.getCurrentPageShapes().filter(s => s.type === 'leader-label');
+  }
+
+  // 拖出引线：mousedown 设锚点（命中被指对象）→ mousemove 拖标签位 → mouseup 落库
+  function drawLeader(vm: F32VM, ax: number, ay: number, lx: number, ly: number) {
+    const stage = konvaMocks.MockStage.last()!;
+    vm.selectLeader();
+    stage._pointer = { x: ax, y: ay };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: lx, y: ly };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    stage.fire('mouseup', { target: stage, evt: {} });
+  }
+
+  function seedImageAndLeader(vm: F32VM) {
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape({
+      id: 'img-t',
+      type: 'image',
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+      src: 'data:image/png;base64,x',
+      opacity: 1
+    });
+    provider.addShape({
+      id: 'ld-t',
+      type: 'leader-label',
+      points: [120, 120, 260, 90], // 锚点(120,120) + 标签位(260,90)
+      label: '细胞核',
+      targetId: 'img-t',
+      anchorRel: [20, 20], // 锚点相对被指对象 x,y 的偏移
+      color: '#000',
+      lineWidth: 2,
+      fontSize: 14,
+      opacity: 1
+    });
+  }
+
+  it('正向：拖出引线标签，锚点与标签位写入 Yjs', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F32VM;
+    drawLeader(vm, 120, 120, 260, 90);
+    const shapes = leaderShapes(vm);
+    expect(shapes.length).toBe(1);
+    expect(shapes[0]!.points).toEqual([120, 120, 260, 90]);
+    expect(typeof shapes[0]!.label).toBe('string');
+    wrapper.unmount();
+  });
+
+  it('正向：双击改标签，Enter 提交并可撤销/重做', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F32VM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape({
+      id: 'ld-e',
+      type: 'leader-label',
+      points: [120, 120, 260, 90],
+      label: '旧标签',
+      targetId: null,
+      anchorRel: null,
+      color: '#000',
+      lineWidth: 2,
+      fontSize: 14,
+      opacity: 1
+    });
+    vm.tool('cur');
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(
+      provider.getActiveElements()
+    );
+    const node = (
+      vm.renderer as unknown as { layer: { getChildren: () => unknown[] } }
+    ).layer.getChildren()[0] as { fire: (e: string) => void };
+
+    node.fire('dblclick');
+    const ta = document.querySelector('textarea') as HTMLTextAreaElement;
+    expect(ta).toBeTruthy();
+    expect(ta.value).toBe('旧标签');
+    ta.value = '新标签';
+    ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(ta.isConnected).toBe(false);
+    expect(leaderShapes(vm)[0]!.label).toBe('新标签');
+
+    vm.revocation('pre');
+    expect(leaderShapes(vm)[0]!.label).toBe('旧标签');
+    vm.revocation('next');
+    expect(leaderShapes(vm)[0]!.label).toBe('新标签');
+    wrapper.unmount();
+  });
+
+  it('正向：移动被指图片，引线锚点跟随（anchorRel 重算）', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F32VM;
+    seedImageAndLeader(vm);
+
+    // 移动图片 x,y → 引线锚点 = 新 x,y + anchorRel，标签位不变
+    vm.commitShapeMove('img-t', 180, 160);
+    const ld = leaderShapes(vm)[0]!;
+    expect(ld.points).toEqual([200, 180, 260, 90]);
+    wrapper.unmount();
+  });
+
+  it('负向：微小拖拽（<5px）不落引线元素', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F32VM;
+    drawLeader(vm, 120, 120, 122, 121);
+    expect(leaderShapes(vm).length).toBe(0);
+    wrapper.unmount();
+  });
+});

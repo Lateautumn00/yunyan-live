@@ -70,6 +70,11 @@
             </el-popover>
           </div>
         </el-tooltip>
+        <el-tooltip content="引线标注 · 点击被指对象拖出标签，双击改文字" placement="right">
+          <div :class="['leader-tool', { on: mode === 'leader' }]" @click="selectLeader()">
+            <el-icon><Right /></el-icon>
+          </div>
+        </el-tooltip>
         <el-tooltip content="直线工具 · 按住 Shift 锁定水平/垂直" placement="right">
           <div :class="['line', { on: mode === 'line' }]" @click="tool('line')">
             <el-icon><Minus /></el-icon>
@@ -912,7 +917,8 @@ function tool(type: ToolMode) {
     'rectangle',
     'arrows',
     'line',
-    'force'
+    'force',
+    'leader'
   ].includes(type);
   showFillToggle.value = false;
   showFillPalette.value = false;
@@ -925,6 +931,11 @@ const armedForceLabel = ref('F₁');
 function selectForceLabel(label: string) {
   armedForceLabel.value = label;
   tool('force');
+}
+
+// F3.2 引线标注：进入 leader 模式（点击锚点→拖标签位→输入文字）
+function selectLeader() {
+  tool('leader');
 }
 
 function toggleFileList() {
@@ -962,6 +973,13 @@ function selectPen(next: PenType) {
 }
 
 // --- 选择器：单选图形，拖动/缩放/删除写回 Yjs ---
+// F3.2：按 id 取当前页元素 Y.Map（引线锚点命中对象、commitShapeMove 跟随复用）
+function getShape(id: string): any | null {
+  const els = provider?.getActiveElements();
+  if (!els) return null;
+  return els.toArray().find((x: any) => x.get('id') === id) ?? null;
+}
+
 function snapshotShape(id: string, keys: string[]): Record<string, any> | null {
   const els = provider?.getActiveElements();
   if (!els) return null;
@@ -1038,18 +1056,27 @@ function editTextShape(id: string) {
     return;
   }
   // F3.1：受力箭头双击改标签——定位标签中点偏移（与 createNode 同款），仅写 label 键
-  if (elType === 'force-arrow') {
+  // F3.1/F3.2：受力箭头/引线标签双击改标签——定位标签点，仅写 label 键（复用同一编辑器）
+  if (elType === 'force-arrow' || elType === 'leader-label') {
     const layer = renderer.layer;
     const s = layer.scaleX() || 1;
     const pts = (m.get('points') as number[]) || [];
-    const mx = ((pts[0] as number) || 0) + ((pts[2] as number) || 0);
-    const my = ((pts[1] as number) || 0) + ((pts[3] as number) || 0);
-    const screenX = layer.x() + (mx / 2 + 6) * s;
-    const screenY = layer.y() + (my / 2 - 18) * s;
+    // force-arrow 标签在中点上方；leader-label 标签在标签位(pts[2..3])上方
+    const baseX =
+      elType === 'force-arrow'
+        ? (((pts[0] as number) || 0) + ((pts[2] as number) || 0)) / 2 + 6
+        : (pts[2] as number) || 0;
+    const baseY =
+      elType === 'force-arrow'
+        ? (((pts[1] as number) || 0) + ((pts[3] as number) || 0)) / 2 - 18
+        : ((pts[3] as number) || 0) - 18;
+    const screenX = layer.x() + baseX * s;
+    const screenY = layer.y() + baseY * s;
+    const fontSize = elType === 'force-arrow' ? 16 : Number(m.get('fontSize')) || 14;
     const original = String(m.get('label') ?? '');
     const ta = document.createElement('textarea');
     ta.value = original;
-    ta.style.cssText = `position:fixed; left:${screenX}px; top:${screenY}px; font-size:16px; color:${String(m.get('color') || '#000')}; border:1px dashed #88b8cc; background:rgba(255,255,255,0.9); outline:none; resize:none; padding:2px 4px; margin:0; overflow:hidden; z-index:999; min-width:32px; min-height:24px; font-family:sans-serif; line-height:1.2;`;
+    ta.style.cssText = `position:fixed; left:${screenX}px; top:${screenY}px; font-size:${fontSize}px; color:${String(m.get('color') || '#000')}; border:1px dashed #88b8cc; background:rgba(255,255,255,0.9); outline:none; resize:none; padding:2px 4px; margin:0; overflow:hidden; z-index:999; min-width:32px; min-height:24px; font-family:sans-serif; line-height:1.2;`;
     editingTextId = id;
     document.body.appendChild(ta);
     ta.focus();
@@ -1233,6 +1260,15 @@ async function submitFormula() {
   }
 }
 
+// F3.2：收集指向某对象的引线标签（移动被指对象时锚点跟随）
+function collectLeadersTargeting(targetId: string): any[] {
+  const els = provider?.getActiveElements();
+  if (!els) return [];
+  return els
+    .toArray()
+    .filter((m: any) => m.get('type') === 'leader-label' && m.get('targetId') === targetId);
+}
+
 function commitShapeMove(id: string, x: number, y: number) {
   if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
   const before = snapshotShape(id, ['x', 'y']);
@@ -1240,7 +1276,25 @@ function commitShapeMove(id: string, x: number, y: number) {
   before.x = before.x ?? 0;
   before.y = before.y ?? 0;
   if (before.x === x && before.y === y) return;
-  if (!provider.updateElement(id, { x, y })) {
+  // F3.2：引线锚点跟随——同事务更新被指对象与所有指向它的引线，撤销/重做原子
+  const leaderUpdates = collectLeadersTargeting(id).map(ld => {
+    const pts = (ld.get('points') as number[]) || [];
+    const rel = ld.get('anchorRel') as [number, number] | null;
+    const nx = rel ? x + rel[0] : (pts[0] as number) || 0;
+    const ny = rel ? y + rel[1] : (pts[1] as number) || 0;
+    return {
+      id: ld.get('id') as string,
+      points: [nx, ny, (pts[2] as number) || 0, (pts[3] as number) || 0]
+    };
+  });
+  let ok = false;
+  const p = provider;
+  p.doc.transact(() => {
+    ok = p.updateElement(id, { x, y });
+    if (!ok) return;
+    leaderUpdates.forEach(u => p.updateElement(u.id, { points: u.points }));
+  });
+  if (!ok) {
     // 提交失败（元素已被远端删除等）：立即回滚视觉到 Yjs 实况，且不入 undo 栈
     refreshLayer();
     return;
@@ -1336,6 +1390,9 @@ function deleteSelected() {
 let isDrawing = false;
 let startPos: { x: number; y: number } | null = null;
 let currentPath: number[] = [];
+// F3.2 引线标注：拖拽期间记录被指对象与其相对锚点偏移（mouseup 落库 targetId/anchorRel）
+let leaderTargetId: string | null = null;
+let leaderAnchorRel: [number, number] | null = null;
 // 激光广播节流（50ms）与远端状态去重（同坐标不重复渲染）
 let lastLaserSend = 0;
 let lastLaserKey = '';
@@ -1437,9 +1494,18 @@ function onPointerDown(e: any) {
   } else if (m === 'eraser') {
     isDrawing = true;
     eraseAt(pos);
-  } else if (['circle', 'rectangle', 'arrows', 'line', 'force'].includes(m)) {
+  } else if (['circle', 'rectangle', 'arrows', 'line', 'force', 'leader'].includes(m)) {
     isDrawing = true;
     startPos = pos;
+    // F3.2：引线锚点命中被指对象（bounding-box），记录相对偏移供移动跟随
+    if (m === 'leader') {
+      const lp = toLayerCoords(pos);
+      leaderTargetId = renderer?.hitElementAt(lp.x, lp.y) ?? null;
+      const t = leaderTargetId ? getShape(leaderTargetId) : null;
+      leaderAnchorRel = t
+        ? [lp.x - (Number(t.get('x')) || 0), lp.y - (Number(t.get('y')) || 0)]
+        : null;
+    }
   } else if (m === 'text') {
     const clickX = (e.evt as MouseEvent).clientX;
     const clickY = (e.evt as MouseEvent).clientY;
@@ -1543,7 +1609,7 @@ function onPointerMove(e: any) {
     renderer!.previewLayer.batchDraw();
   } else if (m === 'eraser') {
     eraseAt(pos);
-  } else if (['circle', 'rectangle', 'arrows', 'line', 'force'].includes(m) && startPos) {
+  } else if (['circle', 'rectangle', 'arrows', 'line', 'force', 'leader'].includes(m) && startPos) {
     renderer!.previewLayer.destroyChildren();
     drawTempShape(pos, !!e?.evt?.shiftKey);
     renderer!.previewLayer.batchDraw();
@@ -1571,7 +1637,7 @@ function onPointerUp(e: any) {
   if (
     provider &&
     !provider.getActiveElements() &&
-    ['brush', 'circle', 'rectangle', 'arrows', 'line', 'force'].includes(m)
+    ['brush', 'circle', 'rectangle', 'arrows', 'line', 'force', 'leader'].includes(m)
   ) {
     provider.addPage();
   }
@@ -1689,8 +1755,28 @@ function onPointerUp(e: any) {
       provider?.addShape(shapeData);
       refreshLayer();
     }
+  } else if (m === 'leader' && startPos && pos) {
+    const layerStart = toLayerCoords(startPos);
+    const layerEnd = toLayerCoords(pos);
+    if (Math.hypot(layerEnd.x - layerStart.x, layerEnd.y - layerStart.y) > 5) {
+      provider?.addShape({
+        id: uid(),
+        type: 'leader-label',
+        points: [layerStart.x, layerStart.y, layerEnd.x, layerEnd.y],
+        label: '',
+        targetId: leaderTargetId,
+        anchorRel: leaderAnchorRel,
+        color: currentColor.value,
+        lineWidth: currentSize.value,
+        fontSize: textSize.value,
+        opacity: currentOpacity.value
+      });
+      refreshLayer();
+    }
   }
   startPos = null;
+  leaderTargetId = null;
+  leaderAnchorRel = null;
 }
 
 function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
@@ -1784,6 +1870,15 @@ function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
         })
       );
     }
+  } else if (m === 'leader') {
+    renderer.previewLayer.add(
+      new Konva.Line({
+        points: [ls.x, ls.y, le.x, le.y],
+        stroke: currentColor.value,
+        strokeWidth: currentSize.value,
+        lineCap: 'round'
+      })
+    );
   }
 }
 
@@ -2966,6 +3061,8 @@ defineExpose({
   FORCE_PRESETS,
   armedForceLabel,
   selectForceLabel,
+  // F3.2：引线标注入口
+  selectLeader,
   // 测试钩子：直接访问底层 Yjs provider / Konva renderer / 当前视口快照（供同步类用例断言）
   get provider() {
     return provider;
