@@ -241,6 +241,10 @@ const konvaMocks = vi.hoisted(() => {
     getClassName() {
       return 'Node';
     }
+    strokeWidth(_v?: number) {
+      const v = this._attrs.strokeWidth;
+      return typeof v === 'number' ? v : 1;
+    }
     add(_child: unknown) {}
     draggable(_val?: unknown) {
       if (_val !== undefined) this._draggable = _val as boolean;
@@ -282,16 +286,30 @@ const konvaMocks = vi.hoisted(() => {
 
   class MockLine extends MockNode {
     _points: number[] = [];
+    constructor(attrs?: Record<string, unknown>) {
+      super(attrs);
+      if (attrs?.points !== undefined) this._points = attrs.points as number[];
+    }
     points(_val?: number[]) {
       if (_val !== undefined) this._points = _val;
       return this._points;
     }
+    override getClassName() {
+      return 'Line';
+    }
   }
   class MockArrow extends MockNode {
     _points: number[] = [];
+    constructor(attrs?: Record<string, unknown>) {
+      super(attrs);
+      if (attrs?.points !== undefined) this._points = attrs.points as number[];
+    }
     points(_val?: number[]) {
       if (_val !== undefined) this._points = _val;
       return this._points;
+    }
+    override getClassName() {
+      return 'Arrow';
     }
   }
   class MockText extends MockNode {
@@ -1864,6 +1882,9 @@ describe('WhiteBoard.vue 选择器', () => {
 // ── 圆形工具绘制：自由拖=椭圆、Shift=正圆、实时预览 ───────────────────────
 type DrawVM = SelVM & {
   renderer: { previewLayer: { getChildren: () => unknown[] } };
+  penType: string;
+  selectPen: (p: 'pen' | 'highlight') => void;
+  selectColor: (c: string) => void;
 };
 
 describe('WhiteBoard.vue 圆形工具绘制', () => {
@@ -1955,23 +1976,186 @@ describe('WhiteBoard.vue 圆形工具绘制', () => {
   });
 });
 
-// ── 橡皮擦：白盖落库与拖拽预览渲染一致（宽度基值×倍数、强制不透明） ────────
+// ── 橡皮擦：按元素整笔擦除（F4.1 交互写死：非像素级、不落库白盖） ─────────
 describe('WhiteBoard.vue 橡皮擦', () => {
-  it('抬起落库强制 opacity=1 且 lineWidth 为基值（与拖拽预览一致）', () => {
+  function drawStroke(vm: DrawVM, x1: number, y1: number, x2: number, y2: number) {
+    const stage = konvaMocks.MockStage.last()!;
+    vm.tool('brush');
+    stage._pointer = { x: x1, y: y1 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: x2, y: y2 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    stage.fire('mouseup', { target: stage, evt: {} });
+  }
+
+  function eraseTap(x: number, y: number) {
+    const stage = konvaMocks.MockStage.last()!;
+    stage._pointer = { x, y };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage.fire('mouseup', { target: stage, evt: {} });
+  }
+
+  it('拖过整笔笔迹一次擦除：不落库白盖元素、预览圆随拖显示抬起清理', () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as DrawVM;
+    drawStroke(vm, 100, 100, 160, 140);
+    expect(vm.getCurrentPageShapes().length).toBe(1);
+
     vm.tool('eraser');
-    vm.provider!.setToolState({ opacity: 0.5 });
     const stage = konvaMocks.MockStage.last()!;
+    stage._pointer = { x: 130, y: 120 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+    expect(vm.getCurrentPageShapes().filter(s => s.type === 'eraser').length).toBe(0);
+    // 按下即有擦除半径预览圆，抬起清理
+    expect(vm.renderer.previewLayer.getChildren().length).toBe(1);
+    stage.fire('mouseup', { target: stage, evt: {} });
+    expect(vm.renderer.previewLayer.getChildren().length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('远离笔迹不误擦；擦除入撤销栈，撤销恢复、重做再擦除', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    drawStroke(vm, 100, 100, 160, 140);
+
+    vm.tool('eraser');
+    eraseTap(500, 500);
+    expect(vm.getCurrentPageShapes().length).toBe(1);
+
+    eraseTap(130, 120);
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+
+    vm.revocation('pre');
+    expect(vm.getCurrentPageShapes().length).toBe(1);
+    vm.revocation('next');
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('兼容历史白盖元素（type=eraser）同样整笔擦除', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape({
+      id: 'legacy1',
+      type: 'eraser',
+      points: [100, 100, 160, 140],
+      color: '#ffffff',
+      lineWidth: 2,
+      opacity: 1
+    });
+    // 远处补一笔：借提交路径完成层绑定，同时作为「不误擦」对照
+    drawStroke(vm, 400, 400, 460, 440);
+    expect(vm.getCurrentPageShapes().length).toBe(2);
+
+    vm.tool('eraser');
+    eraseTap(130, 120);
+    const rest = vm.getCurrentPageShapes();
+    expect(rest.length).toBe(1);
+    expect(rest[0]!.type).toBe('brush');
+    wrapper.unmount();
+  });
+});
+
+// ── F4.1 荧光笔：分段控件、笔型档位存根、multiply 落库 ───────────────────
+describe('WhiteBoard.vue 荧光笔', () => {
+  function drawStroke(vm: DrawVM, x1: number, y1: number, x2: number, y2: number) {
+    const stage = konvaMocks.MockStage.last()!;
+    vm.tool('brush');
+    stage._pointer = { x: x1, y: y1 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: x2, y: y2 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    stage.fire('mouseup', { target: stage, evt: {} });
+  }
+
+  it('分段控件切至荧光：进画笔模式 + 亮黄 + 钢笔 1.5× 宽预设', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    const segs = wrapper.findAll('.tools .brush-seg .seg');
+    expect(segs.length).toBe(2);
+    expect(vm.penType).toBe('pen');
+
+    await segs[1]!.trigger('click');
+    expect(vm.mode).toBe('brush');
+    expect(vm.penType).toBe('highlight');
+    const state = vm.provider!.getToolState();
+    expect(state.penType).toBe('highlight');
+    expect(state.color).toBe('#ffeb3b');
+    expect(state.lineWidth).toBe(2); // Math.round(1 × 1.5)
+    wrapper.unmount();
+  });
+
+  it('档位存根：切回钢笔恢复原色宽，再切回荧光保留用户改过的颜色', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    vm.selectPen('highlight');
+    // 用户在荧光下自选颜色（走现有颜色管线）
+    vm.selectColor('#e1383f');
+
+    vm.selectPen('pen');
+    expect(vm.penType).toBe('pen');
+    expect(vm.provider!.getToolState().color).toBe('#000000');
+    expect(vm.provider!.getToolState().lineWidth).toBe(1);
+
+    vm.selectPen('highlight');
+    expect(vm.penType).toBe('highlight');
+    expect(vm.provider!.getToolState().color).toBe('#e1383f');
+    expect(vm.provider!.getToolState().lineWidth).toBe(2);
+    wrapper.unmount();
+  });
+
+  it('荧光笔迹落库带 blend:multiply，钢笔不写该键；撤销/重做正常', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    vm.selectPen('highlight');
+    drawStroke(vm, 100, 100, 160, 140);
+    let shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(1);
+    expect(shapes[0]).toMatchObject({ type: 'brush', blend: 'multiply' });
+
+    vm.revocation('pre');
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+    vm.revocation('next');
+    shapes = vm.getCurrentPageShapes();
+    expect(shapes[0]!.blend).toBe('multiply');
+
+    // 切回钢笔再画一笔：键集不被 blend 污染
+    vm.selectPen('pen');
+    drawStroke(vm, 300, 300, 360, 340);
+    shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(2);
+    expect(shapes.some(s => s.blend === 'multiply')).toBe(true);
+    expect('blend' in shapes[1]!).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('绘制中预览线同步挂 multiply（落库前视觉一致）', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    vm.selectPen('highlight');
+    const stage = konvaMocks.MockStage.last()!;
+    vm.tool('brush');
     stage._pointer = { x: 100, y: 100 };
     stage.fire('mousedown', { target: stage, evt: {} });
     stage._pointer = { x: 160, y: 140 };
     stage.fire('mousemove', { target: stage, evt: {} });
+    const preview = vm.renderer.previewLayer.getChildren()[0] as {
+      _attrs: Record<string, unknown>;
+    };
+    expect(preview._attrs.globalCompositeOperation).toBe('multiply');
     stage.fire('mouseup', { target: stage, evt: {} });
-    const shapes = vm.getCurrentPageShapes();
-    expect(shapes.length).toBe(1);
-    expect(shapes[0]).toMatchObject({ type: 'eraser', opacity: 1 });
-    expect(shapes[0]!.lineWidth).toBe(vm.provider!.getToolState().lineWidth);
+    wrapper.unmount();
+  });
+
+  it('学生端只读矩阵：无分段控件、selectPen 不可用', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as DrawVM;
+    expect(wrapper.find('.tools .brush-seg').exists()).toBe(false);
+    expect(() => vm.selectPen('highlight')).not.toThrow();
+    expect(vm.provider!.getToolState().penType).toBe('pen');
     wrapper.unmount();
   });
 });

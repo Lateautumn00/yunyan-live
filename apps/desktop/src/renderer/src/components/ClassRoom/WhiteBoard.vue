@@ -17,9 +17,22 @@
             <el-icon><Pointer /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip content="画笔工具" placement="right">
-          <div :class="['brush', { on: mode === 'brush' }]" @click="tool('brush')">
-            <el-icon><EditPen /></el-icon>
+        <el-tooltip content="画笔 · 上钢笔 / 下荧光笔（笔型记忆）" placement="right">
+          <div class="brush-seg" :class="{ on: mode === 'brush' }">
+            <div
+              class="seg seg-pen"
+              :class="{ active: penType === 'pen' }"
+              @click="selectPen('pen')"
+            >
+              <el-icon><EditPen /></el-icon>
+            </div>
+            <div
+              class="seg seg-hl"
+              :class="{ active: penType === 'highlight' }"
+              @click="selectPen('highlight')"
+            >
+              <el-icon><BrushFilled /></el-icon>
+            </div>
           </div>
         </el-tooltip>
         <el-tooltip content="文本工具" placement="right">
@@ -43,7 +56,7 @@
             <el-icon><Minus /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip content="橡皮擦" placement="right">
+        <el-tooltip content="橡皮擦 · 按整笔擦除（含荧光笔迹）" placement="right">
           <div :class="['eraser', { on: mode === 'eraser' }]" @click="tool('eraser')" />
         </el-tooltip>
         <el-tooltip content="拖动工具" placement="right">
@@ -383,7 +396,15 @@ import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
 import { runExport, type ExportFormat, type ExportScope } from './whiteboard/exportBoard';
-import { PRESET_COLORS, ERASER_WIDTH_MULT, type FileItem, type ToolMode } from './whiteboard/types';
+import {
+  PRESET_COLORS,
+  ERASER_WIDTH_MULT,
+  HIGHLIGHT_COLOR,
+  HIGHLIGHT_WIDTH_MULT,
+  type FileItem,
+  type ToolMode,
+  type PenType
+} from './whiteboard/types';
 import { useUserStore } from '@/store/user';
 import Live from '@/api/backstage';
 
@@ -438,6 +459,11 @@ const sizeBtnLeft = ref(0);
 const zoomInputRef = ref<HTMLInputElement>();
 const currentOpacity = ref(1);
 const panelOpacity = ref(1);
+/** F4.1 笔型分段控件：pen/highlight（写入 toolState 持久，读侧镜像） */
+const penType = ref<PenType>('pen');
+/** 笔型档位存根（会话内）：切走时存当前色宽，切回读回——首次进荧光按钢笔 1.5× 预设 */
+const penStash = ref<{ color: string; lineWidth: number } | null>(null);
+const highlightStash = ref<{ color: string; lineWidth: number } | null>(null);
 
 // Color panel drag state
 const colorPanelCollapsed = ref(true);
@@ -534,13 +560,17 @@ onMounted(() => {
     }
   });
 
-  provider.toolState.observe(() => {
+  // 工具态回读：初始读一次（observe 不回放历史，重进房恢复笔型/颜色/粗细），此后随写入同步
+  const applyToolState = () => {
     const state = provider!.getToolState();
     currentColor.value = state.color;
     currentSize.value = state.lineWidth;
     textSize.value = state.fontSize;
     currentOpacity.value = state.opacity ?? 1;
-  });
+    penType.value = state.penType;
+  };
+  applyToolState();
+  provider.toolState.observe(applyToolState);
 
   // Sync viewport (move pan / zoom / fit-all pan) — register once.
   // 本地写入与远端更新走同一观察器，幂等应用；zoomLevel 同步仅供教师端显示（学生端 UI 隐藏）。
@@ -726,6 +756,34 @@ function toggleFileList() {
   showFileList.value = !showFileList.value;
   showEditer.value = false;
   setMode(showFileList.value ? 'file' : 'cur');
+}
+
+// --- F4.1 笔型切换：分段控件（钢笔/荧光笔），笔型持久工具态 ---
+function setPenType(next: PenType) {
+  if (next === penType.value) return;
+  // 双通道换档：当前档存根 → 目标档读回；首进荧光无存根 → 亮黄 + 钢笔 1.5× 宽预设
+  const stash = { color: currentColor.value, lineWidth: currentSize.value };
+  if (penType.value === 'pen') penStash.value = stash;
+  else highlightStash.value = stash;
+  const target = next === 'highlight' ? highlightStash.value : penStash.value;
+  const active =
+    target ??
+    (next === 'highlight'
+      ? {
+          color: HIGHLIGHT_COLOR,
+          lineWidth: Math.max(1, Math.round(stash.lineWidth * HIGHLIGHT_WIDTH_MULT))
+        }
+      : { color: '#000000', lineWidth: 1 });
+  if (next === 'highlight' && !highlightStash.value) highlightStash.value = active;
+  if (next === 'pen' && !penStash.value) penStash.value = active;
+  penType.value = next;
+  provider?.setToolState({ penType: next, color: active.color, lineWidth: active.lineWidth });
+  sizeBtnLeft.value = Math.max(0, Math.min(130, ((active.lineWidth - 1) / 19) * 130));
+}
+
+function selectPen(next: PenType) {
+  setPenType(next);
+  tool('brush');
 }
 
 // --- 选择器：单选图形，拖动/缩放/删除写回 Yjs ---
@@ -991,6 +1049,38 @@ function onSelectionKeydown(e: KeyboardEvent) {
   deleteSelected();
 }
 
+// --- F4.1 橡皮：按元素整笔擦除（折线类命中即删，非像素级、不落库白盖） ---
+function erasePreview(lp: { x: number; y: number }) {
+  if (!renderer) return;
+  const radius = (currentSize.value * ERASER_WIDTH_MULT) / 2;
+  renderer.previewLayer.destroyChildren();
+  renderer.previewLayer.add(
+    new Konva.Circle({
+      x: lp.x,
+      y: lp.y,
+      radius,
+      stroke: '#8b8b93',
+      strokeWidth: 1,
+      listening: false
+    })
+  );
+  renderer.previewLayer.batchDraw();
+}
+
+function eraseAt(pos: { x: number; y: number }) {
+  if (!provider || !renderer) return;
+  const lp = toLayerCoords(pos);
+  erasePreview(lp);
+  const radius = (currentSize.value * ERASER_WIDTH_MULT) / 2;
+  let hits = 0;
+  for (;;) {
+    const id = renderer.hitStroke(lp.x, lp.y, radius);
+    if (!id || ++hits > 500) break;
+    provider.removeElement(id);
+    refreshLayer();
+  }
+}
+
 function onPointerDown(e: any) {
   // 学生端白板只读：不响应任何绘制/交互
   if (!props.isTeacher) return;
@@ -998,9 +1088,12 @@ function onPointerDown(e: any) {
   if (!pos) return;
   const m = mode.value;
 
-  if (['brush', 'eraser'].includes(m)) {
+  if (m === 'brush') {
     isDrawing = true;
     currentPath = [pos.x, pos.y];
+  } else if (m === 'eraser') {
+    isDrawing = true;
+    eraseAt(pos);
   } else if (['circle', 'rectangle', 'arrows', 'line'].includes(m)) {
     isDrawing = true;
     startPos = pos;
@@ -1081,7 +1174,7 @@ function onPointerMove(e: any) {
   if (!pos) return;
   const m = mode.value;
 
-  if (['brush', 'eraser'].includes(m)) {
+  if (m === 'brush') {
     currentPath.push(pos.x, pos.y);
     renderer!.previewLayer.destroyChildren();
     // previewLayer 与 layer 同变换 → 预览节点必须存层局部坐标
@@ -1092,14 +1185,17 @@ function onPointerMove(e: any) {
     }
     const line = new Konva.Line({
       points: layerPath,
-      stroke: m === 'eraser' ? '#ffffff' : currentColor.value,
-      strokeWidth: currentSize.value * (m === 'eraser' ? ERASER_WIDTH_MULT : 1),
+      stroke: currentColor.value,
+      strokeWidth: currentSize.value,
       lineCap: 'round',
       lineJoin: 'round',
-      tension: 0.5
+      tension: 0.5,
+      ...(penType.value === 'highlight' ? { globalCompositeOperation: 'multiply' } : {})
     });
     renderer!.previewLayer.add(line);
     renderer!.previewLayer.batchDraw();
+  } else if (m === 'eraser') {
+    eraseAt(pos);
   } else if (['circle', 'rectangle', 'arrows', 'line'].includes(m) && startPos) {
     renderer!.previewLayer.destroyChildren();
     drawTempShape(pos, !!e?.evt?.shiftKey);
@@ -1134,12 +1230,12 @@ function onPointerUp(e: any) {
   if (
     provider &&
     !provider.getActiveElements() &&
-    ['brush', 'eraser', 'circle', 'rectangle', 'arrows', 'line'].includes(m)
+    ['brush', 'circle', 'rectangle', 'arrows', 'line'].includes(m)
   ) {
     provider.addPage();
   }
 
-  if (['brush', 'eraser'].includes(m) && currentPath.length > 2) {
+  if (m === 'brush' && currentPath.length > 2) {
     const layerPath: number[] = [];
     for (let i = 0; i < currentPath.length; i += 2) {
       const lp = toLayerCoords({ x: currentPath[i]!, y: currentPath[i + 1]! });
@@ -1151,8 +1247,9 @@ function onPointerUp(e: any) {
       points: layerPath,
       color: currentColor.value,
       lineWidth: currentSize.value,
-      // 橡皮是白盖而非笔迹：强制不透明，否则透明度滑杆会让被擦内容透回来
-      opacity: m === 'eraser' ? 1 : currentOpacity.value
+      opacity: currentOpacity.value,
+      // F4.1 荧光笔迹：blend=multiply 随元素落库（钢笔不写该键，键集差语义不受污染）
+      ...(penType.value === 'highlight' ? { blend: 'multiply' } : {})
     };
     provider?.addShape(shapeData);
     currentPath = [];
@@ -2199,6 +2296,9 @@ async function confirmExport() {
 defineExpose({
   layerClear,
   tool,
+  penType,
+  selectPen,
+  setPenType,
   addLayer,
   showLayer,
   showFile,
@@ -2227,6 +2327,7 @@ defineExpose({
   importServerCoursewares,
   revocation,
   selectShape,
+  selectColor,
   clearSelection,
   getSelectedShapeId,
   commitShapeMove,
@@ -2358,6 +2459,36 @@ defineExpose({
   .move {
     background-image: url('@{wbicon}');
     background-repeat: no-repeat;
+  }
+  // F4.1 笔型分段控件：32×32 内上下两段（钢笔/荧光笔），覆盖通用 div 规则
+  .brush-seg {
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    .seg {
+      width: 32px;
+      height: 16px;
+      border-radius: 0;
+      &:hover {
+        background-color: rgba(64, 158, 255, 0.1);
+      }
+      &.active {
+        background-color: rgba(64, 158, 255, 0.16);
+      }
+      .el-icon {
+        font-size: 11px;
+      }
+      &.active .el-icon {
+        color: #409eff;
+      }
+    }
+    .seg-hl {
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+      &.active .el-icon {
+        color: #c8a400;
+      }
+    }
   }
   .rectangle {
     background-position: 0 -34px;
