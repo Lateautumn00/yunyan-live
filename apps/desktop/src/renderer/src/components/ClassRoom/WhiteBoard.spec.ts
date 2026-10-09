@@ -1470,6 +1470,199 @@ describe('WhiteBoard.vue PPT 课件', () => {
     expect(vm.viewState().zoom).toBe(150);
     wrapper.unmount();
   });
+
+  // ── F5.1 课件页全工具回归（4.8 清单：绘制层级/命中/保存/翻页回显 + 组合用例） ──
+  describe('F5.1 课件页回归', () => {
+    type F51VM = DrawVM & {
+      openFormula: () => void;
+      submitFormula: () => Promise<void>;
+      formulaVisible: boolean;
+      formulaInput: string;
+    };
+
+    async function openTwoPageCourseware(wrapper: ReturnType<typeof mountWB>) {
+      const vm = wrapper.vm as unknown as F51VM;
+      await uploadTwoPagePpt(wrapper);
+      await vi.waitFor(
+        () => {
+          expect(unwrapVal(vm.fileList).length).toBe(1);
+        },
+        { timeout: 3000 }
+      );
+      await vm.openCourseware(unwrapVal(vm.fileList)[0]!, 0);
+      // 落在首张课件页：底图为页内唯一元素（pptImport.ts 单事务建页首元素）
+      await vi.waitFor(
+        () => {
+          expect(vm.getCurrentPageShapes().length).toBe(1);
+        },
+        { timeout: 3000 }
+      );
+      expect(vm.getCurrentPageShapes()[0]).toMatchObject({ type: 'ppt-image' });
+      return vm;
+    }
+
+    function dragDraw(x1: number, y1: number, x2: number, y2: number) {
+      const stage = konvaMocks.MockStage.last()!;
+      stage._pointer = { x: x1, y: y1 };
+      stage.fire('mousedown', { target: stage, evt: {} });
+      stage._pointer = { x: x2, y: y2 };
+      stage.fire('mousemove', { target: stage, evt: {} });
+      stage.fire('mouseup', { target: stage, evt: {} });
+    }
+
+    function layerChildren(vm: F51VM): unknown[] {
+      return (
+        vm.renderer as unknown as { layer: { getChildren: () => unknown[] } }
+      ).layer.getChildren();
+    }
+
+    it('课件页绘制落库与层级：底图恒首元素，笔迹/矩形依次在上', async () => {
+      const wrapper = mountWB();
+      const vm = await openTwoPageCourseware(wrapper);
+
+      vm.tool('brush');
+      dragDraw(100, 100, 300, 160);
+      vm.tool('rectangle');
+      dragDraw(50, 50, 150, 120);
+
+      const shapes = vm.getCurrentPageShapes();
+      expect(shapes.length).toBe(3);
+      expect(shapes[0]).toMatchObject({ type: 'ppt-image' });
+      expect(shapes[1]).toMatchObject({ type: 'brush', points: [100, 100, 300, 160] });
+      expect(shapes[2]).toMatchObject({ type: 'rect', width: 100, height: 70 });
+      // Konva 子节点数与 Yjs 元素一一对应（插入序 = bindElements 迭代序 = 绘制序）
+      expect(layerChildren(vm).length).toBe(3);
+      wrapper.unmount();
+    });
+
+    it('翻页回显：离开再返回，底图与笔迹均重建且层级不变', async () => {
+      const wrapper = mountWB();
+      const vm = await openTwoPageCourseware(wrapper);
+      vm.tool('brush');
+      dragDraw(100, 100, 300, 160);
+      const cw = unwrapVal(vm.curLayerIndex);
+      const total = vm.rendererPageCount();
+      const other = cw === total ? cw - 1 : cw + 1;
+
+      vm.showLayer(other);
+      await vi.waitFor(
+        () => {
+          expect(vm.getCurrentPageShapes().some(s => s.type === 'brush')).toBe(false);
+        },
+        { timeout: 3000 }
+      );
+
+      vm.showLayer(cw);
+      await vi.waitFor(
+        () => {
+          expect(vm.getCurrentPageShapes().length).toBe(2);
+        },
+        { timeout: 3000 }
+      );
+      const shapes = vm.getCurrentPageShapes();
+      expect(shapes[0]).toMatchObject({ type: 'ppt-image' });
+      expect(shapes[1]).toMatchObject({ type: 'brush', points: [100, 100, 300, 160] });
+      expect(layerChildren(vm).length).toBe(2);
+      wrapper.unmount();
+    });
+
+    it('课件页撤销/重做：只动笔迹，底图全程在场', async () => {
+      const wrapper = mountWB();
+      const vm = await openTwoPageCourseware(wrapper);
+      vm.tool('brush');
+      dragDraw(100, 100, 300, 160);
+      expect(vm.getCurrentPageShapes().length).toBe(2);
+
+      vm.revocation('pre');
+      expect(vm.getCurrentPageShapes().length).toBe(1);
+      expect(vm.getCurrentPageShapes()[0]).toMatchObject({ type: 'ppt-image' });
+
+      vm.revocation('next');
+      expect(vm.getCurrentPageShapes().length).toBe(2);
+      expect(vm.getCurrentPageShapes()[1]).toMatchObject({
+        type: 'brush',
+        points: [100, 100, 300, 160]
+      });
+      wrapper.unmount();
+    });
+
+    it('课件页橡皮整笔擦除：只删目标笔迹，底图元素在 Yjs 中完好', async () => {
+      const wrapper = mountWB();
+      const vm = await openTwoPageCourseware(wrapper);
+      vm.tool('brush');
+      dragDraw(100, 100, 200, 100);
+      dragDraw(100, 200, 200, 200);
+      expect(vm.getCurrentPageShapes().length).toBe(3);
+
+      vm.tool('eraser');
+      const stage = konvaMocks.MockStage.last()!;
+      stage._pointer = { x: 150, y: 100 };
+      stage.fire('mousedown', { target: stage, evt: {} });
+      stage.fire('mouseup', { target: stage, evt: {} });
+
+      const shapes = vm.getCurrentPageShapes();
+      expect(shapes.length).toBe(2);
+      expect(shapes[0]).toMatchObject({ type: 'ppt-image' });
+      expect(shapes[1]).toMatchObject({ type: 'brush', points: [100, 200, 200, 200] });
+      wrapper.unmount();
+    });
+
+    it('课件页清页钉现状：整页（含底图）清空且 undo 栈一并清空', async () => {
+      const wrapper = mountWB();
+      const vm = await openTwoPageCourseware(wrapper);
+      vm.tool('brush');
+      dragDraw(100, 100, 300, 160);
+      expect(vm.getCurrentPageShapes().length).toBe(2);
+
+      vm.layerClear();
+      expect(vm.getCurrentPageShapes().length).toBe(0);
+      // 现状钉死：清页连课件底图一并删除、撤销栈清空；是否应保护底图留待实机走查裁决
+      vm.revocation('pre');
+      expect(vm.getCurrentPageShapes().length).toBe(0);
+      wrapper.unmount();
+    });
+
+    it('课件页提交公式：视口中心落点、浮层关闭、底图之后', async () => {
+      const wrapper = mountWB();
+      const vm = await openTwoPageCourseware(wrapper);
+
+      vm.openFormula();
+      vm.formulaInput = 'E=mc^2';
+      await vm.submitFormula();
+      await nextTick();
+
+      expect(formulaMocks.measureFormula).toHaveBeenCalledWith('E=mc^2', '#000000');
+      const stage = vm.renderer.getStage();
+      const lp = vm.toLayerCoords({ x: stage.width() / 2, y: stage.height() / 2 });
+      const shapes = vm.getCurrentPageShapes();
+      expect(shapes.length).toBe(2);
+      expect(shapes[1]).toMatchObject({
+        type: 'formula',
+        latex: 'E=mc^2',
+        x: Math.round(lp.x - 65),
+        y: Math.round(lp.y - 20),
+        width: 130,
+        height: 40
+      });
+      expect(vm.formulaVisible).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('课件页荧光笔迹：blend:multiply 落库且位于底图之上（F4.1×课件组合）', async () => {
+      const wrapper = mountWB();
+      const vm = await openTwoPageCourseware(wrapper);
+
+      vm.selectPen('highlight');
+      expect(vm.mode).toBe('brush');
+      dragDraw(100, 100, 300, 160);
+
+      const shapes = vm.getCurrentPageShapes();
+      expect(shapes.length).toBe(2);
+      expect(shapes[0]).toMatchObject({ type: 'ppt-image' });
+      expect(shapes[1]).toMatchObject({ type: 'brush', blend: 'multiply' });
+      wrapper.unmount();
+    });
+  });
 });
 
 // ── 进房自动导入服务端课件 ────────────────────────────────────────────────
@@ -2286,7 +2479,7 @@ describe('WhiteBoard.vue 快捷键', () => {
 });
 
 // ── 直线工具：自由拖、Shift 锁定水平/垂直、预览 ────────────────────────────
-describe('WhiteBoard.vue 直线工具', () => {
+describe('WhiteBoard.vue 直线与箭头工具', () => {
   function drawLine(
     stage: InstanceType<typeof konvaMocks.MockStage>,
     to: { x: number; y: number },
@@ -2332,6 +2525,49 @@ describe('WhiteBoard.vue 直线工具', () => {
     // 水平：|dx| >= |dy| → dy 归零
     drawLine(stage, { x: 300, y: 160 }, true);
     // 垂直：|dy| > |dx| → dx 归零
+    drawLine(stage, { x: 140, y: 300 }, true);
+
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(2);
+    expect(shapes[0]!.points).toEqual([100, 100, 300, 100]);
+    expect(shapes[1]!.points).toEqual([100, 100, 100, 300]);
+    wrapper.unmount();
+  });
+
+  it('自由拖出箭头（type=arrow 落库），撤销可移除', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    vm.tool('arrows');
+    const stage = konvaMocks.MockStage.last()!;
+
+    drawLine(stage, { x: 300, y: 160 }, false);
+
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(1);
+    expect(shapes[0]).toMatchObject({ type: 'arrow', points: [100, 100, 300, 160] });
+
+    vm.revocation('pre');
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('箭头 Shift 锁定水平/垂直，预览与落库一致（F5.1 修复回归）', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DrawVM;
+    vm.tool('arrows');
+    const stage = konvaMocks.MockStage.last()!;
+
+    // 预览路径：mousemove(shift) 即钳制
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 300, y: 160 };
+    stage.fire('mousemove', { target: stage, evt: { shiftKey: true } });
+    const preview = vm.renderer.previewLayer.getChildren()[0] as { points: () => number[] };
+    expect(preview.points()).toEqual([100, 100, 300, 100]);
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: true } });
+    expect(vm.renderer.previewLayer.getChildren().length).toBe(0);
+
+    // 落库路径：水平 |dx|>=|dy| → dy 归零；垂直 |dy|>|dx| → dx 归零
     drawLine(stage, { x: 140, y: 300 }, true);
 
     const shapes = vm.getCurrentPageShapes();
@@ -3340,146 +3576,146 @@ describe('WhiteBoard.vue 板书导出（F6.1）', () => {
     expect(vm.exporting).toBe(false);
     expect(wrapper.find('.export-progress').exists()).toBe(false);
   });
+});
 
-  // ── F1.1 公式浮层（5.7.1 B1：∑ 按钮 → 源码框 → Enter 提交 / Esc 取消 / 双击重编辑） ──
-  describe('F1.1 公式浮层', () => {
-    type FormulaVM = PPTVM & {
-      formulaVisible: boolean;
-      formulaInput: string;
-      formulaError: string;
-      formulaLoading: boolean;
-      openFormula: () => void;
-      closeFormula: () => void;
-      submitFormula: () => Promise<void>;
-      editTextShape: (id: string) => void;
-    };
+// ── F1.1 公式浮层（5.7.1 B1：∑ 按钮 → 源码框 → Enter 提交 / Esc 取消 / 双击重编辑） ──
+describe('F1.1 公式浮层', () => {
+  type FormulaVM = PPTVM & {
+    formulaVisible: boolean;
+    formulaInput: string;
+    formulaError: string;
+    formulaLoading: boolean;
+    openFormula: () => void;
+    closeFormula: () => void;
+    submitFormula: () => Promise<void>;
+    editTextShape: (id: string) => void;
+  };
 
-    it('教师工具栏提供 ∑ 按钮，点击呼出源码浮层', async () => {
-      const wrapper = mountWB();
-      const vm = wrapper.vm as unknown as FormulaVM;
-      const btn = wrapper.find('.formula-tool');
-      expect(btn.exists()).toBe(true);
-      expect(btn.text()).toContain('∑');
-      await btn.trigger('click');
-      await nextTick();
-      expect(vm.formulaVisible).toBe(true);
-      expect(wrapper.find('.formula-overlay').exists()).toBe(true);
-      expect(wrapper.find('.formula-textarea').exists()).toBe(true);
-      expect(wrapper.find('.formula-hint').text()).toContain('Enter');
-      wrapper.unmount();
+  it('教师工具栏提供 ∑ 按钮，点击呼出源码浮层', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as FormulaVM;
+    const btn = wrapper.find('.formula-tool');
+    expect(btn.exists()).toBe(true);
+    expect(btn.text()).toContain('∑');
+    await btn.trigger('click');
+    await nextTick();
+    expect(vm.formulaVisible).toBe(true);
+    expect(wrapper.find('.formula-overlay').exists()).toBe(true);
+    expect(wrapper.find('.formula-textarea').exists()).toBe(true);
+    expect(wrapper.find('.formula-hint').text()).toContain('Enter');
+    wrapper.unmount();
+  });
+
+  it('非法 LaTeX → 行内红框文案，浮层不关闭', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as FormulaVM;
+    vm.openFormula();
+    vm.formulaInput = 'INVALID';
+    await vm.submitFormula();
+    await nextTick();
+    expect(vm.formulaError).toBe(formulaMocks.FORMULA_INVALID_MSG);
+    expect(wrapper.find('.formula-error').exists()).toBe(true);
+    expect(wrapper.find('.formula-textarea').classes()).toContain('invalid');
+    expect(vm.formulaVisible).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('空输入 → 提示必填，不调渲染管线', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as FormulaVM;
+    formulaMocks.measureFormula.mockClear();
+    vm.openFormula();
+    vm.formulaInput = '   ';
+    await vm.submitFormula();
+    expect(vm.formulaError).toBe('请输入 LaTeX 公式');
+    expect(formulaMocks.measureFormula).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('合法提交 → addShape(type=formula, 自然尺寸) 且浮层关闭', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as FormulaVM;
+    const addSpy = vi.spyOn(YjsProvider.prototype, 'addShape').mockClear();
+    vm.openFormula();
+    vm.formulaInput = 'E=mc^2';
+    await vm.submitFormula();
+    await nextTick();
+    expect(addSpy).toHaveBeenCalledTimes(1);
+    const data = addSpy.mock.calls[0]![0] as Record<string, unknown>;
+    expect(data.type).toBe('formula');
+    expect(data.latex).toBe('E=mc^2');
+    expect(data.width).toBe(130);
+    expect(data.height).toBe(40);
+    expect(typeof data.id).toBe('string');
+    expect(vm.formulaVisible).toBe(false);
+    expect(wrapper.find('.formula-overlay').exists()).toBe(false);
+    addSpy.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('切换工具即收起浮层（面板互斥，setMode 单一收口）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as FormulaVM;
+    vm.openFormula();
+    expect(vm.formulaVisible).toBe(true);
+    vm.tool('brush');
+    await nextTick();
+    expect(vm.formulaVisible).toBe(false);
+    expect(wrapper.find('.formula-overlay').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('渲染模块加载失败 → 可读降级文案（§4.9）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as FormulaVM;
+    formulaMocks.measureFormula.mockImplementationOnce(() => {
+      throw new Error('chunk down');
     });
+    vm.openFormula();
+    vm.formulaInput = 'E=mc^2';
+    await vm.submitFormula();
+    await nextTick();
+    expect(vm.formulaError).toBe('公式组件加载失败，点击重试');
+    expect(vm.formulaVisible).toBe(true);
+    wrapper.unmount();
+  });
 
-    it('非法 LaTeX → 行内红框文案，浮层不关闭', async () => {
-      const wrapper = mountWB();
-      const vm = wrapper.vm as unknown as FormulaVM;
-      vm.openFormula();
-      vm.formulaInput = 'INVALID';
-      await vm.submitFormula();
-      await nextTick();
-      expect(vm.formulaError).toBe(formulaMocks.FORMULA_INVALID_MSG);
-      expect(wrapper.find('.formula-error').exists()).toBe(true);
-      expect(wrapper.find('.formula-textarea').classes()).toContain('invalid');
-      expect(vm.formulaVisible).toBe(true);
-      wrapper.unmount();
+  it('双击已有公式 → 预填源码重编辑，提交走 updateElement', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as FormulaVM;
+    const updateSpy = vi.spyOn(YjsProvider.prototype, 'updateElement');
+    // 与生产路径一致：WS 未同步时无页，先建页（onPointerUp 兜底建页的等价测试前置）
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+    vm.provider!.addShape({
+      id: 'fx1',
+      type: 'formula',
+      latex: 'a+b',
+      x: 0,
+      y: 0,
+      width: 130,
+      height: 40,
+      color: '#000000',
+      opacity: 1
     });
+    await nextTick();
+    vm.editTextShape('fx1');
+    await nextTick();
+    expect(vm.formulaVisible).toBe(true);
+    expect(vm.formulaInput).toBe('a+b');
+    vm.formulaInput = 'c+d';
+    await vm.submitFormula();
+    await nextTick();
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    expect(updateSpy.mock.calls[0]![0]).toBe('fx1');
+    expect(updateSpy.mock.calls[0]![1]).toMatchObject({ latex: 'c+d', width: 130, height: 40 });
+    expect(vm.formulaVisible).toBe(false);
+    updateSpy.mockRestore();
+    wrapper.unmount();
+  });
 
-    it('空输入 → 提示必填，不调渲染管线', async () => {
-      const wrapper = mountWB();
-      const vm = wrapper.vm as unknown as FormulaVM;
-      formulaMocks.measureFormula.mockClear();
-      vm.openFormula();
-      vm.formulaInput = '   ';
-      await vm.submitFormula();
-      expect(vm.formulaError).toBe('请输入 LaTeX 公式');
-      expect(formulaMocks.measureFormula).not.toHaveBeenCalled();
-      wrapper.unmount();
-    });
-
-    it('合法提交 → addShape(type=formula, 自然尺寸) 且浮层关闭', async () => {
-      const wrapper = mountWB();
-      const vm = wrapper.vm as unknown as FormulaVM;
-      const addSpy = vi.spyOn(YjsProvider.prototype, 'addShape').mockClear();
-      vm.openFormula();
-      vm.formulaInput = 'E=mc^2';
-      await vm.submitFormula();
-      await nextTick();
-      expect(addSpy).toHaveBeenCalledTimes(1);
-      const data = addSpy.mock.calls[0]![0] as Record<string, unknown>;
-      expect(data.type).toBe('formula');
-      expect(data.latex).toBe('E=mc^2');
-      expect(data.width).toBe(130);
-      expect(data.height).toBe(40);
-      expect(typeof data.id).toBe('string');
-      expect(vm.formulaVisible).toBe(false);
-      expect(wrapper.find('.formula-overlay').exists()).toBe(false);
-      addSpy.mockRestore();
-      wrapper.unmount();
-    });
-
-    it('切换工具即收起浮层（面板互斥，setMode 单一收口）', async () => {
-      const wrapper = mountWB();
-      const vm = wrapper.vm as unknown as FormulaVM;
-      vm.openFormula();
-      expect(vm.formulaVisible).toBe(true);
-      vm.tool('brush');
-      await nextTick();
-      expect(vm.formulaVisible).toBe(false);
-      expect(wrapper.find('.formula-overlay').exists()).toBe(false);
-      wrapper.unmount();
-    });
-
-    it('渲染模块加载失败 → 可读降级文案（§4.9）', async () => {
-      const wrapper = mountWB();
-      const vm = wrapper.vm as unknown as FormulaVM;
-      formulaMocks.measureFormula.mockImplementationOnce(() => {
-        throw new Error('chunk down');
-      });
-      vm.openFormula();
-      vm.formulaInput = 'E=mc^2';
-      await vm.submitFormula();
-      await nextTick();
-      expect(vm.formulaError).toBe('公式组件加载失败，点击重试');
-      expect(vm.formulaVisible).toBe(true);
-      wrapper.unmount();
-    });
-
-    it('双击已有公式 → 预填源码重编辑，提交走 updateElement', async () => {
-      const wrapper = mountWB();
-      const vm = wrapper.vm as unknown as FormulaVM;
-      const updateSpy = vi.spyOn(YjsProvider.prototype, 'updateElement');
-      // 与生产路径一致：WS 未同步时无页，先建页（onPointerUp 兜底建页的等价测试前置）
-      if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
-      vm.provider!.addShape({
-        id: 'fx1',
-        type: 'formula',
-        latex: 'a+b',
-        x: 0,
-        y: 0,
-        width: 130,
-        height: 40,
-        color: '#000000',
-        opacity: 1
-      });
-      await nextTick();
-      vm.editTextShape('fx1');
-      await nextTick();
-      expect(vm.formulaVisible).toBe(true);
-      expect(vm.formulaInput).toBe('a+b');
-      vm.formulaInput = 'c+d';
-      await vm.submitFormula();
-      await nextTick();
-      expect(updateSpy).toHaveBeenCalledTimes(1);
-      expect(updateSpy.mock.calls[0]![0]).toBe('fx1');
-      expect(updateSpy.mock.calls[0]![1]).toMatchObject({ latex: 'c+d', width: 130, height: 40 });
-      expect(vm.formulaVisible).toBe(false);
-      updateSpy.mockRestore();
-      wrapper.unmount();
-    });
-
-    it('学生端不渲染公式按钮（工具栏仅教师可见的回归延伸）', () => {
-      const wrapper = mountWB({ isTeacher: false });
-      expect(wrapper.find('.formula-tool').exists()).toBe(false);
-      wrapper.unmount();
-    });
+  it('学生端不渲染公式按钮（工具栏仅教师可见的回归延伸）', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    expect(wrapper.find('.formula-tool').exists()).toBe(false);
+    wrapper.unmount();
   });
 });

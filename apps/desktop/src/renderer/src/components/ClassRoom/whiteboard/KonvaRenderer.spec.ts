@@ -916,6 +916,29 @@ describe('KonvaRenderer circle/ellipse', () => {
     renderer.destroy();
   });
 
+  it('creates Arrow nodes for arrow shapes with points', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const data: Record<string, unknown> = {
+      id: 'a1',
+      type: 'arrow',
+      points: [10, 20, 80, 90],
+      color: '#000',
+      lineWidth: 2,
+      opacity: 1
+    };
+    renderer.bindElements([{ get: (k: string) => data[k] }] as unknown as Parameters<
+      typeof renderer.bindElements
+    >[0]);
+
+    const node = renderer.layer.getChildren()[0] as unknown as InstanceType<
+      typeof konvaMocks.MockLineShape
+    >;
+    // Konva.Arrow 在 mock 中共用 MockLineShape（getClassName 恒为 Line），points 为断言锚点
+    expect(node.getClassName()).toBe('Line');
+    expect(node.points()).toEqual([10, 20, 80, 90]);
+    renderer.destroy();
+  });
+
   it('fires onShapeDblClick only while select mode is on', () => {
     const renderer = new KonvaRenderer(document.createElement('div'));
     bindOne(renderer, circleData());
@@ -1146,6 +1169,28 @@ describe('KonvaRenderer 未知元素类型（F6.2 前向兼容）', () => {
 
     expect(() => renderer.bindElements(elements)).not.toThrow();
     expect(renderer.layer.getChildren().length).toBe(0);
+    renderer.destroy();
+  });
+
+  it('课件底图批次混入未知类型：底图与已知笔迹正常渲染、未知跳过', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const unknown: Record<string, unknown> = { id: 'x1', type: 'hologram-3d', x: 5, y: 5 };
+    const brush: Record<string, unknown> = {
+      id: 'b1',
+      type: 'brush',
+      points: [0, 0, 50, 0],
+      color: '#000',
+      lineWidth: 2,
+      opacity: 1
+    };
+    const elements = [
+      pptElement(),
+      { get: (k: string) => unknown[k] },
+      { get: (k: string) => brush[k] }
+    ] as unknown as Parameters<typeof renderer.bindElements>[0];
+
+    expect(() => renderer.bindElements(elements)).not.toThrow();
+    expect(renderer.layer.getChildren().length).toBe(2);
     renderer.destroy();
   });
 });
@@ -1457,5 +1502,54 @@ describe('KonvaRenderer formula', () => {
       vi.useRealTimers();
     }
     expect(formulaMocks.rasterizeFormula).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── F5.1 课件页混合批次：底图/荧光/公式按 Yjs 迭代序堆叠 ─────────────────
+describe('KonvaRenderer F5.1 混合批次层级', () => {
+  it('底图在下、荧光居中（multiply）、公式在上，blend 只挂荧光', async () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    const highlighter: Record<string, unknown> = {
+      id: 'hl1',
+      type: 'brush',
+      points: [0, 0, 100, 0],
+      color: '#ffeb3b',
+      lineWidth: 2,
+      opacity: 1,
+      blend: 'multiply'
+    };
+    const formula: Record<string, unknown> = {
+      id: 'f1',
+      type: 'formula',
+      latex: 'E=mc^2',
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 48,
+      color: '#000000',
+      opacity: 1
+    };
+    const elements = [
+      pptElement(),
+      { get: (k: string) => highlighter[k] },
+      { get: (k: string) => formula[k] }
+    ] as unknown as Parameters<typeof renderer.bindElements>[0];
+    renderer.bindElements(elements);
+    await new Promise(r => setTimeout(r, 0));
+
+    const children = renderer.layer.getChildren() as unknown as Array<{
+      image?: () => unknown;
+      attrs: Record<string, unknown>;
+    }>;
+    expect(children.length).toBe(3);
+    // Image 类节点（底图/公式）带 image()，荧光折线不带
+    expect(typeof children[0]!.image).toBe('function');
+    expect(typeof children[1]!.image).toBe('undefined');
+    expect(typeof children[2]!.image).toBe('function');
+    expect(children[1]!.attrs.globalCompositeOperation).toBe('multiply');
+    expect(children[0]!.attrs.globalCompositeOperation).toBeUndefined();
+    expect(children[2]!.attrs.globalCompositeOperation).toBeUndefined();
+    expect(children[2]!.attrs.latex).toBe('E=mc^2');
+    renderer.destroy();
   });
 });
