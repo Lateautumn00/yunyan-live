@@ -149,6 +149,13 @@ const konvaMocks = vi.hoisted(() => {
     getClassName() {
       return 'Image';
     }
+    image(v?: unknown) {
+      if (v !== undefined) {
+        this.attrs.image = v;
+        return this;
+      }
+      return this.attrs.image;
+    }
   }
 
   class MockShape {
@@ -326,8 +333,14 @@ vi.mock('konva', () => ({
   }
 }));
 
+// 导出就绪用例需可控的 PDF 渲染：默认挂起（image 保持 null），单测内按需覆写结果
+vi.mock('./pdfAsset', () => ({
+  renderPdfPage: vi.fn(() => new Promise(() => {}))
+}));
+
 import { KonvaRenderer } from './KonvaRenderer';
 import { ERASER_WIDTH_MULT, HIT_STROKE_MIN } from './types';
+import { renderPdfPage } from './pdfAsset';
 
 class StubImage {
   static instances: StubImage[] = [];
@@ -335,6 +348,9 @@ class StubImage {
   onerror: (() => void) | null = null;
   width = 800;
   height = 450;
+  complete = true;
+  naturalWidth = 800;
+  crossOrigin: string | null = null;
   private _src = '';
   constructor() {
     StubImage.instances.push(this);
@@ -998,6 +1014,101 @@ describe('KonvaRenderer 未知元素类型（F6.2 前向兼容）', () => {
 
     expect(() => renderer.bindElements(elements)).not.toThrow();
     expect(renderer.layer.getChildren().length).toBe(0);
+    renderer.destroy();
+  });
+});
+
+describe('KonvaRenderer 导出模式与图片就绪（F6.1）', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    StubImage.instances = [];
+  });
+
+  function bindOneImage(renderer: KonvaRenderer, overrides: Record<string, unknown> = {}) {
+    const elements = [pptElement({ id: 'img1', ...overrides })] as unknown as Parameters<
+      typeof renderer.bindElements
+    >[0];
+    renderer.bindElements(elements);
+  }
+
+  it('导出模式下 http 图片挂 crossorigin（读像素不被跨域污染）', () => {
+    vi.stubGlobal('Image', StubImage);
+    const renderer = new KonvaRenderer(document.createElement('div'), { exportMode: true });
+    bindOneImage(renderer);
+    expect(StubImage.instances[0]!.crossOrigin).toBe('anonymous');
+    renderer.destroy();
+  });
+
+  it('导出模式下非 http 源不挂 crossorigin（data: 本就不污染）', () => {
+    vi.stubGlobal('Image', StubImage);
+    const renderer = new KonvaRenderer(document.createElement('div'), { exportMode: true });
+    bindOneImage(renderer, { url: 'data:image/png;base64,AAA' });
+    expect(StubImage.instances[0]!.crossOrigin).toBeNull();
+    renderer.destroy();
+  });
+
+  it('展示模式保持原行为：不挂 crossorigin（旧服务端反代下图片照常显示）', () => {
+    vi.stubGlobal('Image', StubImage);
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    bindOneImage(renderer);
+    expect(StubImage.instances[0]!.crossOrigin).toBeNull();
+    renderer.destroy();
+  });
+
+  it('whenImagesReady 图片已就绪时立即返回', async () => {
+    vi.stubGlobal('Image', StubImage);
+    const renderer = new KonvaRenderer(document.createElement('div'), { exportMode: true });
+    bindOneImage(renderer);
+    await expect(renderer.whenImagesReady(1000)).resolves.toBeUndefined();
+    renderer.destroy();
+  });
+
+  it('whenImagesReady 等待晚到的图片加载完成', async () => {
+    vi.stubGlobal('Image', StubImage);
+    const renderer = new KonvaRenderer(document.createElement('div'), { exportMode: true });
+    bindOneImage(renderer);
+    const img = StubImage.instances[0]!;
+    img.complete = false;
+    const wait = renderer.whenImagesReady(3000);
+    setTimeout(() => {
+      img.complete = true;
+      img.naturalWidth = 640;
+      img.onload?.();
+    }, 30);
+    await expect(wait).resolves.toBeUndefined();
+    renderer.destroy();
+  });
+
+  it('图片加载失败（naturalWidth=0）立即抛可读错误', async () => {
+    vi.stubGlobal('Image', StubImage);
+    const renderer = new KonvaRenderer(document.createElement('div'), { exportMode: true });
+    bindOneImage(renderer);
+    StubImage.instances[0]!.naturalWidth = 0;
+    await expect(renderer.whenImagesReady(1000)).rejects.toThrow('底图加载失败');
+    renderer.destroy();
+  });
+
+  it('图片一直未就绪 → 超时抛可读错误', async () => {
+    vi.stubGlobal('Image', StubImage);
+    const renderer = new KonvaRenderer(document.createElement('div'), { exportMode: true });
+    bindOneImage(renderer);
+    StubImage.instances[0]!.complete = false;
+    await expect(renderer.whenImagesReady(200)).rejects.toThrow('图片加载超时');
+    renderer.destroy();
+  });
+
+  it('ppt 的 PDF 页渲染未落位 → 视为未就绪，超时抛可读错误', async () => {
+    const renderer = new KonvaRenderer(document.createElement('div'), { exportMode: true });
+    bindOneImage(renderer, { pdfUrl: 'http://test.local/deck.pdf', page: 1 });
+    await expect(renderer.whenImagesReady(200)).rejects.toThrow('图片加载超时');
+    renderer.destroy();
+  });
+
+  it('ppt 的 PDF 页渲染完成后视为就绪', async () => {
+    vi.mocked(renderPdfPage).mockResolvedValueOnce({} as HTMLCanvasElement);
+    const renderer = new KonvaRenderer(document.createElement('div'), { exportMode: true });
+    bindOneImage(renderer, { pdfUrl: 'http://test.local/deck.pdf', page: 1 });
+    await expect(renderer.whenImagesReady(3000)).resolves.toBeUndefined();
     renderer.destroy();
   });
 });

@@ -19,7 +19,7 @@ export function registerRecordingHandlers(_getWindow: GetWindow): void {
     async (_event, data: RecordingSaveBlobArgs): Promise<RecordingSaveBlobResult> => {
       const result = await dialog.showSaveDialog({
         defaultPath: data.defaultName,
-        filters: [{ name: 'MP4 Video', extensions: ['mp4'] }]
+        filters: data.filters ?? [{ name: 'MP4 Video', extensions: ['mp4'] }]
       });
       if (result.canceled || !result.filePath) {
         return { success: false };

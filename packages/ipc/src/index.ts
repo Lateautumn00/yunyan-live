@@ -29,9 +29,16 @@ export interface AppMessagePayload {
   message: string;
 }
 
+export interface SaveFileFilter {
+  name: string;
+  extensions: string[];
+}
+
 export interface RecordingSaveBlobArgs {
   buffer: ArrayBuffer;
   defaultName: string;
+  /** 系统保存框的文件类型过滤；缺省保持录屏 mp4 */
+  filters?: SaveFileFilter[];
 }
 
 export interface RecordingSaveBlobResult {

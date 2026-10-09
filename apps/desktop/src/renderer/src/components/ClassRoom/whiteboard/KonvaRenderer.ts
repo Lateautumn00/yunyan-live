@@ -27,6 +27,8 @@ export class KonvaRenderer {
   private transformer: Konva.Transformer | null = null;
   private gesturing = false;
   private pendingBind: Y.Array<any> | null = null;
+  // 导出实例专用：http 图片挂 crossorigin，导出读像素才不被跨域污染（展示路径不加，避免旧服务端反代下图片加载失败）
+  private exportMode = false;
   pageIds: string[] = [];
   onShapeClick?: (id: string) => void;
   onShapeDblClick?: (id: string) => void;
@@ -35,7 +37,8 @@ export class KonvaRenderer {
   // 手势（拖动/缩放）期间收到的刷新延后到手势结束，避免销毁正在操作的节点
   onRefreshRequest?: () => void;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, opts?: { exportMode?: boolean }) {
+    this.exportMode = opts?.exportMode ?? false;
     this.stage = new Konva.Stage({
       container: container as HTMLDivElement,
       width: container.clientWidth,
@@ -505,8 +508,34 @@ export class KonvaRenderer {
     img.onload = () => {
       node.getLayer?.()?.batchDraw();
     };
+    if (this.exportMode && /^https?:\/\//i.test(url)) img.crossOrigin = 'anonymous';
     img.src = url;
     return node;
+  }
+
+  // 导出管线专用：等待本层全部图片类节点就绪（HTML 图片加载完成 / ppt 的 PDF 页渲染落位）。
+  // image 为 null = PDF 仍在渲染；complete=false = 图片加载中；naturalWidth=0 = 加载失败。
+  // 任一失败或超时抛错（文案可直接展示），不静默产出缺底图的图。
+  async whenImagesReady(timeoutMs = 15000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      let pending = false;
+      for (const node of this.layer.getChildren()) {
+        const imageFn = (node as { image?: () => unknown }).image;
+        if (typeof imageFn !== 'function') continue;
+        const img = imageFn.call(node) as
+          { complete?: boolean; naturalWidth?: number } | null | undefined;
+        if (!img) {
+          pending = true;
+          continue;
+        }
+        if (img.complete === false) pending = true;
+        else if (img.naturalWidth === 0) throw new Error('底图加载失败');
+      }
+      if (!pending) return;
+      if (Date.now() > deadline) throw new Error('图片加载超时');
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
   }
 
   clearCurrentPage() {
