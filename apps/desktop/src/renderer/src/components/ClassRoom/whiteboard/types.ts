@@ -12,12 +12,16 @@ export type ToolMode =
   | 'laser'
   | 'file';
 
+/** 笔型分段控件状态（F4.1）：钢笔/荧光笔，持久工具态（切换工具后记忆，重进房恢复） */
+export type PenType = 'pen' | 'highlight';
+
 export interface ToolState {
   type: ToolMode;
   color: string;
   lineWidth: number;
   fontSize: number;
   opacity: number;
+  penType: PenType;
 }
 
 /** Yjs 元素 type（element 侧）：KonvaRenderer.createNode 工厂注册的字面量全集 */
@@ -74,8 +78,13 @@ export const DEFAULT_TOOL: ToolState = {
   color: '#000000',
   lineWidth: 1,
   fontSize: 14,
-  opacity: 1
+  opacity: 1,
+  penType: 'pen'
 };
+
+/** 荧光笔预设（F4.1 交互写死）：切换至荧光笔时应用亮黄与钢笔 1.5× 宽，仍走颜色/线宽管线 */
+export const HIGHLIGHT_COLOR = '#ffeb3b';
+export const HIGHLIGHT_WIDTH_MULT = 1.5;
 
 /** 橡皮白盖显示宽度倍数：拖拽预览与落库渲染同源，lineWidth 存滑杆基值 */
 export const ERASER_WIDTH_MULT = 3;

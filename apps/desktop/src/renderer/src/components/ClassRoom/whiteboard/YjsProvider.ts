@@ -268,6 +268,7 @@ export class YjsProvider {
       if (state.lineWidth !== undefined) this.toolState.set('lineWidth', state.lineWidth);
       if (state.fontSize !== undefined) this.toolState.set('fontSize', state.fontSize);
       if (state.opacity !== undefined) this.toolState.set('opacity', state.opacity);
+      if (state.penType !== undefined) this.toolState.set('penType', state.penType);
     });
   }
 
@@ -277,7 +278,12 @@ export class YjsProvider {
       color: (this.toolState.get('color') as string) || '#000000',
       lineWidth: (this.toolState.get('lineWidth') as number) || 1,
       fontSize: (this.toolState.get('fontSize') as number) || 14,
-      opacity: (this.toolState.get('opacity') as number) ?? 1
+      opacity: (this.toolState.get('opacity') as number) ?? 1,
+      // penType 不在构造期写默认：避免覆盖快照恢复的持久笔型（F4.1 重进房恢复），读时兜底
+      penType:
+        (this.toolState.get('penType') as ToolState['penType']) === 'highlight'
+          ? 'highlight'
+          : 'pen'
     };
   }
 

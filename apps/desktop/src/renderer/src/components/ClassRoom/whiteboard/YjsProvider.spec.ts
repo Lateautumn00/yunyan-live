@@ -87,14 +87,29 @@ describe('YjsProvider readOnly', () => {
 
   it('readOnly setToolState 不写入', () => {
     const p = create(true);
-    p.setToolState({ color: '#ff0000' });
+    p.setToolState({ color: '#ff0000', penType: 'highlight' });
     expect(p.getToolState().color).toBe(DEFAULT_TOOL.color);
+    expect(p.getToolState().penType).toBe('pen');
   });
 
   it('可写 setToolState 正常写入（对照）', () => {
     const p = create(false);
     p.setToolState({ color: '#ff0000' });
     expect(p.getToolState().color).toBe('#ff0000');
+  });
+
+  it('getToolState 默认 penType=pen 且构造期不写入（不覆盖快照恢复的笔型）', () => {
+    const p = create(false);
+    expect(p.getToolState().penType).toBe('pen');
+    expect(p.toolState.has('penType')).toBe(false);
+  });
+
+  it('可写 setToolState penType 往返写入（F4.1 持久工具态）', () => {
+    const p = create(false);
+    p.setToolState({ penType: 'highlight' });
+    expect(p.getToolState().penType).toBe('highlight');
+    p.setToolState({ penType: 'pen' });
+    expect(p.getToolState().penType).toBe('pen');
   });
 
   it('readOnly setViewportOffset 不写入', () => {
