@@ -403,7 +403,8 @@ import {
   HIGHLIGHT_WIDTH_MULT,
   type FileItem,
   type ToolMode,
-  type PenType
+  type PenType,
+  type CursorData
 } from './whiteboard/types';
 import { useUserStore } from '@/store/user';
 import Live from '@/api/backstage';
@@ -548,7 +549,7 @@ onMounted(() => {
 
   window.addEventListener('resize', onResize);
   document.addEventListener('keydown', onSelectionKeydown);
-  provider.awareness.on('change', onAwarenessLaser);
+  provider.awareness.on('change', onAwarenessChange);
 
   // 计算颜色面板初始位置（选择工具右侧）
   nextTick(() => {
@@ -664,7 +665,11 @@ onUnmounted(() => {
   document.removeEventListener('keydown', onSelectionKeydown);
   document.removeEventListener('mousemove', throttledWheelMove);
   document.removeEventListener('mouseup', onWheelUp);
-  provider?.awareness.off('change', onAwarenessLaser);
+  provider?.awareness.off('change', onAwarenessChange);
+  if (cursorLabelTimer) {
+    clearTimeout(cursorLabelTimer);
+    cursorLabelTimer = null;
+  }
   renderer?.destroy();
   provider?.destroy();
 });
@@ -727,19 +732,51 @@ function laserOff() {
   lastLaserKey = '';
 }
 
-// awareness 激光状态 → 单点渲染（远端教师红点/本地回显/熄灭）。坐标即层局部坐标；
-// 用坐标键去重：光标等高频 change 不重复触发渲染
-function onAwarenessLaser() {
+// awareness change → 激光单点 + 远端光标渲染（F7.1）。激光坐标即层局部坐标，直接渲染；
+// 光标写侧是教师 stage 坐标（任意窗口尺寸），学生端按 contain 比例 k（与 applyRemoteViewport
+// 同式）×k 后经 toLayerCoords 换算成层局部坐标 → 与笔迹/激光同空间对齐。
+// 两者均用坐标键去重：高频 change 不重复渲染、也不重置光标标签淡出计时
+function onAwarenessChange() {
   if (!renderer || !provider) return;
   let laser: { x: number; y: number } | null = null;
+  let cursor: CursorData | null = null;
   // for-of 而非 forEach：同作用域赋值可被类型收窄跟踪（闭包内赋值会丢）
   for (const s of provider.awareness.getStates().values()) {
     if (s && s.laser) laser = s.laser;
+    // 只渲染远端光标（学生端 provider 只读写不进 cursor，双保险）：跳过本端 userId
+    if (s && s.cursor && s.cursor.userId !== userId) cursor = s.cursor;
   }
-  const key = laser ? `${laser.x},${laser.y}` : '';
-  if (key === lastLaserKey) return;
-  lastLaserKey = key;
-  renderer.setLaserPoint(laser ? laser.x : null, laser ? laser.y : 0);
+  const laserKey = laser ? `${laser.x},${laser.y}` : '';
+  if (laserKey !== lastLaserKey) {
+    lastLaserKey = laserKey;
+    renderer.setLaserPoint(laser ? laser.x : null, laser ? laser.y : 0);
+  }
+  const cursorKey = cursor ? `${cursor.x},${cursor.y}` : '';
+  if (cursorKey === lastCursorKey) return;
+  lastCursorKey = cursorKey;
+  if (!cursor) {
+    // peer 离开 / cursor:null → 隐藏光标节点并清尾迹，防幽灵光标残留
+    renderer.clearRemoteCursor();
+    if (cursorLabelTimer) {
+      clearTimeout(cursorLabelTimer);
+      cursorLabelTimer = null;
+    }
+    return;
+  }
+  const remote = provider.getViewportStageSize();
+  const stage = renderer.getStage();
+  let k = 1;
+  if (remote && remote.w > 0 && remote.h > 0 && stage.width() > 0 && stage.height() > 0) {
+    k = Math.min(stage.width() / remote.w, stage.height() / remote.h);
+  }
+  const lp = toLayerCoords({ x: cursor.x * k, y: cursor.y * k });
+  renderer.setRemoteCursor(lp.x, lp.y, cursor.color, cursor.userName);
+  // 新光标帧恢复标签并重置 3s 静止淡出计时
+  if (cursorLabelTimer) clearTimeout(cursorLabelTimer);
+  cursorLabelTimer = setTimeout(() => {
+    renderer?.setRemoteCursorLabel(false);
+    cursorLabelTimer = null;
+  }, 3000);
 }
 
 function tool(type: ToolMode) {
@@ -1010,8 +1047,11 @@ let currentPath: number[] = [];
 // 激光广播节流（50ms）与远端状态去重（同坐标不重复渲染）
 let lastLaserSend = 0;
 let lastLaserKey = '';
-// 教师光标 awareness 写侧节流（50ms，对齐 laser；渲染归 F7.1）
+// 教师光标 awareness 写侧节流（50ms，对齐 laser）与远端状态去重（同坐标不重复渲染/不重置淡出计时）
 let lastCursorSend = 0;
+let lastCursorKey = '';
+// 静止 3s 标签淡出计时（F7.1；每次远端光标帧到达即重置）
+let cursorLabelTimer: ReturnType<typeof setTimeout> | null = null;
 
 function onSelectionKeydown(e: KeyboardEvent) {
   const ae = document.activeElement;
@@ -1155,23 +1195,27 @@ function onPointerDown(e: any) {
 }
 
 function onPointerMove(e: any) {
+  const pos = getPointerPos(e);
+  if (!pos) return;
+  // F7.1 光标广播：悬停即发（50ms 节流，与 laser 对齐；学生端由 provider.readOnly 拦截）。
+  // 置于激光/绘制分支之前：激光模式下教师指针同时广播红点与光标（DoD 两者共存）
+  const cursorNow = Date.now();
+  if (cursorNow - lastCursorSend >= 50) {
+    lastCursorSend = cursorNow;
+    provider?.updateCursor({ userId, userName: displayName, x: pos.x, y: pos.y, color: userColor });
+  }
   // 激光笔：不依赖 isDrawing，红点跟指 + 节流广播（学生端仅接收渲染，进不到此分支）
   if (mode.value === 'laser') {
-    const pos = getPointerPos(e);
-    if (pos) {
-      const lp = toLayerCoords(pos);
-      renderer?.setLaserPoint(lp.x, lp.y);
-      const now = Date.now();
-      if (now - lastLaserSend >= 50) {
-        lastLaserSend = now;
-        provider?.setLaser(lp.x, lp.y);
-      }
+    const lp = toLayerCoords(pos);
+    renderer?.setLaserPoint(lp.x, lp.y);
+    const now = Date.now();
+    if (now - lastLaserSend >= 50) {
+      lastLaserSend = now;
+      provider?.setLaser(lp.x, lp.y);
     }
     return;
   }
   if (!isDrawing) return;
-  const pos = getPointerPos(e);
-  if (!pos) return;
   const m = mode.value;
 
   if (m === 'brush') {
@@ -1208,12 +1252,6 @@ function onPointerMove(e: any) {
     renderer!.setViewport(newX, newY);
     syncViewportToYjs();
     startPos = pos;
-  }
-
-  const cursorNow = Date.now();
-  if (cursorNow - lastCursorSend >= 50) {
-    lastCursorSend = cursorNow;
-    provider?.updateCursor({ userId, userName: displayName, x: pos.x, y: pos.y, color: userColor });
   }
 }
 

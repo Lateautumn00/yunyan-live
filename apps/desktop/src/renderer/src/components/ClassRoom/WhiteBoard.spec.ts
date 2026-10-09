@@ -201,6 +201,11 @@ const konvaMocks = vi.hoisted(() => {
       if (v !== undefined) this._visible = v;
       return this._visible;
     }
+    _opacity = 1;
+    opacity(v?: number) {
+      if (v !== undefined) this._opacity = v;
+      return this._opacity;
+    }
     draw() {}
     batchDraw() {}
     destroy() {}
@@ -2915,6 +2920,177 @@ describe('WhiteBoard.vue 激光笔', () => {
 
     provider.awareness.setLocalStateField('laser', null);
     expect(dot.visible()).toBe(false);
+    wrapper.unmount();
+  });
+});
+
+// ── 远端光标：悬停广播、写侧节流、contain 换算、标签淡出、幽灵清理（F7.1） ──
+describe('WhiteBoard.vue 远端光标（F7.1）', () => {
+  type NodeLike = {
+    x: (v?: number) => number;
+    y: (v?: number) => number;
+    visible: () => boolean;
+    opacity: (v?: number) => number;
+    _attrs: Record<string, unknown>;
+  };
+  function cursorChildren(vm: SelVM): unknown[] {
+    return (
+      vm.renderer as unknown as { cursorLayer: { getChildren: () => unknown[] } }
+    ).cursorLayer.getChildren();
+  }
+  function localCursor(vm: SelVM): Record<string, unknown> | null | undefined {
+    return (vm.provider!.awareness.getLocalState() as Record<string, unknown> | null)?.cursor as
+      Record<string, unknown> | null | undefined;
+  }
+  function fireMove(stage: unknown, x: number, y: number) {
+    const s = stage as {
+      _pointer: { x: number; y: number };
+      fire: (evt: string, d: unknown) => void;
+    };
+    s._pointer = { x, y };
+    s.fire('mousemove', { target: stage, evt: {} });
+  }
+  const teacherCursor = (x: number, y: number) => ({
+    userId: 'teacher-9',
+    userName: 'Teacher',
+    x,
+    y,
+    color: '#3366ff'
+  });
+
+  it('教师悬停（未进入绘制）即广播光标：stage 坐标 + 姓名 + 代表色', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    fireMove(konvaMocks.MockStage.last()!, 300, 240);
+    expect(localCursor(vm)).toMatchObject({
+      userId: 'op1',
+      userName: 'teacher',
+      x: 300,
+      y: 240
+    });
+    expect(typeof (localCursor(vm) as Record<string, unknown>).color).toBe('string');
+    // 本端光标不自渲染（children 未创建）
+    expect(cursorChildren(vm).length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('光标写侧 50ms 节流：连续移动只广播一次', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const spy = vi.spyOn(vm.provider!, 'updateCursor');
+    const stage = konvaMocks.MockStage.last()!;
+    fireMove(stage, 10, 10);
+    fireMove(stage, 11, 11);
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('学生端移动指针不写 cursor awareness（只渲染不可写）', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as SelVM;
+    fireMove(konvaMocks.MockStage.last()!, 50, 60);
+    expect(localCursor(vm) ?? null).toBeFalsy();
+    wrapper.unmount();
+  });
+
+  it('远端光标渲染点+姓名标签，stage 坐标经 contain k=2 换算成层局部坐标', () => {
+    // 视口写侧被 readOnly 守卫（学生只读），用教师端写入触发同一 viewportOffset 观察器
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SelVM;
+    const provider = vm.provider!;
+    // 视口：平移(60,40)、缩放 100%、stage 400×300 → 本端 800×600 下 k=min(2,2)=2
+    provider.setViewportAll({ x: 60, y: 40, zoom: 100, sw: 400, sh: 300 });
+    provider.awareness.setLocalStateField('cursor', teacherCursor(200, 180));
+
+    const children = cursorChildren(vm);
+    expect(children.length).toBe(7);
+    const dot = children[5] as unknown as NodeLike;
+    const label = children[6] as unknown as NodeLike;
+    // 教师层局部坐标 = (200−60)/1 = 140（k 经 ×k 与层缩放抵消）
+    expect(dot.x()).toBe(140);
+    expect(dot.y()).toBe(140);
+    expect(dot.visible()).toBe(true);
+    expect(label.x()).toBe(152);
+    expect(label.y()).toBe(152);
+    expect(label._attrs.text).toBe('Teacher');
+    wrapper.unmount();
+  });
+
+  it('远端光标静止 3s 后姓名标签淡出，新光标帧恢复并重置计时', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as SelVM;
+    const provider = vm.provider!;
+    vi.useFakeTimers();
+    try {
+      provider.awareness.setLocalStateField('cursor', teacherCursor(10, 20));
+      const label = cursorChildren(vm)[6] as unknown as NodeLike;
+      expect(label.opacity()).toBe(1);
+      vi.advanceTimersByTime(3000);
+      expect(label.opacity()).toBe(0);
+      // 新帧（坐标须变化，同坐标被去重跳过）→ 恢复可见
+      provider.awareness.setLocalStateField('cursor', teacherCursor(30, 40));
+      expect(label.opacity()).toBe(1);
+      // 重置后再次满 3s 才淡出（计时器已被新帧重置）
+      vi.advanceTimersByTime(2999);
+      expect(label.opacity()).toBe(1);
+      vi.advanceTimersByTime(1);
+      expect(label.opacity()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+    wrapper.unmount();
+  });
+
+  it('peer 离开 / cursor:null 清除光标节点，无幽灵残留', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as SelVM;
+    const provider = vm.provider!;
+    provider.awareness.setLocalStateField('cursor', teacherCursor(1, 2));
+    const children = cursorChildren(vm);
+    expect((children[5] as unknown as NodeLike).visible()).toBe(true);
+
+    provider.awareness.setLocalStateField('cursor', null);
+    expect((children[5] as unknown as NodeLike).visible()).toBe(false);
+    expect((children[6] as unknown as NodeLike).visible()).toBe(false);
+    (children.slice(0, 5) as unknown as NodeLike[]).forEach(t => expect(t.visible()).toBe(false));
+    wrapper.unmount();
+  });
+
+  it('本端 userId 的光标帧被忽略（不渲染自己的光标）', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as SelVM;
+    // 本端 userId = opaqueId 'op1'（route.query.userId 为空）
+    vm.provider!.awareness.setLocalStateField('cursor', {
+      userId: 'op1',
+      userName: 'Self',
+      x: 9,
+      y: 9,
+      color: '#000'
+    });
+    expect(cursorChildren(vm).length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('激光红点与远端光标同时渲染互不干扰（各在各层，清激光不动光标）', () => {
+    const wrapper = mountWB({ isTeacher: false });
+    const vm = wrapper.vm as unknown as SelVM;
+    const provider = vm.provider!;
+    provider.awareness.setLocalStateField('laser', { x: 30, y: 40 });
+    provider.awareness.setLocalStateField('cursor', teacherCursor(5, 6));
+
+    const laserDot = (
+      vm.renderer as unknown as { laserLayer: { getChildren: () => unknown[] } }
+    ).laserLayer.getChildren()[0] as NodeLike;
+    const cursorDot = cursorChildren(vm)[5] as unknown as NodeLike;
+    expect(laserDot.visible()).toBe(true);
+    expect(laserDot.x()).toBe(30);
+    expect(cursorDot.visible()).toBe(true);
+    expect(cursorDot.x()).toBe(5);
+
+    provider.awareness.setLocalStateField('laser', null);
+    expect(laserDot.visible()).toBe(false);
+    expect(cursorDot.visible()).toBe(true);
     wrapper.unmount();
   });
 });
