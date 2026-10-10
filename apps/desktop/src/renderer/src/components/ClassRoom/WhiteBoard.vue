@@ -222,6 +222,27 @@
             <el-icon><Plus /></el-icon>
           </div>
         </el-tooltip>
+        <el-tooltip content="页面总览 · 缩略图快速跳页" placement="top">
+          <div :class="['overview', { on: showThumbPanel }]" @click="toggleThumbPanel">
+            <el-icon><Grid /></el-icon>
+          </div>
+        </el-tooltip>
+      </div>
+
+      <!-- F5.2：页面缩略图总览浮层（覆盖层，不改画布布局；当前页高亮，点击跳页） -->
+      <div v-if="showThumbPanel" class="thumb-panel">
+        <div class="thumb-panel-title">页面总览</div>
+        <div class="thumb-grid">
+          <div
+            v-for="p in thumbPages"
+            :key="p.id"
+            :class="['thumb-item', { on: p.current }]"
+            @click="jumpToThumb(p.index)"
+          >
+            <div class="thumb-ph">{{ p.index + 1 }}</div>
+            <div class="thumb-num">{{ p.index + 1 }}</div>
+          </div>
+        </div>
       </div>
 
       <!-- 可拖拽颜色面板 -->
@@ -589,6 +610,19 @@ const exporting = ref(false);
 const exportProgress = ref<{ done: number; total: number } | null>(null);
 const curLayerIndex = ref(1);
 const layerIndex = ref(1);
+// F5.2：页面缩略图总览浮层（覆盖层；当前页高亮，点击跳页）
+const showThumbPanel = ref(false);
+function toggleThumbPanel() {
+  showThumbPanel.value = !showThumbPanel.value;
+}
+function jumpToThumb(index: number) {
+  showLayer(index + 1);
+}
+// 缩略图条目：页码 + 是否当前页（快照后续接入离屏渲染，暂用页码占位图）
+const thumbPages = computed(() => {
+  const ids = renderer?.pageIds ?? [];
+  return ids.map((id, i) => ({ id, index: i, current: i === curLayerIndex.value - 1 }));
+});
 const fileList = ref<any[]>([]);
 const editFileIndex = ref(-1);
 const presetColors = PRESET_COLORS;
@@ -3348,6 +3382,10 @@ defineExpose({
   toggleSnap,
   selIsTable,
   tableOp,
+  showThumbPanel,
+  toggleThumbPanel,
+  thumbPages,
+  jumpToThumb,
   // 测试钩子：直接访问底层 Yjs provider / Konva renderer / 当前视口快照（供同步类用例断言）
   get provider() {
     return provider;
@@ -3647,6 +3685,64 @@ defineExpose({
     font-size: 12px;
     line-height: 26px;
     background: none;
+  }
+  .overview.on .el-icon {
+    color: #409eff;
+  }
+}
+
+/* F5.2：页面缩略图总览浮层（覆盖层，不改画布布局） */
+.thumb-panel {
+  position: absolute;
+  right: 10px;
+  bottom: 54px;
+  width: 260px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 10px;
+  z-index: 12;
+  .thumb-panel-title {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 8px;
+  }
+  .thumb-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .thumb-item {
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    padding: 4px;
+    text-align: center;
+    &:hover {
+      background: rgba(64, 158, 255, 0.08);
+    }
+    &.on {
+      border-color: #409eff;
+      background: rgba(64, 158, 255, 0.1);
+    }
+    .thumb-ph {
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f3f3f4;
+      border-radius: 4px;
+      font-size: 18px;
+      color: #999;
+    }
+    .thumb-num {
+      font-size: 11px;
+      color: #666;
+      margin-top: 2px;
+    }
   }
 }
 

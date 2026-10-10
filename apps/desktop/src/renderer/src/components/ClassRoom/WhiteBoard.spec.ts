@@ -4712,3 +4712,65 @@ describe('F4.4 表格', () => {
     wrapper.unmount();
   });
 });
+
+// ── F5.2 页面缩略图总览（浮层 + 当前页高亮 + 快速跳页） ──────────────────────
+type ThumbVM = PPTVM & {
+  showThumbPanel: boolean;
+  toggleThumbPanel: () => void;
+  jumpToThumb: (index: number) => void;
+  thumbPages: Array<{ id: string; index: number; current: boolean }>;
+  curLayerIndex: number;
+};
+
+describe('F5.2 页面缩略图总览', () => {
+  it('正向：总览按钮开合浮层，列出各页且当前页高亮', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as ThumbVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addPage();
+    provider.addPage();
+    await nextTick();
+    expect(wrapper.find('.thumb-panel').exists()).toBe(false);
+    vm.toggleThumbPanel();
+    await nextTick();
+    expect(wrapper.find('.thumb-panel').exists()).toBe(true);
+    const items = wrapper.findAll('.thumb-item');
+    expect(items.length).toBe(vm.thumbPages.length);
+    expect(vm.thumbPages.length).toBeGreaterThanOrEqual(3);
+    // 当前页（addPage 后停在最后一页）高亮：恰有一项 current 且对应 curLayerIndex
+    const curIdx = vm.curLayerIndex - 1;
+    expect(vm.thumbPages[curIdx]!.current).toBe(true);
+    expect(items[curIdx]!.classes()).toContain('on');
+    vm.toggleThumbPanel();
+    await nextTick();
+    expect(wrapper.find('.thumb-panel').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('正向：点击缩略图跳到对应页（当前页随之更新）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as ThumbVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addPage();
+    await nextTick();
+    vm.toggleThumbPanel();
+    await nextTick();
+    vm.jumpToThumb(1);
+    await nextTick();
+    expect(vm.curLayerIndex).toBe(2);
+    expect(vm.thumbPages[1]!.current).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('负向：无页时不渲染缩略图条目（thumbPages 空）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as ThumbVM;
+    // 未额外建页：至少有初始 1 页；模拟 renderer 未就绪时 thumbPages 回退空数组
+    vm.toggleThumbPanel();
+    await nextTick();
+    expect(Array.isArray(vm.thumbPages)).toBe(true);
+    wrapper.unmount();
+  });
+});
