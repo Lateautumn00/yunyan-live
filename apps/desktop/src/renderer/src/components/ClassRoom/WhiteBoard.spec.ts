@@ -5093,3 +5093,77 @@ describe('F2.3 几何吸附（绘制期）', () => {
     wrapper.unmount();
   });
 });
+
+// ── F2.3c 点 / 多边形工具（单击落点 + 逐点取顶点闭合） ─────────────────────
+describe('F2.3c 点与多边形工具', () => {
+  function clickAt(
+    stage: { _pointer: { x: number; y: number } | null; fire: (n: string, o: unknown) => void },
+    x: number,
+    y: number
+  ): void {
+    stage._pointer = { x, y };
+    stage.fire('mousedown', { target: stage, evt: {} });
+  }
+
+  it('正向：点工具单击落点并吸附到既有线段端点', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as GeoSnapVM;
+    seedLine(vm);
+    vm.tool('point');
+    const stage = konvaMocks.MockStage.last()!;
+    clickAt(stage, -4, 2);
+    const pt = vm.getCurrentPageShapes().find(s => s.type === 'point');
+    expect(pt).toBeTruthy();
+    expect(pt!.x).toBe(0);
+    expect(pt!.y).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('负向：关闭吸附开关后点工具按原始指针落点', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as GeoSnapVM;
+    seedLine(vm);
+    vm.toggleSnap();
+    vm.tool('point');
+    const stage = konvaMocks.MockStage.last()!;
+    clickAt(stage, -4, 2);
+    const pt = vm.getCurrentPageShapes().find(s => s.type === 'point');
+    expect(pt).toBeTruthy();
+    expect(pt!.x).toBe(-4);
+    expect(pt!.y).toBe(2);
+    wrapper.unmount();
+  });
+
+  it('正向：多边形逐点取顶点，点击首点闭合落 polygon 元素', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as GeoSnapVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    vm.tool('polygon');
+    const stage = konvaMocks.MockStage.last()!;
+    clickAt(stage, 10, 10);
+    clickAt(stage, 100, 10);
+    clickAt(stage, 100, 100);
+    // 未满 3 顶点不闭合；第 4 点命中首点（阈值内）即闭合
+    clickAt(stage, 10, 10);
+    const poly = vm.getCurrentPageShapes().find(s => s.type === 'polygon');
+    expect(poly).toBeTruthy();
+    expect(poly!.points).toEqual([10, 10, 100, 10, 100, 100]);
+    wrapper.unmount();
+  });
+
+  it('负向：Esc 取消未完成多边形，不落元素', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as GeoSnapVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    vm.tool('polygon');
+    const stage = konvaMocks.MockStage.last()!;
+    clickAt(stage, 10, 10);
+    clickAt(stage, 100, 10);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.some(s => s.type === 'polygon')).toBe(false);
+    wrapper.unmount();
+  });
+});

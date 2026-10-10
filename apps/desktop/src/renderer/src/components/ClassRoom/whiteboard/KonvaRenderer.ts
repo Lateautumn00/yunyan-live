@@ -891,6 +891,39 @@ export class KonvaRenderer {
           opacity
         });
       }
+      // F2.3c 几何点：实心圆点；hitStrokeWidth 放大命中区便于选中/拖动
+      case 'point': {
+        const r = Number(data.get('radius')) || 5;
+        const color = data.get('color') || '#000';
+        return new Konva.Circle({
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
+          radius: r,
+          fill: color,
+          stroke: color,
+          strokeWidth: 1,
+          hitStrokeWidth: 12,
+          opacity
+        });
+      }
+      // F2.3c 多边形：闭合折线（首点不重复存储，Konva closed 自动闭合）
+      case 'polygon': {
+        const strokeWidth = (data.get('lineWidth') as number) || 2;
+        const fill = data.get('fill') as string | undefined;
+        return new Konva.Line({
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
+          points: (data.get('points') as number[]) || [],
+          stroke: data.get('color') || '#000',
+          strokeWidth,
+          hitStrokeWidth: Math.max(strokeWidth, HIT_STROKE_MIN),
+          lineCap: 'round',
+          lineJoin: 'round',
+          closed: true,
+          ...(fill ? { fill } : {}),
+          opacity
+        });
+      }
       case 'text': {
         // F4.3：粗斜/对齐/行距/宽度（自动折行）随元素渲染；bold/italic → Konva fontStyle 字符串
         const bold = !!data.get('bold');

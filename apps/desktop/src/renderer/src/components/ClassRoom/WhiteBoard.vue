@@ -110,6 +110,22 @@
             <el-icon><Minus /></el-icon>
           </div>
         </el-tooltip>
+        <el-tooltip content="点工具 · 单击落点（吸附附近端点/中点）" placement="right">
+          <div
+            :class="['glyph-tool', 'point-tool', { on: mode === 'point' }]"
+            @click="tool('point')"
+          >
+            <span class="glyph-icon">●</span>
+          </div>
+        </el-tooltip>
+        <el-tooltip content="多边形 · 逐点取顶点，点击首点闭合（Esc 取消）" placement="right">
+          <div
+            :class="['glyph-tool', 'polygon-tool', { on: mode === 'polygon' }]"
+            @click="tool('polygon')"
+          >
+            <span class="glyph-icon">△</span>
+          </div>
+        </el-tooltip>
         <el-tooltip content="公式 · LaTeX 输入（Enter 提交，Esc 取消）" placement="right">
           <div class="formula-tool" @click="openFormula">
             <span class="formula-tool-icon">∑</span>
@@ -1232,6 +1248,8 @@ function setMode(type: ToolMode) {
   if (mode.value === 'laser' && type !== 'laser') laserOff();
   // 面板互斥矩阵：切工具即收公式浮层（开浮层不切工具，故浮层侧另行收属性/课件面板）
   closeFormula();
+  // F2.3c：切走多边形即丢弃未完成顶点（不落残件）
+  if (mode.value === 'polygon' && type !== 'polygon') cancelPolygon();
   mode.value = type;
   renderer?.setSelectMode(type === 'cur' && props.isTeacher);
   // toolState.type 的唯一写点：工具态同步随模式切换收口（含 laser/file 等旁路）
@@ -2025,6 +2043,7 @@ function onSelectionKeydown(e: KeyboardEvent) {
     isDrawing = false;
     startPos = null;
     currentPath = [];
+    cancelPolygon();
     return;
   }
   if (e.key !== 'Delete' && e.key !== 'Backspace') return;
@@ -2078,6 +2097,47 @@ function onPointerDown(e: any) {
   } else if (m === 'eraser') {
     isDrawing = true;
     eraseAt(pos);
+  } else if (m === 'point') {
+    // F2.3c 点工具：单击即落点（非拖拽），起笔即吸附
+    refreshSnapContext();
+    const lp = toLayerCoords(snapDrawPos(pos));
+    if (provider && !provider.getActiveElements()) provider.addPage();
+    provider?.addShape({
+      id: uid(),
+      type: 'point',
+      x: Math.round(lp.x * 100) / 100,
+      y: Math.round(lp.y * 100) / 100,
+      radius: 5,
+      color: currentColor.value,
+      opacity: currentOpacity.value
+    });
+    lastSnap = null;
+    refreshLayer();
+  } else if (m === 'polygon') {
+    // F2.3c 多边形：首击初始化并取顶点；已满 3 顶点时点击首点（阈值内）闭合
+    if (!polygonActive) {
+      refreshSnapContext();
+      polygonActive = true;
+      polygonPts = [];
+    }
+    const lp = toLayerCoords(snapDrawPos(pos));
+    const nx = Math.round(lp.x * 100) / 100;
+    const ny = Math.round(lp.y * 100) / 100;
+    if (polygonPts.length >= 6) {
+      const fx = polygonPts[0]!;
+      const fy = polygonPts[1]!;
+      if (Math.hypot(nx - fx, ny - fy) <= 10) {
+        commitPolygon();
+        cancelPolygon();
+        return;
+      }
+    }
+    polygonPts.push(nx, ny);
+    if (renderer) {
+      renderer.previewLayer.destroyChildren();
+      drawPolygonPreview(pos);
+      renderer.previewLayer.batchDraw();
+    }
   } else if (SNAP_MODES.includes(m)) {
     isDrawing = true;
     // F2.3：起笔前派生本页吸附目标，起笔点即吸附（leader 锚点仍按原始指针命中图元）
@@ -2246,6 +2306,75 @@ function drawSnapMarker(): void {
   );
 }
 
+// --- F2.3c 多边形：逐点取顶点，点击首点闭合；预览不依赖 isDrawing（非拖拽） ---
+let polygonPts: number[] = [];
+let polygonActive = false;
+
+function polygonVerts(): { x: number; y: number; i: number }[] {
+  const out: { x: number; y: number; i: number }[] = [];
+  for (let i = 0; i + 1 < polygonPts.length; i += 2) {
+    out.push({ x: polygonPts[i]!, y: polygonPts[i + 1]!, i });
+  }
+  return out;
+}
+
+function cancelPolygon(): void {
+  polygonActive = false;
+  polygonPts = [];
+  // 无条件清预览：提交后同样需要收掉橡皮筋（否则残留到下次指针事件）
+  if (renderer) {
+    renderer.previewLayer.destroyChildren();
+    renderer.previewLayer.batchDraw();
+  }
+}
+
+function commitPolygon(): void {
+  if (!provider || polygonPts.length < 6) {
+    cancelPolygon();
+    return;
+  }
+  if (!provider.getActiveElements()) provider.addPage();
+  provider.addShape({
+    id: uid(),
+    type: 'polygon',
+    x: 0,
+    y: 0,
+    points: polygonPts.slice(),
+    color: currentColor.value,
+    lineWidth: currentSize.value,
+    opacity: currentOpacity.value,
+    ...(fillEnabled.value ? { fill: fillColor.value || currentColor.value } : {})
+  });
+  polygonActive = false;
+  polygonPts = [];
+  refreshLayer();
+}
+
+/** 临时多边形：已取顶点 + 指向当前指针的橡皮筋（吸附态也走 snapDrawPos） */
+function drawPolygonPreview(pos: { x: number; y: number }): void {
+  if (!renderer) return;
+  const cur = toLayerCoords(snapDrawPos(pos));
+  const verts = polygonVerts();
+  const pts: number[] = [];
+  for (const v of verts) pts.push(v.x, v.y);
+  pts.push(cur.x, cur.y);
+  renderer.previewLayer.add(
+    new Konva.Line({
+      points: pts,
+      stroke: currentColor.value,
+      strokeWidth: currentSize.value,
+      lineCap: 'round',
+      lineJoin: 'round',
+      dash: verts.length >= 2 ? [6, 4] : [],
+      closed: false
+    })
+  );
+  for (const v of verts) {
+    renderer.previewLayer.add(new Konva.Circle({ x: v.x, y: v.y, radius: 4, fill: '#f56c6c' }));
+  }
+  drawSnapMarker();
+}
+
 function onPointerMove(e: any) {
   const pos = getPointerPos(e);
   if (!pos) return;
@@ -2265,6 +2394,13 @@ function onPointerMove(e: any) {
       lastLaserSend = now;
       provider?.setLaser(lp.x, lp.y);
     }
+    return;
+  }
+  // F2.3c 多边形橡皮筋：逐点单击（非拖拽），不依赖 isDrawing
+  if (mode.value === 'polygon' && polygonActive) {
+    renderer?.previewLayer.destroyChildren();
+    drawPolygonPreview(pos);
+    renderer?.previewLayer.batchDraw();
     return;
   }
   if (!isDrawing) return;
@@ -4676,6 +4812,22 @@ defineExpose({
     line-height: 1;
   }
   &:hover .formula-tool-icon {
+    color: #409eff;
+  }
+}
+
+/* F2.3c 点/多边形：字形工具钮（与 ∑ 的 .formula-tool 分离，避免选择器撞车） */
+.glyph-tool {
+  .glyph-icon {
+    font-size: 15px;
+    font-weight: 700;
+    color: #555;
+    line-height: 1;
+  }
+  &:hover .glyph-icon {
+    color: #409eff;
+  }
+  &.on .glyph-icon {
     color: #409eff;
   }
 }

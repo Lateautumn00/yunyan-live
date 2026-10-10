@@ -8,6 +8,8 @@ export type ToolMode =
   | 'rectangle'
   | 'arrows'
   | 'line'
+  | 'point'
+  | 'polygon'
   | 'force'
   | 'leader'
   | 'table'
@@ -37,6 +39,8 @@ export const ELEMENT_TYPES = [
   'circle',
   'arrow',
   'line',
+  'point',
+  'polygon',
   'text',
   'ppt-image',
   'image',
@@ -66,6 +70,8 @@ export const MODE_TO_ELEMENT: Partial<Record<ToolMode, ElementType>> = {
   force: 'force-arrow',
   leader: 'leader-label',
   line: 'line',
+  point: 'point',
+  polygon: 'polygon',
   table: 'table',
   coord: 'coord'
 };
