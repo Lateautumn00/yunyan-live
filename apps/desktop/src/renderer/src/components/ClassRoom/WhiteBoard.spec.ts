@@ -5167,3 +5167,67 @@ describe('F2.3c 点与多边形工具', () => {
     wrapper.unmount();
   });
 });
+
+// ── F2.3d 平行/垂直快捷标记（选中线段类 → 一键加/取消标记） ───────────────
+type MarkVM = GeoSnapVM & {
+  selIsMarkable: boolean;
+  selMark: 'parallel' | 'perpendicular' | null;
+  selectShape: (id: string) => void;
+  toggleMark: (kind: 'parallel' | 'perpendicular') => void;
+};
+
+function seedRect(vm: MarkVM): void {
+  const provider = vm.provider!;
+  if (!provider.getActiveElements()) provider.addPage();
+  provider.addShape({
+    id: 'seed-rect',
+    type: 'rect',
+    x: 0,
+    y: 0,
+    width: 50,
+    height: 50,
+    color: '#000',
+    opacity: 1
+  });
+}
+
+describe('F2.3d 平行/垂直标记', () => {
+  it('正向：选中线段点「平行」写入 mark，再切「垂直」覆盖', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as MarkVM;
+    seedLine(vm);
+    vm.tool('cur');
+    vm.selectShape('seed-line');
+    expect(vm.selIsMarkable).toBe(true);
+
+    vm.toggleMark('parallel');
+    expect(vm.selMark).toBe('parallel');
+    expect(vm.getCurrentPageShapes().find(s => s.id === 'seed-line')!.mark).toBe('parallel');
+
+    vm.toggleMark('perpendicular');
+    expect(vm.selMark).toBe('perpendicular');
+    expect(vm.getCurrentPageShapes().find(s => s.id === 'seed-line')!.mark).toBe('perpendicular');
+    wrapper.unmount();
+  });
+
+  it('负向：再点同款标记即取消；矩形等非线段图元不给标记入口', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as MarkVM;
+    seedLine(vm);
+    vm.tool('cur');
+    vm.selectShape('seed-line');
+    vm.toggleMark('parallel');
+    expect(vm.selMark).toBe('parallel');
+
+    // 同款再点 → 走空 patch + 键集差，把 mark 字段删掉
+    vm.toggleMark('parallel');
+    expect(vm.selMark).toBeNull();
+    expect(vm.getCurrentPageShapes().find(s => s.id === 'seed-line')!.mark).toBeUndefined();
+
+    seedRect(vm);
+    vm.selectShape('seed-rect');
+    expect(vm.selIsMarkable).toBe(false);
+    expect(vm.selMark).toBeNull();
+    wrapper.unmount();
+  });
+});

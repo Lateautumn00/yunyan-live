@@ -1556,3 +1556,66 @@ describe('KonvaRenderer F5.1 混合批次层级', () => {
     renderer.destroy();
   });
 });
+
+// ── F2.3d 平行/垂直标记：线段字形装饰（不入 nodeMap、不参与命中） ──────────
+describe('KonvaRenderer 平行/垂直标记', () => {
+  function lineElement(overrides: Record<string, unknown> = {}) {
+    const data: Record<string, unknown> = {
+      id: 'l1',
+      type: 'line',
+      points: [0, 0, 100, 0],
+      x: 0,
+      y: 0,
+      color: '#f00',
+      lineWidth: 2,
+      opacity: 1,
+      ...overrides
+    };
+    return { get: (k: string) => data[k] };
+  }
+
+  it('正向：parallel 标记在首段中点渲染字形，且不计入 nodeMap', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    renderer.bindElements([lineElement({ mark: 'parallel' })] as unknown as Parameters<
+      typeof renderer.bindElements
+    >[0]);
+
+    const children = renderer.layer.getChildren() as unknown as Array<{
+      attrs: Record<string, unknown>;
+    }>;
+    expect(children.length).toBe(2);
+    expect(children[1]!.attrs.text).toBe('∥');
+    expect(children[1]!.attrs.listening).toBe(false);
+    expect(children[1]!.attrs.x).toBe(39);
+    expect(children[1]!.attrs.y).toBe(-8);
+    // 纯装饰：不进 nodeMap，选择/拖拽/命中一律看不到它
+    expect(renderer.getNodeCount()).toBe(1);
+    renderer.destroy();
+  });
+
+  it('正向：perpendicular 标记渲染 ⊥ 字形', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    renderer.bindElements([
+      lineElement({ id: 'l2', points: [0, 0, 0, 80], mark: 'perpendicular' })
+    ] as unknown as Parameters<typeof renderer.bindElements>[0]);
+
+    const children = renderer.layer.getChildren() as unknown as Array<{
+      attrs: Record<string, unknown>;
+    }>;
+    expect(children.length).toBe(2);
+    expect(children[1]!.attrs.text).toBe('⊥');
+    renderer.destroy();
+  });
+
+  it('负向：无 mark 或 points 不足的线段不产生装饰节点', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    renderer.bindElements([
+      lineElement(),
+      lineElement({ id: 'l2', points: [10, 10], mark: 'perpendicular' })
+    ] as unknown as Parameters<typeof renderer.bindElements>[0]);
+
+    expect(renderer.layer.getChildren().length).toBe(2);
+    expect(renderer.getNodeCount()).toBe(2);
+    renderer.destroy();
+  });
+});

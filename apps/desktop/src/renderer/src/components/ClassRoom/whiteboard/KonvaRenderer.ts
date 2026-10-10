@@ -387,11 +387,41 @@ export class KonvaRenderer {
         this.wireNode(node, id);
       }
     });
+    this.rebuildMarks(elements);
     this.layer.batchDraw();
     if (this.selectedId) {
       if (this.selectEnabled && this.nodeMap.has(this.selectedId)) this.selectNode(this.selectedId);
       else this.clearSelection();
     }
+  }
+
+  // --- F2.3d 平行/垂直标记：线段上的字形装饰 ---
+  // 刻意不入 nodeMap：纯视觉叠加，不参与命中/选择/拖拽/变换；随 bindElements 重建，
+  // 因而本地改标记、远端同步、拖动落笔、撤销重做都会自动跟随
+  private rebuildMarks(elements: Y.Array<any>) {
+    // 仅在 bindElements 内、layer.destroyChildren() 之后调用：旧标记已随之销毁
+    elements.forEach((el: any) => {
+      const mark = el?.get?.('mark');
+      if (mark !== 'parallel' && mark !== 'perpendicular') return;
+      const pts = el.get('points');
+      if (!Array.isArray(pts) || pts.length < 4) return;
+      // 线段几何存 points，整体位移存 x/y（画布/坐标系平移）——字形取首段中点
+      const mx = (Number(el.get('x')) || 0) + ((Number(pts[0]) || 0) + (Number(pts[2]) || 0)) / 2;
+      const my = (Number(el.get('y')) || 0) + ((Number(pts[1]) || 0) + (Number(pts[3]) || 0)) / 2;
+      const glyph = new Konva.Text({
+        x: mx - 11,
+        y: my - 8,
+        width: 22,
+        align: 'center',
+        text: mark === 'parallel' ? '∥' : '⊥',
+        fontSize: 15,
+        fill: String(el.get('color') || '#000'),
+        stroke: '#ffffff',
+        strokeWidth: 3,
+        listening: false
+      });
+      this.layer.add(glyph as any);
+    });
   }
 
   // --- 选择器：cur 模式下节点可点选/拖动/缩放 ---

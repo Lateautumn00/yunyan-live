@@ -340,6 +340,24 @@
           <div class="top-btn" @click="tableOp('addCol')">+列</div>
           <div class="top-btn" @click="tableOp('removeCol')">-列</div>
         </div>
+        <!-- F2.3d：平行/垂直快捷标记（选中线段类时显示，再点同款即取消） -->
+        <div v-if="selIsMarkable" class="mark-bar">
+          <span class="mark-label">标记</span>
+          <div
+            :class="['mk-btn', { on: selMark === 'parallel' }]"
+            title="平行标记"
+            @click="toggleMark('parallel')"
+          >
+            ∥
+          </div>
+          <div
+            :class="['mk-btn', { on: selMark === 'perpendicular' }]"
+            title="垂直标记"
+            @click="toggleMark('perpendicular')"
+          >
+            ⊥
+          </div>
+        </div>
         <div class="edit-color">
           <div
             v-for="(c, i) in presetColors"
@@ -733,6 +751,11 @@ const selItalic = ref(false);
 const selAlign = ref<'left' | 'center' | 'right'>('left');
 // F4.4：当前选中是否表格（属性面板显示增/删行列按钮）
 const selIsTable = ref(false);
+// F2.3d：选中图元是否线段类（可加平行/垂直标记）及其当前标记值
+const selIsMarkable = ref(false);
+const selMark = ref<'parallel' | 'perpendicular' | null>(null);
+// 平行/垂直仅对「有方向的线」有意义：直线/箭头/受力箭头/引线
+const MARKABLE_TYPES = ['line', 'arrow', 'force-arrow', 'leader-label'];
 // F4.3：对齐选项（中文标签，element-plus 无对齐图标）
 const alignOptions = [
   { value: 'left' as const, label: '左' },
@@ -1475,6 +1498,11 @@ function selectShape(id: string) {
   }
   colorPanelCollapsed.value = false;
   selIsTable.value = type === 'table';
+  // F2.3d：线段类图元才给标记入口（圆/矩形/文本等无平行垂直语义）
+  selIsMarkable.value = MARKABLE_TYPES.includes(type);
+  selMark.value = selIsMarkable.value
+    ? ((m.get('mark') as 'parallel' | 'perpendicular') ?? null)
+    : null;
   if (m.get('color') !== undefined) currentColor.value = String(m.get('color'));
   if (m.get('opacity') !== undefined) currentOpacity.value = Number(m.get('opacity'));
   const isText = type === 'text';
@@ -1501,6 +1529,8 @@ function selectShape(id: string) {
 function clearSelection() {
   renderer?.clearSelection();
   selIsTable.value = false;
+  selIsMarkable.value = false;
+  selMark.value = null;
   if (mode.value === 'cur') {
     showEditer.value = false;
     showFillToggle.value = false;
@@ -1912,6 +1942,18 @@ function toggleTextStyle(kind: 'bold' | 'italic') {
 function setSelAlign(a: 'left' | 'center' | 'right') {
   selAlign.value = a;
   commitTextStyle({ align: a });
+}
+
+// F2.3d：平行/垂直快捷标记——写元素 mark 字段（入 undo 栈，随 bindElements 重绘字形）；
+// 点同款即取消：走空 patch + 显式快照键，由键集差把 mark 字段删掉
+function toggleMark(kind: 'parallel' | 'perpendicular') {
+  if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  const id = renderer.getSelectedId();
+  if (!id) return;
+  const cur = getShape(id)?.get('mark');
+  if (cur === kind) commitSelectedStyle({}, ['mark']);
+  else commitSelectedStyle({ mark: kind }, ['mark']);
+  selMark.value = (getShape(id)?.get('mark') as 'parallel' | 'perpendicular') ?? null;
 }
 
 // F4.4：表格增/删行列——读当前表格数据 → 不可变变换 → 写回 rows/cols/cells（入 undo 栈）
@@ -3903,6 +3945,10 @@ defineExpose({
   toggleSnap,
   selIsTable,
   tableOp,
+  // F2.3d：平行/垂直标记
+  selIsMarkable,
+  selMark,
+  toggleMark,
   showThumbPanel,
   toggleThumbPanel,
   thumbPages,
@@ -4347,6 +4393,38 @@ defineExpose({
       background: rgba(0, 0, 0, 0.04);
       &:hover {
         background: rgba(64, 158, 255, 0.15);
+        color: #409eff;
+      }
+    }
+  }
+  .mark-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    .mark-label {
+      font-size: 12px;
+      color: #666;
+    }
+    .mk-btn {
+      width: 28px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1;
+      color: #555;
+      cursor: pointer;
+      background: rgba(0, 0, 0, 0.04);
+      &:hover {
+        background: rgba(64, 158, 255, 0.15);
+        color: #409eff;
+      }
+      &.on {
+        background: rgba(64, 158, 255, 0.22);
         color: #409eff;
       }
     }
