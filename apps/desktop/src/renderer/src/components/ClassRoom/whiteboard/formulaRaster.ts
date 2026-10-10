@@ -1,6 +1,8 @@
 import katex from 'katex';
 import html2canvas from 'html2canvas';
 import 'katex/dist/katex.min.css';
+// F1.2：mhchem 扩展注册 \ce{} 化学式语法（副作用 import，随本懒 chunk 加载，不进主包）
+import 'katex/dist/contrib/mhchem.mjs';
 
 /** 公式逻辑字号与内边距（自然尺寸基准；光栅过采样见 scale 参数，F1.1/5.7.1 B1 路线） */
 export const FORMULA_FONT_SIZE = 16;
@@ -29,6 +31,13 @@ export function validateLatex(latex: string): FormulaValidateResult {
   } catch {
     return { ok: false, message: FORMULA_INVALID_MSG };
   }
+}
+
+/** F1.2 化学模式：裸化学输入自动包裹 \ce{}；已含 \ce 或非化学（纯数学）输入原样返回 */
+export function wrapChem(latex: string): string {
+  if (latex.includes('\\ce')) return latex;
+  // 化学特征：字母紧邻数字（H2O/CO2）或反应箭头
+  return /[A-Za-z]\d|->/.test(latex) ? `\\ce{${latex}}` : latex;
 }
 
 /** 过采样系数（5.7.1 实测）：S = clamp(2×zoom, 1, 8)，4× 缩放仍清晰；固定 S 在高倍缩放下发糊 */

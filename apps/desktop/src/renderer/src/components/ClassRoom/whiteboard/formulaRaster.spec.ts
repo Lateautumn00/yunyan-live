@@ -10,7 +10,8 @@ import {
   formulaOversample,
   measureFormula,
   rasterizeFormula,
-  validateLatex
+  validateLatex,
+  wrapChem
 } from './formulaRaster';
 
 describe('formulaRaster', () => {
@@ -91,5 +92,30 @@ describe('formulaRaster', () => {
     clearFormulaCache();
     await rasterizeFormula('x^2', '#000000', 2);
     expect(html2canvasMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+// F1.2 化学方程式（mhchem 扩展）：\ce{} 语法经 katex contrib 注册后可校验/渲染
+describe('formulaRaster — F1.2 化学 mhchem', () => {
+  beforeEach(() => {
+    clearFormulaCache();
+  });
+
+  it('validateLatex 接受 \\ce{} 化学式（气体↑/沉淀↓/条件）', () => {
+    expect(validateLatex('\\ce{H2O}').ok).toBe(true);
+    expect(validateLatex('\\ce{CO2 + Ca(OH)2 -> CaCO3 v + H2O}').ok).toBe(true);
+    expect(validateLatex('\\ce{^{227}_{90}Th}').ok).toBe(true);
+  });
+
+  it('非法 \\ce{} 仍拒绝并回落行内文案', () => {
+    const bad = validateLatex('\\ce{H2O');
+    expect(bad.ok).toBe(false);
+    expect(bad.message).toBe(FORMULA_INVALID_MSG);
+  });
+
+  it('wrapChem：化学模式下裸输入包裹 \\ce{}，已含 \\ce 不重复包裹', () => {
+    expect(wrapChem('H2O')).toBe('\\ce{H2O}');
+    expect(wrapChem('\\ce{H2O}')).toBe('\\ce{H2O}');
+    expect(wrapChem('\\frac{1}{2}')).toBe('\\frac{1}{2}');
   });
 });

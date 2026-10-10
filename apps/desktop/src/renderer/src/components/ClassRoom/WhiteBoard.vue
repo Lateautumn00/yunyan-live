@@ -462,6 +462,11 @@
           />
           <div v-if="formulaError" class="formula-error">{{ formulaError }}</div>
           <div v-else-if="formulaLoading" class="formula-loading">渲染中…</div>
+          <!-- F1.2 化学模式开关：开启后裸化学输入提交时自动包裹 \ce{} -->
+          <div class="formula-chem">
+            <el-switch v-model="chemMode" size="small" />
+            <span class="formula-chem-label">化学模式（\ce{}）</span>
+          </div>
           <div class="formula-actions">
             <el-button size="small" @click="closeFormula">取消</el-button>
             <el-button size="small" type="primary" :loading="formulaLoading" @click="submitFormula">
@@ -662,6 +667,8 @@ const formulaLoading = ref(false);
 /** 双击重编辑时锁定的目标元素 id；null = 新建 */
 const editingFormulaId = ref<string | null>(null);
 const formulaInputRef = ref<HTMLTextAreaElement>();
+/** F1.2 化学模式：开启后提交时裸化学输入自动包裹 \ce{} */
+const chemMode = ref(false);
 
 // Color panel drag state
 const colorPanelCollapsed = ref(true);
@@ -1423,7 +1430,7 @@ function closeFormula() {
 
 async function submitFormula() {
   if (formulaLoading.value || !formulaVisible.value) return;
-  const latex = formulaInput.value.trim();
+  let latex = formulaInput.value.trim();
   if (!latex) {
     formulaError.value = '请输入 LaTeX 公式';
     return;
@@ -1433,6 +1440,8 @@ async function submitFormula() {
   try {
     // 懒加载 katex+html2canvas 独立 chunk（§4.9：加载失败 → 可读文案 + 按钮转重试）
     const mod = await import('./whiteboard/formulaRaster');
+    // F1.2 化学模式：裸化学输入自动包裹 \ce{}（已在 \ce 或纯数学输入原样）
+    if (chemMode.value) latex = mod.wrapChem(latex);
     const check = mod.validateLatex(latex);
     if (!check.ok) {
       formulaError.value = check.message || mod.FORMULA_INVALID_MSG;
@@ -4362,6 +4371,18 @@ defineExpose({
   margin-top: 6px;
   font-size: 12px;
   color: #409eff;
+}
+
+.formula-chem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.formula-chem-label {
+  font-size: 12px;
+  color: #666;
 }
 
 .formula-actions {

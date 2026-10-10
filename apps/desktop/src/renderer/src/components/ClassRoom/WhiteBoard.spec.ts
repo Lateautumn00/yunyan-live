@@ -528,7 +528,11 @@ const formulaMocks = vi.hoisted(() => {
       height: 40
     })),
     clearFormulaCache: vi.fn(),
-    formulaOversample: vi.fn(() => 2)
+    formulaOversample: vi.fn(() => 2),
+    // F1.2：化学模式包裹（真实实现在 formulaRaster.spec 覆盖，此处镜像行为验接线）
+    wrapChem: vi.fn((latex: string) =>
+      latex.includes('\\ce') || !/[A-Za-z]\d|->/.test(latex) ? latex : `\\ce{${latex}}`
+    )
   };
 });
 vi.mock('./whiteboard/formulaRaster', () => formulaMocks);
@@ -3840,6 +3844,55 @@ describe('F1.1 公式浮层', () => {
   it('学生端不渲染公式按钮（工具栏仅教师可见的回归延伸）', () => {
     const wrapper = mountWB({ isTeacher: false });
     expect(wrapper.find('.formula-tool').exists()).toBe(false);
+    wrapper.unmount();
+  });
+});
+
+// ── F1.2 化学模式（mhchem 预设：开关 → 裸化学输入提交时自动包裹 \ce{}） ──
+describe('F1.2 公式浮层化学模式', () => {
+  type ChemVM = PPTVM & {
+    formulaVisible: boolean;
+    formulaInput: string;
+    chemMode: boolean;
+    openFormula: () => void;
+    submitFormula: () => Promise<void>;
+  };
+
+  it('化学模式开启 → 裸化学输入提交包裹 \\ce{}；纯数学输入不包裹', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as ChemVM;
+    const addSpy = vi.spyOn(YjsProvider.prototype, 'addShape').mockClear();
+    vm.openFormula();
+    vm.chemMode = true;
+    vm.formulaInput = 'H2O';
+    await vm.submitFormula();
+    await nextTick();
+    expect(formulaMocks.wrapChem).toHaveBeenCalledWith('H2O');
+    expect(addSpy.mock.calls[0]![0]).toMatchObject({ latex: '\\ce{H2O}' });
+    // 纯数学：wrapChem 原样返回
+    (formulaMocks.wrapChem as ReturnType<typeof vi.fn>).mockClear();
+    vm.openFormula();
+    vm.formulaInput = '\\frac{1}{2}';
+    await vm.submitFormula();
+    await nextTick();
+    expect(addSpy.mock.calls[1]![0]).toMatchObject({ latex: '\\frac{1}{2}' });
+    addSpy.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('化学模式关闭 → 不调用 wrapChem，原样提交', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as ChemVM;
+    const addSpy = vi.spyOn(YjsProvider.prototype, 'addShape').mockClear();
+    formulaMocks.wrapChem.mockClear();
+    vm.openFormula();
+    vm.chemMode = false;
+    vm.formulaInput = 'H2O';
+    await vm.submitFormula();
+    await nextTick();
+    expect(formulaMocks.wrapChem).not.toHaveBeenCalled();
+    expect(addSpy.mock.calls[0]![0]).toMatchObject({ latex: 'H2O' });
+    addSpy.mockRestore();
     wrapper.unmount();
   });
 });
