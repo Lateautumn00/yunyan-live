@@ -4965,3 +4965,57 @@ describe('F3.3 本地素材收藏', () => {
     wrapper.unmount();
   });
 });
+
+// ���� F2.2 ����ͼ�񣨱���ʽ���븡�� �� ������㣩 ����������������������������������������������������������
+type CurveVM = PPTVM & {
+  curveVisible: boolean;
+  curveInput: string;
+  curveMin: number;
+  curveMax: number;
+  curveError: string;
+  openCurve: () => void;
+  submitCurve: () => Promise<void>;
+};
+
+describe('F2.2 ����ͼ��', () => {
+  it('���򣺰���������ʽ�ύ�� curve Ԫ�أ�������������ɫ��', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as CurveVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    const addSpy = vi.spyOn(YjsProvider.prototype, 'addShape').mockClear();
+    vm.openCurve();
+    await nextTick();
+    expect(vm.curveVisible).toBe(true);
+    vm.curveInput = '2*x+1';
+    vm.curveMin = -5;
+    vm.curveMax = 5;
+    await vm.submitCurve();
+    await nextTick();
+    expect(addSpy).toHaveBeenCalledTimes(1);
+    const data = addSpy.mock.calls[0]![0] as Record<string, unknown>;
+    expect(data.type).toBe('curve');
+    expect(Array.isArray(data.points)).toBe(true);
+    expect((data.points as number[]).length).toBeGreaterThan(2);
+    expect(data.color).toBeTruthy();
+    expect(vm.curveVisible).toBe(false);
+    addSpy.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('���򣺷ǰ���������ʽ���ɶ�����������Ԫ��', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as CurveVM;
+    const addSpy = vi.spyOn(YjsProvider.prototype, 'addShape').mockClear();
+    vm.openCurve();
+    await nextTick();
+    vm.curveInput = 'foo(x)';
+    await vm.submitCurve();
+    await nextTick();
+    expect(vm.curveError).toBeTruthy();
+    expect(addSpy).not.toHaveBeenCalled();
+    expect(vm.curveVisible).toBe(true);
+    addSpy.mockRestore();
+    wrapper.unmount();
+  });
+});

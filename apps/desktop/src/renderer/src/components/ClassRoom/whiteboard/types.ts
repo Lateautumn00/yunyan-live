@@ -12,6 +12,7 @@ export type ToolMode =
   | 'leader'
   | 'table'
   | 'coord'
+  | 'curve'
   | 'move'
   | 'laser'
   | 'file';
@@ -43,7 +44,8 @@ export const ELEMENT_TYPES = [
   'force-arrow',
   'leader-label',
   'table',
-  'coord'
+  'coord',
+  'curve'
 ] as const;
 
 export type ElementType = (typeof ELEMENT_TYPES)[number];

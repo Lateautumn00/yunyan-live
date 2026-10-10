@@ -115,6 +115,11 @@
             <span class="formula-tool-icon">∑</span>
           </div>
         </el-tooltip>
+        <el-tooltip content="函数图像 · 输入 y=f(x) 生成曲线" placement="right">
+          <div class="curve-tool" @click="openCurve">
+            <span class="formula-tool-icon">f(x)</span>
+          </div>
+        </el-tooltip>
         <el-tooltip content="橡皮擦 · 按整笔擦除（含荧光笔迹）" placement="right">
           <div :class="['eraser', { on: mode === 'eraser' }]" @click="tool('eraser')" />
         </el-tooltip>
@@ -546,6 +551,37 @@
         </div>
       </div>
 
+      <!-- F2.2 函数图像浮层：表达式 + 定义域 → 采样落点（白名单校验见 curve.ts） -->
+      <div v-if="curveVisible" class="curve-overlay" @mousedown.self="closeCurve">
+        <div class="curve-panel">
+          <div class="curve-title">绘制函数图像</div>
+          <input
+            :ref="setCurveInputRef"
+            v-model="curveInput"
+            class="curve-expr"
+            :class="{ invalid: !!curveError }"
+            placeholder="例：sin(x) 或 2*x+1"
+            @input="curveError = ''"
+            @keydown.enter.exact.prevent="submitCurve"
+            @keydown.esc.stop.prevent="closeCurve"
+          />
+          <div class="curve-domain">
+            <span>定义域</span>
+            <input v-model.number="curveMin" class="curve-bound" type="number" />
+            <span>至</span>
+            <input v-model.number="curveMax" class="curve-bound" type="number" />
+          </div>
+          <div v-if="curveError" class="formula-error">{{ curveError }}</div>
+          <div class="formula-actions">
+            <el-button size="small" @click="closeCurve">取消</el-button>
+            <el-button size="small" type="primary" @click="submitCurve">绘制</el-button>
+          </div>
+          <div class="formula-hint">
+            支持 sin/cos/tan/exp/log/sqrt/abs 等与常量 pi/e · 仅变量 x · Enter 绘制
+          </div>
+        </div>
+      </div>
+
       <!-- Loading -->
       <div v-show="loading" class="loading-div" @click.stop>
         <el-icon class="loading-gif is-loading" :size="48">
@@ -638,6 +674,7 @@ import {
   useMemoryAssetBackend,
   type FavoriteAsset
 } from './whiteboard/assetStore';
+import { layoutCurve, loadCurveParser, sampleCurve, validateExpr } from './whiteboard/curve';
 import BoardReview from './BoardReview.vue';
 import {
   PRESET_COLORS,
@@ -834,6 +871,77 @@ function placeAsset(a: FavoriteAsset): void {
 async function removeAsset(id: string): Promise<void> {
   await removeFavorite(id);
   await loadAssets();
+}
+
+// --- F2.2 函数图像：表达式输入浮层 → 采样 → 数学坐标映射落点 ---
+const curveVisible = ref(false);
+const curveInput = ref('');
+const curveMin = ref(-10);
+const curveMax = ref(10);
+const curveError = ref('');
+const curveInputRef = ref<HTMLInputElement>();
+
+function setCurveInputRef(el: unknown): void {
+  curveInputRef.value = (el as HTMLInputElement | null) ?? undefined;
+}
+/** 数学原点映射到画布的 px/单位（与坐标系默认 unit 一致，便于与 F2.1 叠用） */
+const CURVE_SCALE = 30;
+
+function openCurve(): void {
+  if (!props.isTeacher) return;
+  curveError.value = '';
+  curveVisible.value = true;
+  // 预载懒 chunk（失败不阻断：提交时 validateExpr 会给出可读报错）
+  void loadCurveParser().catch(() => undefined);
+  void nextTick(() => curveInputRef.value?.focus());
+}
+
+function closeCurve(): void {
+  curveVisible.value = false;
+}
+
+async function submitCurve(): Promise<void> {
+  if (!provider || !renderer || !curveVisible.value) return;
+  const expr = curveInput.value.trim();
+  const min = Number(curveMin.value);
+  const max = Number(curveMax.value);
+  const check = await validateExpr(expr);
+  if (!check.ok) {
+    curveError.value = check.message || '表达式无效';
+    return;
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) {
+    curveError.value = '定义域无效：左端点需小于右端点';
+    return;
+  }
+  const mathPts = await sampleCurve(expr, min, max, 600);
+  if (mathPts.length < 4) {
+    curveError.value = '该定义域内无可绘制的有效点';
+    return;
+  }
+  // 视口中心为数学原点
+  const stage = renderer.getStage();
+  const origin = toLayerCoords({ x: stage.width() / 2, y: stage.height() / 2 });
+  const laid = layoutCurve(mathPts, origin.x, origin.y, CURVE_SCALE);
+  if (laid.points.length < 4) {
+    curveError.value = '绘制失败，请调整表达式或定义域';
+    return;
+  }
+  provider.addShape({
+    id: uid(),
+    type: 'curve',
+    expr,
+    domainMin: min,
+    domainMax: max,
+    x: Math.round(laid.x),
+    y: Math.round(laid.y),
+    points: laid.points.map(v => Math.round(v * 100) / 100),
+    color: currentColor.value,
+    lineWidth: 2,
+    opacity: currentOpacity.value
+  });
+  refreshLayer();
+  closeCurve();
 }
 
 // Color panel drag state
@@ -4726,5 +4834,64 @@ defineExpose({
   margin-top: 8px;
   font-size: 12px;
   color: #999;
+}
+
+.curve-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 30;
+}
+
+.curve-panel {
+  width: 340px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.curve-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.curve-expr {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font-size: 14px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  outline: none;
+}
+
+.curve-expr.invalid {
+  border-color: #e1383f;
+}
+
+.curve-expr:focus {
+  border-color: #409eff;
+}
+
+.curve-domain {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #666;
+}
+
+.curve-bound {
+  width: 72px;
+  padding: 4px 6px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  outline: none;
 }
 </style>

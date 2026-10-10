@@ -862,6 +862,21 @@ export class KonvaRenderer {
         }
         return group;
       }
+      // F2.2 函数图像：采样点折线（points 为相对 x/y 的画布坐标，layoutCurve 归一化产出）
+      case 'curve': {
+        const strokeWidth = (data.get('lineWidth') as number) || 2;
+        return new Konva.Line({
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
+          points: (data.get('points') as number[]) || [],
+          stroke: data.get('color') || '#000',
+          strokeWidth,
+          hitStrokeWidth: Math.max(strokeWidth, HIT_STROKE_MIN),
+          lineCap: 'round',
+          lineJoin: 'round',
+          opacity
+        });
+      }
       case 'line': {
         const strokeWidth = (data.get('lineWidth') as number) || 1;
         return new Konva.Line({
