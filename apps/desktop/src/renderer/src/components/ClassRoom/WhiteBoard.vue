@@ -227,6 +227,11 @@
             <el-icon><Grid /></el-icon>
           </div>
         </el-tooltip>
+        <el-tooltip content="课后回看 · 查看历史板书快照（仅教师）" placement="top">
+          <div class="review" @click="showBoardReview = true">
+            <el-icon><Clock /></el-icon>
+          </div>
+        </el-tooltip>
       </div>
 
       <!-- F5.2：页面缩略图总览浮层（覆盖层，不改画布布局；当前页高亮，点击跳页） -->
@@ -244,6 +249,9 @@
           </div>
         </div>
       </div>
+
+      <!-- F6.3 课后回看：只读快照查看浮层（覆盖层；Q4 MVP 仅教师） -->
+      <BoardReview v-if="showBoardReview" :room-id="roomId" @close="showBoardReview = false" />
 
       <!-- 可拖拽颜色面板 -->
       <div
@@ -548,6 +556,7 @@ import { runExport, type ExportFormat, type ExportScope } from './whiteboard/exp
 import { regularizePath } from './whiteboard/regularize';
 import { computeSnap } from './whiteboard/snap';
 import { addRow, removeRow, addCol, removeCol, type TableData } from './whiteboard/table';
+import BoardReview from './BoardReview.vue';
 import {
   PRESET_COLORS,
   ERASER_WIDTH_MULT,
@@ -623,6 +632,8 @@ const thumbPages = computed(() => {
   const ids = renderer?.pageIds ?? [];
   return ids.map((id, i) => ({ id, index: i, current: i === curLayerIndex.value - 1 }));
 });
+// F6.3 课后回看：教师端入口打开只读快照查看浮层（Q4 MVP 仅教师，服务端 403 鉴权）
+const showBoardReview = ref(false);
 const fileList = ref<any[]>([]);
 const editFileIndex = ref(-1);
 const presetColors = PRESET_COLORS;
@@ -3386,6 +3397,7 @@ defineExpose({
   toggleThumbPanel,
   thumbPages,
   jumpToThumb,
+  showBoardReview,
   // 测试钩子：直接访问底层 Yjs provider / Konva renderer / 当前视口快照（供同步类用例断言）
   get provider() {
     return provider;

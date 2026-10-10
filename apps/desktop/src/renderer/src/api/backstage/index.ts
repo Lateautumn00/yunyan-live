@@ -75,5 +75,14 @@ export default {
       raw: true,
       timeout: 0
     });
+  },
+  // F6.3 课后回看（Q4 MVP 仅教师；服务端 boardHistory/boardSnapshot 均带房间级 403）
+  board_history(roomId: string, cursor?: string, limit?: number) {
+    return http.get(`${config.liveApi}/liveInfo/boardHistory`, {
+      params: { roomId, cursor, limit }
+    });
+  },
+  board_snapshot(id: string) {
+    return http.get(`${config.liveApi}/liveInfo/boardSnapshot/${id}`);
   }
 };
