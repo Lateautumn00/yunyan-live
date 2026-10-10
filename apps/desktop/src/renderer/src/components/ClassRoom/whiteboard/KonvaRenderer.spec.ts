@@ -1619,3 +1619,43 @@ describe('KonvaRenderer 平行/垂直标记', () => {
     renderer.destroy();
   });
 });
+
+// ── F5.2b 缩略图拖拽排序：按目标 id 序重排页 Layer ────────────────────────────
+describe('KonvaRenderer reorderPages（F5.2b 拖拽排序）', () => {
+  function threePages(): KonvaRenderer {
+    const r = new KonvaRenderer(document.createElement('div'));
+    r.addPage(0, 'p1');
+    r.addPage(1, 'p2');
+    r.addPage(2, 'p3');
+    r.showPage(0);
+    return r;
+  }
+
+  it('正向：按目标 id 序重排，pageIds 与 layers 同步换位', () => {
+    const r = threePages();
+    expect(r.reorderPages(['p3', 'p1', 'p2'])).toBe(true);
+    expect(r.pageIds).toEqual(['p3', 'p1', 'p2']);
+    expect(r.getPageCount()).toBe(3);
+    // 当前层对象是 p1（原 index0），换位后应落在 index1
+    expect(r.getCurrentPageIndex()).toBe(1);
+    r.destroy();
+  });
+
+  it('正向：重排只换位置不换可见页（正在看的仍是原来那一页）', () => {
+    const r = threePages(); // showPage(0) → 看 p1
+    expect(r.reorderPages(['p2', 'p3', 'p1'])).toBe(true);
+    expect(r.getCurrentPageIndex()).toBe(2);
+    r.destroy();
+  });
+
+  it('负向：目标 id 集合不匹配（缺页/重复/未知 id）不动现有顺序', () => {
+    const r = threePages();
+    expect(r.reorderPages(['p2', 'p1'])).toBe(false);
+    expect(r.reorderPages(['p1', 'p1', 'p2'])).toBe(false);
+    expect(r.reorderPages(['p1', 'p2', 'px'])).toBe(false);
+    expect(r.reorderPages([])).toBe(false);
+    expect(r.pageIds).toEqual(['p1', 'p2', 'p3']);
+    expect(r.getCurrentPageIndex()).toBe(0);
+    r.destroy();
+  });
+});

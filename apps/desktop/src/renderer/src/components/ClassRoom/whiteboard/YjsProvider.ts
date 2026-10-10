@@ -36,6 +36,8 @@ export class YjsProvider {
   undoManager: Y.UndoManager;
   readOnly: boolean;
   private snapshotStatusCbs: Array<(status: SnapshotStatus) => void> = [];
+  /** F5.2b：调序事务给栈项打的页标记（stack-item-added 在事务收尾时消费） */
+  private pendingMovePageId: string | null = null;
 
   constructor(
     roomId: string,
@@ -70,6 +72,11 @@ export class YjsProvider {
     this.undoManager.on('stack-item-added', ({ stackItem }) => {
       if (!stackItem.meta.has('pageIndex')) {
         stackItem.meta.set('pageIndex', this.getCurrentPageIndex());
+      }
+      // F5.2b：调序后索引会漂移，补记页 id，jumpToUndoMeta 优先按 id 解析
+      if (this.pendingMovePageId) {
+        stackItem.meta.set('pageId', this.pendingMovePageId);
+        this.pendingMovePageId = null;
       }
     });
 
@@ -246,6 +253,63 @@ export class YjsProvider {
     const page = this.pages.get(idx);
     if (!page) return null;
     return page.get('elements') as Y.Array<any>;
+  }
+
+  /**
+   * F5.2b：页调序（缩略图拖拽排序）。
+   *
+   * yjs 13.x 没有原生 move：把同一个 Y.Map delete 再 insert 会因 _prelimContent 已被
+   * 清空而抛 TypeError，故必须整页深克隆（非 elements 字段直取 + 新 Y.Array 重建
+   * elements 及其每个元素），再「删旧插新」放进同一事务：
+   *  - 恰好触发一次 pages.observe 与一档 undo，一次回滚全恢复；
+   *  - currentPageIndex 按位移算术跟页走（被搬的页落 to，区间内整体挪一格）；
+   *  - 栈项 meta.pageId 记当前页 id，undo 后索引漂移也能跳回正确页。
+   *
+   * @param from 起始索引
+   * @param to 目标索引（落位后的最终索引）
+   */
+  movePage(from: number, to: number): boolean {
+    if (this.readOnly) return false;
+    const total = this.pages.length;
+    if (from === to) return false;
+    if (from < 0 || from >= total || to < 0 || to >= total) return false;
+    const src = this.pages.get(from);
+    if (!src) return false;
+    const clone = this.clonePage(src);
+    this.doc.transact(() => {
+      this.pages.delete(from, 1);
+      this.pages.insert(to, [clone]);
+      const cur = this.getCurrentPageIndex();
+      let next = cur;
+      if (cur === from) next = to;
+      else if (cur > from && cur <= to) next = cur - 1;
+      else if (cur >= to && cur < from) next = cur + 1;
+      this.currentPageIndex.set('index', next);
+      this.pendingMovePageId = this.getCurrentPageId();
+    });
+    this.pendingMovePageId = null; // 未被栈项消费也别漏到下一档
+    return true;
+  }
+
+  /** 深拷贝一页（含 elements 子树），得到未集成到文档的新实例 */
+  private clonePage(page: Y.Map<any>): Y.Map<any> {
+    const copy = new Y.Map<any>();
+    page.forEach((v, k) => {
+      if (k === 'elements') return;
+      copy.set(k, v);
+    });
+    const els = page.get('elements') as Y.Array<Y.Map<any>> | undefined;
+    const rebuilt = new Y.Array<Y.Map<any>>();
+    if (els && els.length) {
+      const items = els.toArray().map(el => {
+        const item = new Y.Map<any>();
+        if (el instanceof Y.Map) el.forEach((v, k) => item.set(k, v));
+        return item;
+      });
+      rebuilt.push(items);
+    }
+    copy.set('elements', rebuilt);
+    return copy;
   }
 
   getCurrentPageId(): string {

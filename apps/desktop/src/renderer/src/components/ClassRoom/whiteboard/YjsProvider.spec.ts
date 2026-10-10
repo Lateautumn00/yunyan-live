@@ -399,3 +399,135 @@ describe('YjsProvider 快照状态帧（type=4，§4.9 F6.2 横幅数据源）',
     expect(seen).toEqual([1]);
   });
 });
+
+// ── F5.2b 缩略图拖拽排序：movePage 深克隆重排 ─────────────────────────────────
+// yjs 13.x 没有原生 move：对同一 Y.Map 直接 delete+insert 会因 _prelimContent 已置
+// null 抛 TypeError，必须整页深克隆后删旧插新。
+describe('YjsProvider movePage（F5.2b 拖拽排序）', () => {
+  const providers: YjsProvider[] = [];
+  function create(readOnly = false): YjsProvider {
+    const p = new YjsProvider(
+      `move-spec-${Math.random().toString(36).slice(2, 8)}`,
+      'u1',
+      'tester',
+      '#000000',
+      undefined,
+      readOnly
+    );
+    providers.push(p);
+    return p;
+  }
+
+  afterEach(() => {
+    while (providers.length) providers.pop()!.destroy();
+  });
+
+  /** A/B/C 三页，每页一个可辨识元素；建页动作清栈，等价于「会话开始即有三页」 */
+  function seed3(): { p: YjsProvider; ids: string[] } {
+    const p = create(false);
+    const ids: string[] = [];
+    for (const n of ['A', 'B', 'C']) {
+      ids.push(p.addPage());
+      p.addShape({ id: `s_${n}`, type: 'rect', x: 0, y: 0, width: 4, height: 4 });
+    }
+    p.clearUndoStack();
+    p.setCurrentPageIndex(0);
+    return { p, ids };
+  }
+
+  function orderOf(p: YjsProvider): string[] {
+    return p
+      .getPages()
+      .toArray()
+      .map(pg => pg.get('id') as string);
+  }
+
+  it('正向：movePage(0,2) 把首页移到末位，各页元素随页走且字段保留', () => {
+    const { p, ids } = seed3();
+    expect(p.movePage(0, 2)).toBe(true);
+    expect(orderOf(p)).toEqual([ids[1], ids[2], ids[0]]);
+    // 元素必须跟着自己的页（否则拖完页内容串页）
+    expect(p.getElementsAtPage(0)!.toArray()[0]!.get('id')).toBe('s_B');
+    expect(p.getElementsAtPage(1)!.toArray()[0]!.get('id')).toBe('s_C');
+    expect(p.getElementsAtPage(2)!.toArray()[0]!.get('id')).toBe('s_A');
+    expect(p.getPages().toArray()[2]!.get('name')).toBe('Page 1');
+    p.destroy();
+    providers.pop();
+  });
+
+  it('正向：反向 movePage(2,0) 末页移到首位', () => {
+    const { p, ids } = seed3();
+    p.setCurrentPageIndex(0);
+    expect(p.movePage(2, 0)).toBe(true);
+    expect(orderOf(p)).toEqual([ids[2], ids[0], ids[1]]);
+    p.destroy();
+    providers.pop();
+  });
+
+  it('正向：当前页索引跟页走（跨过位移点时一并修正）', () => {
+    const { p } = seed3();
+    p.setCurrentPageIndex(1); // B：位于 from=0 与 to=2 之间 → 落到 0
+    p.movePage(0, 2);
+    expect(p.getCurrentPageIndex()).toBe(0);
+
+    const q = seed3().p;
+    q.setCurrentPageIndex(0); // A：被搬走的页 → 跟到 to=2
+    q.movePage(0, 2);
+    expect(q.getCurrentPageIndex()).toBe(2);
+
+    const r = seed3().p;
+    r.setCurrentPageIndex(0); // 反向：A/B 在末页左移后右移一格
+    r.movePage(2, 0);
+    expect(r.getCurrentPageIndex()).toBe(1);
+    q.destroy();
+    r.destroy();
+    providers.pop();
+    providers.pop();
+  });
+
+  it('正向：调序是一档 undo，一次回滚恢复原顺序与元素', () => {
+    const { p, ids } = seed3();
+    p.movePage(1, 0);
+    expect(orderOf(p)).toEqual([ids[1], ids[0], ids[2]]);
+    expect(p.undoManager.undoStack.length).toBe(1);
+    expect(p.undo()).not.toBeNull();
+    expect(orderOf(p)).toEqual(ids);
+    expect(p.getElementsAtPage(0)!.toArray()[0]!.get('id')).toBe('s_A');
+    expect(p.undoManager.redoStack.length).toBe(1);
+    p.destroy();
+    providers.pop();
+  });
+
+  it('正向：调序栈项记录 pageId（undo 后据 id 找页，index 会漂移）', () => {
+    const { p, ids } = seed3();
+    p.setCurrentPageIndex(1);
+    p.movePage(0, 2);
+    const item = p.undoManager.undoStack.at(-1)!;
+    expect(item.meta.get('pageId')).toBe(ids[1]); // 当前页 B 落在 index0
+    p.destroy();
+    providers.pop();
+  });
+
+  it('负向：只读/越界/原地不动都不改文档且不入 undo 栈', () => {
+    const { p } = seed3();
+    const before = orderOf(p);
+    expect(p.movePage(0, 5)).toBe(false);
+    expect(p.movePage(3, 0)).toBe(false);
+    expect(p.movePage(1, 1)).toBe(false);
+    expect(p.movePage(-1, 2)).toBe(false);
+    expect(orderOf(p)).toEqual(before);
+    expect(p.undoManager.undoStack.length).toBe(0);
+    p.destroy();
+    providers.pop();
+
+    const ro = create(true);
+    seedPage(ro);
+    seedPage(ro);
+    seedPage(ro);
+    const roBefore = orderOf(ro);
+    expect(ro.movePage(0, 2)).toBe(false);
+    expect(orderOf(ro)).toEqual(roBefore);
+    ro.destroy();
+    providers.pop();
+  });
+});

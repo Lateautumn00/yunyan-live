@@ -272,7 +272,14 @@
           <div
             v-for="p in thumbPages"
             :key="p.id"
-            :class="['thumb-item', { on: p.current }]"
+            :class="[
+              'thumb-item',
+              { on: p.current, drag: dragIndex === p.index, over: dragOverIndex === p.index }
+            ]"
+            :data-thumb-index="p.index"
+            @pointerdown="onThumbPointerDown(p.index, $event)"
+            @pointermove="onThumbPointerMove(p.index)"
+            @pointerenter="onThumbPointerEnter(p.index)"
             @click="jumpToThumb(p.index)"
           >
             <img v-if="p.dataUrl" class="thumb-snap" :src="p.dataUrl" alt="" />
@@ -794,6 +801,11 @@ function toggleThumbPanel() {
   if (showThumbPanel.value) void refreshAllThumbs();
 }
 function jumpToThumb(index: number) {
+  // F5.2b：拖拽收尾的那次 click 不算跳页（否则拖完又跳走）
+  if (suppressClick) {
+    suppressClick = false;
+    return;
+  }
   showLayer(index + 1);
 }
 // 缩略图快照：页 id → dataURL。离屏渲染由 pageSnapshot 负责（与 F6.1 导出共用管线），
@@ -857,8 +869,16 @@ function scheduleThumbRefresh(delay: number) {
   }, delay);
 }
 // 缩略图条目：页码 + 是否当前页 + 快照 dataURL（null → 页码占位）
+// 页序走 thumbOrder（响应式）：renderer.pageIds 是普通数组，仅靠它重排不触发渲染
+const thumbOrder = ref<string[]>([]);
+
+function syncThumbOrder() {
+  thumbOrder.value = [...(renderer?.pageIds ?? [])];
+}
+
 const thumbPages = computed(() => {
-  const ids = renderer?.pageIds ?? [];
+  const synced = thumbOrder.value;
+  const ids = synced.length ? synced : (renderer?.pageIds ?? []);
   return ids.map((id, i) => ({
     id,
     index: i,
@@ -866,6 +886,64 @@ const thumbPages = computed(() => {
     dataUrl: thumbSnapshots.value[id] ?? null
   }));
 });
+
+// F5.2b：缩略图拖拽排序（Pointer 事件，鼠标/触摸通用）
+// 元素级 pointerenter/move 供鼠标与无 elementFromPoint 环境兜底，
+// window 级监听用 elementFromPoint 解析落点（触摸拖动时事件仍指向起始元素）
+const dragIndex = ref<number | null>(null);
+const dragOverIndex = ref<number | null>(null);
+// 拖拽提交后抑制紧随其后的 click
+let suppressClick = false;
+
+function onThumbPointerDown(index: number, e: PointerEvent) {
+  if (!props.isTeacher) return;
+  if (e.button !== undefined && e.button !== 0) return;
+  dragIndex.value = index;
+  dragOverIndex.value = index;
+  suppressClick = false;
+  (e.currentTarget as HTMLElement | undefined)?.setPointerCapture?.(e.pointerId);
+  window.addEventListener('pointermove', onWindowThumbMove);
+  window.addEventListener('pointerup', onThumbPointerUp);
+  window.addEventListener('pointercancel', onThumbPointerUp);
+}
+
+function onThumbPointerEnter(index: number) {
+  if (dragIndex.value === null) return;
+  dragOverIndex.value = index;
+}
+
+function onThumbPointerMove(index: number) {
+  if (dragIndex.value === null) return;
+  dragOverIndex.value = index;
+}
+
+function onWindowThumbMove(e: PointerEvent) {
+  if (dragIndex.value === null) return;
+  let host: Element | null;
+  try {
+    host = document.elementFromPoint?.(e.clientX, e.clientY)?.closest('[data-thumb-index]') ?? null;
+  } catch {
+    host = null;
+  }
+  if (!host) return;
+  const next = Number((host as HTMLElement).dataset.thumbIndex);
+  if (!Number.isNaN(next)) dragOverIndex.value = next;
+}
+
+function onThumbPointerUp() {
+  if (dragIndex.value === null) return;
+  const from = dragIndex.value;
+  const to = dragOverIndex.value;
+  window.removeEventListener('pointermove', onWindowThumbMove);
+  window.removeEventListener('pointerup', onThumbPointerUp);
+  window.removeEventListener('pointercancel', onThumbPointerUp);
+  dragIndex.value = null;
+  dragOverIndex.value = null;
+  if (to === null || to === from) return;
+  suppressClick = true;
+  // 顺序变了：观察器负责换位、换可见页与重绑元素；快照按页 id 走，无需重渲
+  provider?.movePage(from, to);
+}
 // F6.3 课后回看：教师端入口打开只读快照查看浮层（Q4 MVP 仅教师，服务端 403 鉴权）
 const showBoardReview = ref(false);
 const fileList = ref<any[]>([]);
@@ -1133,6 +1211,7 @@ onMounted(() => {
   renderer.onRefreshRequest = refreshLayer;
   renderer.setSelectMode(mode.value === 'cur' && props.isTeacher);
   renderer.showPage(0);
+  syncThumbOrder();
 
   const stage = renderer.getStage();
   stage.on('mousedown touchstart', onPointerDown);
@@ -1196,12 +1275,31 @@ onMounted(() => {
       }
     }
 
+    // F5.2b：调序换位——id 集合没变但顺序变了（本地拖拽/undo/远端推送都会改序）。
+    // 调序不换「正在看的页」：按可见页 id 找新位置（provider 的索引在 undo/远端
+    // 场景可能已过期，不能直接用）
+    let visibleId: string | null = null;
+    const idsNow = [...renderer.pageIds];
+    if (yPageIds.length === idsNow.length && yPageIds.some((id, i) => id !== idsNow[i])) {
+      visibleId = renderer.pageIds[renderer.getCurrentPageIndex()] ?? null;
+      renderer.reorderPages(yPageIds);
+    }
+
     layerIndex.value = renderer.getPageCount();
-    const teacherIdx = provider!.getCurrentPageIndex();
-    if (teacherIdx < renderer.getPageCount()) {
-      renderer.showPage(teacherIdx);
+    if (visibleId !== null) {
+      const idx = renderer.pageIds.indexOf(visibleId);
+      if (idx >= 0) {
+        renderer.showPage(idx);
+        if (provider!.getCurrentPageIndex() !== idx) provider!.setCurrentPageIndex(idx);
+      }
+    } else {
+      const teacherIdx = provider!.getCurrentPageIndex();
+      if (teacherIdx < renderer.getPageCount()) {
+        renderer.showPage(teacherIdx);
+      }
     }
     curLayerIndex.value = renderer.getCurrentPageIndex() + 1;
+    syncThumbOrder();
     refreshLayer();
     const els = provider!.getActiveElements();
     if (els) bindElementsObserver(els);
@@ -1307,6 +1405,10 @@ onUnmounted(() => {
     clearTimeout(thumbTimer);
     thumbTimer = null;
   }
+  // F5.2b：拖拽中卸载也要摘掉 window 监听
+  window.removeEventListener('pointermove', onWindowThumbMove);
+  window.removeEventListener('pointerup', onThumbPointerUp);
+  window.removeEventListener('pointercancel', onThumbPointerUp);
   renderer?.destroy();
   provider?.destroy();
 });
@@ -2885,6 +2987,16 @@ function revocation(type: string) {
 // 撤销/重做后按栈项 meta 跳回操作发生页（meta 由 provider 在 stack-item-added 记录）；
 // 跨页删除后页数已变，按当前页数夹取
 function jumpToUndoMeta(item: { meta: Map<unknown, unknown> }) {
+  // F5.2b：调序后页序变了，记录时的 pageIndex 已漂移 → 优先按页 id 找回
+  const pageId = item.meta.get('pageId');
+  if (typeof pageId === 'string' && renderer) {
+    const idx = renderer.pageIds.indexOf(pageId);
+    if (idx >= 0) {
+      ensurePageIndex(idx);
+      refreshLayer();
+      return;
+    }
+  }
   const idx = item.meta.get('pageIndex');
   if (typeof idx === 'number') {
     ensurePageIndex(Math.min(idx, Math.max(0, renderer!.getPageCount() - 1)));
@@ -4374,6 +4486,15 @@ defineExpose({
     &.on {
       border-color: #409eff;
       background: rgba(64, 158, 255, 0.1);
+    }
+    // F5.2b：拖拽中——源项半透明，落点项蓝框提示可放置
+    &.drag {
+      opacity: 0.55;
+      cursor: grabbing;
+    }
+    &.over {
+      border-color: #409eff;
+      background: rgba(64, 158, 255, 0.06);
     }
     .thumb-ph {
       height: 54px;

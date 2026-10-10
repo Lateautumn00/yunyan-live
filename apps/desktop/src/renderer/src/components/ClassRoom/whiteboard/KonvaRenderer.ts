@@ -178,6 +178,33 @@ export class KonvaRenderer {
     if (idx >= 0) this.removePage(idx);
   }
 
+  /**
+   * F5.2b：按目标 id 序重排页（缩略图拖拽排序）。只换位不增删：
+   * layers 与 pageIds 同步换位、重建 layer→index 映射，当前正在显示的 Layer
+   * 保持可见（其余隐藏），当前索引由 getCurrentPageIndex 按对象重算。
+   * 目标集合与现有页不匹配（长度不同/重复/未知 id）时一律不动并返回 false。
+   */
+  reorderPages(targetIds: string[]): boolean {
+    if (targetIds.length !== this.pageIds.length) return false;
+    if (new Set(targetIds).size !== targetIds.length) return false;
+    const idxOf = new Map(this.pageIds.map((id, i) => [id, i] as const));
+    const reordered: Array<Konva.Layer | undefined> = targetIds.map(id => {
+      const i = idxOf.get(id);
+      return i === undefined ? undefined : this.layers[i];
+    });
+    if (reordered.some(l => !l)) return false;
+    const current = this.layer;
+    this.layers = reordered as Konva.Layer[];
+    this.pageIds = [...targetIds];
+    this.rebuildLayerMap();
+    this.layers.forEach(l => {
+      if (l === current) l.show();
+      else l.hide();
+    });
+    this.stage.batchDraw();
+    return true;
+  }
+
   getPageCount(): number {
     return this.layers.length;
   }

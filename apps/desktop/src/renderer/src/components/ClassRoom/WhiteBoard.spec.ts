@@ -4937,16 +4937,17 @@ async function until(cond: () => boolean, ms = 3000): Promise<void> {
   while (!cond() && Date.now() - t0 < ms) await new Promise(resolve => setTimeout(resolve, 20));
 }
 
+/** 造满 3 页（每页一元素）；初始可能没有页，先补一页再加两页 */
+function seedPages(vm: ThumbVM): number {
+  const provider = vm.provider!;
+  if (!provider.getActiveElements()) provider.addPage();
+  provider.addPage();
+  provider.addPage();
+  return provider.getPages().length;
+}
+
 describe('F5.2a 缩略图离屏快照', () => {
   const FAKE = 'data:image/png;base64,FAKE';
-
-  function seedPages(vm: ThumbSnapVM): number {
-    const provider = vm.provider!;
-    if (!provider.getActiveElements()) provider.addPage();
-    provider.addPage();
-    provider.addPage();
-    return provider.getPages().length;
-  }
 
   beforeEach(() => {
     snapMocks.renderPageSnapshot.mockClear();
@@ -5035,6 +5036,114 @@ describe('F5.2a 缩略图离屏快照', () => {
     vm.showLayer(2);
     await until(() => false, 300);
     expect(snapMocks.renderPageSnapshot).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+});
+
+// ── F5.2b 缩略图拖拽排序（Pointer 事件 + Yjs 调序 + 观察器换位 + 撤销跳页） ──
+type DragVM = ThumbSnapVM & { revocation: (type: string) => void };
+
+describe('F5.2b 缩略图拖拽排序', () => {
+  beforeEach(() => {
+    snapMocks.renderPageSnapshot.mockClear();
+    snapMocks.renderPageSnapshot.mockResolvedValue('data:image/png;base64,FAKE');
+  });
+
+  function idsOf(vm: DragVM): string[] {
+    return vm.thumbPages.map(p => p.id);
+  }
+
+  it('正向：远端调序后缩略图顺序、当前页索引与渲染器页序同步换位', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DragVM;
+    seedPages(vm);
+    await nextTick();
+    const before = idsOf(vm);
+    expect(before.length).toBeGreaterThanOrEqual(3);
+    vm.toggleThumbPanel();
+    await until(() => vm.thumbPages.every(p => p.dataUrl !== null));
+
+    const cur = vm.curLayerIndex; // seed 后停在末页
+    const viewing = before[cur - 1]!;
+    vm.provider!.movePage(0, 2); // 首页移到末位
+    await nextTick();
+
+    expect(idsOf(vm)).toEqual([before[1], before[2], before[0]]);
+    // 看的还是同一页（id 不变），当前页序号跟着它换到新位置
+    expect(vm.thumbPages.find(p => p.current)!.id).toBe(viewing);
+    expect(vm.curLayerIndex).toBe(idsOf(vm).indexOf(viewing) + 1);
+    wrapper.unmount();
+  });
+
+  it('正向：拖拽指针序列触发调序（down→move→up），缩略图与文档同时换位', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DragVM;
+    seedPages(vm);
+    await nextTick();
+    const before = idsOf(vm);
+    vm.toggleThumbPanel();
+    await until(() => vm.thumbPages.every(p => p.dataUrl !== null));
+    const items = wrapper.findAll('.thumb-item');
+    expect(items.length).toBe(before.length);
+
+    await items[0]!.trigger('pointerdown');
+    await items[2]!.trigger('pointermove');
+    window.dispatchEvent(new Event('pointerup'));
+    await nextTick();
+
+    expect(idsOf(vm)).toEqual([before[1], before[2], before[0]]);
+    expect(
+      vm
+        .provider!.getPages()
+        .toArray()
+        .map(pg => pg.get('id'))
+    ).toEqual(idsOf(vm));
+    wrapper.unmount();
+  });
+
+  it('负向：原地按下抬起（未跨过其他页）不调序', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DragVM;
+    seedPages(vm);
+    await nextTick();
+    const before = idsOf(vm);
+    const undoBefore = vm.provider!.undoManager.undoStack.length;
+    vm.toggleThumbPanel();
+    await until(() => vm.thumbPages.every(p => p.dataUrl !== null));
+    const items = wrapper.findAll('.thumb-item');
+
+    await items[1]!.trigger('pointerdown');
+    window.dispatchEvent(new Event('pointerup'));
+    await nextTick();
+
+    expect(idsOf(vm)).toEqual(before);
+    expect(vm.provider!.undoManager.undoStack.length).toBe(undoBefore);
+    wrapper.unmount();
+  });
+
+  it('正向：撤销调序一次回滚顺序，且仍停在原来那一页（按 pageId 跳页）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DragVM;
+    seedPages(vm);
+    await nextTick();
+    const before = idsOf(vm);
+    vm.toggleThumbPanel();
+    await until(() => vm.thumbPages.every(p => p.dataUrl !== null));
+    // 停在第 2 页（B），把首页拖到末位：B 的序号从 1 变 0
+    vm.showLayer(2);
+    await nextTick();
+    vm.provider!.movePage(0, 2);
+    await nextTick();
+    expect(idsOf(vm)).toEqual([before[1], before[2], before[0]]);
+    expect(vm.curLayerIndex).toBe(1);
+
+    vm.revocation('pre');
+    await nextTick();
+
+    expect(idsOf(vm)).toEqual(before);
+    // 关键：调序栈项带 pageId，undo 后索引漂移也能跳回 B（第 2 页）
+    expect(vm.curLayerIndex).toBe(2);
+    expect(vm.thumbPages[1]!.current).toBe(true);
     wrapper.unmount();
   });
 });
