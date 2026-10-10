@@ -4966,7 +4966,7 @@ describe('F3.3 本地素材收藏', () => {
   });
 });
 
-// ���� F2.2 ����ͼ�񣨱���ʽ���븡�� �� ������㣩 ����������������������������������������������������������
+// ── F2.2 函数图像（表达式输入浮层 → 采样落点） ─────────────────────────────
 type CurveVM = PPTVM & {
   curveVisible: boolean;
   curveInput: string;
@@ -4977,8 +4977,8 @@ type CurveVM = PPTVM & {
   submitCurve: () => Promise<void>;
 };
 
-describe('F2.2 ����ͼ��', () => {
-  it('���򣺰���������ʽ�ύ�� curve Ԫ�أ�������������ɫ��', async () => {
+describe('F2.2 函数图像', () => {
+  it('正向：白名单表达式提交落 curve 元素（含采样点与颜色）', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as CurveVM;
     const provider = vm.provider!;
@@ -5003,7 +5003,7 @@ describe('F2.2 ����ͼ��', () => {
     wrapper.unmount();
   });
 
-  it('���򣺷ǰ���������ʽ���ɶ�����������Ԫ��', async () => {
+  it('负向：非白名单表达式给可读报错，不落元素', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as CurveVM;
     const addSpy = vi.spyOn(YjsProvider.prototype, 'addShape').mockClear();
@@ -5016,6 +5016,80 @@ describe('F2.2 ����ͼ��', () => {
     expect(addSpy).not.toHaveBeenCalled();
     expect(vm.curveVisible).toBe(true);
     addSpy.mockRestore();
+    wrapper.unmount();
+  });
+});
+
+// ── F2.3 几何作图与吸附（绘制期端点/中点吸附 + 吸附视觉反馈） ─────────────
+type GeoSnapVM = DrawVM & {
+  toggleSnap: () => void;
+  getCurrentPageShapes: () => Record<string, unknown>[];
+};
+
+function seedLine(vm: GeoSnapVM): void {
+  const provider = vm.provider!;
+  if (!provider.getActiveElements()) provider.addPage();
+  provider.addShape({
+    id: 'seed-line',
+    type: 'line',
+    points: [0, 0, 100, 0],
+    color: '#000',
+    lineWidth: 2,
+    opacity: 1
+  });
+}
+
+describe('F2.3 几何吸附（绘制期）', () => {
+  it('正向：起笔/落点吸附近邻线段端点与中点，且给视觉反馈', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as GeoSnapVM;
+    seedLine(vm);
+    vm.tool('line');
+    const stage = konvaMocks.MockStage.last()!;
+
+    stage._pointer = { x: -4, y: 2 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 50, y: 5 };
+    stage.fire('mousemove', { target: stage, evt: { shiftKey: false } });
+
+    // 吸附视觉反馈：预览层除临时线外还画了吸附点标记
+    expect(vm.renderer.previewLayer.getChildren().length).toBeGreaterThan(1);
+
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
+    expect(vm.renderer.previewLayer.getChildren().length).toBe(0);
+
+    const shapes = vm.getCurrentPageShapes();
+    const drawn = shapes.find(s => s.id !== 'seed-line')!;
+    expect(drawn.type).toBe('line');
+    const pts = drawn.points as number[];
+    // 起笔 (-4,2)：垂足落在段外 → 吸附到端点 (0,0)
+    expect(pts[0]).toBe(0);
+    expect(pts[1]).toBe(0);
+    // 落点 (50,5)：垂足与中点重合（并列取中点）→ (50,0)
+    expect(pts[2]).toBeCloseTo(50, 5);
+    expect(pts[3]).toBeCloseTo(0, 5);
+    wrapper.unmount();
+  });
+
+  it('负向：关闭吸附开关后按原始指针落点，不与端点对齐', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as GeoSnapVM;
+    seedLine(vm);
+    vm.toggleSnap();
+    vm.tool('line');
+    const stage = konvaMocks.MockStage.last()!;
+
+    stage._pointer = { x: -4, y: 2 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 50, y: 5 };
+    stage.fire('mousemove', { target: stage, evt: { shiftKey: false } });
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
+
+    const shapes = vm.getCurrentPageShapes();
+    const drawn = shapes.find(s => s.id !== 'seed-line')!;
+    const pts = drawn.points as number[];
+    expect(pts[0]).toBe(-4);
+    expect(pts[1]).toBe(2);
     wrapper.unmount();
   });
 });

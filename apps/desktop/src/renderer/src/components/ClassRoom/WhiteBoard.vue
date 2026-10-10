@@ -675,6 +675,13 @@ import {
   type FavoriteAsset
 } from './whiteboard/assetStore';
 import { layoutCurve, loadCurveParser, sampleCurve, validateExpr } from './whiteboard/curve';
+import {
+  SNAP_THRESHOLD as GEO_SNAP_THRESHOLD,
+  collectSnapTargets,
+  snapPoint,
+  type SnapContext,
+  type SnapKind
+} from './whiteboard/geoSnap';
 import BoardReview from './BoardReview.vue';
 import {
   PRESET_COLORS,
@@ -2071,9 +2078,11 @@ function onPointerDown(e: any) {
   } else if (m === 'eraser') {
     isDrawing = true;
     eraseAt(pos);
-  } else if (['circle', 'rectangle', 'arrows', 'line', 'force', 'leader'].includes(m)) {
+  } else if (SNAP_MODES.includes(m)) {
     isDrawing = true;
-    startPos = pos;
+    // F2.3：起笔前派生本页吸附目标，起笔点即吸附（leader 锚点仍按原始指针命中图元）
+    refreshSnapContext();
+    startPos = snapDrawPos(pos);
     // F3.2：引线锚点命中被指对象（bounding-box），记录相对偏移供移动跟随
     if (m === 'leader') {
       const lp = toLayerCoords(pos);
@@ -2180,6 +2189,63 @@ function onPointerDown(e: any) {
   }
 }
 
+// --- F2.3 几何吸附：绘制期端点/中点/垂足吸附 + 视觉反馈（与 F4.5 拖动对齐吸附互补） ---
+/** 吸附仅作用于形状绘制工具（brush 走笔迹、move 走平移，均不吸附） */
+const SNAP_MODES = ['circle', 'rectangle', 'arrows', 'line', 'force', 'leader'];
+const SNAP_LABELS: Record<SnapKind, string> = {
+  endpoint: '端点',
+  midpoint: '中点',
+  center: '中心',
+  perpendicular: '垂足'
+};
+let snapCtx: SnapContext = { targets: [], segments: [] };
+let lastSnap: { x: number; y: number; kind: SnapKind } | null = null;
+
+function toPageCoords(lp: { x: number; y: number }): { x: number; y: number } {
+  const layer = renderer!.layer;
+  const s = layer.scaleX() || 1;
+  return { x: lp.x * s + layer.x(), y: lp.y * s + layer.y() };
+}
+
+/** 起笔前调用：以当前页既有图元派生吸附目标（空页自然无吸附） */
+function refreshSnapContext(): void {
+  // getActiveElements 返回 Y.Array<Y.Map>，须经 toJSON 展平为普通对象后再派生
+  snapCtx = collectSnapTargets(getCurrentPageShapes());
+}
+
+/** 页面坐标 → 层坐标吸附 → 命中则回投页面坐标并记录反馈点；未命中原样返回 */
+function snapDrawPos(pos: { x: number; y: number }): { x: number; y: number } {
+  if (!renderer || !snapEnabled.value) {
+    lastSnap = null;
+    return pos;
+  }
+  const r = snapPoint(toLayerCoords(pos), snapCtx, GEO_SNAP_THRESHOLD);
+  if (!r.snapped || r.kind === null) {
+    lastSnap = null;
+    return pos;
+  }
+  lastSnap = { x: r.x, y: r.y, kind: r.kind };
+  return toPageCoords({ x: r.x, y: r.y });
+}
+
+/** 吸附状态视觉反馈：命中点圆环 + 圆心 + 中文标签（仅预览层，抬笔即清） */
+function drawSnapMarker(): void {
+  if (!lastSnap || !renderer) return;
+  const { x, y, kind } = lastSnap;
+  const label = SNAP_LABELS[kind];
+  const w = label.length * 12 + 8;
+  renderer.previewLayer.add(
+    new Konva.Circle({ x, y, radius: 6, stroke: '#f56c6c', strokeWidth: 1.5 })
+  );
+  renderer.previewLayer.add(new Konva.Circle({ x, y, radius: 2.5, fill: '#f56c6c' }));
+  renderer.previewLayer.add(
+    new Konva.Rect({ x: x + 9, y: y - 21, width: w, height: 16, fill: '#f56c6c', cornerRadius: 3 })
+  );
+  renderer.previewLayer.add(
+    new Konva.Text({ x: x + 13, y: y - 18, text: label, fill: '#fff', fontSize: 11 })
+  );
+}
+
 function onPointerMove(e: any) {
   const pos = getPointerPos(e);
   if (!pos) return;
@@ -2226,9 +2292,11 @@ function onPointerMove(e: any) {
     renderer!.previewLayer.batchDraw();
   } else if (m === 'eraser') {
     eraseAt(pos);
-  } else if (['circle', 'rectangle', 'arrows', 'line', 'force', 'leader'].includes(m) && startPos) {
+  } else if (SNAP_MODES.includes(m) && startPos) {
     renderer!.previewLayer.destroyChildren();
-    drawTempShape(pos, !!e?.evt?.shiftKey);
+    // F2.3：移动中吸附 + 吸附点视觉反馈（同处预览层，抬笔统一清理）
+    drawTempShape(snapDrawPos(pos), !!e?.evt?.shiftKey);
+    drawSnapMarker();
     renderer!.previewLayer.batchDraw();
   } else if (m === 'move' && startPos) {
     const dx = pos.x - startPos.x;
@@ -2244,11 +2312,13 @@ function onPointerMove(e: any) {
 function onPointerUp(e: any) {
   if (!isDrawing) return;
   isDrawing = false;
-  const pos = getPointerPos(e);
+  let pos = getPointerPos(e);
   // 只清预览层：tempLayer 上的选中框/手柄（transformer）不能被绘制清理连带销毁
   renderer!.previewLayer.destroyChildren();
   renderer!.previewLayer.batchDraw();
   const m = mode.value;
+  // F2.3：落点同样吸附，保证提交坐标与预览一致
+  if (pos && startPos && SNAP_MODES.includes(m)) pos = snapDrawPos(pos);
 
   // 同步尚未完成时 pages 可能未播种，否则 addShape 静默丢弃；与图片添加一致先兜底建页
   if (
