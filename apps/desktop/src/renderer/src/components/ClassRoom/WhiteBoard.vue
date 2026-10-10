@@ -100,6 +100,11 @@
             <el-icon><Aim /></el-icon>
           </div>
         </el-tooltip>
+        <el-tooltip content="素材收藏 · 导入本地图入收藏，点击入画布" placement="right">
+          <div :class="['asset-tool', { on: showAssets }]" @click="openAssets">
+            <el-icon><Picture /></el-icon>
+          </div>
+        </el-tooltip>
         <el-tooltip content="直线工具 · 按住 Shift 锁定水平/垂直" placement="right">
           <div :class="['line', { on: mode === 'line' }]" @click="tool('line')">
             <el-icon><Minus /></el-icon>
@@ -508,6 +513,39 @@
         </div>
       </div>
 
+      <!-- F3.3 素材收藏浮层：导入本地图入收藏，点击缩略图入画布 -->
+      <div v-if="showAssets" class="assets-overlay" @mousedown.self="closeAssets">
+        <div class="assets-panel">
+          <div class="assets-title">素材收藏</div>
+          <div class="assets-actions">
+            <el-button size="small" type="primary" @click="assetsImportClick">
+              导入本地图
+            </el-button>
+            <input
+              ref="assetsInputRef"
+              type="file"
+              accept="image/*"
+              style="display: none"
+              @change="importAsset"
+            />
+          </div>
+          <div v-if="assetsLoading" class="assets-empty">加载中…</div>
+          <div v-else-if="assets.length === 0" class="assets-empty">
+            还没有收藏，点击"导入本地图"添加常用素材
+          </div>
+          <div v-else class="assets-grid">
+            <div v-for="a in assets" :key="a.id" class="assets-item" @click="placeAsset(a)">
+              <img :src="a.dataUrl" :alt="a.name" class="assets-thumb" />
+              <div class="assets-name">{{ a.name }}</div>
+              <button type="button" class="assets-del" title="删除" @click.stop="removeAsset(a.id)">
+                ×
+              </button>
+            </div>
+          </div>
+          <div class="assets-hint">点击缩略图插入画布中心 · Esc 关闭</div>
+        </div>
+      </div>
+
       <!-- Loading -->
       <div v-show="loading" class="loading-div" @click.stop>
         <el-icon class="loading-gif is-loading" :size="48">
@@ -593,6 +631,13 @@ import { regularizePath } from './whiteboard/regularize';
 import { computeSnap } from './whiteboard/snap';
 import { addRow, removeRow, addCol, removeCol, type TableData } from './whiteboard/table';
 import { SYMBOL_GROUPS, insertAtCursor } from './whiteboard/symbols';
+import {
+  addFavorite,
+  listFavorites,
+  removeFavorite,
+  useMemoryAssetBackend,
+  type FavoriteAsset
+} from './whiteboard/assetStore';
 import BoardReview from './BoardReview.vue';
 import {
   PRESET_COLORS,
@@ -715,6 +760,80 @@ function insertSymbol(sym: string): void {
     ta.focus();
     ta.setSelectionRange(r.cursor, r.cursor);
   }
+}
+
+// --- F3.3 本地素材收藏：IndexedDB 收藏 + 导入本地图 + 点击入画布 ---
+const showAssets = ref(false);
+const assets = ref<FavoriteAsset[]>([]);
+const assetsLoading = ref(false);
+const assetsInputRef = ref<HTMLInputElement>();
+
+function assetsImportClick(): void {
+  assetsInputRef.value?.click();
+}
+
+async function loadAssets(): Promise<void> {
+  assetsLoading.value = true;
+  try {
+    assets.value = await listFavorites();
+  } catch {
+    // IndexedDB 不可用 → 降级内存后端（会话内收藏）
+    useMemoryAssetBackend();
+    assets.value = await listFavorites().catch(() => []);
+  } finally {
+    assetsLoading.value = false;
+  }
+}
+
+function openAssets(): void {
+  showAssets.value = true;
+  void loadAssets();
+}
+
+function closeAssets(): void {
+  showAssets.value = false;
+}
+
+async function importAsset(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+  if (!dataUrl) return;
+  await addFavorite(file.name, dataUrl);
+  await loadAssets();
+}
+
+/** 收藏入画布：以 dataURL 建 image 元素（默认 200×200，后续可按自然尺寸细化） */
+function placeAsset(a: FavoriteAsset): void {
+  if (!provider || !renderer) return;
+  const w = 200;
+  const h = 200;
+  const stage = renderer.getStage();
+  const lp = toLayerCoords({ x: stage.width() / 2, y: stage.height() / 2 });
+  provider.addShape({
+    id: uid(),
+    type: 'image',
+    url: a.dataUrl,
+    x: Math.round(lp.x - w / 2),
+    y: Math.round(lp.y - h / 2),
+    width: w,
+    height: h,
+    opacity: currentOpacity.value
+  });
+  refreshLayer();
+  closeAssets();
+}
+
+async function removeAsset(id: string): Promise<void> {
+  await removeFavorite(id);
+  await loadAssets();
 }
 
 // Color panel drag state
@@ -4511,6 +4630,100 @@ defineExpose({
 
 .formula-hint {
   margin-top: 6px;
+  font-size: 12px;
+  color: #999;
+}
+
+.assets-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 30;
+}
+
+.assets-panel {
+  width: 360px;
+  max-height: 70%;
+  background: #fff;
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.assets-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.assets-actions {
+  margin-bottom: 10px;
+}
+
+.assets-empty {
+  padding: 24px 0;
+  text-align: center;
+  font-size: 13px;
+  color: #999;
+}
+
+.assets-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.assets-item {
+  position: relative;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.assets-item:hover {
+  border-color: #409eff;
+}
+
+.assets-thumb {
+  width: 100%;
+  height: 64px;
+  object-fit: contain;
+}
+
+.assets-name {
+  font-size: 11px;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assets-del {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  border: none;
+  background: transparent;
+  color: #999;
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.assets-del:hover {
+  color: #e1383f;
+}
+
+.assets-hint {
+  margin-top: 8px;
   font-size: 12px;
   color: #999;
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { enableAutoUnmount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import * as Y from 'yjs';
 import { YjsProvider } from './whiteboard/YjsProvider';
@@ -493,10 +493,10 @@ vi.mock('vue-router', async importOriginal => {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 import WhiteBoard from './WhiteBoard.vue';
-import { mount } from '@vue/test-utils';
 import ElementPlus from 'element-plus';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import { getPdfPageCount, getPdfPageDims } from './whiteboard/pdfAsset';
+import { addFavorite, createMemoryAssetBackend, setAssetBackend } from './whiteboard/assetStore';
 import { PRESET_COLORS, MODE_TO_ELEMENT, isElementType } from './whiteboard/types';
 
 // pdf.js 管线在单测中不可用（worker/网络），mock 模块级 API
@@ -4915,6 +4915,53 @@ describe('F5.2 页面缩略图总览', () => {
     vm.toggleThumbPanel();
     await nextTick();
     expect(Array.isArray(vm.thumbPages)).toBe(true);
+    wrapper.unmount();
+  });
+});
+
+// ── F3.3 本地素材收藏（导入本地图入收藏 → 点击缩略图入画布） ─────────────────
+type AssetVM = PPTVM & {
+  showAssets: boolean;
+  assets: Array<{ id: string; name: string; dataUrl: string }>;
+  openAssets: () => void;
+  placeAsset: (a: { id: string; name: string; dataUrl: string }) => void;
+};
+
+describe('F3.3 本地素材收藏', () => {
+  beforeEach(() => {
+    setAssetBackend(createMemoryAssetBackend());
+  });
+
+  it('正向：点击收藏缩略图入画布生成 image 元素（url=dataURL）', async () => {
+    await addFavorite('cell.png', 'data:image/png;base64,AAA');
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as AssetVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    const addSpy = vi.spyOn(YjsProvider.prototype, 'addShape').mockClear();
+    vm.openAssets();
+    await flushPromises();
+    expect(vm.showAssets).toBe(true);
+    expect(vm.assets).toHaveLength(1);
+    vm.placeAsset(vm.assets[0]!);
+    expect(addSpy).toHaveBeenCalledTimes(1);
+    expect(addSpy.mock.calls[0]![0]).toMatchObject({
+      type: 'image',
+      url: 'data:image/png;base64,AAA'
+    });
+    expect(vm.showAssets).toBe(false);
+    addSpy.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('负向：空收藏显示引导文案，无缩略图', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as AssetVM;
+    vm.openAssets();
+    await flushPromises();
+    expect(vm.assets).toHaveLength(0);
+    expect(wrapper.find('.assets-empty').text()).toContain('还没有收藏');
+    expect(wrapper.findAll('.assets-item')).toHaveLength(0);
     wrapper.unmount();
   });
 });
