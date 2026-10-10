@@ -3897,6 +3897,48 @@ describe('F1.2 公式浮层化学模式', () => {
   });
 });
 
+// ── F1.3 符号快捷面板（分组页签 + 点击插入光标处） ──
+describe('F1.3 符号快捷面板', () => {
+  type SymVM = PPTVM & {
+    formulaVisible: boolean;
+    formulaInput: string;
+    activeSymbolGroup: string;
+    openFormula: () => void;
+  };
+
+  it('公式浮层渲染分组页签与符号按钮，点击插入光标处', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SymVM;
+    vm.openFormula();
+    await nextTick();
+    const tabs = wrapper.findAll('.formula-symbol-tab');
+    expect(tabs.length).toBe(4);
+    expect(tabs.map(t => t.text())).toEqual(['通用数学', '物理', '化学', '音标']);
+    // 默认数学组；点击第一个符号（≥）插入光标处（jsdom selectionStart=0 → 头部插入）
+    const btns = wrapper.findAll('.formula-symbol-btn');
+    expect(btns.length).toBeGreaterThan(0);
+    await btns[0]!.trigger('click');
+    expect(vm.formulaInput).toBe('≥');
+    wrapper.unmount();
+  });
+
+  it('切换到音标分组渲染音标符号，点击插入', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SymVM;
+    vm.openFormula();
+    await nextTick();
+    const phoneticTab = wrapper.findAll('.formula-symbol-tab').find(t => t.text() === '音标')!;
+    await phoneticTab.trigger('click');
+    await nextTick();
+    expect(vm.activeSymbolGroup).toBe('phonetic');
+    const btns = wrapper.findAll('.formula-symbol-btn');
+    expect(btns.map(b => b.text())).toContain('iː');
+    await btns.find(b => b.text() === 'iː')!.trigger('click');
+    expect(vm.formulaInput).toBe('iː');
+    wrapper.unmount();
+  });
+});
+
 // ── F7.5 学生端跟随打磨 ────────────────────────────────────────────────────
 describe('WhiteBoard.vue 跟随打磨（F7.5）', () => {
   type F75Renderer = {

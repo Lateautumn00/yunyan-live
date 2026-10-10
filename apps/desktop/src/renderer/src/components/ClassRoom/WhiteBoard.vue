@@ -467,6 +467,32 @@
             <el-switch v-model="chemMode" size="small" />
             <span class="formula-chem-label">化学模式（\ce{}）</span>
           </div>
+          <!-- F1.3 符号快捷面板：分组页签 + 点击插入光标处 -->
+          <div class="formula-symbols">
+            <div class="formula-symbol-tabs">
+              <button
+                v-for="g in SYMBOL_GROUPS"
+                :key="g.id"
+                type="button"
+                class="formula-symbol-tab"
+                :class="{ on: activeSymbolGroup === g.id }"
+                @click="activeSymbolGroup = g.id"
+              >
+                {{ g.label }}
+              </button>
+            </div>
+            <div class="formula-symbol-grid">
+              <button
+                v-for="sym in SYMBOL_GROUPS.find(g => g.id === activeSymbolGroup)?.symbols ?? []"
+                :key="sym"
+                type="button"
+                class="formula-symbol-btn"
+                @click="insertSymbol(sym)"
+              >
+                {{ sym }}
+              </button>
+            </div>
+          </div>
           <div class="formula-actions">
             <el-button size="small" @click="closeFormula">取消</el-button>
             <el-button size="small" type="primary" :loading="formulaLoading" @click="submitFormula">
@@ -561,6 +587,7 @@ import { runExport, type ExportFormat, type ExportScope } from './whiteboard/exp
 import { regularizePath } from './whiteboard/regularize';
 import { computeSnap } from './whiteboard/snap';
 import { addRow, removeRow, addCol, removeCol, type TableData } from './whiteboard/table';
+import { SYMBOL_GROUPS, insertAtCursor } from './whiteboard/symbols';
 import BoardReview from './BoardReview.vue';
 import {
   PRESET_COLORS,
@@ -669,6 +696,21 @@ const editingFormulaId = ref<string | null>(null);
 const formulaInputRef = ref<HTMLTextAreaElement>();
 /** F1.2 化学模式：开启后提交时裸化学输入自动包裹 \ce{} */
 const chemMode = ref(false);
+/** F1.3 符号面板：当前分组页签 */
+const activeSymbolGroup = ref(SYMBOL_GROUPS[0]!.id);
+
+/** F1.3：在公式光标处插入符号，插入后光标前移并保持聚焦 */
+function insertSymbol(sym: string): void {
+  const ta = formulaInputRef.value;
+  const cursor = ta ? ta.selectionStart : formulaInput.value.length;
+  const r = insertAtCursor(formulaInput.value, cursor, sym);
+  formulaInput.value = r.value;
+  formulaError.value = '';
+  if (ta) {
+    ta.focus();
+    ta.setSelectionRange(r.cursor, r.cursor);
+  }
+}
 
 // Color panel drag state
 const colorPanelCollapsed = ref(true);
@@ -4383,6 +4425,55 @@ defineExpose({
 .formula-chem-label {
   font-size: 12px;
   color: #666;
+}
+
+.formula-symbols {
+  margin-top: 8px;
+}
+
+.formula-symbol-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.formula-symbol-tab {
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #666;
+  background: #f2f3f5;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.formula-symbol-tab.on {
+  color: #fff;
+  background: #409eff;
+}
+
+.formula-symbol-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+  gap: 4px;
+  margin-top: 6px;
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.formula-symbol-btn {
+  padding: 4px 0;
+  font-size: 14px;
+  color: #333;
+  background: #fafafa;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.formula-symbol-btn:hover {
+  color: #409eff;
+  border-color: #409eff;
 }
 
 .formula-actions {
