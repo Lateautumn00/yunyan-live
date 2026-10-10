@@ -55,7 +55,7 @@ export class KonvaRenderer {
   private exportMode = false;
   pageIds: string[] = [];
   onShapeClick?: (id: string) => void;
-  onShapeDblClick?: (id: string) => void;
+  onShapeDblClick?: (id: string, e?: any) => void;
   onShapeDragEnd?: (id: string, x: number, y: number, altKey?: boolean) => void;
   onShapeTransformEnd?: (id: string, attrs: Record<string, any>) => void;
   // 手势（拖动/缩放）期间收到的刷新延后到手势结束，避免销毁正在操作的节点
@@ -406,7 +406,7 @@ export class KonvaRenderer {
     if (!this.selectEnabled) return;
     node.draggable(true);
     node.on('click', () => this.onShapeClick?.(id));
-    node.on('dblclick', () => this.onShapeDblClick?.(id));
+    node.on('dblclick', (e: any) => this.onShapeDblClick?.(id, e));
     node.on('dragstart', () => {
       this.gesturing = true;
     });
@@ -751,6 +751,46 @@ export class KonvaRenderer {
               fill: color
             })
           );
+        }
+        return group;
+      }
+      case 'table': {
+        const tx = data.get('x') || 0;
+        const ty = data.get('y') || 0;
+        const rows = (data.get('rows') as number) || 3;
+        const cols = (data.get('cols') as number) || 3;
+        const cellW = (data.get('cellW') as number) || 80;
+        const cellH = (data.get('cellH') as number) || 30;
+        const color = data.get('color') || '#000';
+        const cells = (data.get('cells') as Array<Array<{ text: string; bg?: string }>>) || [];
+        const group = new Konva.Group({ x: tx, y: ty, opacity });
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const cell = cells[r]?.[c] || { text: '' };
+            const cx = c * cellW;
+            const cy = r * cellH;
+            group.add(
+              new Konva.Rect({
+                x: cx,
+                y: cy,
+                width: cellW,
+                height: cellH,
+                stroke: color,
+                strokeWidth: 1,
+                fill: cell.bg || '#ffffff'
+              })
+            );
+            group.add(
+              new Konva.Text({
+                x: cx + 4,
+                y: cy + 4,
+                width: cellW - 8,
+                text: cell.text || '',
+                fontSize: (data.get('fontSize') as number) || 14,
+                fill: '#000000'
+              })
+            );
+          }
         }
         return group;
       }

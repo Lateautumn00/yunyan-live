@@ -87,6 +87,14 @@
             <el-icon><Right /></el-icon>
           </div>
         </el-tooltip>
+        <el-tooltip
+          content="表格 · 点击落点插入 3×3，选中后增删行列，双击编辑单元格"
+          placement="right"
+        >
+          <div :class="['table-tool', { on: mode === 'table' }]" @click="tool('table')">
+            <el-icon><Grid /></el-icon>
+          </div>
+        </el-tooltip>
         <el-tooltip content="直线工具 · 按住 Shift 锁定水平/垂直" placement="right">
           <div :class="['line', { on: mode === 'line' }]" @click="tool('line')">
             <el-icon><Minus /></el-icon>
@@ -264,6 +272,13 @@
         <div class="snap-bar">
           <span class="snap-label">吸附</span>
           <el-switch :model-value="snapEnabled" @change="toggleSnap()" />
+        </div>
+        <!-- F4.4：表格行列操作（选中表格时显示） -->
+        <div v-if="selIsTable" class="table-ops">
+          <div class="top-btn" @click="tableOp('addRow')">+行</div>
+          <div class="top-btn" @click="tableOp('removeRow')">-行</div>
+          <div class="top-btn" @click="tableOp('addCol')">+列</div>
+          <div class="top-btn" @click="tableOp('removeCol')">-列</div>
         </div>
         <div class="edit-color">
           <div
@@ -511,6 +526,7 @@ import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whit
 import { runExport, type ExportFormat, type ExportScope } from './whiteboard/exportBoard';
 import { regularizePath } from './whiteboard/regularize';
 import { computeSnap } from './whiteboard/snap';
+import { addRow, removeRow, addCol, removeCol, type TableData } from './whiteboard/table';
 import {
   PRESET_COLORS,
   ERASER_WIDTH_MULT,
@@ -543,6 +559,8 @@ const textSize = ref(14);
 const selBold = ref(false);
 const selItalic = ref(false);
 const selAlign = ref<'left' | 'center' | 'right'>('left');
+// F4.4：当前选中是否表格（属性面板显示增/删行列按钮）
+const selIsTable = ref(false);
 // F4.3：对齐选项（中文标签，element-plus 无对齐图标）
 const alignOptions = [
   { value: 'left' as const, label: '左' },
@@ -1105,6 +1123,7 @@ function selectShape(id: string) {
     return;
   }
   colorPanelCollapsed.value = false;
+  selIsTable.value = type === 'table';
   if (m.get('color') !== undefined) currentColor.value = String(m.get('color'));
   if (m.get('opacity') !== undefined) currentOpacity.value = Number(m.get('opacity'));
   const isText = type === 'text';
@@ -1130,6 +1149,7 @@ function selectShape(id: string) {
 
 function clearSelection() {
   renderer?.clearSelection();
+  selIsTable.value = false;
   if (mode.value === 'cur') {
     showEditer.value = false;
     showFillToggle.value = false;
@@ -1141,7 +1161,7 @@ function clearSelection() {
 // 空内容与未改动视为放弃（避免留下不可见的空文本）
 let editingTextId: string | null = null;
 
-function editTextShape(id: string) {
+function editTextShape(id: string, e?: any) {
   if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
   if (editingTextId) return;
   const m = provider
@@ -1196,6 +1216,63 @@ function editTextShape(id: string) {
     };
     ta.addEventListener('keydown', ke => {
       if (ke.key === 'Enter') {
+        ke.preventDefault();
+        finish();
+      } else if (ke.key === 'Escape') {
+        ke.preventDefault();
+        done = true;
+        editingTextId = null;
+        ta.remove();
+      }
+    });
+    ta.addEventListener('blur', finish);
+    return;
+  }
+  // F4.4：表格双击编辑单元格——按指针落点算行列，原位 textarea，Enter/失焦提交，Esc 弃改
+  if (elType === 'table') {
+    const pos = getPointerPos(e);
+    if (!pos) return;
+    const lp = toLayerCoords(pos);
+    const tx = Number(m.get('x')) || 0;
+    const ty = Number(m.get('y')) || 0;
+    const cellW = Number(m.get('cellW')) || 80;
+    const cellH = Number(m.get('cellH')) || 30;
+    const rows = Number(m.get('rows')) || 3;
+    const cols = Number(m.get('cols')) || 3;
+    const col = Math.floor((lp.x - tx) / cellW);
+    const row = Math.floor((lp.y - ty) / cellH);
+    if (row < 0 || row >= rows || col < 0 || col >= cols) return;
+    const cells = (m.get('cells') as Array<Array<{ text: string; bg?: string }>>) || [];
+    const original = cells[row]?.[col]?.text ?? '';
+    const layer = renderer.layer;
+    const s = layer.scaleX() || 1;
+    const screenX = layer.x() + (tx + col * cellW) * s;
+    const screenY = layer.y() + (ty + row * cellH) * s;
+    const fontSize = Number(m.get('fontSize')) || 14;
+    const ta = document.createElement('textarea');
+    ta.value = original;
+    ta.style.cssText = `position:fixed; left:${screenX}px; top:${screenY}px; width:${cellW * s}px; height:${cellH * s}px; box-sizing:border-box; font-size:${fontSize}px; color:#000; border:1px dashed #88b8cc; background:rgba(255,255,255,0.95); outline:none; resize:none; padding:2px 4px; margin:0; overflow:hidden; z-index:999; font-family:sans-serif; line-height:1.2;`;
+    editingTextId = id;
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      editingTextId = null;
+      const val = ta.value.trim();
+      ta.remove();
+      if (val === original) return;
+      const before = snapshotShape(id, ['cells']);
+      if (!before) return;
+      const nextCells = cells.map(r => r.map(c => ({ ...c })));
+      if (nextCells[row] && nextCells[row]![col]) nextCells[row]![col]!.text = val;
+      if (!applyShapeUpdate(id, { cells: nextCells }, before)) return;
+      refreshLayer();
+    };
+    ta.addEventListener('keydown', ke => {
+      if (ke.key === 'Enter' && !ke.shiftKey) {
         ke.preventDefault();
         finish();
       } else if (ke.key === 'Escape') {
@@ -1484,6 +1561,33 @@ function setSelAlign(a: 'left' | 'center' | 'right') {
   commitTextStyle({ align: a });
 }
 
+// F4.4：表格增/删行列——读当前表格数据 → 不可变变换 → 写回 rows/cols/cells（入 undo 栈）
+function tableOp(op: 'addRow' | 'removeRow' | 'addCol' | 'removeCol') {
+  if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  const id = renderer.getSelectedId();
+  if (!id) return;
+  const m = getShape(id);
+  if (!m || m.get('type') !== 'table') return;
+  const data: TableData = {
+    rows: (m.get('rows') as number) || 3,
+    cols: (m.get('cols') as number) || 3,
+    cellW: (m.get('cellW') as number) || 80,
+    cellH: (m.get('cellH') as number) || 30,
+    cells: (m.get('cells') as TableData['cells']) || []
+  };
+  let next: TableData;
+  if (op === 'addRow') next = addRow(data);
+  else if (op === 'removeRow') next = removeRow(data, data.rows - 1);
+  else if (op === 'addCol') next = addCol(data);
+  else next = removeCol(data, data.cols - 1);
+  if (next.rows === data.rows && next.cols === data.cols) return; // 保底无变化
+  const before = snapshotShape(id, ['rows', 'cols', 'cells']);
+  if (!before) return;
+  if (!applyShapeUpdate(id, { rows: next.rows, cols: next.cols, cells: next.cells }, before))
+    return;
+  refreshLayer();
+}
+
 // 粗细条当前作用对象：绘制文本模式，或选中的是文本图形 → 字号；否则线宽
 function sizeTargetsText(): boolean {
   if (mode.value === 'text') return true;
@@ -1690,6 +1794,25 @@ function onPointerDown(e: any) {
         }
       });
     }, 0);
+  } else if (m === 'table') {
+    // F4.4：点击落点插入固定 3×3 模板表格（非拖框）
+    const layerPos = toLayerCoords(pos);
+    provider?.addShape({
+      id: uid(),
+      type: 'table',
+      x: layerPos.x,
+      y: layerPos.y,
+      rows: 3,
+      cols: 3,
+      cellW: 80,
+      cellH: 30,
+      color: currentColor.value,
+      fontSize: textSize.value,
+      opacity: currentOpacity.value,
+      cells: Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => ({ text: '' })))
+    });
+    refreshLayer();
+    tool('cur');
   } else if (m === 'move') {
     isDrawing = true;
     startPos = pos;
@@ -3223,6 +3346,8 @@ defineExpose({
   toggleRegularize,
   snapEnabled,
   toggleSnap,
+  selIsTable,
+  tableOp,
   // 测试钩子：直接访问底层 Yjs provider / Konva renderer / 当前视口快照（供同步类用例断言）
   get provider() {
     return provider;
@@ -3585,6 +3710,27 @@ defineExpose({
     .snap-label {
       font-size: 12px;
       color: #666;
+    }
+  }
+  .table-ops {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+    .top-btn {
+      flex: 1;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #555;
+      cursor: pointer;
+      background: rgba(0, 0, 0, 0.04);
+      &:hover {
+        background: rgba(64, 158, 255, 0.15);
+        color: #409eff;
+      }
     }
   }
   .size-title {

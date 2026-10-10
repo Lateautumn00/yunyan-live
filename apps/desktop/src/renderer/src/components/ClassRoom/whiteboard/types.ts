@@ -10,6 +10,7 @@ export type ToolMode =
   | 'line'
   | 'force'
   | 'leader'
+  | 'table'
   | 'move'
   | 'laser'
   | 'file';
@@ -39,7 +40,8 @@ export const ELEMENT_TYPES = [
   'image',
   'formula',
   'force-arrow',
-  'leader-label'
+  'leader-label',
+  'table'
 ] as const;
 
 export type ElementType = (typeof ELEMENT_TYPES)[number];
@@ -59,7 +61,8 @@ export const MODE_TO_ELEMENT: Partial<Record<ToolMode, ElementType>> = {
   arrows: 'arrow',
   force: 'force-arrow',
   leader: 'leader-label',
-  line: 'line'
+  line: 'line',
+  table: 'table'
 };
 
 export interface CursorData {

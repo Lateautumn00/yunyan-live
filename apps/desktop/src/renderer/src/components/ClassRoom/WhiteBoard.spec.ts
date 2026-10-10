@@ -4580,3 +4580,135 @@ describe('F4.5 对齐吸附', () => {
     wrapper.unmount();
   });
 });
+
+// ── F4.4 表格（点击落点插入 + 选中增删行列） ────────────────────────────────
+type TableVM = PPTVM & {
+  tool: (m: string) => void;
+  selectShape: (id: string) => void;
+  tableOp: (op: 'addRow' | 'removeRow' | 'addCol' | 'removeCol') => void;
+  editTextShape: (id: string, e?: unknown) => void;
+  selIsTable: boolean;
+};
+
+describe('F4.4 表格', () => {
+  it('正向：table 工具点击落点插入 3×3 表格', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as TableVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    vm.tool('table');
+    const stage = vm.renderer!.getStage();
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown');
+    await nextTick();
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]!.type).toBe('table');
+    expect(shapes[0]!.rows).toBe(3);
+    expect(shapes[0]!.cols).toBe(3);
+    wrapper.unmount();
+  });
+
+  it('正向：选中表格显示行列按钮，增行/增列改数据并入 undo 栈', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as TableVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape({
+      id: 't1',
+      type: 'table',
+      x: 10,
+      y: 10,
+      rows: 2,
+      cols: 2,
+      cellW: 80,
+      cellH: 30,
+      cells: [
+        [{ text: 'A' }, { text: 'B' }],
+        [{ text: 'C' }, { text: 'D' }]
+      ]
+    });
+    vm.tool('cur');
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(
+      provider.getActiveElements()
+    );
+    vm.selectShape('t1');
+    await nextTick();
+    expect(vm.selIsTable).toBe(true);
+    vm.tableOp('addRow');
+    expect(vm.getCurrentPageShapes()[0]!.rows).toBe(3);
+    expect((vm.getCurrentPageShapes()[0]!.cells as string[][]).length).toBe(3);
+    vm.tableOp('addCol');
+    expect(vm.getCurrentPageShapes()[0]!.cols).toBe(3);
+    // 撤销回到 2×3
+    vm.revocation('pre');
+    expect(vm.getCurrentPageShapes()[0]!.cols).toBe(2);
+    wrapper.unmount();
+  });
+
+  it('负向：仅剩 1 行时删行不生效（保底 1 行）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as TableVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape({
+      id: 't2',
+      type: 'table',
+      x: 10,
+      y: 10,
+      rows: 1,
+      cols: 2,
+      cellW: 80,
+      cellH: 30,
+      cells: [[{ text: 'A' }, { text: 'B' }]]
+    });
+    vm.tool('cur');
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(
+      provider.getActiveElements()
+    );
+    vm.selectShape('t2');
+    vm.tableOp('removeRow');
+    expect(vm.getCurrentPageShapes()[0]!.rows).toBe(1);
+    wrapper.unmount();
+  });
+
+  it('正向：双击单元格弹出编辑框，提交写回该单元格文本', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as TableVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape({
+      id: 't3',
+      type: 'table',
+      x: 10,
+      y: 10,
+      rows: 2,
+      cols: 2,
+      cellW: 80,
+      cellH: 30,
+      cells: [
+        [{ text: 'A' }, { text: 'B' }],
+        [{ text: 'C' }, { text: 'D' }]
+      ]
+    });
+    vm.tool('cur');
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(
+      provider.getActiveElements()
+    );
+    const stage = vm.renderer!.getStage();
+    // 表格 (10,10)，cellW=80,cellH=30；单元格 (0,1) 中心约 (130,25)
+    stage._pointer = { x: 130, y: 25 };
+    vm.editTextShape('t3', {});
+    await nextTick();
+    const ta = document.querySelector('textarea');
+    expect(ta).not.toBeNull();
+    expect(ta!.value).toBe('B');
+    ta!.value = 'Hi';
+    ta!.dispatchEvent(new Event('blur'));
+    await nextTick();
+    const cells = vm.getCurrentPageShapes()[0]!.cells as Array<Array<{ text: string }>>;
+    expect(cells[0]![1]!.text).toBe('Hi');
+    expect(cells[0]![0]!.text).toBe('A'); // 其它单元格不变
+    wrapper.unmount();
+  });
+});
