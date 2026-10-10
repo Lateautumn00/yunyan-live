@@ -260,6 +260,11 @@
             {{ a.label }}
           </div>
         </div>
+        <!-- F4.5：对齐吸附开关（触屏无键盘时的 Alt 替代入口），拖动生效 -->
+        <div class="snap-bar">
+          <span class="snap-label">吸附</span>
+          <el-switch :model-value="snapEnabled" @change="toggleSnap()" />
+        </div>
         <div class="edit-color">
           <div
             v-for="(c, i) in presetColors"
@@ -505,6 +510,7 @@ import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
 import { runExport, type ExportFormat, type ExportScope } from './whiteboard/exportBoard';
 import { regularizePath } from './whiteboard/regularize';
+import { computeSnap } from './whiteboard/snap';
 import {
   PRESET_COLORS,
   ERASER_WIDTH_MULT,
@@ -1018,6 +1024,13 @@ function toggleRegularize() {
   regularizeEnabled.value = !regularizeEnabled.value;
 }
 
+// F4.5 对齐吸附：拖动与邻元素边缘/中心吸附（Alt 跳过本次）
+const snapEnabled = ref(true);
+const SNAP_THRESHOLD = 6;
+function toggleSnap() {
+  snapEnabled.value = !snapEnabled.value;
+}
+
 // 抬笔后规整：近似直线/圆/矩形自动变标准图形；Shift 跳过、失败保留原笔迹。
 // 变换走独立事务（applyShapeUpdate）→ undo 第一步回手绘、第二步回未绘制（两步语义）
 function maybeRegularize(id: string, layerPath: number[], shiftSkip: boolean) {
@@ -1356,19 +1369,39 @@ function collectLeadersTargeting(targetId: string): any[] {
     .filter((m: any) => m.get('type') === 'leader-label' && m.get('targetId') === targetId);
 }
 
-function commitShapeMove(id: string, x: number, y: number) {
+function commitShapeMove(id: string, x: number, y: number, altKey?: boolean) {
   if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  // F4.5：对齐吸附——与邻元素边缘/中心对齐，Alt 或开关关闭时跳过
+  let tx = x;
+  let ty = y;
+  if (snapEnabled.value && !altKey) {
+    const cur = renderer.getBox(id);
+    if (cur) {
+      // 吸附盒锚定在提议位置（x,y）+ 元素尺寸：真实拖动与直接调用一致
+      const snap = computeSnap(
+        { x, y, width: cur.width, height: cur.height },
+        renderer.getSnapBoxes(id),
+        SNAP_THRESHOLD,
+        false
+      );
+      tx = x + snap.dx;
+      ty = y + snap.dy;
+      renderer.showGuides(snap.guides);
+      // 参考线短暂显示后清除（真实拖动结束即闪现提示）
+      setTimeout(() => renderer?.clearGuides(), 400);
+    }
+  }
   const before = snapshotShape(id, ['x', 'y']);
   if (!before) return;
   before.x = before.x ?? 0;
   before.y = before.y ?? 0;
-  if (before.x === x && before.y === y) return;
+  if (before.x === tx && before.y === ty) return;
   // F3.2：引线锚点跟随——同事务更新被指对象与所有指向它的引线，撤销/重做原子
   const leaderUpdates = collectLeadersTargeting(id).map(ld => {
     const pts = (ld.get('points') as number[]) || [];
     const rel = ld.get('anchorRel') as [number, number] | null;
-    const nx = rel ? x + rel[0] : (pts[0] as number) || 0;
-    const ny = rel ? y + rel[1] : (pts[1] as number) || 0;
+    const nx = rel ? tx + rel[0] : (pts[0] as number) || 0;
+    const ny = rel ? ty + rel[1] : (pts[1] as number) || 0;
     return {
       id: ld.get('id') as string,
       points: [nx, ny, (pts[2] as number) || 0, (pts[3] as number) || 0]
@@ -1377,7 +1410,7 @@ function commitShapeMove(id: string, x: number, y: number) {
   let ok = false;
   const p = provider;
   p.doc.transact(() => {
-    ok = p.updateElement(id, { x, y });
+    ok = p.updateElement(id, { x: tx, y: ty });
     if (!ok) return;
     leaderUpdates.forEach(u => p.updateElement(u.id, { points: u.points }));
   });
@@ -3188,6 +3221,8 @@ defineExpose({
   // F4.2：手绘图形规整开关
   regularizeEnabled,
   toggleRegularize,
+  snapEnabled,
+  toggleSnap,
   // 测试钩子：直接访问底层 Yjs provider / Konva renderer / 当前视口快照（供同步类用例断言）
   get provider() {
     return provider;
@@ -3540,6 +3575,16 @@ defineExpose({
       height: 16px;
       background: rgba(0, 0, 0, 0.12);
       margin: 0 2px;
+    }
+  }
+  .snap-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    .snap-label {
+      font-size: 12px;
+      color: #666;
     }
   }
   .size-title {

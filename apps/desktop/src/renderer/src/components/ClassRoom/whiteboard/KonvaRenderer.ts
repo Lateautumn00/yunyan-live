@@ -31,6 +31,8 @@ export class KonvaRenderer {
   laserLayer: Konva.Layer;
   // 远端光标专用层：与 previewLayer 同步视口变换（层局部坐标；z 序高于笔迹、低于激光）
   cursorLayer: Konva.Layer;
+  // F4.5 对齐参考线专用层：与 previewLayer 同步视口变换（拖动吸附时显示，交互结束清除）
+  guideLayer: Konva.Layer;
   private laserDot: Konva.Circle | null = null;
   private cursorDot: Konva.Circle | null = null;
   private cursorLabel: Konva.Text | null = null;
@@ -54,7 +56,7 @@ export class KonvaRenderer {
   pageIds: string[] = [];
   onShapeClick?: (id: string) => void;
   onShapeDblClick?: (id: string) => void;
-  onShapeDragEnd?: (id: string, x: number, y: number) => void;
+  onShapeDragEnd?: (id: string, x: number, y: number, altKey?: boolean) => void;
   onShapeTransformEnd?: (id: string, attrs: Record<string, any>) => void;
   // 手势（拖动/缩放）期间收到的刷新延后到手势结束，避免销毁正在操作的节点
   onRefreshRequest?: () => void;
@@ -71,11 +73,13 @@ export class KonvaRenderer {
     this.tempLayer = new Konva.Layer();
     this.cursorLayer = new Konva.Layer();
     this.laserLayer = new Konva.Layer();
+    this.guideLayer = new Konva.Layer();
     this.stage.add(this.layer);
     this.stage.add(this.previewLayer);
     this.stage.add(this.tempLayer);
     this.stage.add(this.cursorLayer);
     this.stage.add(this.laserLayer);
+    this.stage.add(this.guideLayer);
     this.layers = [this.layer];
     this.layerMap.set(0, this.layer);
   }
@@ -121,11 +125,16 @@ export class KonvaRenderer {
     this.laserLayer.scaleY(this.zoomLevel / 100);
     this.laserLayer.x(this.viewX);
     this.laserLayer.y(this.viewY);
+    this.guideLayer.scaleX(this.zoomLevel / 100);
+    this.guideLayer.scaleY(this.zoomLevel / 100);
+    this.guideLayer.x(this.viewX);
+    this.guideLayer.y(this.viewY);
     this.clearSelection();
     this.previewLayer.moveToTop();
     this.tempLayer.moveToTop();
     this.cursorLayer.moveToTop();
     this.laserLayer.moveToTop();
+    this.guideLayer.moveToTop();
     this.rebuildLayerMap();
     this.stage.batchDraw();
   }
@@ -401,9 +410,9 @@ export class KonvaRenderer {
     node.on('dragstart', () => {
       this.gesturing = true;
     });
-    node.on('dragend', () => {
+    node.on('dragend', (e: any) => {
       this.gesturing = false;
-      this.onShapeDragEnd?.(id, node.x(), node.y());
+      this.onShapeDragEnd?.(id, node.x(), node.y(), !!e?.evt?.altKey);
       this.flushPendingBind();
     });
     node.on('transformstart', () => {
@@ -514,6 +523,61 @@ export class KonvaRenderer {
       if (x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height) return id;
     }
     return null;
+  }
+
+  // F4.5：返回除 exceptId 外所有元素的包围盒（对齐吸附参照）
+  getSnapBoxes(exceptId: string): Array<{ x: number; y: number; width: number; height: number }> {
+    const out: Array<{ x: number; y: number; width: number; height: number }> = [];
+    for (const [id, node] of this.nodeMap.entries()) {
+      if (id === exceptId) continue;
+      const box = (
+        node as unknown as {
+          getClientRect: () => { x: number; y: number; width: number; height: number };
+        }
+      ).getClientRect();
+      out.push(box);
+    }
+    return out;
+  }
+
+  // F4.5：返回指定元素当前包围盒（对齐吸附的拖动方参照）
+  getBox(id: string): { x: number; y: number; width: number; height: number } | null {
+    const node = this.nodeMap.get(id);
+    if (!node) return null;
+    return (
+      node as unknown as {
+        getClientRect: () => { x: number; y: number; width: number; height: number };
+      }
+    ).getClientRect();
+  }
+
+  // F4.5：绘制对齐参考线（独立覆盖层，交互结束清除）
+  showGuides(guides: Array<{ orientation: 'vertical' | 'horizontal'; position: number }>) {
+    this.clearGuides();
+    if (!guides.length) return;
+    const stageW = this.stage.width();
+    const stageH = this.stage.height();
+    for (const g of guides) {
+      const points =
+        g.orientation === 'vertical'
+          ? [g.position, -stageH * 2, g.position, stageH * 2]
+          : [-stageW * 2, g.position, stageW * 2, g.position];
+      this.guideLayer.add(
+        new Konva.Line({
+          points,
+          stroke: '#409eff',
+          strokeWidth: 1,
+          dash: [4, 4],
+          listening: false
+        })
+      );
+    }
+    this.guideLayer.batchDraw();
+  }
+
+  clearGuides() {
+    this.guideLayer.destroyChildren();
+    this.guideLayer.batchDraw();
   }
 
   // 把 transformer 施加的 scale 烘焙进节点属性（Yjs 只存绝对属性）

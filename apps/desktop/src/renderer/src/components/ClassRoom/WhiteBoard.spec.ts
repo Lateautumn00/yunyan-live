@@ -4196,7 +4196,7 @@ describe('WhiteBoard.vue 截图插入（F4.6）', () => {
 describe('WhiteBoard.vue 引线标签（F3.2）', () => {
   type F32VM = PPTVM & {
     selectLeader: () => void;
-    commitShapeMove: (id: string, x: number, y: number) => void;
+    commitShapeMove: (id: string, x: number, y: number, altKey?: boolean) => void;
     renderer: {
       previewLayer: { getChildren: () => unknown[] };
       layer: { getChildren: () => unknown[] };
@@ -4499,6 +4499,84 @@ describe('WhiteBoard.vue 文本工具增强（F4.3）', () => {
     expect(s.bold).toBe(true);
     expect(s.ranges).toBeUndefined();
     expect(s.runs).toBeUndefined();
+    wrapper.unmount();
+  });
+});
+
+// ── F4.5 对齐吸附（commitShapeMove 落位吸附到邻元素边缘/中心） ──────────────
+type SnapVM = PPTVM & {
+  tool: (m: string) => void;
+  commitShapeMove: (id: string, x: number, y: number, altKey?: boolean) => void;
+  snapEnabled: boolean;
+  renderer: {
+    getBox: (id: string) => { x: number; y: number; width: number; height: number } | null;
+    getSnapBoxes: (
+      exceptId: string
+    ) => Array<{ x: number; y: number; width: number; height: number }>;
+    showGuides: (g: unknown) => void;
+    clearGuides: () => void;
+  } | null;
+};
+
+describe('F4.5 对齐吸附', () => {
+  function seedRect(vm: SnapVM, id: string, x: number, y: number) {
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape({
+      id,
+      type: 'rect',
+      x,
+      y,
+      width: 40,
+      height: 20,
+      color: '#000',
+      lineWidth: 2
+    });
+    vm.tool('cur');
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(
+      provider.getActiveElements()
+    );
+  }
+
+  it('正向：拖动落位吸附到邻元素左边缘并产生垂直参考线', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SnapVM;
+    seedRect(vm, 'a', 100, 100);
+    vi.spyOn(vm.renderer!, 'getBox').mockReturnValue({ x: 100, y: 100, width: 40, height: 20 });
+    vi.spyOn(vm.renderer!, 'getSnapBoxes').mockReturnValue([
+      { x: 98, y: 300, width: 60, height: 30 }
+    ]);
+    const guideSpy = vi.spyOn(vm.renderer!, 'showGuides');
+    vm.commitShapeMove('a', 100, 100, false);
+    expect(vm.getCurrentPageShapes()[0]!.x).toBe(98); // 100 → 98（左边缘差 2 吸附）
+    expect(guideSpy).toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('负向：按住 Alt 跳过本次吸附', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SnapVM;
+    seedRect(vm, 'a', 100, 100);
+    vi.spyOn(vm.renderer!, 'getBox').mockReturnValue({ x: 100, y: 100, width: 40, height: 20 });
+    vi.spyOn(vm.renderer!, 'getSnapBoxes').mockReturnValue([
+      { x: 98, y: 300, width: 60, height: 30 }
+    ]);
+    vm.commitShapeMove('a', 100, 100, true);
+    expect(vm.getCurrentPageShapes()[0]!.x).toBe(100); // 不吸附
+    wrapper.unmount();
+  });
+
+  it('负向：关闭吸附开关后不吸附', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SnapVM;
+    seedRect(vm, 'a', 100, 100);
+    vm.snapEnabled = false;
+    vi.spyOn(vm.renderer!, 'getBox').mockReturnValue({ x: 100, y: 100, width: 40, height: 20 });
+    vi.spyOn(vm.renderer!, 'getSnapBoxes').mockReturnValue([
+      { x: 98, y: 300, width: 60, height: 30 }
+    ]);
+    vm.commitShapeMove('a', 100, 100, false);
+    expect(vm.getCurrentPageShapes()[0]!.x).toBe(100);
     wrapper.unmount();
   });
 });
