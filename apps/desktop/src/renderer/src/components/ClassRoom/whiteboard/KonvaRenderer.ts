@@ -404,6 +404,8 @@ export class KonvaRenderer {
   private wireNode(node: Konva.Node, id: string) {
     node.off('click dblclick dragstart dragend transformstart transformend');
     if (!this.selectEnabled) return;
+    // F2.1 锁定态：不接选择/拖拽（锁定背景不参与交互）
+    if (node.getAttr('locked')) return;
     node.draggable(true);
     node.on('click', () => this.onShapeClick?.(id));
     node.on('dblclick', (e: any) => this.onShapeDblClick?.(id, e));
@@ -438,6 +440,8 @@ export class KonvaRenderer {
     if (!this.selectEnabled) return false;
     const node = this.nodeMap.get(id);
     if (!node) return false;
+    // F2.1 锁定态：不可选中（避免误选锁定背景坐标系）
+    if (node.getAttr('locked')) return false;
     this.selectedId = id;
     // tempLayer 的预览清理（destroyChildren）会连带销毁 transformer 但引用残留，
     // 失效判定后重建，否则选中框/手柄永久消失
@@ -788,6 +792,70 @@ export class KonvaRenderer {
                 text: cell.text || '',
                 fontSize: (data.get('fontSize') as number) || 14,
                 fill: '#000000'
+              })
+            );
+          }
+        }
+        return group;
+      }
+      // F2.1 直角坐标系：Group = 双轴 + 网格线 + 刻度数字；原点居中，locked 时不可选中/拖动
+      case 'coord': {
+        const x = data.get('x') || 0;
+        const y = data.get('y') || 0;
+        const w = (data.get('width') as number) || 300;
+        const h = (data.get('height') as number) || 300;
+        const unit = (data.get('unit') as number) || 30;
+        const gridOn = data.get('gridOn') !== false;
+        const ticksOn = data.get('ticksOn') !== false;
+        const color = (data.get('color') as string) || '#666666';
+        const locked = !!data.get('locked');
+        const group = new Konva.Group({ x, y, opacity, locked });
+        const ox = w / 2;
+        const oy = h / 2;
+        // 双轴（穿过原点）
+        group.add(new Konva.Line({ points: [0, oy, w, oy], stroke: color, strokeWidth: 1.5 }));
+        group.add(new Konva.Line({ points: [ox, 0, ox, h], stroke: color, strokeWidth: 1.5 }));
+        if (gridOn) {
+          const gridColor = '#d9d9d9';
+          const kxMin = Math.ceil(-ox / unit);
+          const kxMax = Math.floor((w - ox) / unit);
+          for (let k = kxMin; k <= kxMax; k++) {
+            const gx = ox + k * unit;
+            group.add(
+              new Konva.Line({ points: [gx, 0, gx, h], stroke: gridColor, strokeWidth: 0.5 })
+            );
+          }
+          const kyMin = Math.ceil(-oy / unit);
+          const kyMax = Math.floor((h - oy) / unit);
+          for (let k = kyMin; k <= kyMax; k++) {
+            const gy = oy + k * unit;
+            group.add(
+              new Konva.Line({ points: [0, gy, w, gy], stroke: gridColor, strokeWidth: 0.5 })
+            );
+          }
+        }
+        if (ticksOn) {
+          const kxMax = Math.floor((w - ox) / unit);
+          for (let k = 1; k <= kxMax; k++) {
+            group.add(
+              new Konva.Text({
+                x: ox + k * unit - 4,
+                y: oy + 2,
+                text: String(k),
+                fontSize: 10,
+                fill: color
+              })
+            );
+          }
+          const kyMax = Math.floor(oy / unit);
+          for (let k = 1; k <= kyMax; k++) {
+            group.add(
+              new Konva.Text({
+                x: ox + 4,
+                y: oy - k * unit - 6,
+                text: String(k),
+                fontSize: 10,
+                fill: color
               })
             );
           }

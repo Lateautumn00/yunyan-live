@@ -187,6 +187,9 @@ const konvaMocks = vi.hoisted(() => {
       if (attrs.points !== undefined) this._points = attrs.points as number[];
       if (attrs.opacity !== undefined) this._opacity = attrs.opacity as number;
     }
+    getAttr(k: string) {
+      return this.attrs[k];
+    }
     getLayer() {
       return this._layer;
     }

@@ -95,6 +95,11 @@
             <el-icon><Grid /></el-icon>
           </div>
         </el-tooltip>
+        <el-tooltip content="坐标系 · 点击落点插入，选中可锁定/关网格" placement="right">
+          <div :class="['coord-tool', { on: mode === 'coord' }]" @click="tool('coord')">
+            <el-icon><Aim /></el-icon>
+          </div>
+        </el-tooltip>
         <el-tooltip content="直线工具 · 按住 Shift 锁定水平/垂直" placement="right">
           <div :class="['line', { on: mode === 'line' }]" @click="tool('line')">
             <el-icon><Minus /></el-icon>
@@ -1906,6 +1911,27 @@ function onPointerDown(e: any) {
       fontSize: textSize.value,
       opacity: currentOpacity.value,
       cells: Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => ({ text: '' })))
+    });
+    refreshLayer();
+    tool('cur');
+  } else if (m === 'coord') {
+    // F2.1：点击落点居中插入坐标系（默认 300×300，unit=30，网格/刻度开）
+    const layerPos = toLayerCoords(pos);
+    const cw = 300;
+    const ch = 300;
+    provider?.addShape({
+      id: uid(),
+      type: 'coord',
+      x: Math.round(layerPos.x - cw / 2),
+      y: Math.round(layerPos.y - ch / 2),
+      width: cw,
+      height: ch,
+      unit: 30,
+      gridOn: true,
+      ticksOn: true,
+      locked: false,
+      color: currentColor.value,
+      opacity: currentOpacity.value
     });
     refreshLayer();
     tool('cur');

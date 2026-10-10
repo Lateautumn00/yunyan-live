@@ -3939,6 +3939,55 @@ describe('F1.3 符号快捷面板', () => {
   });
 });
 
+// ── F2.1 直角坐标系/网格（点击落点插入 + 锁定不可选中） ──────────────────────
+type CoordVM = PPTVM & {
+  tool: (m: string) => void;
+  selectShape: (id: string) => void;
+  getCurrentPageShapes: () => Array<Record<string, unknown>>;
+};
+
+describe('F2.1 直角坐标系', () => {
+  it('正向：coord 工具点击落点插入坐标系（默认 unit/gridOn）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as CoordVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    vm.tool('coord');
+    const stage = vm.renderer!.getStage();
+    stage._pointer = { x: 120, y: 90 };
+    stage.fire('mousedown');
+    await nextTick();
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]!.type).toBe('coord');
+    expect(shapes[0]!.unit).toBe(30);
+    expect(shapes[0]!.gridOn).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('负向：locked 坐标系不可选中；未锁定可选中', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as CoordVM;
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape({ id: 'c-lock', type: 'coord', x: 0, y: 0, locked: true });
+    provider.addShape({ id: 'c-free', type: 'coord', x: 0, y: 0, locked: false });
+    vm.tool('cur');
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(
+      provider.getActiveElements()
+    );
+    vm.selectShape('c-lock');
+    expect(
+      (vm.renderer as unknown as { getSelectedId: () => string | null }).getSelectedId()
+    ).toBeNull();
+    vm.selectShape('c-free');
+    expect((vm.renderer as unknown as { getSelectedId: () => string | null }).getSelectedId()).toBe(
+      'c-free'
+    );
+    wrapper.unmount();
+  });
+});
+
 // ── F7.5 学生端跟随打磨 ────────────────────────────────────────────────────
 describe('WhiteBoard.vue 跟随打磨（F7.5）', () => {
   type F75Renderer = {
