@@ -243,6 +243,23 @@
             <div class="strip-btn" :style="{ left: sizeBtnLeft + 'px' }" />
           </div>
         </div>
+        <!-- F4.3：文本样式行（粗斜/对齐），仅文本模式或选中文本时显示 -->
+        <div v-if="sizeTargetsText()" class="text-style">
+          <div :class="['ts-btn', { on: selBold }]" @click="toggleTextStyle('bold')"><b>B</b></div>
+          <div :class="['ts-btn', { on: selItalic }]" @click="toggleTextStyle('italic')">
+            <i>I</i>
+          </div>
+          <div class="ts-sep" />
+          <div
+            v-for="a in alignOptions"
+            :key="a.value"
+            :class="['ts-btn', 'ts-align', { on: selAlign === a.value }]"
+            :title="a.label"
+            @click="setSelAlign(a.value)"
+          >
+            {{ a.label }}
+          </div>
+        </div>
         <div class="edit-color">
           <div
             v-for="(c, i) in presetColors"
@@ -516,6 +533,16 @@ const mode = ref<ToolMode>('cur');
 const currentColor = ref('#000000');
 const currentSize = ref(1);
 const textSize = ref(14);
+// F4.3：选中文本的样式态（粗斜/对齐），供工具条高亮与提交
+const selBold = ref(false);
+const selItalic = ref(false);
+const selAlign = ref<'left' | 'center' | 'right'>('left');
+// F4.3：对齐选项（中文标签，element-plus 无对齐图标）
+const alignOptions = [
+  { value: 'left' as const, label: '左' },
+  { value: 'center' as const, label: '中' },
+  { value: 'right' as const, label: '右' }
+];
 const zoomLevel = ref(100);
 const showEditer = ref(false);
 const showFillToggle = ref(false);
@@ -1069,6 +1096,12 @@ function selectShape(id: string) {
   if (m.get('opacity') !== undefined) currentOpacity.value = Number(m.get('opacity'));
   const isText = type === 'text';
   if (isText && m.get('fontSize') !== undefined) textSize.value = Number(m.get('fontSize'));
+  // F4.3：回填选中文本的粗斜/对齐态
+  if (isText) {
+    selBold.value = !!m.get('bold');
+    selItalic.value = !!m.get('italic');
+    selAlign.value = (m.get('align') as 'left' | 'center' | 'right') || 'left';
+  }
   if (!isText && m.get('lineWidth') !== undefined) currentSize.value = Number(m.get('lineWidth'));
   if (isText && m.get('fontSize') !== undefined) {
     sizeBtnLeft.value = Math.max(0, Math.min(130, ((textSize.value - 8) / 40) * 130));
@@ -1391,6 +1424,31 @@ function commitSelectedStyle(patch: Record<string, any>, snapshotKeys?: string[]
   if (keys.length && keys.every(k => before[k] === patch[k])) return;
   if (!applyShapeUpdate(id, patch, before)) return;
   refreshLayer();
+}
+
+// F4.3：选中文本样式提交（粗斜/对齐/行距/宽度）——复用 commitSelectedStyle 通道
+function commitTextStyle(patch: Record<string, any>): boolean {
+  if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return false;
+  const id = renderer.getSelectedId();
+  if (!id) return false;
+  const keys = Object.keys(patch);
+  const before = snapshotShape(id, keys);
+  if (!before) return false;
+  if (keys.length && keys.every(k => before[k] === patch[k])) return true; // 无变化
+  return applyShapeUpdate(id, patch, before) && (refreshLayer(), true);
+}
+
+// F4.3：粗斜/对齐切换（选中文本工具条）
+function toggleTextStyle(kind: 'bold' | 'italic') {
+  const next = kind === 'bold' ? !selBold.value : !selItalic.value;
+  if (kind === 'bold') selBold.value = next;
+  else selItalic.value = next;
+  commitTextStyle({ [kind]: next });
+}
+
+function setSelAlign(a: 'left' | 'center' | 'right') {
+  selAlign.value = a;
+  commitTextStyle({ align: a });
 }
 
 // 粗细条当前作用对象：绘制文本模式，或选中的是文本图形 → 字号；否则线宽
@@ -3106,6 +3164,14 @@ defineExpose({
   getSelectedShapeId,
   commitShapeMove,
   commitShapeTransform,
+  // F4.3：文本样式提交
+  commitTextStyle,
+  toggleTextStyle,
+  setSelAlign,
+  selBold,
+  selItalic,
+  selAlign,
+  alignOptions,
   deleteSelected,
   toLayerCoords,
   applyRemoteViewport,
@@ -3444,6 +3510,37 @@ defineExpose({
   }
   .edit-size {
     margin-bottom: 12px;
+  }
+  /* F4.3：文本样式行（粗斜/对齐） */
+  .text-style {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 12px;
+    .ts-btn {
+      width: 24px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #555;
+      &:hover {
+        background: rgba(64, 158, 255, 0.1);
+      }
+      &.on {
+        background: rgba(64, 158, 255, 0.18);
+        color: #409eff;
+      }
+    }
+    .ts-sep {
+      width: 1px;
+      height: 16px;
+      background: rgba(0, 0, 0, 0.12);
+      margin: 0 2px;
+    }
   }
   .size-title {
     display: flex;

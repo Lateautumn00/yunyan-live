@@ -704,15 +704,26 @@ export class KonvaRenderer {
           opacity
         });
       }
-      case 'text':
+      case 'text': {
+        // F4.3：粗斜/对齐/行距/宽度（自动折行）随元素渲染；bold/italic → Konva fontStyle 字符串
+        const bold = !!data.get('bold');
+        const italic = !!data.get('italic');
+        const fontStyle =
+          [bold && 'bold', italic && 'italic'].filter(Boolean).join(' ') || 'normal';
+        const width = Number(data.get('width')) || 0;
         return new Konva.Text({
           x: data.get('x') || 0,
           y: data.get('y') || 0,
           text: data.get('text') || '',
           fontSize: data.get('fontSize') || 14,
           fill: data.get('color') || '#000',
+          fontStyle,
+          align: (data.get('align') as string) || 'left',
+          lineHeight: Number(data.get('lineHeight')) || 1.1,
+          ...(width > 0 ? { width } : {}),
           opacity
         });
+      }
       case 'formula': {
         const latex = String(data.get('latex') ?? '');
         const color = String(data.get('color') || '#000000');

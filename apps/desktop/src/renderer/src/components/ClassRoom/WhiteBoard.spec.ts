@@ -332,23 +332,45 @@ const konvaMocks = vi.hoisted(() => {
     }
   }
   class MockText extends MockNode {
+    _text = '';
+    _fontSize = 14;
+    _fontStyle = 'normal';
+    _align = 'left';
+    _lineHeight = 1.1;
+    override _width = 0;
+    constructor(attrs?: Record<string, unknown>) {
+      super(attrs);
+      if (attrs?.text !== undefined) this._text = attrs.text as string;
+      if (attrs?.fontSize !== undefined) this._fontSize = attrs.fontSize as number;
+      if (attrs?.fontStyle !== undefined) this._fontStyle = attrs.fontStyle as string;
+      if (attrs?.align !== undefined) this._align = attrs.align as string;
+      if (attrs?.lineHeight !== undefined) this._lineHeight = attrs.lineHeight as number;
+      if (attrs?.width !== undefined) this._width = attrs.width as number;
+    }
     text(_val?: unknown) {
-      return '';
+      return this._text;
     }
     fontSize(_val?: unknown) {
-      return 14;
+      return this._fontSize;
     }
     fontFamily(_val?: unknown) {
       return 'Arial';
+    }
+    fontStyle(_val?: unknown) {
+      return this._fontStyle;
     }
     fill(_val?: unknown) {
       return '#000';
     }
     align(_val?: unknown) {
-      return 'left';
+      return this._align;
     }
     lineHeight(_val?: unknown) {
-      return 1.1;
+      return this._lineHeight;
+    }
+    override width(_val?: unknown) {
+      if (_val !== undefined) this._width = _val as number;
+      return this._width;
     }
   }
   class MockCircle extends MockNode {
@@ -4390,6 +4412,93 @@ describe('WhiteBoard.vue 手绘图形规整（F4.2）', () => {
     }
     stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
     expect(vm.getCurrentPageShapes()[0]!.type).toBe('brush');
+    wrapper.unmount();
+  });
+});
+
+// ── F4.3 文本工具增强：粗斜/对齐/行距/宽度字段 + 渲染读取（行内混排不做） ──
+describe('WhiteBoard.vue 文本工具增强（F4.3）', () => {
+  type F43VM = PPTVM & {
+    commitTextStyle: (patch: Record<string, unknown>) => boolean;
+    selectShape: (id: string) => void;
+    renderer: {
+      layer: { getChildren: () => unknown[] };
+      bindElements: (els: unknown) => void;
+    } | null;
+  };
+
+  function seedText(vm: F43VM) {
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addShape({
+      id: 'tx1',
+      type: 'text',
+      x: 20,
+      y: 30,
+      text: '你好世界',
+      fontSize: 14,
+      color: '#000',
+      opacity: 1
+    });
+    vm.tool('cur');
+    vm.selectShape('tx1');
+  }
+
+  it('正向：选中文本应用粗斜/对齐/行距/宽度 → 写入 Yjs 字段', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F43VM;
+    seedText(vm);
+    const ok = vm.commitTextStyle({
+      bold: true,
+      italic: true,
+      align: 'center',
+      lineHeight: 1.5,
+      width: 200
+    });
+    expect(ok).toBe(true);
+    const s = vm.getCurrentPageShapes()[0]!;
+    expect(s.bold).toBe(true);
+    expect(s.italic).toBe(true);
+    expect(s.align).toBe('center');
+    expect(s.lineHeight).toBe(1.5);
+    expect(s.width).toBe(200);
+    wrapper.unmount();
+  });
+
+  it('正向：Konva.Text 渲染读取 width/align/lineHeight/fontStyle（粗斜→bold italic）', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F43VM;
+    seedText(vm);
+    vm.commitTextStyle({ bold: true, italic: true, align: 'right', lineHeight: 1.4, width: 180 });
+    // 重绑渲染层，读取节点属性
+    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(
+      vm.provider!.getActiveElements()
+    );
+    const node = (
+      vm.renderer as unknown as { layer: { getChildren: () => Array<Record<string, unknown>> } }
+    ).layer.getChildren()[0] as unknown as {
+      fontStyle: () => string;
+      align: () => string;
+      lineHeight: () => number;
+      width: () => number;
+    };
+    expect(node.fontStyle()).toBe('bold italic');
+    expect(node.align()).toBe('right');
+    expect(node.lineHeight()).toBe(1.4);
+    expect(node.width()).toBe(180);
+    wrapper.unmount();
+  });
+
+  it('负向：粗体为元素级单一样式，不支持行内混排（一个文本单一 fontStyle）', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F43VM;
+    seedText(vm);
+    vm.commitTextStyle({ bold: true });
+    // 元素仅一个 bold 布尔字段（无逐字符 range 样式）
+    const s = vm.getCurrentPageShapes()[0]!;
+    expect(s.bold).toBe(true);
+    expect(s.ranges).toBeUndefined();
+    expect(s.runs).toBeUndefined();
     wrapper.unmount();
   });
 });
