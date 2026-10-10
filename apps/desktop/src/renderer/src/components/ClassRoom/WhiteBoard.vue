@@ -275,7 +275,8 @@
             :class="['thumb-item', { on: p.current }]"
             @click="jumpToThumb(p.index)"
           >
-            <div class="thumb-ph">{{ p.index + 1 }}</div>
+            <img v-if="p.dataUrl" class="thumb-snap" :src="p.dataUrl" alt="" />
+            <div v-else class="thumb-ph">{{ p.index + 1 }}</div>
             <div class="thumb-num">{{ p.index + 1 }}</div>
           </div>
         </div>
@@ -697,6 +698,7 @@ import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
 import { runExport, type ExportFormat, type ExportScope } from './whiteboard/exportBoard';
+import { renderPageSnapshot } from './whiteboard/pageSnapshot';
 import { regularizePath } from './whiteboard/regularize';
 import { computeSnap } from './whiteboard/snap';
 import { addRow, removeRow, addCol, removeCol, type TableData } from './whiteboard/table';
@@ -788,14 +790,81 @@ const layerIndex = ref(1);
 const showThumbPanel = ref(false);
 function toggleThumbPanel() {
   showThumbPanel.value = !showThumbPanel.value;
+  // 浮层是临时视图：每次打开全量重渲（页面内容可能在面板关闭期间被改过）
+  if (showThumbPanel.value) void refreshAllThumbs();
 }
 function jumpToThumb(index: number) {
   showLayer(index + 1);
 }
-// 缩略图条目：页码 + 是否当前页（快照后续接入离屏渲染，暂用页码占位图）
+// 缩略图快照：页 id → dataURL。离屏渲染由 pageSnapshot 负责（与 F6.1 导出共用管线），
+// 任一页失败为 null → 模板回退页码占位图（§4.9 失败态降级）
+const thumbSnapshots = ref<Record<string, string | null>>({});
+let thumbTimer: ReturnType<typeof setTimeout> | null = null;
+// 卸载后所有在途/延时刷新都作废（否则组件销毁了还会起离屏渲染）
+let thumbUnmounted = false;
+// 并发/过期保护：按页 id 各自计数（并发渲染多页时，全局单值会让后启动的作废先启动的）
+const thumbSeq = new Map<string, number>();
+
+async function renderThumbAt(index: number) {
+  if (thumbUnmounted) return;
+  const r = renderer;
+  const p = provider;
+  if (!r || !p) return;
+  const id = r.pageIds[index];
+  if (!id) return;
+  const seq = (thumbSeq.get(id) ?? 0) + 1;
+  thumbSeq.set(id, seq);
+  try {
+    const stage = r.getStage();
+    const url = await renderPageSnapshot(
+      {
+        getElementsAt: i => p.getElementsAtPage(i),
+        width: stage?.width() || 1280,
+        height: stage?.height() || 720,
+        pixelRatio: 1,
+        timeoutMs: 1500
+      },
+      index
+    );
+    if (thumbSeq.get(id) !== seq) return; // 同页已有更新的渲染在途，本结果作废
+    if (!renderer || renderer.pageIds[index] !== id) return; // 页序已变，结果作废
+    thumbSnapshots.value = { ...thumbSnapshots.value, [id]: url };
+  } catch {
+    // 取尺寸/渲染器阶段即失败：留 null 占位，不打断面板
+  }
+}
+
+async function refreshAllThumbs() {
+  const queue: number[] = (renderer?.pageIds ?? []).map((_, i) => i);
+  const worker = async () => {
+    for (;;) {
+      const i = queue.shift();
+      if (i === undefined) return;
+      await renderThumbAt(i);
+    }
+  };
+  // 并发 2：每页各建一份离屏 Stage，全并行会卡主线程，纯串行又拖慢面板打开
+  await Promise.all([worker(), worker()]);
+}
+
+// 翻页/重绘后的刷新调度（仅面板开着时才有意义）：延迟折叠，只保留最后一次
+function scheduleThumbRefresh(delay: number) {
+  if (!showThumbPanel.value || thumbUnmounted) return;
+  if (thumbTimer) clearTimeout(thumbTimer);
+  thumbTimer = setTimeout(() => {
+    thumbTimer = null;
+    void renderThumbAt(curLayerIndex.value - 1);
+  }, delay);
+}
+// 缩略图条目：页码 + 是否当前页 + 快照 dataURL（null → 页码占位）
 const thumbPages = computed(() => {
   const ids = renderer?.pageIds ?? [];
-  return ids.map((id, i) => ({ id, index: i, current: i === curLayerIndex.value - 1 }));
+  return ids.map((id, i) => ({
+    id,
+    index: i,
+    current: i === curLayerIndex.value - 1,
+    dataUrl: thumbSnapshots.value[id] ?? null
+  }));
 });
 // F6.3 课后回看：教师端入口打开只读快照查看浮层（Q4 MVP 仅教师，服务端 403 鉴权）
 const showBoardReview = ref(false);
@@ -1231,6 +1300,12 @@ onUnmounted(() => {
   if (followBannerTimer) {
     clearTimeout(followBannerTimer);
     followBannerTimer = null;
+  }
+  // F5.2a：缩略图延时刷新随卸载清除，避免销毁后仍起离屏渲染
+  thumbUnmounted = true;
+  if (thumbTimer) {
+    clearTimeout(thumbTimer);
+    thumbTimer = null;
   }
   renderer?.destroy();
   provider?.destroy();
@@ -2768,6 +2843,8 @@ function onWheel(e: Konva.KonvaEventObject<WheelEvent>) {
 function refreshLayer() {
   const elements = provider?.getActiveElements();
   if (elements && renderer) renderer.bindElements(elements);
+  // 板书内容变了 → 当前页缩略图跟着过期（面板开着时延迟 300ms 折叠重渲）
+  scheduleThumbRefresh(300);
 }
 
 // --- Undo/Redo ---
@@ -3002,6 +3079,8 @@ function showLayer(index: number) {
   curLayerIndex.value = index;
   provider?.setCurrentPageIndex(index - 1);
   refreshLayer();
+  // F5.2：翻页后 500ms 内刷新当前页快照（150ms 调度 + 离屏渲染，且折叠掉 refreshLayer 的 300ms 档）
+  scheduleThumbRefresh(150);
   // 与旧栈一致：手动翻页清空重做栈（只清 redo，不清 undo）
   provider?.undoManager.clear(false, true);
   const newElements = provider?.getActiveElements();
@@ -4305,6 +4384,16 @@ defineExpose({
       border-radius: 4px;
       font-size: 18px;
       color: #999;
+    }
+    .thumb-snap {
+      display: block;
+      width: 100%;
+      height: 54px;
+      object-fit: contain;
+      object-position: center;
+      background: #fff;
+      border: 1px solid #e4e7ed;
+      border-radius: 4px;
     }
     .thumb-num {
       font-size: 11px;

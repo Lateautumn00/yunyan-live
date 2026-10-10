@@ -513,6 +513,16 @@ vi.mock('./whiteboard/exportBoard', () => ({
   runExport: exportMocks.runExport
 }));
 
+// F5.2 缩略图：离屏渲染管线由 pageSnapshot.spec 覆盖，此处只验面板接线与刷新时机
+const snapMocks = vi.hoisted(() => ({
+  renderPageSnapshot: vi.fn(
+    async (_req?: unknown, _index?: number): Promise<string | null> => 'data:image/png;base64,FAKE'
+  )
+}));
+vi.mock('./whiteboard/pageSnapshot', () => ({
+  renderPageSnapshot: snapMocks.renderPageSnapshot
+}));
+
 // F1.1 公式：katex/html2canvas chunk 的光栅实现由 formulaRaster.spec 覆盖，此处只验浮层接线
 const formulaMocks = vi.hoisted(() => {
   const FORMULA_INVALID_MSG = 'LaTeX 语法有误，请检查括号与命令是否完整';
@@ -4862,7 +4872,7 @@ type ThumbVM = PPTVM & {
   showThumbPanel: boolean;
   toggleThumbPanel: () => void;
   jumpToThumb: (index: number) => void;
-  thumbPages: Array<{ id: string; index: number; current: boolean }>;
+  thumbPages: Array<{ id: string; index: number; current: boolean; dataUrl: string | null }>;
   curLayerIndex: number;
 };
 
@@ -4915,6 +4925,116 @@ describe('F5.2 页面缩略图总览', () => {
     vm.toggleThumbPanel();
     await nextTick();
     expect(Array.isArray(vm.thumbPages)).toBe(true);
+    wrapper.unmount();
+  });
+});
+
+// ── F5.2a 缩略图快照（离屏渲染接线 + 翻页刷新时机 + 失败降级占位） ────────────
+type ThumbSnapVM = ThumbVM & { showLayer: (index: number) => void };
+
+async function until(cond: () => boolean, ms = 3000): Promise<void> {
+  const t0 = Date.now();
+  while (!cond() && Date.now() - t0 < ms) await new Promise(resolve => setTimeout(resolve, 20));
+}
+
+describe('F5.2a 缩略图离屏快照', () => {
+  const FAKE = 'data:image/png;base64,FAKE';
+
+  function seedPages(vm: ThumbSnapVM): number {
+    const provider = vm.provider!;
+    if (!provider.getActiveElements()) provider.addPage();
+    provider.addPage();
+    provider.addPage();
+    return provider.getPages().length;
+  }
+
+  beforeEach(() => {
+    snapMocks.renderPageSnapshot.mockClear();
+    snapMocks.renderPageSnapshot.mockResolvedValue(FAKE);
+  });
+
+  it('正向：打开总览面板即渲染各页快照，条目带上 dataUrl', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as ThumbSnapVM;
+    const n = seedPages(vm);
+    await nextTick();
+    expect(n).toBeGreaterThanOrEqual(3);
+    expect(vm.thumbPages).toHaveLength(n);
+    vm.toggleThumbPanel();
+    await until(() => vm.thumbPages.every(p => p.dataUrl === FAKE));
+    expect(vm.thumbPages).toHaveLength(n);
+    expect(snapMocks.renderPageSnapshot.mock.calls.length).toBe(n);
+    await nextTick();
+    expect(wrapper.findAll('.thumb-snap')).toHaveLength(n);
+    expect(wrapper.findAll('.thumb-ph')).toHaveLength(0);
+    wrapper.unmount();
+  });
+
+  it('正向：翻页后 500ms 内刷新当前页快照', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as ThumbSnapVM;
+    const n = seedPages(vm);
+    await nextTick();
+    expect(n).toBeGreaterThanOrEqual(2);
+    vm.toggleThumbPanel();
+    await until(() => vm.thumbPages.every(p => p.dataUrl === FAKE));
+    snapMocks.renderPageSnapshot.mockClear();
+    const t0 = Date.now();
+    vm.showLayer(2);
+    await until(() => snapMocks.renderPageSnapshot.mock.calls.length > 0);
+    const elapsed = Date.now() - t0;
+    expect(elapsed).toBeLessThan(500);
+    expect(snapMocks.renderPageSnapshot.mock.calls).toHaveLength(1);
+    expect(snapMocks.renderPageSnapshot.mock.calls[0]![1]).toBe(1);
+    await until(() => vm.thumbPages[1]!.dataUrl === FAKE);
+    expect(vm.thumbPages[1]!.current).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('正向：重开面板会重新渲染快照（浮层是临时视图，不缓存旧快照任务）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as ThumbSnapVM;
+    const n = seedPages(vm);
+    await nextTick();
+    vm.toggleThumbPanel();
+    await until(() => vm.thumbPages.every(p => p.dataUrl === FAKE));
+    vm.toggleThumbPanel();
+    await nextTick();
+    expect(vm.showThumbPanel).toBe(false);
+    snapMocks.renderPageSnapshot.mockClear();
+    // 换一个返回值：证明重开确实重新渲染，而不是复用第一轮的旧快照
+    const FAKE2 = 'data:image/png;base64,FAKE2';
+    snapMocks.renderPageSnapshot.mockResolvedValue(FAKE2);
+    vm.toggleThumbPanel();
+    await until(() => vm.thumbPages.every(p => p.dataUrl === FAKE2));
+    expect(snapMocks.renderPageSnapshot.mock.calls.length).toBe(n);
+    wrapper.unmount();
+  });
+
+  it('负向：快照渲染失败 → dataUrl 为 null，仍显示页码占位而非崩溃', async () => {
+    snapMocks.renderPageSnapshot.mockResolvedValue(null);
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as ThumbSnapVM;
+    const n = seedPages(vm);
+    await nextTick();
+    vm.toggleThumbPanel();
+    await until(() => snapMocks.renderPageSnapshot.mock.calls.length >= n);
+    expect(vm.thumbPages.every(p => p.dataUrl === null)).toBe(true);
+    expect(wrapper.findAll('.thumb-ph')).toHaveLength(n);
+    expect(wrapper.findAll('.thumb-snap')).toHaveLength(0);
+    wrapper.unmount();
+  });
+
+  it('负向：面板未打开时不发起渲染（避免浮层关闭后空耗离屏渲染）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as ThumbSnapVM;
+    seedPages(vm);
+    await nextTick();
+    expect(vm.showThumbPanel).toBe(false);
+    expect(snapMocks.renderPageSnapshot).not.toHaveBeenCalled();
+    vm.showLayer(2);
+    await until(() => false, 300);
+    expect(snapMocks.renderPageSnapshot).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });
