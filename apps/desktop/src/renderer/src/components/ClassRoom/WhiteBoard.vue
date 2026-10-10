@@ -34,6 +34,18 @@
               <el-icon><BrushFilled /></el-icon>
             </div>
           </div>
+          <!-- F4.2：笔型工具子菜单——手绘图形规整开关 -->
+          <el-popover placement="right-end" :width="168" trigger="click">
+            <template #reference>
+              <div class="seg-menu" :class="{ on: mode === 'brush' }">
+                <el-icon><MoreFilled /></el-icon>
+              </div>
+            </template>
+            <div class="seg-menu-item">
+              <span>手绘规整</span>
+              <el-switch :model-value="regularizeEnabled" @change="toggleRegularize()" />
+            </div>
+          </el-popover>
         </el-tooltip>
         <el-tooltip content="文本工具" placement="right">
           <div :class="['text', { on: mode === 'text' }]" @click="tool('text')">
@@ -475,6 +487,7 @@ import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
 import { runExport, type ExportFormat, type ExportScope } from './whiteboard/exportBoard';
+import { regularizePath } from './whiteboard/regularize';
 import {
   PRESET_COLORS,
   ERASER_WIDTH_MULT,
@@ -970,6 +983,47 @@ function setPenType(next: PenType) {
 function selectPen(next: PenType) {
   setPenType(next);
   tool('brush');
+}
+
+// F4.2 手绘图形规整：默认开启，开关置于笔型分段控件的工具子菜单
+const regularizeEnabled = ref(true);
+function toggleRegularize() {
+  regularizeEnabled.value = !regularizeEnabled.value;
+}
+
+// 抬笔后规整：近似直线/圆/矩形自动变标准图形；Shift 跳过、失败保留原笔迹。
+// 变换走独立事务（applyShapeUpdate）→ undo 第一步回手绘、第二步回未绘制（两步语义）
+function maybeRegularize(id: string, layerPath: number[], shiftSkip: boolean) {
+  if (!provider || shiftSkip || !regularizeEnabled.value || penType.value !== 'pen') return;
+  const fit = regularizePath(layerPath);
+  if (!fit) return; // 规整失败保留原笔迹
+  let target: Record<string, any>;
+  let other: Record<string, any> = {};
+  if (fit.kind === 'line') {
+    target = { type: 'line', points: fit.points, lineCap: 'round', lineJoin: 'round' };
+  } else if (fit.kind === 'circle') {
+    target = { type: 'circle', x: fit.x, y: fit.y, radius: fit.radius };
+    other = { points: true }; // brush 的 points 键须清理（circle 用 x/y/radius）
+  } else {
+    target = { type: 'rect', x: fit.x, y: fit.y, width: fit.width, height: fit.height };
+    other = { points: true };
+  }
+  applyShapeUpdate(id, target, other);
+  morphShapeNode(id); // 100ms morph 过渡（真实 Konva 下生效，测试环境空转）
+}
+
+// F4.2：抬笔变换的 100ms 过渡动画——对刚规整的节点做一次缩放回落的 morph
+function morphShapeNode(id: string) {
+  if (typeof (Konva as any).Tween !== 'function') return; // 测试/mock 环境无 Tween，跳过
+  const node = (renderer as any)?.nodeMap?.get?.(id);
+  if (!node || typeof node.to !== 'function') return;
+  try {
+    node.scaleX(0.92);
+    node.scaleY(0.92);
+    node.to({ scaleX: 1, scaleY: 1, duration: 0.1, easing: (Konva as any).Easings?.easeOut });
+  } catch {
+    /* morph 非关键路径，失败静默 */
+  }
 }
 
 // --- 选择器：单选图形，拖动/缩放/删除写回 Yjs ---
@@ -1660,6 +1714,8 @@ function onPointerUp(e: any) {
     };
     provider?.addShape(shapeData);
     currentPath = [];
+    // F4.2：抬笔规整（Shift 跳过/失败保留）——变换独立事务，undo 两步
+    maybeRegularize(shapeData.id, layerPath, !!e?.evt?.shiftKey);
     refreshLayer();
   } else if (m === 'circle' && startPos && pos) {
     const layerStart = toLayerCoords(startPos);
@@ -3063,6 +3119,9 @@ defineExpose({
   selectForceLabel,
   // F3.2：引线标注入口
   selectLeader,
+  // F4.2：手绘图形规整开关
+  regularizeEnabled,
+  toggleRegularize,
   // 测试钩子：直接访问底层 Yjs provider / Konva renderer / 当前视口快照（供同步类用例断言）
   get provider() {
     return provider;
@@ -3215,6 +3274,19 @@ defineExpose({
       &.active .el-icon {
         color: #c8a400;
       }
+    }
+  }
+  /* F4.2：笔型工具子菜单触发钮 + 规整开关行 */
+  .seg-menu {
+    width: 32px;
+    height: 16px;
+    border-radius: 0 0 6px 6px;
+    .el-icon {
+      font-size: 10px;
+      color: #888;
+    }
+    &:hover .el-icon {
+      color: #409eff;
     }
   }
   .rectangle {
@@ -3739,6 +3811,15 @@ defineExpose({
   bottom: 8px;
   pointer-events: auto;
   cursor: pointer;
+}
+
+/* F4.2 笔型工具子菜单内容（el-popover）：手绘规整开关行 */
+.seg-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #333;
 }
 
 /* F3.1 受力箭头预设面板（el-popover 内容）：标签芯片点选武装 */

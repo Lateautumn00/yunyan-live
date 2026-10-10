@@ -4296,3 +4296,100 @@ describe('WhiteBoard.vue 引线标签（F3.2）', () => {
     wrapper.unmount();
   });
 });
+
+// ── F4.2 手绘图形规整：抬笔后近似直线/圆/矩形自动规整（两步 undo） ─────────
+describe('WhiteBoard.vue 手绘图形规整（F4.2）', () => {
+  type RegVM = DrawVM & {
+    regularizeEnabled: boolean;
+    toggleRegularize: () => void;
+    renderer: { previewLayer: { getChildren: () => unknown[] } };
+  };
+
+  // 近似直线：多次 mousemove 沿水平线轻微抖动
+  function drawNearLine(vm: DrawVM, opts: { shift?: boolean } = {}) {
+    const stage = konvaMocks.MockStage.last()!;
+    vm.tool('brush');
+    const jitter = [0, 1, -1, 0, 1];
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    for (let i = 1; i <= 4; i++) {
+      stage._pointer = { x: 100 + i * 50, y: 100 + jitter[i]! };
+      stage.fire('mousemove', { target: stage, evt: {} });
+    }
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: !!opts.shift } });
+  }
+
+  it('正向：近似直线抬笔后规整为 line（端点），原 brush 变换', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as RegVM;
+    drawNearLine(vm);
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(1);
+    expect(shapes[0]!.type).toBe('line');
+    const pts = shapes[0]!.points as number[];
+    expect(pts.length).toBe(4);
+    expect(pts[0]).toBeCloseTo(100, 0);
+    expect(pts[2]).toBeCloseTo(300, 0);
+    wrapper.unmount();
+  });
+
+  it('负向：按住 Shift 跳过本次规整，保留 brush 笔迹', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as RegVM;
+    drawNearLine(vm, { shift: true });
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.length).toBe(1);
+    expect(shapes[0]!.type).toBe('brush');
+    wrapper.unmount();
+  });
+
+  it('两步 undo：第一步回手绘轨迹，第二步回未绘制', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as RegVM;
+    drawNearLine(vm);
+    expect(vm.getCurrentPageShapes()[0]!.type).toBe('line');
+
+    vm.revocation('pre'); // 第一步：回手绘轨迹
+    expect(vm.getCurrentPageShapes()[0]!.type).toBe('brush');
+
+    vm.revocation('pre'); // 第二步：回未绘制
+    expect(vm.getCurrentPageShapes().length).toBe(0);
+    wrapper.unmount();
+  });
+
+  it('负向：开关关闭时不规整，保留 brush 笔迹', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as RegVM;
+    expect(vm.regularizeEnabled).toBe(true); // 默认开启
+    vm.toggleRegularize(); // 关闭
+    expect(vm.regularizeEnabled).toBe(false);
+    drawNearLine(vm);
+    expect(vm.getCurrentPageShapes()[0]!.type).toBe('brush');
+    wrapper.unmount();
+  });
+
+  it('边界：不规则笔迹拟合失败，保留原 brush 笔迹', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as RegVM;
+    const stage = konvaMocks.MockStage.last()!;
+    vm.tool('brush');
+    stage._pointer = { x: 50, y: 50 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    // 剧烈曲折（交叉/沙漏），包围盒内部有点 → 拟合失败
+    const path: Array<[number, number]> = [
+      [50, 50],
+      [150, 150],
+      [250, 50],
+      [250, 150],
+      [50, 150],
+      [150, 100]
+    ];
+    for (const [x, y] of path) {
+      stage._pointer = { x, y };
+      stage.fire('mousemove', { target: stage, evt: {} });
+    }
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
+    expect(vm.getCurrentPageShapes()[0]!.type).toBe('brush');
+    wrapper.unmount();
+  });
+});
