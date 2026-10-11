@@ -1,6 +1,6 @@
 <template>
   <div class="classroom-white-board">
-    <div class="whiteBoard">
+    <div class="whiteBoard" :class="{ dark: pageDark }">
       <div
         :id="containerId"
         :class="['container', 'cursor-' + mode]"
@@ -188,6 +188,11 @@
         </el-tooltip>
         <el-tooltip content="清空当前画布" placement="top">
           <div class="clear" @click="layerClear" />
+        </el-tooltip>
+        <el-tooltip content="黑板模式 · 深色底（课件页禁用）" placement="top">
+          <div class="darkboard" :class="{ on: pageDark }" @click="toggleDarkBoard">
+            <el-icon><Moon /></el-icon>
+          </div>
         </el-tooltip>
         <el-tooltip content="缩小画布" placement="top">
           <div class="sub" @click="layerZoomChange('sub')">
@@ -540,7 +545,10 @@
             :class="{ invalid: !!formulaError }"
             rows="3"
             placeholder="例：\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}"
-            @input="formulaError = ''"
+            @input="
+              formulaError = '';
+              formulaBalance = '';
+            "
             @keydown.enter.exact.prevent="submitFormula"
             @keydown.esc.stop.prevent="closeFormula"
           />
@@ -550,6 +558,11 @@
           <div class="formula-chem">
             <el-switch v-model="chemMode" size="small" />
             <span class="formula-chem-label">化学模式（\ce{}）</span>
+          </div>
+          <!-- F3.6 配平辅助：化学模式下矩阵法配平，只提示不改写输入 -->
+          <div v-if="chemMode" class="formula-balance-row">
+            <button type="button" class="formula-balance-btn" @click="balanceFormula">配平</button>
+            <span v-if="formulaBalance" class="formula-balance">{{ formulaBalance }}</span>
           </div>
           <!-- F1.3 符号快捷面板：分组页签 + 点击插入光标处 -->
           <div class="formula-symbols">
@@ -740,6 +753,7 @@ import { regularizePath } from './whiteboard/regularize';
 import { computeSnap } from './whiteboard/snap';
 import { addRow, removeRow, addCol, removeCol, type TableData } from './whiteboard/table';
 import { SYMBOL_GROUPS, insertAtCursor } from './whiteboard/symbols';
+import { balanceEquation } from './whiteboard/chemBalance';
 import {
   addFavorite,
   listFavorites,
@@ -824,6 +838,37 @@ const exporting = ref(false);
 const exportProgress = ref<{ done: number; total: number } | null>(null);
 const curLayerIndex = ref(1);
 const layerIndex = ref(1);
+// F7.2：黑板模式——页级深色底（dark 字段存页 Y.Map，学生端经同一字段自然跟随）
+const pageDark = ref(false);
+function syncPageDark() {
+  // curLayerIndex 是 1-based 显示号，页字段按 provider 0-based 索引读
+  pageDark.value = provider?.getPageDark(curLayerIndex.value - 1) ?? false;
+}
+// 翻页四条路径（pages.observe / ensurePageIndex / applyRemotePage / showLayer）都改 curLayerIndex；
+// watch 默认 pre 批处理在各函数同步写完 provider.setCurrentPageIndex 后才跑，读到最终索引
+watch(curLayerIndex, syncPageDark);
+/** 课件页判定：页内含 ppt-image 底图即整页为课件讲义，禁用黑板模式 */
+function currentHasPptImage() {
+  const els = provider?.getActiveElements();
+  if (!els || els.length === 0) return false;
+  for (let i = 0; i < els.length; i++) {
+    const el = els.get(i);
+    // 元素在 Yjs 里是 Y.Map（addShape 逐字段 set）；兼容历史裸对象
+    const type = typeof el?.get === 'function' ? el.get('type') : el?.type;
+    if (type === 'ppt-image') return true;
+  }
+  return false;
+}
+/** F7.2：黑板模式开关（仅教师；课件页拒绝并提示；写页字段，远端/undo 走观察器同步） */
+function toggleDarkBoard() {
+  if (!props.isTeacher) return;
+  if (currentHasPptImage()) {
+    toast('课件页不支持黑板模式');
+    return;
+  }
+  provider?.setPageDark(curLayerIndex.value - 1, !pageDark.value);
+  syncPageDark();
+}
 // F5.2：页面缩略图总览浮层（覆盖层；当前页高亮，点击跳页）
 const showThumbPanel = ref(false);
 function toggleThumbPanel() {
@@ -1045,6 +1090,8 @@ const formulaInputRef = ref<HTMLTextAreaElement>();
 const chemMode = ref(false);
 /** F1.3 符号面板：当前分组页签 */
 const activeSymbolGroup = ref(SYMBOL_GROUPS[0]!.id);
+/** F3.6 配平结果展示串（只提示，不自动改写输入） */
+const formulaBalance = ref('');
 
 /** F1.3：在公式光标处插入符号，插入后光标前移并保持聚焦 */
 function insertSymbol(sym: string): void {
@@ -1053,10 +1100,17 @@ function insertSymbol(sym: string): void {
   const r = insertAtCursor(formulaInput.value, cursor, sym);
   formulaInput.value = r.value;
   formulaError.value = '';
+  formulaBalance.value = '';
   if (ta) {
     ta.focus();
     ta.setSelectionRange(r.cursor, r.cursor);
   }
+}
+
+/** F3.6：矩阵法配平当前输入方程式，结果显示在浮层，不自动改写输入 */
+function balanceFormula(): void {
+  const res = balanceEquation(formulaInput.value);
+  formulaBalance.value = res.ok ? res.display : `配平失败：${res.reason}`;
 }
 
 // --- F3.3 本地素材收藏：IndexedDB 收藏 + 导入本地图 + 点击入画布 ---
@@ -1225,6 +1279,27 @@ let provider: YjsProvider | null = null;
 let renderer: KonvaRenderer | null = null;
 let currentElementsObserver: (() => void) | null = null;
 let currentElementsObserved: any = null;
+
+// F7.2：页级 dark 观察器——pages.observe 是 Y.Array 级，收不到页内 key 变更（远端/undo 改
+// dark 只动页 Map），须按页挂 Map 观察；按页 id 去重防重复挂载
+const darkObservedPages = new Set<string>();
+function attachDarkObserver(
+  page: NonNullable<ReturnType<ReturnType<YjsProvider['getPages']>['get']>>
+) {
+  const id = page.get('id') as string | undefined;
+  if (!id || darkObservedPages.has(id)) return;
+  darkObservedPages.add(id);
+  // 任意被观察页变化都回读当前页深色底（非当前页回读是无副作用的同值写，省去索引比对）
+  page.observe(() => syncPageDark());
+}
+function attachAllDarkObservers() {
+  const pages = provider?.getPages();
+  if (!pages) return;
+  for (let i = 0; i < pages.length; i++) {
+    const p = pages.get(i);
+    if (p) attachDarkObserver(p);
+  }
+}
 
 function onElementsChanged() {
   refreshLayer();
@@ -1400,7 +1475,14 @@ onMounted(() => {
     refreshLayer();
     const els = provider!.getActiveElements();
     if (els) bindElementsObserver(els);
+    // F7.2：新到页（远端建页/全量同步）补挂 dark 观察器并回读当前页深色底
+    attachAllDarkObservers();
+    syncPageDark();
   });
+
+  // F7.2：observe 不回放历史——先给已存在页挂 dark 观察器并回读一次初始态
+  attachAllDarkObservers();
+  syncPageDark();
 
   // Sync page switching — register once
   // F7.5：教师本地翻页已由 showLayer 即时应用（观察器经相等判断空转）；学生端快速翻页
@@ -2002,6 +2084,7 @@ function openFormula() {
   formulaInput.value = '';
   formulaError.value = '';
   formulaLoading.value = false;
+  formulaBalance.value = '';
   formulaVisible.value = true;
   nextTick(() => formulaInputRef.value?.focus());
 }
@@ -2016,6 +2099,7 @@ function openFormulaFor(id: string, latex: string) {
   formulaInput.value = latex;
   formulaError.value = '';
   formulaLoading.value = false;
+  formulaBalance.value = '';
   formulaVisible.value = true;
   nextTick(() => {
     formulaInputRef.value?.focus();
@@ -2029,6 +2113,7 @@ function closeFormula() {
   formulaInput.value = '';
   formulaError.value = '';
   formulaLoading.value = false;
+  formulaBalance.value = '';
 }
 
 async function submitFormula() {
@@ -4152,6 +4237,8 @@ async function confirmExport() {
       currentPage: p.getCurrentPageIndex(),
       pageCount: p.getPages().length,
       getElementsAt: index => p.getElementsAtPage(index),
+      // F7.2：黑板页导出须带页级深色底（runExport 按页画底色，浅色页清底）
+      getPageDark: index => p.getPageDark(index),
       width: stage.width(),
       height: stage.height(),
       fileNameBase: `板书-${props.roomId}`,
@@ -4286,6 +4373,10 @@ defineExpose({
   position: relative;
   overflow: visible;
   background: #fff;
+  // F7.2 黑板模式：页级深色底（墨绿板色；导出底色由 exportBoard 按页字段另绘）
+  &.dark {
+    background: #35543f;
+  }
 }
 .container {
   width: 100%;
@@ -4486,6 +4577,13 @@ defineExpose({
     background-image: url('@{wbicon}');
     background-repeat: no-repeat;
     background-position: -154px 0;
+  }
+  // F7.2：黑板模式开关（开启态墨绿高亮）
+  .darkboard.on {
+    background-color: #35543f;
+    .el-icon {
+      color: #fff;
+    }
   }
   .num {
     width: auto;
@@ -5363,6 +5461,34 @@ defineExpose({
 .formula-chem-label {
   font-size: 12px;
   color: #666;
+}
+
+// F3.6 配平辅助：按钮 + 结果行
+.formula-balance-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.formula-balance-btn {
+  flex: none;
+  padding: 2px 10px;
+  border: 1px solid #409eff;
+  border-radius: 4px;
+  background: #fff;
+  color: #409eff;
+  font-size: 12px;
+  cursor: pointer;
+  &:hover {
+    background: rgba(64, 158, 255, 0.1);
+  }
+}
+
+.formula-balance {
+  font-size: 12px;
+  color: #333;
+  word-break: break-all;
 }
 
 .formula-symbols {

@@ -255,6 +255,18 @@ export class YjsProvider {
     return page.get('elements') as Y.Array<any>;
   }
 
+  /** F7.2：页级黑板深色底开关（写页 Map 字段，随整 doc UndoManager 可撤销） */
+  setPageDark(index: number, dark: boolean): void {
+    if (this.readOnly) return;
+    const page = this.pages.get(index);
+    if (page) page.set('dark', dark);
+  }
+
+  /** F7.2：读页级深色底；旧页缺 dark 字段按 false（前向兼容） */
+  getPageDark(index: number): boolean {
+    return this.pages.get(index)?.get('dark') === true;
+  }
+
   /**
    * F5.2b：页调序（缩略图拖拽排序）。
    *

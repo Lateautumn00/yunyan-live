@@ -53,6 +53,8 @@ export class KonvaRenderer {
   private pendingBind: Y.Array<any> | null = null;
   // 导出实例专用：http 图片挂 crossorigin，导出读像素才不被跨域污染（展示路径不加，避免旧服务端反代下图片加载失败）
   private exportMode = false;
+  // F7.2：导出底色矩形（黑板页自绘墨绿底；DOM 背景不进 toDataURL 画布像素）
+  private bgRect: Konva.Rect | null = null;
   pageIds: string[] = [];
   onShapeClick?: (id: string) => void;
   onShapeDblClick?: (id: string, e?: any) => void;
@@ -1184,6 +1186,29 @@ export class KonvaRenderer {
 
   getStage(): Konva.Stage {
     return this.stage;
+  }
+
+  /**
+   * F7.2：整页底色（导出用）——矩形放内容层最底，不遮挡板书；null=清底。
+   * 离屏容器的 DOM 背景不进 toDataURL 的画布像素，黑板页导出必须画布自绘底。
+   * 逐页导出时 bindElements/clearCurrentPage 可能已连底一起销毁 → 仅在仍挂载时销毁。
+   */
+  fillBackground(color: string | null) {
+    if (this.bgRect) {
+      if (this.bgRect.getParent()) this.bgRect.destroy();
+      this.bgRect = null;
+    }
+    if (!color) return;
+    this.bgRect = new Konva.Rect({
+      x: 0,
+      y: 0,
+      width: this.stage.width(),
+      height: this.stage.height(),
+      fill: color
+    });
+    this.layer.add(this.bgRect);
+    this.bgRect.moveToBottom();
+    this.layer.batchDraw();
   }
 
   destroy() {

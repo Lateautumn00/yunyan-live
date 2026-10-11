@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
   const whenImagesReady = vi.fn();
   const toDataURL = vi.fn();
   const destroy = vi.fn();
+  const fillBackground = vi.fn();
   class MockKonvaRenderer {
     static lastContainer: HTMLElement | null = null;
     static lastOpts: unknown = null;
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => {
     getStage() {
       return { toDataURL };
     }
+    fillBackground = fillBackground;
     destroy = destroy;
   }
   const jsPDFInstances: Array<{
@@ -46,6 +48,7 @@ const mocks = vi.hoisted(() => {
     whenImagesReady,
     toDataURL,
     destroy,
+    fillBackground,
     MockKonvaRenderer,
     MockJsPDF,
     jsPDFInstances
@@ -188,6 +191,17 @@ describe('exportBoard', () => {
     expect(mocks.clearCurrentPage).toHaveBeenCalledTimes(1);
     expect(mocks.toDataURL).toHaveBeenCalledTimes(1);
     expect(saveMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('黑板页导出：深色页画墨绿底、浅色页清底（F7.2）', async () => {
+    mocks.fillBackground.mockClear();
+    await runExport(makeRequest({ getPageDark: () => true }));
+    expect(mocks.fillBackground).toHaveBeenCalledWith('#35543f');
+
+    mocks.fillBackground.mockClear();
+    await runExport(makeRequest({ scope: 'all', pageCount: 2, getPageDark: () => false }));
+    expect(mocks.fillBackground).toHaveBeenCalledTimes(2);
+    expect(mocks.fillBackground).toHaveBeenCalledWith(null);
   });
 
   it('用户取消保存 → cancelled，不抛错', async () => {

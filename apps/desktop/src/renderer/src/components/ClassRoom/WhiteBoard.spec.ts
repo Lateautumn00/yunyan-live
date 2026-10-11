@@ -3919,6 +3919,131 @@ describe('F1.2 公式浮层化学模式', () => {
   });
 });
 
+// ── F3.6 配平辅助（化学模式下点"配平"矩阵法求系数，只提示不改写输入） ──
+describe('F3.6 配平辅助', () => {
+  type BalVM = PPTVM & {
+    formulaVisible: boolean;
+    formulaInput: string;
+    chemMode: boolean;
+    formulaBalance: string;
+    openFormula: () => void;
+    balanceFormula: () => void;
+  };
+
+  it('正向：化学模式输入方程式点配平显示最小整数系数，且不改写输入', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as BalVM;
+    vm.openFormula();
+    vm.chemMode = true;
+    vm.formulaInput = 'H2 + O2 -> H2O';
+    vm.balanceFormula();
+    await nextTick();
+    expect(wrapper.find('.formula-balance-btn').exists()).toBe(true);
+    expect(vm.formulaBalance).toBe('2H2 + 1O2 -> 2H2O');
+    expect(vm.formulaInput).toBe('H2 + O2 -> H2O');
+    wrapper.unmount();
+  });
+
+  it('负向：不可配平输入显示可读失败文案，浮层保持可用', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as BalVM;
+    vm.openFormula();
+    vm.chemMode = true;
+    vm.formulaInput = 'H2 -> O2';
+    vm.balanceFormula();
+    await nextTick();
+    expect(vm.formulaBalance).toContain('配平失败');
+    expect(vm.formulaVisible).toBe(true);
+    wrapper.unmount();
+  });
+});
+
+// ── F7.2 板书深色底（黑板模式：页级 dark 字段 + 背景切换 + 远端/undo 同步） ──
+describe('F7.2 黑板模式', () => {
+  type DarkVM = PPTVM & {
+    pageDark: boolean;
+    toggleDarkBoard: () => void;
+    provider: YjsProvider;
+    toastMsg: string | { value: string };
+    openExportDialog: () => void;
+    confirmExport: () => Promise<void>;
+  };
+
+  it('正向：教师切换 → dark class + 页字段写入；远端改字段观察器刷新', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as DarkVM;
+    if (!vm.provider.getActiveElements()) vm.provider.addPage();
+    expect(vm.pageDark).toBe(false);
+    expect(wrapper.find('.whiteBoard').classes()).not.toContain('dark');
+
+    vm.toggleDarkBoard();
+    await nextTick();
+    expect(vm.pageDark).toBe(true);
+    expect(vm.provider.getPageDark(0)).toBe(true);
+    expect(wrapper.find('.whiteBoard').classes()).toContain('dark');
+
+    // 模拟远端/undo：直接改页字段 → 观察器须刷新 ref 与 class
+    vm.provider.getPages().get(0)!.set('dark', false);
+    await nextTick();
+    expect(vm.pageDark).toBe(false);
+    expect(wrapper.find('.whiteBoard').classes()).not.toContain('dark');
+
+    // F7.2 导出接线：请求带 getPageDark 并回传页字段（黑板底能否进导出图的唯一通路）
+    expect(typeof exportMocks.runExport).toBe('function');
+    vm.toggleDarkBoard();
+    await nextTick();
+    vm.openExportDialog();
+    await nextTick();
+    // 前面导出用例留下挂起的 mockImplementation（不 reset 会吞掉 confirmExport 的 await）
+    exportMocks.runExport.mockReset();
+    exportMocks.runExport.mockResolvedValue('saved');
+    await vm.confirmExport();
+    const req = exportMocks.runExport.mock.lastCall![0] as { getPageDark?: (i: number) => boolean };
+    expect(typeof req.getPageDark).toBe('function');
+    expect(req.getPageDark!(0)).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('负向：学生端无开关且切换无效；课件页拒绝切换并提示', async () => {
+    const s = mountWB({ isTeacher: false });
+    const svm = s.vm as unknown as DarkVM;
+    // 学生端 readOnly 加不了页，直推页 Map 种子，证明是教师守卫拦下而非“无页可写”
+    const sp = new Y.Map();
+    sp.set('id', 'page_dark_student');
+    sp.set('name', 'Page 1');
+    sp.set('visible', true);
+    sp.set('elements', new Y.Array());
+    svm.provider.getPages().push([sp]);
+    await nextTick();
+    expect(s.find('.darkboard').exists()).toBe(false);
+    svm.toggleDarkBoard();
+    await nextTick();
+    expect(svm.provider.getPageDark(0)).toBe(false);
+    expect(svm.pageDark).toBe(false);
+    s.unmount();
+
+    const w = mountWB();
+    const vm = w.vm as unknown as DarkVM;
+    if (!vm.provider.getActiveElements()) vm.provider.addPage();
+    vm.provider.addShape({
+      id: 'ppt_dark',
+      type: 'ppt-image',
+      pdfUrl: 'http://mock.test/ppt/deck.pdf',
+      page: 1,
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100
+    });
+    await nextTick();
+    vm.toggleDarkBoard();
+    await nextTick();
+    expect(vm.provider.getPageDark(0)).toBe(false);
+    expect(String(unwrapVal(vm.toastMsg))).toContain('课件页');
+    w.unmount();
+  });
+});
+
 // ── F1.3 符号快捷面板（分组页签 + 点击插入光标处） ──
 describe('F1.3 符号快捷面板', () => {
   type SymVM = PPTVM & {

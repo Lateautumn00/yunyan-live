@@ -16,11 +16,16 @@ export interface ExportRequest {
   currentPage: number;
   pageCount: number;
   getElementsAt: (index: number) => Y.Array<any> | null;
+  /** F7.2：页级黑板深色底（true=画墨绿底；缺省按浅色处理，浅色页会清底） */
+  getPageDark?: (index: number) => boolean;
   width: number;
   height: number;
   fileNameBase: string;
   onProgress?: (done: number, total: number) => void;
 }
+
+/** F7.2 黑板模式深色底（与 WhiteBoard.vue `.whiteBoard.dark` 同值） */
+export const DARK_BOARD_COLOR = '#35543f';
 
 /** 导出像素倍率：2x 保证板书文字/细线在放大查看时清晰 */
 const PIXEL_RATIO = 2;
@@ -85,6 +90,10 @@ export async function runExport(req: ExportRequest): Promise<ExportOutcome> {
   hidden.style.height = `${req.height}px`;
   document.body.appendChild(hidden);
   const renderer = new KonvaRenderer(hidden, { exportMode: true });
+  // 导出渲染器按需带底色（测试/轻量实现可能无此方法 → 可选调用）
+  const bgCapable = renderer as KonvaRenderer & {
+    fillBackground?: (color: string | null) => void;
+  };
   try {
     const dataUrls: string[] = [];
     for (let i = 0; i < pages.length; i++) {
@@ -97,6 +106,8 @@ export async function runExport(req: ExportRequest): Promise<ExportOutcome> {
       } catch (err) {
         throw new Error(`第${pageIndex + 1}页${(err as Error).message}`, { cause: err });
       }
+      // F7.2：黑板页导出自绘底色——离屏容器 DOM 背景不进 toDataURL，且浅色页须清掉上一页残留
+      bgCapable.fillBackground?.(req.getPageDark?.(pageIndex) ? DARK_BOARD_COLOR : null);
       dataUrls.push(renderer.getStage().toDataURL({ pixelRatio: PIXEL_RATIO }));
       req.onProgress?.(i + 1, pages.length);
     }

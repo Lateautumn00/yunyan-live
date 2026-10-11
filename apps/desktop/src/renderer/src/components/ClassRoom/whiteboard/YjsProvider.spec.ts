@@ -531,3 +531,42 @@ describe('YjsProvider movePage（F5.2b 拖拽排序）', () => {
     providers.pop();
   });
 });
+
+describe('YjsProvider setPageDark/getPageDark（F7.2 黑板模式页级字段）', () => {
+  const providers: YjsProvider[] = [];
+  function create(readOnly = false): YjsProvider {
+    const p = new YjsProvider(
+      `provider-dark-${Math.random().toString(36).slice(2, 8)}`,
+      'u1',
+      'tester',
+      '#000000',
+      undefined,
+      readOnly
+    );
+    providers.push(p);
+    return p;
+  }
+
+  afterEach(() => {
+    while (providers.length) providers.pop()!.destroy();
+  });
+
+  it('正向：setPageDark 写入页 dark 字段，getPageDark 读回并可置回 false', () => {
+    const p = create();
+    seedPage(p);
+    expect(p.getPageDark(0)).toBe(false);
+    p.setPageDark(0, true);
+    expect(p.getPages().get(0)!.get('dark')).toBe(true);
+    expect(p.getPageDark(0)).toBe(true);
+    p.setPageDark(0, false);
+    expect(p.getPageDark(0)).toBe(false);
+  });
+
+  it('负向：旧页缺 dark 字段返回 false（前向兼容）；readOnly 不写入', () => {
+    const ro = create(true);
+    seedPage(ro);
+    ro.setPageDark(0, true);
+    expect(ro.getPages().get(0)!.has('dark')).toBe(false);
+    expect(ro.getPageDark(0)).toBe(false);
+  });
+});
