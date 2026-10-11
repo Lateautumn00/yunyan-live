@@ -7,6 +7,35 @@
         :style="showFileList ? 'pointer-events: none' : ''"
       />
 
+      <!-- F7.3 聚光灯浮层：遮罩挖窗（box-shadow），教师拖窗、点击拦截不穿透；学生端纯视觉 -->
+      <div
+        v-if="spotState"
+        class="spotlight-overlay"
+        :class="{ student: !isTeacher }"
+        :style="{ pointerEvents: isTeacher ? 'auto' : 'none' }"
+        @pointerdown="onSpotPointerDown"
+        @pointermove="onSpotPointerMove"
+        @pointerup="onSpotPointerUp"
+      >
+        <div class="spot-window" :style="spotWindowStyle" />
+      </div>
+      <!-- F7.3 放大镜浮层：全屏捕捉指针 + 圆形透镜采样；学生端跟随广播、不可交互 -->
+      <div
+        v-if="magState"
+        class="mag-overlay"
+        :class="{ student: !isTeacher }"
+        :style="{ pointerEvents: isTeacher ? 'auto' : 'none' }"
+        @pointermove="onMagPointerMove"
+        @wheel.prevent="onMagWheel"
+      >
+        <div class="mag-lens" :style="lensStyle" />
+      </div>
+
+      <!-- F7.4 板中板：页级手写演算区（第二个 KonvaRenderer；学生端只读跟随、无开关入口） -->
+      <div v-if="scratchOpen" class="scratch-panel">
+        <div ref="scratchStageEl" class="scratch-stage" />
+      </div>
+
       <!-- 左侧工具面板 -->
       <div v-if="isTeacher && isDisplay" class="tools">
         <el-tooltip
@@ -142,9 +171,24 @@
         <el-tooltip content="拖动工具" placement="right">
           <div :class="['move', { on: mode === 'move' }]" @click="tool('move')" />
         </el-tooltip>
+        <el-tooltip content="蒙层 · 拖拽覆盖内容，单击揭开，拖开后可 Delete" placement="right">
+          <div :class="['mask', { on: mode === 'mask' }]" @click="tool('mask')">
+            <el-icon><Hide /></el-icon>
+          </div>
+        </el-tooltip>
         <el-tooltip content="激光笔 · 红点跟指，切换工具或 Esc 熄灭" placement="right">
           <div :class="['laser', { on: mode === 'laser' }]" @click="toggleLaser">
             <el-icon><Aim /></el-icon>
+          </div>
+        </el-tooltip>
+        <el-tooltip content="聚光灯 · 遮罩高亮窗口，拖动移窗，Esc 关闭" placement="right">
+          <div :class="['spotlight', { on: spotlightOn }]" @click="toggleSpotlight">
+            <el-icon><Sunny /></el-icon>
+          </div>
+        </el-tooltip>
+        <el-tooltip content="放大镜 · 滚轮调倍率，Esc 关闭" placement="right">
+          <div :class="['magnifier', { on: magOn }]" @click="toggleMagnifier">
+            <el-icon><ZoomIn /></el-icon>
           </div>
         </el-tooltip>
         <el-tooltip content="上传图片 · 贴到当前页" placement="right">
@@ -192,6 +236,11 @@
         <el-tooltip content="黑板模式 · 深色底（课件页禁用）" placement="top">
           <div class="darkboard" :class="{ on: pageDark }" @click="toggleDarkBoard">
             <el-icon><Moon /></el-icon>
+          </div>
+        </el-tooltip>
+        <el-tooltip content="板中板 · 手写演算区（随页保存，Esc 不关）" placement="top">
+          <div class="scratch" :class="{ on: scratchOpen }" @click="toggleScratch">
+            <el-icon><EditPen /></el-icon>
           </div>
         </el-tooltip>
         <el-tooltip content="缩小画布" placement="top">
@@ -762,6 +811,8 @@ import {
   type FavoriteAsset
 } from './whiteboard/assetStore';
 import { layoutCurve, loadCurveParser, sampleCurve, validateExpr } from './whiteboard/curve';
+// F7.4：scratchObserved 类型标注用（纯类型引入，不引入运行时依赖）
+import type * as Y from 'yjs';
 import {
   SNAP_THRESHOLD as GEO_SNAP_THRESHOLD,
   collectSnapTargets,
@@ -778,7 +829,9 @@ import {
   type FileItem,
   type ToolMode,
   type PenType,
-  type CursorData
+  type CursorData,
+  type SpotlightState,
+  type MagnifierState
 } from './whiteboard/types';
 import { useUserStore } from '@/store/user';
 import Live from '@/api/backstage';
@@ -846,7 +899,12 @@ function syncPageDark() {
 }
 // 翻页四条路径（pages.observe / ensurePageIndex / applyRemotePage / showLayer）都改 curLayerIndex；
 // watch 默认 pre 批处理在各函数同步写完 provider.setCurrentPageIndex 后才跑，读到最终索引
-watch(curLayerIndex, syncPageDark);
+watch(curLayerIndex, () => {
+  syncPageDark();
+  syncScratchOpen();
+  // 换页重绑 scratch 观察器到新页数组（关板页数组为 null 时仅解绑）
+  rebindScratch();
+});
 /** 课件页判定：页内含 ppt-image 底图即整页为课件讲义，禁用黑板模式 */
 function currentHasPptImage() {
   const els = provider?.getActiveElements();
@@ -868,6 +926,265 @@ function toggleDarkBoard() {
   }
   provider?.setPageDark(curLayerIndex.value - 1, !pageDark.value);
   syncPageDark();
+}
+
+// F7.4：板中板（scratch）——页级手写演算区：页字段 scratchOpen/scratchElements 随页保存，
+// 面板内第二个 KonvaRenderer 独立回放；学生端经页观察器跟随，无开关入口
+const scratchOpen = ref(false);
+const scratchStageEl = ref<HTMLElement | null>(null);
+let scratchRenderer: KonvaRenderer | null = null;
+let scratchObserved: Y.Array<any> | null = null;
+
+function syncScratchOpen() {
+  // curLayerIndex 是 1-based，页字段按 provider 0-based 索引读（与 syncPageDark 同式）
+  scratchOpen.value = provider?.getScratchOpen(curLayerIndex.value - 1) ?? false;
+}
+/** 开关板中板（仅教师）：首开懒建 scratch 数组，写页字段 scratchOpen，远端走页观察器跟随 */
+function toggleScratch() {
+  if (!props.isTeacher) return;
+  const idx = curLayerIndex.value - 1;
+  if (!scratchOpen.value) provider?.ensureScratchAtPage(idx);
+  provider?.setScratchOpen(idx, !scratchOpen.value);
+  syncScratchOpen();
+}
+function refreshScratch() {
+  if (!scratchRenderer) return;
+  const els = provider?.getScratchAtPage(curLayerIndex.value - 1);
+  if (els) scratchRenderer.bindElements(els);
+}
+function onScratchChanged() {
+  refreshScratch();
+}
+/** 换页/开板重绑当前页 scratch 数组（observeDeep：嵌套字段变更同样触发回放） */
+function rebindScratch() {
+  if (scratchObserved) {
+    scratchObserved.unobserveDeep(onScratchChanged);
+    scratchObserved = null;
+  }
+  const els = provider?.getScratchAtPage(curLayerIndex.value - 1);
+  if (els) {
+    els.observeDeep(onScratchChanged);
+    scratchObserved = els;
+  }
+  if (scratchOpen.value) refreshScratch();
+}
+/** 板中板内自由手写：scratch stage 自持的精简管线（主 onPointer 管线零侵入），收笔落 brush 元素 */
+function bindScratchPointer() {
+  if (!props.isTeacher || !scratchRenderer) return;
+  const ss = scratchRenderer.getStage();
+  let drawing = false;
+  let pts: number[] = [];
+  const pointer = () => ss.getPointerPosition();
+  const clearPreview = () => {
+    scratchRenderer!.previewLayer.destroyChildren();
+    scratchRenderer!.previewLayer.batchDraw();
+  };
+  ss.on('mousedown touchstart', () => {
+    const p = pointer();
+    if (!p) return;
+    drawing = true;
+    pts = [p.x, p.y];
+    clearPreview();
+  });
+  ss.on('mousemove touchmove', () => {
+    if (!drawing) return;
+    const p = pointer();
+    if (!p) return;
+    pts.push(p.x, p.y);
+    clearPreview();
+    scratchRenderer!.previewLayer.add(
+      new Konva.Line({
+        points: pts.slice(),
+        stroke: currentColor.value,
+        strokeWidth: currentSize.value,
+        lineCap: 'round',
+        lineJoin: 'round'
+      })
+    );
+    scratchRenderer!.previewLayer.batchDraw();
+  });
+  ss.on('mouseup touchend', () => {
+    if (!drawing) return;
+    drawing = false;
+    clearPreview();
+    // 与主管线 brush 提交同构（层局部坐标=scratch stage 坐标，无 viewport 变换）
+    if (pts.length > 4) {
+      provider?.addScratchElement({
+        id: uid(),
+        type: 'brush',
+        points: pts.slice(),
+        color: currentColor.value,
+        lineWidth: currentSize.value,
+        opacity: currentOpacity.value,
+        ...(penType.value === 'highlight' ? { blend: 'multiply' } : {})
+      });
+      refreshScratch();
+    }
+    pts = [];
+  });
+}
+// 面板开合走 post flush：v-if 容器已在本帧挂载，scratchStageEl 就绪即可 new KonvaRenderer；
+// 关板销毁实例（容器卸载，下次开板重建——避免 stage 挂在已移除的旧 div 上空白）
+watch(
+  scratchOpen,
+  () => {
+    if (!scratchOpen.value) {
+      if (scratchObserved) {
+        scratchObserved.unobserveDeep(onScratchChanged);
+        scratchObserved = null;
+      }
+      scratchRenderer = null;
+      return;
+    }
+    if (!scratchStageEl.value) return;
+    scratchRenderer = new KonvaRenderer(scratchStageEl.value);
+    scratchRenderer.showPage(0);
+    // 板中板只做手写回放：不做形状选择/变换（主管线 setSelectMode 不适用）
+    scratchRenderer.setSelectMode(false);
+    if (props.isTeacher) bindScratchPointer();
+    rebindScratch();
+    refreshScratch();
+  },
+  { flush: 'post' }
+);
+
+// F7.3：聚光灯/放大镜——视图级开关（不入 toolState 持久化），awareness 广播同步学生端
+const spotlightOn = ref(false);
+const spotRect = ref({ x: 80, y: 60, w: 420, h: 300 });
+const magOn = ref(false);
+const magZoom = ref(2);
+const magLens = ref({ x: 400, y: 300 });
+const lensSnapshot = ref('');
+// 学生端应用的远端广播态（教师端 overlay 由本地 ref 驱动，跳过本端 userId）
+const spotRemote = ref<SpotlightState | null>(null);
+const magRemote = ref<MagnifierState | null>(null);
+let spotDrag: {
+  sx: number;
+  sy: number;
+  rect: { x: number; y: number; w: number; h: number };
+} | null = null;
+let lastSpotSend = 0;
+let lastMagSend = 0;
+let lastLensShot = 0;
+let lastSpotKey = '';
+let lastMagKey = '';
+
+/** 当前生效的聚光窗口：教师=本地开关态，学生=远端广播态（null=关） */
+const spotState = computed(() => {
+  if (props.isTeacher) return spotlightOn.value ? spotRect.value : null;
+  const r = spotRemote.value;
+  return r ? { x: r.x, y: r.y, w: r.w, h: r.h } : null;
+});
+/** 当前生效的放大镜：教师=本地透镜，学生=远端广播（null=关） */
+const magState = computed(() => {
+  if (props.isTeacher) return magOn.value ? { ...magLens.value, z: magZoom.value } : null;
+  const m = magRemote.value;
+  return m ? { x: m.x, y: m.y, z: m.z } : null;
+});
+const spotWindowStyle = computed(() => {
+  const s = spotState.value;
+  return s ? { left: `${s.x}px`, top: `${s.y}px`, width: `${s.w}px`, height: `${s.h}px` } : {};
+});
+const lensStyle = computed(() => {
+  const m = magState.value;
+  if (!m) return {};
+  const stageW = renderer?.getStage().width() ?? 800;
+  const stageH = renderer?.getStage().height() ?? 600;
+  const R = 90;
+  return {
+    left: `${m.x - R}px`,
+    top: `${m.y - R}px`,
+    backgroundSize: `${stageW * m.z}px ${stageH * m.z}px`,
+    backgroundPosition: `${-(m.x * m.z - R)}px ${-(m.y * m.z - R)}px`,
+    backgroundImage: lensSnapshot.value ? `url(${lensSnapshot.value})` : 'none'
+  };
+});
+// 透镜快照按 100ms 采样（教师拖动/学生跟随远端帧共用；无 toDataURL 的实现留空底）
+watch(
+  magState,
+  () => {
+    if (!magState.value) return;
+    const now = Date.now();
+    if (now - lastLensShot < 100) return;
+    lastLensShot = now;
+    try {
+      const stage = renderer?.getStage() as unknown as
+        { toDataURL?: (o?: unknown) => string } | undefined;
+      lensSnapshot.value = typeof stage?.toDataURL === 'function' ? stage.toDataURL() : '';
+    } catch {
+      lensSnapshot.value = '';
+    }
+  },
+  { deep: true }
+);
+
+function toggleSpotlight() {
+  if (!props.isTeacher) return;
+  spotlightOn.value = !spotlightOn.value;
+  broadcastSpotlight();
+}
+function broadcastSpotlight() {
+  if (!props.isTeacher) return;
+  provider?.setSpotlight(
+    spotlightOn.value
+      ? {
+          userId,
+          x: spotRect.value.x,
+          y: spotRect.value.y,
+          w: spotRect.value.w,
+          h: spotRect.value.h
+        }
+      : null
+  );
+}
+function onSpotPointerDown(e: PointerEvent) {
+  if (!props.isTeacher || !spotlightOn.value) return;
+  spotDrag = { sx: e.clientX, sy: e.clientY, rect: { ...spotRect.value } };
+}
+function onSpotPointerMove(e: PointerEvent) {
+  if (!props.isTeacher || !spotDrag) return;
+  spotRect.value = {
+    ...spotDrag.rect,
+    x: spotDrag.rect.x + (e.clientX - spotDrag.sx),
+    y: spotDrag.rect.y + (e.clientY - spotDrag.sy)
+  };
+  const now = Date.now();
+  if (now - lastSpotSend >= 50) {
+    lastSpotSend = now;
+    broadcastSpotlight();
+  }
+}
+function onSpotPointerUp() {
+  if (!props.isTeacher || !spotDrag) return;
+  spotDrag = null;
+  broadcastSpotlight();
+}
+function toggleMagnifier() {
+  if (!props.isTeacher) return;
+  magOn.value = !magOn.value;
+  broadcastMagnifier();
+}
+function broadcastMagnifier() {
+  if (!props.isTeacher) return;
+  provider?.setMagnifier(
+    magOn.value ? { userId, x: magLens.value.x, y: magLens.value.y, z: magZoom.value } : null
+  );
+}
+function onMagPointerMove(e: PointerEvent) {
+  if (!props.isTeacher || !magOn.value) return;
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  magLens.value = { x: e.clientX - r.left, y: e.clientY - r.top };
+  const now = Date.now();
+  if (now - lastMagSend >= 50) {
+    lastMagSend = now;
+    broadcastMagnifier();
+  }
+}
+function onMagWheel(e: WheelEvent) {
+  if (!props.isTeacher || !magOn.value) return;
+  const next = magZoom.value + (e.deltaY < 0 ? 0.5 : -0.5);
+  magZoom.value = Math.min(4, Math.max(1.5, Number(next.toFixed(1))));
+  broadcastMagnifier();
 }
 // F5.2：页面缩略图总览浮层（覆盖层；当前页高亮，点击跳页）
 const showThumbPanel = ref(false);
@@ -1289,8 +1606,12 @@ function attachDarkObserver(
   const id = page.get('id') as string | undefined;
   if (!id || darkObservedPages.has(id)) return;
   darkObservedPages.add(id);
-  // 任意被观察页变化都回读当前页深色底（非当前页回读是无副作用的同值写，省去索引比对）
-  page.observe(() => syncPageDark());
+  // 任意被观察页变化都回读当前页字段（非当前页回读是无副作用的同值写，省去索引比对）；
+  // F7.4：scratchOpen 同走页观察器——学生端开合跟随、教师远端翻页各页独立回读
+  page.observe(() => {
+    syncPageDark();
+    syncScratchOpen();
+  });
 }
 function attachAllDarkObservers() {
   const pages = provider?.getPages();
@@ -1376,9 +1697,17 @@ onMounted(() => {
     snapshotRetry.value = status.state === 1 ? status.attempt : null;
   });
   renderer = new KonvaRenderer(document.getElementById(containerId.value)!);
-  renderer.onShapeClick = selectShape;
+  renderer.onShapeClick = handleShapeClick;
   renderer.onShapeDblClick = editTextShape;
-  renderer.onShapeDragEnd = commitShapeMove;
+  renderer.onShapeDragEnd = (id, x, y, alt) => {
+    commitShapeMove(id, x, y, alt);
+    // F4.8：mask 拖动移开后保持选中（呈选中态，可 Delete 删除——单击之外的另一种揭开方式）
+    const moved = provider
+      ?.getActiveElements()
+      ?.toArray()
+      .find(e => e.get('id') === id);
+    if (moved && String(moved.get('type')) === 'mask') selectShape(id);
+  };
   renderer.onShapeTransformEnd = commitShapeTransform;
   renderer.onRefreshRequest = refreshLayer;
   renderer.setSelectMode(mode.value === 'cur' && props.isTeacher);
@@ -1478,11 +1807,15 @@ onMounted(() => {
     // F7.2：新到页（远端建页/全量同步）补挂 dark 观察器并回读当前页深色底
     attachAllDarkObservers();
     syncPageDark();
+    // F7.4：同步后回读当前页板中板开合初始态（observe 不回放历史）
+    syncScratchOpen();
   });
 
   // F7.2：observe 不回放历史——先给已存在页挂 dark 观察器并回读一次初始态
   attachAllDarkObservers();
   syncPageDark();
+  // F7.4：同上，回读板中板开合初始态
+  syncScratchOpen();
 
   // Sync page switching — register once
   // F7.5：教师本地翻页已由 showLayer 即时应用（观察器经相等判断空转）；学生端快速翻页
@@ -1558,6 +1891,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   currentElementsObserver?.();
+  // F7.4：板中板观察器随卸载解绑（scratchRenderer 实例随 v-if 容器弃置）
+  if (scratchObserved) {
+    scratchObserved.unobserveDeep(onScratchChanged);
+    scratchObserved = null;
+  }
   window.removeEventListener('resize', onResize);
   broadcastViewport.cancel();
   document.removeEventListener('keydown', onSelectionKeydown);
@@ -1662,16 +2000,36 @@ function onAwarenessChange() {
   if (!renderer || !provider) return;
   let laser: { x: number; y: number } | null = null;
   let cursor: CursorData | null = null;
+  let spotRemoteState: SpotlightState | null = null;
+  let magRemoteState: MagnifierState | null = null;
   // for-of 而非 forEach：同作用域赋值可被类型收窄跟踪（闭包内赋值会丢）
   for (const s of provider.awareness.getStates().values()) {
     if (s && s.laser) laser = s.laser;
     // 只渲染远端光标（学生端 provider 只读写不进 cursor，双保险）：跳过本端 userId
     if (s && s.cursor && s.cursor.userId !== userId) cursor = s.cursor;
+    // F7.3：聚光/放大同样跳过本端（教师本端 overlay 由本地 ref 驱动，双保险）
+    if (s && s.spotlight && s.spotlight.userId !== userId) spotRemoteState = s.spotlight;
+    if (s && s.magnifier && s.magnifier.userId !== userId) magRemoteState = s.magnifier;
   }
   const laserKey = laser ? `${laser.x},${laser.y}` : '';
   if (laserKey !== lastLaserKey) {
     lastLaserKey = laserKey;
     renderer.setLaserPoint(laser ? laser.x : null, laser ? laser.y : 0);
+  }
+  // F7.3：远端聚光/放大态（peer 离开/教师断线时 awareness 自动移除 state → 置 null → 零残留）
+  const spotKey = spotRemoteState
+    ? `${spotRemoteState.x},${spotRemoteState.y},${spotRemoteState.w},${spotRemoteState.h}`
+    : '';
+  if (spotKey !== lastSpotKey) {
+    lastSpotKey = spotKey;
+    spotRemote.value = spotRemoteState;
+  }
+  const magKey = magRemoteState
+    ? `${magRemoteState.x},${magRemoteState.y},${magRemoteState.z}`
+    : '';
+  if (magKey !== lastMagKey) {
+    lastMagKey = magKey;
+    magRemote.value = magRemoteState;
   }
   const cursorKey = cursor ? `${cursor.x},${cursor.y}` : '';
   if (cursorKey === lastCursorKey) return;
@@ -1835,6 +2193,21 @@ function snapshotShape(id: string, keys: string[]): Record<string, any> | null {
     if (v !== undefined) out[k] = v;
   });
   return out;
+}
+
+/** F4.8：元素点击分发——教师单击 mask = 揭开（删即露内容，undo 一步复原覆盖）；
+ *  其余走选择。学生端 selectEnabled=false 时 Konva 节点不接 click（双保险，此处再守） */
+function handleShapeClick(id: string) {
+  const m = provider
+    ?.getActiveElements()
+    ?.toArray()
+    .find(x => x.get('id') === id);
+  if (props.isTeacher && m && String(m.get('type')) === 'mask') {
+    provider?.removeElement(id);
+    refreshLayer();
+    return;
+  }
+  selectShape(id);
 }
 
 function selectShape(id: string) {
@@ -2440,7 +2813,11 @@ function onSelectionKeydown(e: KeyboardEvent) {
     // Esc：取消选中并中止进行中的绘制/拖拽（学生端由 revocation/clearSelection 自身守卫）；
     // 激光模式 → 回选择器并熄灭
     clearSelection();
-    if (mode.value === 'laser') setMode('cur');
+    // 激光/蒙层放置模式 → 回选择器（激光并熄灭）
+    if (mode.value === 'laser' || mode.value === 'mask') setMode('cur');
+    // F7.3：Esc 关聚光/放大（与激光同款退出；学生端开关本就为关，守卫自然跳过）
+    if (spotlightOn.value) toggleSpotlight();
+    if (magOn.value) toggleMagnifier();
     isDrawing = false;
     startPos = null;
     currentPath = [];
@@ -2652,7 +3029,7 @@ function onPointerDown(e: any) {
 
 // --- F2.3 几何吸附：绘制期端点/中点/垂足吸附 + 视觉反馈（与 F4.5 拖动对齐吸附互补） ---
 /** 吸附仅作用于形状绘制工具（brush 走笔迹、move 走平移，均不吸附） */
-const SNAP_MODES = ['circle', 'rectangle', 'arrows', 'line', 'force', 'leader'];
+const SNAP_MODES = ['circle', 'rectangle', 'arrows', 'line', 'force', 'leader', 'mask'];
 const SNAP_LABELS: Record<SnapKind, string> = {
   endpoint: '端点',
   midpoint: '中点',
@@ -2956,6 +3333,24 @@ function onPointerUp(e: any) {
       provider?.addShape(shapeData);
       refreshLayer();
     }
+  } else if (m === 'mask' && startPos && pos) {
+    // F4.8：拖拽覆盖一块蒙层（不透明矩形，无描边/填充选项；单击揭开在 handleShapeClick）
+    const layerStart = toLayerCoords(startPos);
+    const layerEnd = toLayerCoords(pos);
+    const w = Math.abs(layerEnd.x - layerStart.x);
+    const h = Math.abs(layerEnd.y - layerStart.y);
+    if (w > 2 && h > 2) {
+      provider?.addShape({
+        id: uid(),
+        type: 'mask',
+        x: Math.min(layerStart.x, layerEnd.x),
+        y: Math.min(layerStart.y, layerEnd.y),
+        width: w,
+        height: h,
+        opacity: currentOpacity.value
+      });
+      refreshLayer();
+    }
   } else if ((m === 'arrows' || m === 'force') && startPos && pos) {
     const layerStart = toLayerCoords(startPos);
     const layerEnd = toLayerCoords(pos);
@@ -3012,17 +3407,24 @@ function drawTempShape(pos: { x: number; y: number }, shift: boolean) {
   const ls = toLayerCoords(startPos);
   const le = toLayerCoords(pos);
 
-  if (m === 'rectangle') {
+  if (m === 'rectangle' || m === 'mask') {
+    const base = {
+      x: Math.min(ls.x, le.x),
+      y: Math.min(ls.y, le.y),
+      width: Math.abs(le.x - ls.x),
+      height: Math.abs(le.y - ls.y)
+    };
     renderer.previewLayer.add(
-      new Konva.Rect({
-        x: Math.min(ls.x, le.x),
-        y: Math.min(ls.y, le.y),
-        width: Math.abs(le.x - ls.x),
-        height: Math.abs(le.y - ls.y),
-        stroke: currentColor.value,
-        strokeWidth: currentSize.value,
-        fill: fillEnabled.value ? fillColor.value || currentColor.value : undefined
-      })
+      new Konva.Rect(
+        m === 'mask'
+          ? { ...base, fill: 'rgba(0, 0, 0, 0.45)' }
+          : {
+              ...base,
+              stroke: currentColor.value,
+              strokeWidth: currentSize.value,
+              fill: fillEnabled.value ? fillColor.value || currentColor.value : undefined
+            }
+      )
     );
   } else if (m === 'circle') {
     const dx = le.x - ls.x;
@@ -4293,6 +4695,8 @@ defineExpose({
   snapshotRetry,
   rendererPageCount: () => renderer?.getPageCount() ?? 0,
   renderedShapeCount: () => renderer?.getNodeCount() ?? 0,
+  // F7.4：板中板回放节点数（面板关/未建 renderer 时 0）
+  scratchShapeCount: () => scratchRenderer?.getNodeCount() ?? 0,
   getCurrentPageShapes,
   importServerCoursewares,
   revocation,
@@ -4378,6 +4782,61 @@ defineExpose({
     background: #35543f;
   }
 }
+// F7.3 聚光灯：遮罩盖舞台（z 低于工具栏，否则教师关不掉开关），box-shadow 挖高亮窗口
+.spotlight-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  cursor: move;
+  .spot-window {
+    position: absolute;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.72);
+    outline: 2px solid rgba(255, 235, 59, 0.85);
+    pointer-events: none;
+  }
+  &.student {
+    cursor: default;
+  }
+}
+// F7.3 放大镜：全屏浮层 + 圆透镜（背景为舞台快照按倍率采样）
+.mag-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  cursor: none;
+  .mag-lens {
+    position: absolute;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    border: 3px solid #ffeb3b;
+    background-repeat: no-repeat;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+  }
+  &.student {
+    cursor: default;
+  }
+}
+// F7.4 板中板：浮动手写演算区（z 低于聚光遮罩 5——聚光时同被盖；固定浅底与黑板模式形成对比）
+.scratch-panel {
+  position: absolute;
+  top: 56px;
+  right: 16px;
+  width: 46%;
+  height: 44%;
+  z-index: 3;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  .scratch-stage {
+    width: 100%;
+    height: 100%;
+  }
+}
 .container {
   width: 100%;
   height: 100%;
@@ -4386,6 +4845,9 @@ defineExpose({
 
 .cursor-text {
   cursor: text;
+}
+.cursor-mask {
+  cursor: crosshair;
 }
 .cursor-brush {
   cursor:

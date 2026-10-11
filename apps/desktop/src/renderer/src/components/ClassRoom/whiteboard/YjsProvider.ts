@@ -3,7 +3,14 @@ import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { uid } from '@yunyan-live/utils';
 import { YjsClose } from '@yunyan-live/types';
-import { DEFAULT_TOOL, ToolState, FileItem, CursorData } from './types';
+import {
+  DEFAULT_TOOL,
+  ToolState,
+  FileItem,
+  CursorData,
+  SpotlightState,
+  MagnifierState
+} from './types';
 
 /** 快照状态帧（服务端 type 4，仅教师连接推送）：state 0=暂存已恢复 1=暂存失败重试中 */
 export type SnapshotStatus = {
@@ -303,24 +310,34 @@ export class YjsProvider {
     return true;
   }
 
-  /** 深拷贝一页（含 elements 子树），得到未集成到文档的新实例 */
+  /** 深拷贝一页（含 elements/scratchElements 子树），得到未集成到文档的新实例 */
   private clonePage(page: Y.Map<any>): Y.Map<any> {
     const copy = new Y.Map<any>();
+    const deepCopy = (src: Y.Array<any> | undefined): Y.Array<any> => {
+      const rebuilt = new Y.Array<any>();
+      if (src && src.length) {
+        const items = src.toArray().map(el => {
+          const item = new Y.Map<any>();
+          if (el instanceof Y.Map) el.forEach((v, k) => item.set(k, v));
+          return item;
+        });
+        rebuilt.push(items);
+      }
+      return rebuilt;
+    };
     page.forEach((v, k) => {
-      if (k === 'elements') return;
+      // 子树需重建实例：Y.Array 集成过原页，直接 set 到新页会抛「已集成」错误
+      if (k === 'elements' || k === 'scratchElements') return;
       copy.set(k, v);
     });
-    const els = page.get('elements') as Y.Array<Y.Map<any>> | undefined;
-    const rebuilt = new Y.Array<Y.Map<any>>();
-    if (els && els.length) {
-      const items = els.toArray().map(el => {
-        const item = new Y.Map<any>();
-        if (el instanceof Y.Map) el.forEach((v, k) => item.set(k, v));
-        return item;
-      });
-      rebuilt.push(items);
+    copy.set('elements', deepCopy(page.get('elements') as Y.Array<any> | undefined));
+    // scratch 懒建语义保持：原页没开过板则克隆页也不带字段
+    if (page.has('scratchElements')) {
+      copy.set(
+        'scratchElements',
+        deepCopy(page.get('scratchElements') as Y.Array<any> | undefined)
+      );
     }
-    copy.set('elements', rebuilt);
     return copy;
   }
 
@@ -334,6 +351,58 @@ export class YjsProvider {
     const page = this.pages.get(index);
     if (!page) return null;
     return page.get('elements') as Y.Array<any>;
+  }
+
+  // --- F7.4 板中板（scratch）：页级手写演算区，独立于 elements，随页保存 ---
+
+  /** 读页 scratch 数组（懒建语义：没开过板的页无字段 → null） */
+  getScratchAtPage(index: number): Y.Array<any> | null {
+    const page = this.pages.get(index);
+    if (!page) return null;
+    return (page.get('scratchElements') as Y.Array<any>) ?? null;
+  }
+
+  /** 懒建页 scratch 数组（首开板时调用；只读端拒建） */
+  ensureScratchAtPage(index: number): Y.Array<any> | null {
+    if (this.readOnly) return null;
+    const page = this.pages.get(index);
+    if (!page) return null;
+    let arr = page.get('scratchElements') as Y.Array<any> | undefined;
+    if (!arr) {
+      this.doc.transact(() => {
+        page.set('scratchElements', new Y.Array<any>());
+      });
+      arr = page.get('scratchElements') as Y.Array<any>;
+    }
+    return arr;
+  }
+
+  /** 写一笔到当前页 scratch（只读端拒写；与 addShape 同构：Y.Map 逐字段） */
+  addScratchElement(data: any) {
+    if (this.readOnly) return;
+    const arr = this.ensureScratchAtPage(this.getCurrentPageIndex());
+    if (!arr) return;
+    const map = new Y.Map();
+    Object.entries(data).forEach(([k, v]) => map.set(k, v));
+    this.doc.transact(() => {
+      arr.push([map]);
+    });
+  }
+
+  /** 页级开合字段：学生端经页观察器跟随（与 dark 同路径） */
+  setScratchOpen(index: number, open: boolean): void {
+    if (this.readOnly) return;
+    const page = this.pages.get(index);
+    if (!page) return;
+    this.doc.transact(() => {
+      page.set('scratchOpen', open);
+    });
+  }
+
+  getScratchOpen(index: number): boolean {
+    const page = this.pages.get(index);
+    if (!page) return false;
+    return page.get('scratchOpen') === true;
   }
 
   setToolState(state: Partial<ToolState>) {
@@ -508,9 +577,22 @@ export class YjsProvider {
     this.awareness.setLocalStateField('laser', null);
   }
 
+  // F7.3 聚光灯/放大镜：瞬时广播（awareness，不进 Yjs 文档/undo 栈），仅教师可写（学生端只渲染）
+  setSpotlight(state: SpotlightState | null) {
+    if (this.readOnly) return;
+    this.awareness.setLocalStateField('spotlight', state);
+  }
+
+  setMagnifier(state: MagnifierState | null) {
+    if (this.readOnly) return;
+    this.awareness.setLocalStateField('magnifier', state);
+  }
+
   destroy() {
     this.awareness.setLocalStateField('laser', null);
     this.awareness.setLocalStateField('cursor', null);
+    this.awareness.setLocalStateField('spotlight', null);
+    this.awareness.setLocalStateField('magnifier', null);
     this.awareness.setLocalStateField('user', null);
     this.provider.disconnect();
     this.undoManager.destroy();

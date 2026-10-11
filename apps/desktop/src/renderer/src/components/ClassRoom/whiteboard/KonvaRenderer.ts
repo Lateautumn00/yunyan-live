@@ -717,6 +717,18 @@ export class KonvaRenderer {
           opacity
         });
       }
+      case 'mask': {
+        // F4.8 蒙层：不透明覆盖（无描边，fill 整体可点）。单击揭开在 WhiteBoard.handleShapeClick
+        // 分流为 removeElement；拖动移开走 wireNode 既有 drag 管线
+        return new Konva.Rect({
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
+          width: data.get('width') || 0,
+          height: data.get('height') || 0,
+          fill: data.get('fill') || '#3a3a3c',
+          opacity
+        });
+      }
       case 'circle': {
         const strokeWidth = (data.get('lineWidth') as number) || 1;
         const base = {

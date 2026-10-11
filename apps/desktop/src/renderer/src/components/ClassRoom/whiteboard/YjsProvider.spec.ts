@@ -570,3 +570,58 @@ describe('YjsProvider setPageDark/getPageDark（F7.2 黑板模式页级字段）
     expect(ro.getPageDark(0)).toBe(false);
   });
 });
+
+describe('YjsProvider scratch（F7.4 板中板页字段）', () => {
+  const providers: YjsProvider[] = [];
+  function create(readOnly = false): YjsProvider {
+    const p = new YjsProvider(
+      `provider-scratch-${Math.random().toString(36).slice(2, 8)}`,
+      'u1',
+      'tester',
+      '#000000',
+      undefined,
+      readOnly
+    );
+    providers.push(p);
+    return p;
+  }
+
+  afterEach(() => {
+    while (providers.length) providers.pop()!.destroy();
+  });
+
+  it('正向：ensureScratch 懒建数组、addScratchElement 落当前页、scratchOpen 开关读写', () => {
+    const p = create();
+    seedPage(p);
+    expect(p.getScratchAtPage(0)).toBeNull();
+    expect(p.ensureScratchAtPage(0)).not.toBeNull();
+    expect(p.getScratchAtPage(0)!.length).toBe(0);
+    p.addScratchElement({ id: 's1', type: 'brush', points: [0, 0, 4, 4] });
+    expect(p.getScratchAtPage(0)!.toArray()[0]!.get('id')).toBe('s1');
+    p.setScratchOpen(0, true);
+    expect(p.getScratchOpen(0)).toBe(true);
+    p.setScratchOpen(0, false);
+    expect(p.getScratchOpen(0)).toBe(false);
+  });
+
+  it('负向：readOnly ensureScratch 拒建、addScratchElement/setScratchOpen 拒写', () => {
+    const ro = create(true);
+    seedPage(ro);
+    expect(ro.ensureScratchAtPage(0)).toBeNull();
+    ro.addScratchElement({ id: 's1', type: 'brush', points: [0, 0, 1, 1] });
+    expect(ro.getScratchAtPage(0)).toBeNull();
+    ro.setScratchOpen(0, true);
+    expect(ro.getScratchOpen(0)).toBe(false);
+  });
+
+  it('movePage 携 scratchElements：深克隆不抛「已集成」、内容随页走、未开板页不带字段', () => {
+    const p = create();
+    seedPage(p);
+    seedPage(p);
+    p.addScratchElement({ id: 'sA', type: 'brush', points: [0, 0, 2, 2] }); // 落当前页 0
+    expect(p.movePage(0, 1)).toBe(true);
+    expect(p.getScratchAtPage(1)!.length).toBe(1);
+    expect(p.getScratchAtPage(1)!.toArray()[0]!.get('id')).toBe('sA');
+    expect(p.getScratchAtPage(0)).toBeNull();
+  });
+});

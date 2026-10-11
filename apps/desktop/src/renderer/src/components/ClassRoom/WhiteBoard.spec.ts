@@ -3343,6 +3343,285 @@ describe('WhiteBoard.vue 激光笔', () => {
   });
 });
 
+// ── F7.3 聚光灯/放大镜：教师开关广播 awareness、学生端远端跟随、关态零残留、不穿透 ──
+describe('F7.3 聚光灯/放大镜', () => {
+  type F73VM = PPTVM & {
+    spotlightOn: boolean;
+    magOn: boolean;
+    magZoom: number;
+    toggleSpotlight: () => void;
+    toggleMagnifier: () => void;
+    provider: YjsProvider;
+  };
+
+  function awState(vm: F73VM): Record<string, unknown> {
+    return (vm.provider.awareness.getLocalState() ?? {}) as Record<string, unknown>;
+  }
+
+  it('正向：教师开关聚光/放大写 awareness，学生端远端广播跟随并关态零残留', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F73VM;
+    await wrapper.find('.tools .spotlight').trigger('click');
+    expect(vm.spotlightOn).toBe(true);
+    expect(wrapper.find('.spotlight-overlay').exists()).toBe(true);
+    expect(awState(vm).spotlight).toMatchObject({ x: 80, y: 60, w: 420, h: 300 });
+    await wrapper.find('.tools .magnifier').trigger('click');
+    expect(vm.magOn).toBe(true);
+    expect(wrapper.find('.mag-overlay').exists()).toBe(true);
+    expect(awState(vm).magnifier).toMatchObject({ z: 2 });
+    // 再点关闭 → 浮层消失、awareness 置 null（关态零残留的本地侧）
+    await wrapper.find('.tools .spotlight').trigger('click');
+    await wrapper.find('.tools .magnifier').trigger('click');
+    expect(wrapper.find('.spotlight-overlay').exists()).toBe(false);
+    expect(wrapper.find('.mag-overlay').exists()).toBe(false);
+    expect(awState(vm).spotlight ?? null).toBeNull();
+    expect(awState(vm).magnifier ?? null).toBeNull();
+    wrapper.unmount();
+
+    // 学生端：模拟远端广播（laser 先例 :3330——直接写 awareness 走同一 change 渲染路径）
+    const s = mountWB({ isTeacher: false });
+    const svm = s.vm as unknown as F73VM;
+    const sp = svm.provider.awareness;
+    sp.setLocalStateField('spotlight', { userId: 't1', on: true, x: 10, y: 10, w: 200, h: 150 });
+    await nextTick();
+    expect(s.find('.spotlight-overlay').exists()).toBe(true);
+    sp.setLocalStateField('magnifier', { userId: 't1', on: true, x: 300, y: 200, z: 3 });
+    await nextTick();
+    expect(s.find('.mag-overlay').exists()).toBe(true);
+    // 远端关 / 教师断线信号消失 → 两端浮层清空零残留
+    sp.setLocalStateField('spotlight', null);
+    sp.setLocalStateField('magnifier', null);
+    await nextTick();
+    expect(s.find('.spotlight-overlay').exists()).toBe(false);
+    expect(s.find('.mag-overlay').exists()).toBe(false);
+    s.unmount();
+  });
+
+  it('负向：浮层拦截点击不穿透；学生端无入口切换无效；拖窗广播 50ms 节流', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F73VM;
+    await wrapper.find('.tools .spotlight').trigger('click');
+    const overlay = wrapper.find('.spotlight-overlay');
+    expect(overlay.exists()).toBe(true);
+    // 教师浮层为交互层：inline pointer-events 合同（点击落在浮层，不落到画布）
+    expect((overlay.element as HTMLElement).style.pointerEvents).toBe('auto');
+    // 拖窗广播节流（laser 50ms 同款）：10 帧 move 只 1 次 + pointerup 收尾 1 次
+    const spy = vi.spyOn(vm.provider, 'setSpotlight');
+    // jsdom 下 VTU trigger 无法写 MouseEvent 的只读 clientX —— 直接构造派发（同步、不依赖 await）
+    const fire = (type: string, x: number, y: number): void => {
+      overlay.element.dispatchEvent(
+        new MouseEvent(type, { clientX: x, clientY: y, bubbles: true })
+      );
+    };
+    fire('pointerdown', 200, 200);
+    for (let i = 0; i < 10; i++) {
+      fire('pointermove', 210 + i, 210 + i);
+    }
+    fire('pointerup', 219, 219);
+    expect(spy.mock.calls.length).toBeLessThanOrEqual(3);
+    spy.mockRestore();
+    wrapper.unmount();
+
+    // 学生端：无工具入口、切换被守卫拦下、远端浮层纯视觉不可交互
+    const s = mountWB({ isTeacher: false });
+    const svm = s.vm as unknown as F73VM;
+    expect(s.find('.tools').exists()).toBe(false);
+    svm.toggleSpotlight();
+    svm.toggleMagnifier();
+    await nextTick();
+    expect(svm.spotlightOn).toBe(false);
+    expect(svm.magOn).toBe(false);
+    expect(s.find('.spotlight-overlay').exists()).toBe(false);
+    svm.provider.awareness.setLocalStateField('spotlight', {
+      userId: 't1',
+      on: true,
+      x: 1,
+      y: 2,
+      w: 3,
+      h: 4
+    });
+    await nextTick();
+    const so = s.find('.spotlight-overlay');
+    expect(so.exists()).toBe(true);
+    expect((so.element as HTMLElement).style.pointerEvents).toBe('none');
+    s.unmount();
+  });
+});
+
+// ── F7.4 板中板：页字段 scratchElements/scratchOpen、随页保存恢复、开合同步学生端 ──
+describe('F7.4 板中板', () => {
+  type F74VM = PPTVM & {
+    scratchOpen: boolean | { value: boolean };
+    toggleScratch: () => void;
+    scratchShapeCount: () => number;
+    provider: YjsProvider;
+  };
+
+  it('正向：板中板内容随页保存恢复（页字段 scratchElements 懒建，翻页离开关闭、翻回重放）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F74VM;
+    if (!vm.provider.getActiveElements()) vm.provider.addPage();
+    // 未开板：无面板、页 scratch 数组懒建不存在
+    expect(wrapper.find('.scratch-panel').exists()).toBe(false);
+    expect(vm.provider.getScratchAtPage(0)).toBeNull();
+    // 开板 → 面板出现 + 数组懒建
+    await wrapper.find('.ctrl-tools .scratch').trigger('click');
+    expect(unwrapVal(vm.scratchOpen)).toBe(true);
+    expect(wrapper.find('.scratch-panel').exists()).toBe(true);
+    expect(vm.provider.getScratchAtPage(0)).not.toBeNull();
+    // 面板内手写一笔（stage 交互属人工走查；数据走 addScratchElement 同一入口）
+    vm.provider.addScratchElement({
+      id: 'sc1',
+      type: 'brush',
+      points: [10, 10, 20, 20],
+      color: '#000000',
+      lineWidth: 2,
+      opacity: 1
+    });
+    await nextTick();
+    expect(vm.scratchShapeCount()).toBe(1);
+    // 翻页离开：scratchOpen 是页级字段 → 新页关态、面板随页消失
+    vm.addLayer();
+    await nextTick();
+    vm.showLayer(2);
+    await nextTick();
+    expect(unwrapVal(vm.scratchOpen)).toBe(false);
+    expect(wrapper.find('.scratch-panel').exists()).toBe(false);
+    // 翻回第 1 页：开合态与内容随页恢复（scratch renderer 重放）
+    vm.showLayer(1);
+    await nextTick();
+    expect(unwrapVal(vm.scratchOpen)).toBe(true);
+    expect(wrapper.find('.scratch-panel').exists()).toBe(true);
+    expect(vm.scratchShapeCount()).toBe(1);
+    wrapper.unmount();
+  });
+
+  it('负向：开合页字段同步学生端；学生无入口、只读写入被拒', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F74VM;
+    if (!vm.provider.getActiveElements()) vm.provider.addPage();
+    await wrapper.find('.ctrl-tools .scratch').trigger('click');
+    expect(vm.provider.getScratchOpen(0)).toBe(true);
+    await wrapper.find('.ctrl-tools .scratch').trigger('click');
+    expect(vm.provider.getScratchOpen(0)).toBe(false);
+    expect(wrapper.find('.scratch-panel').exists()).toBe(false);
+    wrapper.unmount();
+
+    // 学生端：无 ctrl-tools 入口、provider 只读写入被拒（连数组都不建）
+    const s = mountWB({ isTeacher: false });
+    const svm = s.vm as unknown as F74VM;
+    // 学生 readOnly 加不了页，直推页 Map 种子（与 dark 负向 :4211 同款）
+    const sp = new Y.Map();
+    sp.set('id', 'page_scratch_student');
+    sp.set('name', 'Page 1');
+    sp.set('visible', true);
+    sp.set('elements', new Y.Array());
+    svm.provider.getPages().push([sp]);
+    await nextTick();
+    expect(s.find('.ctrl-tools').exists()).toBe(false);
+    svm.provider.addScratchElement({ id: 'x', type: 'brush', points: [0, 0, 1, 1] });
+    expect(svm.provider.getScratchAtPage(0)).toBeNull();
+    // 远端教师开板 → 学生面板跟随出现；关闭 → 消失（页字段观察器同 dark 路径）
+    svm.provider.getPages().get(0)!.set('scratchOpen', true);
+    await nextTick();
+    expect(s.find('.scratch-panel').exists()).toBe(true);
+    svm.provider.getPages().get(0)!.set('scratchOpen', false);
+    await nextTick();
+    expect(s.find('.scratch-panel').exists()).toBe(false);
+    s.unmount();
+  });
+});
+
+// ── F4.8 蒙层揭示：mask 拖拽放置/单击揭开/undo/Esc、学生只读、类型注册一致性 ──
+describe('F4.8 蒙层揭示', () => {
+  type F48VM = PPTVM & {
+    tool: (m: string) => void;
+    mode: string;
+    renderer: PPTVM['renderer'] & { onShapeClick?: (id: string) => void };
+  };
+
+  it('正向：拖拽放置 mask 落库并渲染、单击揭开即删、撤销恢复覆盖', () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F48VM;
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+    vm.tool('mask');
+    expect(vm.mode).toBe('mask');
+    const stage = konvaMocks.MockStage.last()!;
+    stage._pointer = { x: 50, y: 40 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 350, y: 260 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]).toMatchObject({ type: 'mask', x: 50, y: 40, width: 300, height: 220 });
+    // 注册一致性：mask 进 createNode 工厂渲染出节点（未注册 → isElementType false → 0 节点）
+    expect(vm.renderedShapeCount()).toBe(1);
+    // 单击揭开 = onShapeClick 回调分流到移除（教师；undo 可复原覆盖）
+    vm.renderer.onShapeClick!(shapes[0]!.id as string);
+    expect(vm.getCurrentPageShapes()).toHaveLength(0);
+    expect(vm.renderedShapeCount()).toBe(0);
+    vm.revocation('pre');
+    expect(vm.getCurrentPageShapes()).toHaveLength(1);
+    expect(vm.renderedShapeCount()).toBe(1);
+    wrapper.unmount();
+  });
+
+  it('负向：学生无入口、放置拒写揭不开；教师 Esc 退出放置模式', async () => {
+    const w = mountWB();
+    const vm = w.vm as unknown as F48VM;
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+    vm.tool('mask');
+    expect(vm.mode).toBe('mask');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(vm.mode).toBe('cur');
+    w.unmount();
+
+    // 学生端：无工具入口；远端已有一张 mask（直推页+元素模拟同步）
+    const s = mountWB({ isTeacher: false });
+    const svm = s.vm as unknown as F48VM;
+    expect(s.find('.tools .mask').exists()).toBe(false);
+    const p = new Y.Map();
+    p.set('id', 'page_mask_student');
+    p.set('name', 'Page 1');
+    p.set('visible', true);
+    p.set('elements', new Y.Array());
+    const mk = new Y.Map();
+    mk.set('id', 'mk1');
+    mk.set('type', 'mask');
+    mk.set('x', 0);
+    mk.set('y', 0);
+    mk.set('width', 100);
+    mk.set('height', 80);
+    // 未集成 Y.Map 的 get 读不到 prelim 字段：先 push 进文档（集成）再补元素
+    svm.provider!.getPages().push([p]);
+    (p.get('elements') as Y.Array<unknown>).push([mk]);
+    await nextTick();
+    expect(svm.getCurrentPageShapes()).toHaveLength(1);
+    // 放置被 readOnly 拦：拖一笔不会多出元素
+    svm.tool('mask');
+    const stage = konvaMocks.MockStage.last()!;
+    stage._pointer = { x: 10, y: 10 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 60, y: 60 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: false } });
+    expect(svm.getCurrentPageShapes()).toHaveLength(1);
+    // 学生单击揭不开（走 selectShape，selectEnabled=false，数据不动）
+    svm.renderer.onShapeClick!('mk1');
+    expect(svm.getCurrentPageShapes()).toHaveLength(1);
+    s.unmount();
+  });
+
+  it('类型注册：mask 入 ELEMENT_TYPES/MODE_TO_ELEMENT；未注册 type 不入工厂（前向兼容）', () => {
+    expect(isElementType('mask')).toBe(true);
+    const target = MODE_TO_ELEMENT.mask;
+    expect(target).toBeDefined();
+    expect(isElementType(target)).toBe(true);
+    expect(isElementType('future-widget')).toBe(false);
+  });
+});
+
 // ── 远端光标：悬停广播、写侧节流、contain 换算、标签淡出、幽灵清理（F7.1） ──
 describe('WhiteBoard.vue 远端光标（F7.1）', () => {
   type NodeLike = {

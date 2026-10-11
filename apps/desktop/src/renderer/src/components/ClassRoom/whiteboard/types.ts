@@ -17,6 +17,7 @@ export type ToolMode =
   | 'curve'
   | 'move'
   | 'laser'
+  | 'mask'
   | 'file';
 
 /** 笔型分段控件状态（F4.1）：钢笔/荧光笔，持久工具态（切换工具后记忆，重进房恢复） */
@@ -49,7 +50,8 @@ export const ELEMENT_TYPES = [
   'leader-label',
   'table',
   'coord',
-  'curve'
+  'curve',
+  'mask'
 ] as const;
 
 export type ElementType = (typeof ELEMENT_TYPES)[number];
@@ -73,7 +75,8 @@ export const MODE_TO_ELEMENT: Partial<Record<ToolMode, ElementType>> = {
   point: 'point',
   polygon: 'polygon',
   table: 'table',
-  coord: 'coord'
+  coord: 'coord',
+  mask: 'mask'
 };
 
 export interface CursorData {
@@ -82,6 +85,24 @@ export interface CursorData {
   x: number;
   y: number;
   color: string;
+}
+
+/** F7.3 聚光灯广播态（awareness 瞬时字段，不进文档/undo；null=关，字段存在即开） */
+export interface SpotlightState {
+  userId: string;
+  /** 高亮窗口左上角与尺寸（教师 stage 坐标系） */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** F7.3 放大镜广播态：透镜中心 + 倍率（教师 stage 坐标系；null=关） */
+export interface MagnifierState {
+  userId: string;
+  x: number;
+  y: number;
+  z: number;
 }
 
 export interface FileItem {
