@@ -266,26 +266,53 @@
       </div>
 
       <!-- F5.2：页面缩略图总览浮层（覆盖层，不改画布布局；当前页高亮，点击跳页） -->
+      <!-- F5.2c：「选择」进入批量模式，勾选后底部出删除条，确认删除 10 秒内可撤销 -->
       <div v-if="showThumbPanel" class="thumb-panel">
-        <div class="thumb-panel-title">页面总览</div>
+        <div class="thumb-panel-title">
+          <span>页面总览</span>
+          <span
+            class="thumb-panel-act"
+            @click="thumbSelectMode ? exitThumbSelect() : (thumbSelectMode = true)"
+          >
+            {{ thumbSelectMode ? '取消' : '选择' }}
+          </span>
+        </div>
         <div class="thumb-grid">
           <div
             v-for="p in thumbPages"
             :key="p.id"
             :class="[
               'thumb-item',
-              { on: p.current, drag: dragIndex === p.index, over: dragOverIndex === p.index }
+              {
+                on: p.current,
+                pick: thumbSelectMode && pickedIds.includes(p.id),
+                drag: dragIndex === p.index,
+                over: dragOverIndex === p.index
+              }
             ]"
             :data-thumb-index="p.index"
             @pointerdown="onThumbPointerDown(p.index, $event)"
             @pointermove="onThumbPointerMove(p.index)"
             @pointerenter="onThumbPointerEnter(p.index)"
-            @click="jumpToThumb(p.index)"
+            @click="onThumbItemClick(p.index, p.id)"
           >
+            <div v-if="thumbSelectMode" class="thumb-pick">
+              {{ pickedIds.includes(p.id) ? '✓' : '' }}
+            </div>
             <img v-if="p.dataUrl" class="thumb-snap" :src="p.dataUrl" alt="" />
             <div v-else class="thumb-ph">{{ p.index + 1 }}</div>
             <div class="thumb-num">{{ p.index + 1 }}</div>
           </div>
+        </div>
+        <div v-if="thumbSelectMode" class="thumb-actions">
+          <button
+            type="button"
+            class="thumb-del"
+            :disabled="pickedIds.length === 0"
+            @click="batchDeletePages"
+          >
+            删除所选（{{ pickedIds.length }}）
+          </button>
         </div>
       </div>
 
@@ -689,7 +716,10 @@
 
       <!-- Toast -->
       <div v-show="toastMsg" class="alert">
-        {{ toastMsg }}
+        <span class="alert-text">{{ toastMsg }}</span>
+        <button v-if="toastActionLabel" type="button" class="alert-act" @click="runToastAction">
+          {{ toastActionLabel }}
+        </button>
       </div>
     </div>
   </div>
@@ -738,6 +768,7 @@ import {
 } from './whiteboard/types';
 import { useUserStore } from '@/store/user';
 import Live from '@/api/backstage';
+import { useConfirmDelete } from '@/composables/useConfirmDelete';
 
 const props = defineProps<{
   roomId: string;
@@ -943,6 +974,42 @@ function onThumbPointerUp() {
   suppressClick = true;
   // 顺序变了：观察器负责换位、换可见页与重绑元素；快照按页 id 走，无需重渲
   provider?.movePage(from, to);
+}
+
+// F5.2c：批量选择与删除（确认框 + 删除后 10 秒可撤销）
+const thumbSelectMode = ref(false);
+const pickedIds = ref<string[]>([]);
+// 确认框由 useConfirmDelete 承担（ElMessageBox），组件只关心「确认了没」
+const { ask: askDeletePages } = useConfirmDelete<string[]>({
+  message: ids => `确定删除所选 ${ids.length} 页吗？删除后 10 秒内可撤销。`,
+  action: async () => undefined,
+  boxTitle: '删除页面',
+  confirmText: '删除'
+});
+
+function onThumbItemClick(index: number, id: string) {
+  if (thumbSelectMode.value) {
+    pickedIds.value = pickedIds.value.includes(id)
+      ? pickedIds.value.filter(x => x !== id)
+      : [...pickedIds.value, id];
+    return;
+  }
+  jumpToThumb(index);
+}
+
+function exitThumbSelect() {
+  thumbSelectMode.value = false;
+  pickedIds.value = [];
+}
+
+async function batchDeletePages() {
+  const ids = [...pickedIds.value];
+  if (ids.length === 0) return;
+  if (!(await askDeletePages(ids))) return;
+  removePagesByIds(ids);
+  exitThumbSelect();
+  // 撤销窗口 10 秒：撤销=对这档删除做一次 undo（removePagesByIds 单事务单档）
+  toastWithAction(`已删除 ${ids.length} 页，10 秒内可撤销`, '撤销', () => revocation('pre'), 10000);
 }
 // F6.3 课后回看：教师端入口打开只读快照查看浮层（Q4 MVP 仅教师，服务端 403 鉴权）
 const showBoardReview = ref(false);
@@ -1179,13 +1246,43 @@ function bindElementsObserver(elements: any) {
 }
 let sizeDragging = false;
 let toastTimer: any = null;
+// F5.2c：批量删除后的「10 秒可撤销」按钮（随 toast 一起出现/过期）
+const toastActionLabel = ref('');
+let toastAction: (() => void) | null = null;
+
+function clearToastAction() {
+  toastActionLabel.value = '';
+  toastAction = null;
+}
+
+function runToastAction() {
+  const fn = toastAction;
+  clearTimeout(toastTimer);
+  toastTimer = null;
+  toastMsg.value = '';
+  clearToastAction();
+  fn?.();
+}
 
 function toast(msg: string) {
   toastMsg.value = msg;
   clearTimeout(toastTimer);
+  clearToastAction();
   toastTimer = setTimeout(() => {
     toastMsg.value = '';
   }, 2000);
+}
+
+/** 带操作按钮的 toast（F5.2c 撤销窗口）：按钮在 ms 后随文案一起过期 */
+function toastWithAction(msg: string, label: string, onAction: () => void, ms = 10000) {
+  toastMsg.value = msg;
+  toastActionLabel.value = label;
+  toastAction = onAction;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toastMsg.value = '';
+    clearToastAction();
+  }, ms);
 }
 
 onMounted(() => {
@@ -3883,8 +3980,9 @@ async function importServerCoursewares() {
 function removePagesByIds(ids: string[]) {
   // 学生端守卫：直接操作 Yjs pages/elements，绕过 provider，必须在此拦截
   if (!props.isTeacher) return;
-  if (!provider || ids.length === 0) return;
-  const pages = provider.getPages();
+  const p = provider;
+  if (!p || ids.length === 0) return;
+  const pages = p.getPages();
   const targets: number[] = [];
   for (let i = pages.length - 1; i >= 0; i--) {
     const pid = String(pages.get(i).get('id'));
@@ -3893,16 +3991,19 @@ function removePagesByIds(ids: string[]) {
   if (targets.length === 0) return;
   const removeAll = targets.length === pages.length;
   targets.sort((a, b) => b - a);
-  for (const idx of targets) {
-    // removePage 自带保底（至少保留一页），Konva 层由 pages.observe 同步移除
-    provider.removePage(idx);
-  }
-  if (removeAll) {
-    // 全删场景：保底留下的页（最小索引）可能带课件图，清空其 elements 避免残留
-    const els = provider.getElementsAtPage(0);
-    if (els && els.length > 0) els.delete(0, els.length);
-    refreshLayer();
-  }
+  // F5.2c：多页删除合并成一个事务 → Yjs 只出一档 undo，10 秒内撤销一次全恢复
+  p.doc.transact(() => {
+    for (const idx of targets) {
+      // removePage 自带保底（至少保留一页），Konva 层由 pages.observe 同步移除
+      p.removePage(idx);
+    }
+    if (removeAll) {
+      // 全删场景：保底留下的页（最小索引）可能带课件图，清空其 elements 避免残留
+      const els = p.getElementsAtPage(0);
+      if (els && els.length > 0) els.delete(0, els.length);
+    }
+  });
+  if (removeAll) refreshLayer();
 }
 
 // 当前页 shape 的纯对象快照（Y.Map.toJSON），供测试/调用方断言
@@ -4096,6 +4197,12 @@ defineExpose({
   layerIndex,
   curLayerIndex,
   toastMsg,
+  // F5.2c：批量删除与 10 秒撤销
+  thumbSelectMode,
+  pickedIds,
+  batchDeletePages,
+  exitThumbSelect,
+  toastActionLabel,
   snapshotRetry,
   rendererPageCount: () => renderer?.getPageCount() ?? 0,
   renderedShapeCount: () => renderer?.getNodeCount() ?? 0,
@@ -4465,9 +4572,20 @@ defineExpose({
   padding: 10px;
   z-index: 12;
   .thumb-panel-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     font-size: 12px;
     color: #666;
     margin-bottom: 8px;
+    .thumb-panel-act {
+      color: #409eff;
+      cursor: pointer;
+      user-select: none;
+      &:hover {
+        text-decoration: underline;
+      }
+    }
   }
   .thumb-grid {
     display: grid;
@@ -4496,6 +4614,25 @@ defineExpose({
       border-color: #409eff;
       background: rgba(64, 158, 255, 0.06);
     }
+    // F5.2c：选择模式下已勾选
+    &.pick {
+      border-color: #67c23a;
+      background: rgba(103, 194, 58, 0.1);
+    }
+    .thumb-pick {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 16px;
+      height: 16px;
+      border: 1px solid #dcdfe6;
+      border-radius: 3px;
+      background: #fff;
+      font-size: 12px;
+      line-height: 14px;
+      color: #67c23a;
+    }
+    position: relative;
     .thumb-ph {
       height: 54px;
       display: flex;
@@ -4520,6 +4657,28 @@ defineExpose({
       font-size: 11px;
       color: #666;
       margin-top: 2px;
+    }
+  }
+  // F5.2c：批量删除操作条
+  .thumb-actions {
+    margin-top: 8px;
+    .thumb-del {
+      width: 100%;
+      padding: 5px 0;
+      border: 1px solid #f56c6c;
+      border-radius: 4px;
+      background: #fff;
+      color: #f56c6c;
+      font-size: 12px;
+      cursor: pointer;
+      &:hover:not(:disabled) {
+        background: #fef0f0;
+      }
+      &:disabled {
+        border-color: #dcdfe6;
+        color: #c0c4cc;
+        cursor: not-allowed;
+      }
     }
   }
 }
@@ -4981,6 +5140,22 @@ defineExpose({
   font-size: 14px;
   z-index: 200;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  // F5.2c：10 秒撤销窗口内的操作按钮
+  .alert-act {
+    padding: 3px 12px;
+    border: 1px solid #fff;
+    border-radius: 4px;
+    background: transparent;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    &:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+  }
 }
 
 .snapshot-banner {

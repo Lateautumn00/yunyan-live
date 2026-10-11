@@ -512,7 +512,6 @@ const exportMocks = vi.hoisted(() => ({ runExport: vi.fn() }));
 vi.mock('./whiteboard/exportBoard', () => ({
   runExport: exportMocks.runExport
 }));
-
 // F5.2 缩略图：离屏渲染管线由 pageSnapshot.spec 覆盖，此处只验面板接线与刷新时机
 const snapMocks = vi.hoisted(() => ({
   renderPageSnapshot: vi.fn(
@@ -521,6 +520,19 @@ const snapMocks = vi.hoisted(() => ({
 }));
 vi.mock('./whiteboard/pageSnapshot', () => ({
   renderPageSnapshot: snapMocks.renderPageSnapshot
+}));
+
+// F5.2c 批量删除确认框（ElMessageBox）由 composable 承担，此处只验确认/取消接线
+const confirmMocks = vi.hoisted(() => ({
+  ask: vi.fn(async (_ids?: unknown) => true)
+}));
+vi.mock('@/composables/useConfirmDelete', () => ({
+  useConfirmDelete: () => ({
+    deleting: { value: false },
+    ask: confirmMocks.ask,
+    perform: vi.fn(async () => true),
+    confirmAndDelete: vi.fn(async () => false)
+  })
 }));
 
 // F1.1 公式：katex/html2canvas chunk 的光栅实现由 formulaRaster.spec 覆盖，此处只验浮层接线
@@ -5144,6 +5156,147 @@ describe('F5.2b 缩略图拖拽排序', () => {
     // 关键：调序栈项带 pageId，undo 后索引漂移也能跳回 B（第 2 页）
     expect(vm.curLayerIndex).toBe(2);
     expect(vm.thumbPages[1]!.current).toBe(true);
+    wrapper.unmount();
+  });
+});
+
+// ── F5.2c 批量删除 + 10 秒撤销（单事务一档 undo + 确认框 + 撤销条） ────────────
+type BatchVM = DragVM & {
+  thumbSelectMode: boolean;
+  pickedIds: string[];
+  batchDeletePages: () => Promise<void>;
+  exitThumbSelect: () => void;
+  toastActionLabel: string;
+};
+
+describe('F5.2c 批量删除与 10 秒撤销', () => {
+  beforeEach(() => {
+    snapMocks.renderPageSnapshot.mockClear();
+    snapMocks.renderPageSnapshot.mockResolvedValue('data:image/png;base64,FAKE');
+    confirmMocks.ask.mockClear();
+    confirmMocks.ask.mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function setup(): Promise<{
+    wrapper: ReturnType<typeof mountWB>;
+    vm: BatchVM;
+    ids: string[];
+  }> {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as BatchVM;
+    seedPages(vm);
+    await nextTick();
+    const ids = vm.thumbPages.map(p => p.id);
+    vm.toggleThumbPanel();
+    await until(() => vm.thumbPages.every(p => p.dataUrl !== null));
+    return { wrapper, vm, ids };
+  }
+
+  it('正向：多页批量删除只占一档 undo，撤销一次全部恢复', async () => {
+    const { wrapper, vm, ids } = await setup();
+    const undoBefore = vm.provider!.undoManager.undoStack.length;
+    vm.thumbSelectMode = true;
+    vm.pickedIds = [ids[0]!, ids[1]!];
+    await vm.batchDeletePages();
+    await nextTick();
+
+    expect(vm.thumbPages.map(p => p.id)).toEqual([ids[2]]);
+    expect(vm.thumbSelectMode).toBe(false);
+    expect(vm.provider!.undoManager.undoStack.length).toBe(undoBefore + 1);
+
+    vm.revocation('pre');
+    await nextTick();
+    expect(vm.thumbPages.map(p => p.id)).toEqual(ids);
+    wrapper.unmount();
+  });
+
+  it('正向：删除成功弹出撤销条，点击撤销恢复且撤销条消失', async () => {
+    const { wrapper, vm, ids } = await setup();
+    vm.thumbSelectMode = true;
+    vm.pickedIds = [ids[2]!];
+    await vm.batchDeletePages();
+    await nextTick();
+
+    expect(vm.thumbPages).toHaveLength(ids.length - 1);
+    expect(vm.toastMsg).toContain('已删除');
+    expect(vm.toastActionLabel).toBe('撤销');
+    const btn = wrapper.find('.alert-act');
+    expect(btn.exists()).toBe(true);
+
+    await btn.trigger('click');
+    await nextTick();
+    expect(vm.thumbPages.map(p => p.id)).toEqual(ids);
+    expect(vm.toastMsg).toBe('');
+    expect(vm.toastActionLabel).toBe('');
+    expect(wrapper.find('.alert-act').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('负向：确认框选取消 → 一页不删也不出撤销条', async () => {
+    confirmMocks.ask.mockResolvedValue(false);
+    const { wrapper, vm, ids } = await setup();
+    vm.thumbSelectMode = true;
+    vm.pickedIds = [ids[0]!];
+    await vm.batchDeletePages();
+    await nextTick();
+
+    expect(confirmMocks.ask).toHaveBeenCalledTimes(1);
+    expect(vm.thumbPages.map(p => p.id)).toEqual(ids);
+    expect(vm.toastMsg).toBe('');
+    expect(vm.thumbSelectMode).toBe(true); // 取消后留在选择模式，便于改选
+    wrapper.unmount();
+  });
+
+  it('正向：撤销窗口 10 秒后自动关闭（撤销条消失且不可再点）', async () => {
+    const { wrapper, vm, ids } = await setup();
+    vm.thumbSelectMode = true;
+    vm.pickedIds = [ids[0]!];
+    vi.useFakeTimers();
+    await vm.batchDeletePages();
+    await nextTick();
+
+    expect(vm.toastActionLabel).toBe('撤销');
+    vi.advanceTimersByTime(9000);
+    expect(vm.toastActionLabel).toBe('撤销');
+    vi.advanceTimersByTime(1100);
+    expect(vm.toastActionLabel).toBe('');
+    expect(vm.toastMsg).toBe('');
+    await nextTick();
+    expect(wrapper.find('.alert-act').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('负向：选择模式点击条目只勾选/取消勾选，不跳页', async () => {
+    const { wrapper, vm, ids } = await setup();
+    vm.thumbSelectMode = true;
+    const cur = vm.curLayerIndex;
+    const items = wrapper.findAll('.thumb-item');
+
+    await items[0]!.trigger('click');
+    await nextTick();
+    expect(vm.pickedIds).toEqual([ids[0]!]);
+    expect(vm.curLayerIndex).toBe(cur);
+
+    await items[0]!.trigger('click');
+    await nextTick();
+    expect(vm.pickedIds).toEqual([]);
+    wrapper.unmount();
+  });
+
+  it('负向：全选删除走保底——保留最后一页且清空其元素', async () => {
+    const { wrapper, vm, ids } = await setup();
+    vm.thumbSelectMode = true;
+    vm.pickedIds = [...ids];
+    await vm.batchDeletePages();
+    await nextTick();
+
+    expect(vm.thumbPages).toHaveLength(1);
+    expect(vm.provider!.getPages().length).toBe(1);
+    expect(vm.provider!.getElementsAtPage(0)!.length).toBe(0);
     wrapper.unmount();
   });
 });
