@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import net from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
 import jwt from 'jsonwebtoken';
 import * as Y from 'yjs';
 import { WebSocket as NodeWebSocket } from 'ws';
@@ -110,6 +112,8 @@ beforeAll(async () => {
   process.env.SNAPSHOT_EMPTY_GRACE_MS = '100';
   process.env.SNAPSHOT_FAIL_RETRY_MS = '150';
   process.env.SNAPSHOT_INTERVAL_MS = '60000';
+  process.env.REPLAY_DIR = path.join(os.tmpdir(), `replay-main-${runId}`);
+  process.env.REPLAY_TTL_MS = '0';
   mockSnap.store.clear();
   mockSnap.saveFails = false;
   mockSnap.loadFails = false;
@@ -363,5 +367,85 @@ describe('yjs-ws realtime sync', () => {
     } finally {
       mockAccess.studentRooms.delete(room);
     }
+  }, 20000);
+
+  it('T11: replay endpoint serves baseline + monotonic events that rebuild to the written state', async () => {
+    const room = `t11-${runId}`;
+
+    const docA = new Y.Doc();
+    const pA = connect(room, docA);
+    await untilSynced(pA);
+    const pages = docA.getArray<Y.Map<unknown>>('pages');
+    docA.transact(() => {
+      const p = new Y.Map<unknown>();
+      p.set('id', 'p11');
+      p.set('elements', new Y.Array<unknown>());
+      pages.push([p]);
+    });
+    docA.getMap<number>('currentPageIndex').set('index', 0);
+    docA.transact(() => {
+      (pages.get(0)!.get('elements') as Y.Array<unknown>).push(['stroke11']);
+    });
+    await sleep(400);
+
+    const res = await fetch(`http://127.0.0.1:${port}/replay/${room}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      code: number;
+      data: {
+        baseline: string | null;
+        events: Array<{ seq: number; ts: number; u: string }>;
+        lastSeq: number;
+      };
+    };
+    expect(body.code).toBe(1000);
+    expect(body.data.baseline).toBeTruthy();
+    expect(body.data.events.length).toBeGreaterThanOrEqual(3);
+    expect(body.data.lastSeq).toBe(body.data.events.length);
+    const seqs = body.data.events.map(e => e.seq);
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
+    expect(new Set(seqs).size).toBe(seqs.length);
+
+    const rebuilt = new Y.Doc();
+    Y.applyUpdate(rebuilt, Buffer.from(body.data.baseline!, 'base64'));
+    for (const e of body.data.events) Y.applyUpdate(rebuilt, Buffer.from(e.u, 'base64'));
+    const rebuiltPages = rebuilt.getArray<Y.Map<unknown>>('pages');
+    expect(rebuiltPages.length).toBeGreaterThanOrEqual(1);
+    const pageEls = (rebuiltPages.get(0)!.get('elements') as Y.Array<unknown>).toArray();
+    expect(pageEls).toContain('stroke11');
+    expect(rebuilt.getMap<number>('currentPageIndex').get('index')).toBe(0);
+
+    pA.disconnect();
+  }, 20000);
+
+  it('T12: replay of a never-written room is an empty stream and fromSeq filters the tail', async () => {
+    const room = `t12-${runId}`;
+
+    const docA = new Y.Doc();
+    const pA = connect(room, docA);
+    await untilSynced(pA);
+    await sleep(200);
+
+    const emptyRes = await fetch(`http://127.0.0.1:${port}/replay/${room}`);
+    const emptyBody = (await emptyRes.json()) as {
+      code: number;
+      data: { events: unknown[]; lastSeq: number };
+    };
+    expect(emptyBody.code).toBe(1000);
+    expect(emptyBody.data.events).toHaveLength(0);
+    expect(emptyBody.data.lastSeq).toBe(0);
+
+    docA.getArray('elements').push(['e1']);
+    docA.getArray('elements').push(['e2']);
+    await sleep(400);
+
+    const tailRes = await fetch(`http://127.0.0.1:${port}/replay/${room}?fromSeq=2`);
+    const tailBody = (await tailRes.json()) as {
+      data: { events: Array<{ seq: number }>; lastSeq: number };
+    };
+    expect(tailBody.data.events.map(e => e.seq)).toEqual([2]);
+    expect(tailBody.data.lastSeq).toBe(2);
+
+    pA.disconnect();
   }, 20000);
 });

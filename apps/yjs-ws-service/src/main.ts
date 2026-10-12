@@ -15,6 +15,7 @@ import {
 } from '@yunyan-live/nest-shared';
 import { loadLatestSnapshot, saveSnapshot } from './snapshot';
 import { checkRoomAccess } from './access';
+import { appendReplayEvent, initReplayBaseline, readReplay } from './replay';
 import * as syncProtocol from 'y-protocols/sync';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
@@ -143,6 +144,15 @@ function initDoc(docName: string, doc: Y.Doc): void {
   d.on('update', (update: Uint8Array, origin: any) => {
     const meta = roomMeta.get(docName);
     if (meta) meta.dirty = true;
+    // F6.4：到达序列日志（快照恢复发生在 initDoc 之前，不会入流）
+    try {
+      appendReplayEvent(docName, update);
+    } catch (err) {
+      console.error(
+        `[YjsWS] replay append failed room=${docName}:`,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, messageSync);
     syncProtocol.writeUpdate(encoder, update);
@@ -211,6 +221,15 @@ function ensureDoc(docName: string): Promise<Y.Doc> {
     if (loaded.ok && loaded.bytes && loaded.bytes.length > 0) {
       // 监听器挂载前恢复：不触发广播、不置 dirty
       Y.applyUpdate(doc, loaded.bytes, 'snapshot-restore');
+    }
+    // F6.4：首建写基线（已有事件流时 no-op，重启续接旧流）
+    try {
+      initReplayBaseline(docName, Y.encodeStateAsUpdate(doc));
+    } catch (err) {
+      console.error(
+        `[YjsWS] replay baseline init failed room=${docName}:`,
+        err instanceof Error ? err.message : String(err)
+      );
     }
     initDoc(docName, doc);
     docs.set(docName, doc);
@@ -516,6 +535,39 @@ async function handleYjsConnection(connection: WebSocket, req: http.IncomingMess
 const app = new Koa();
 const server = http.createServer(app.callback());
 const wss = new WebSocketServer({ server });
+
+app.use(async (ctx, next) => {
+  // F6.4 回放读取端点：GET /replay/:roomId?fromSeq=N（课后低频，直读本地事件流文件）
+  if (ctx.method === 'GET' && ctx.path.startsWith('/replay/')) {
+    const roomId = decodeURIComponent(ctx.path.slice('/replay/'.length));
+    const fromSeq = Number(ctx.query.fromSeq) || 0;
+    try {
+      const data = readReplay(roomId, fromSeq);
+      ctx.body = {
+        code: 1000,
+        msg: 'ok',
+        data: {
+          baseline: data.baseline ? Buffer.from(data.baseline).toString('base64') : null,
+          events: data.events.map(e => ({
+            seq: e.seq,
+            ts: e.ts,
+            u: Buffer.from(e.u).toString('base64')
+          })),
+          lastSeq: data.lastSeq
+        }
+      };
+    } catch (err) {
+      ctx.status = 500;
+      ctx.body = {
+        code: 1002,
+        msg: err instanceof Error ? err.message : String(err),
+        data: null
+      };
+    }
+    return;
+  }
+  await next();
+});
 
 app.use(async ctx => {
   ctx.body = { status: 'ok', service: 'yjs-ws' };
