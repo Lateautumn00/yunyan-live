@@ -30,6 +30,28 @@
             下一页
           </span>
         </div>
+        <div class="br-replaybar">
+          <span v-if="!showReplay" class="br-nav br-replay-btn" @click="openReplay">
+            过程回放
+          </span>
+          <span v-else class="br-nav br-replay-exit" @click="closeReplay">退出回放</span>
+        </div>
+        <div v-if="replayLoading" class="br-state">回放数据加载中…</div>
+        <div v-else-if="replayError" class="br-state br-error br-replay-error">
+          {{ replayError }}
+        </div>
+        <ReplayControls
+          v-else-if="showReplay"
+          :total="replayTotal"
+          :cursor="replayCursor"
+          :playing="replayPlaying"
+          :speed="replaySpeed"
+          :segments="replaySegments"
+          :disabled="replayTotal === 0"
+          @toggle="toggleReplay"
+          @seek="seekReplay"
+          @speed="setReplaySpeed"
+        />
       </div>
     </div>
   </div>
@@ -41,6 +63,8 @@ import { ref, onMounted, nextTick, onBeforeUnmount } from 'vue';
 import Live from '@/api/backstage';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { decodeBoardSnapshot, readSnapshotPages } from './whiteboard/boardReview';
+import ReplayControls from './ReplayControls.vue';
+import { ReplayController, fetchReplay, type ReplaySpeed } from './whiteboard/replayPlayer';
 
 const props = defineProps<{ roomId: string }>();
 defineEmits<{ (e: 'close'): void }>();
@@ -128,8 +152,117 @@ function showPageIdx(idx: number) {
   renderPage(idx);
 }
 
+// ---------- F6.4 过程回放 ----------
+const showReplay = ref(false);
+const replayLoading = ref(false);
+const replayError = ref('');
+const replayTotal = ref(0);
+const replayCursor = ref(0);
+const replayPlaying = ref(false);
+const replaySpeed = ref<ReplaySpeed>(1);
+const replaySegments = ref<Array<{ seq: number; pageIndex: number }>>([]);
+let replayCtrl: ReplayController | null = null;
+let replaySyncTimer: ReturnType<typeof setInterval> | null = null;
+
+async function openReplay() {
+  showReplay.value = true;
+  replayError.value = '';
+  replayLoading.value = true;
+  try {
+    const data = await fetchReplay(props.roomId, undefined, 0);
+    replayCtrl?.destroy();
+    replayCtrl = new ReplayController();
+    replayCtrl.load(data);
+    replayTotal.value = replayCtrl.total;
+    replayCursor.value = replayCtrl.cursor;
+    replaySegments.value = replayCtrl.segments;
+    replayPlaying.value = false;
+    renderReplay();
+  } catch {
+    replayError.value = '回放数据加载失败';
+  } finally {
+    replayLoading.value = false;
+  }
+}
+
+function renderReplay() {
+  const ctrl = replayCtrl;
+  if (!ctrl) return;
+  pages.value = readSnapshotPages(ctrl.doc);
+  const idx = ctrl.doc.getMap<number>('currentPageIndex').get('index') ?? 0;
+  pageIdx.value = Math.min(idx, Math.max(0, pages.value.length - 1));
+  renderPage(pageIdx.value);
+}
+
+function toggleReplay() {
+  const ctrl = replayCtrl;
+  if (!ctrl || !ctrl.canPlay) return;
+  if (ctrl.playing) {
+    ctrl.pause();
+    replayPlaying.value = false;
+    stopReplaySync();
+  } else {
+    ctrl.play();
+    replayPlaying.value = true;
+    startReplaySync();
+  }
+}
+
+/** 回放端节流渲染：200ms 批量同步 cursor + 重绘（规格 §4.6 性能提示） */
+function startReplaySync() {
+  stopReplaySync();
+  replaySyncTimer = setInterval(() => {
+    const ctrl = replayCtrl;
+    if (!ctrl) return;
+    replayCursor.value = ctrl.cursor;
+    if (!ctrl.playing) {
+      replayPlaying.value = false;
+      stopReplaySync();
+    }
+    renderReplay();
+  }, 200);
+}
+
+function stopReplaySync() {
+  if (replaySyncTimer) {
+    clearInterval(replaySyncTimer);
+    replaySyncTimer = null;
+  }
+}
+
+function seekReplay(seq: number) {
+  const ctrl = replayCtrl;
+  if (!ctrl) return;
+  ctrl.seekTo(seq);
+  replayCursor.value = ctrl.cursor;
+  replayPlaying.value = false;
+  stopReplaySync();
+  renderReplay();
+}
+
+function setReplaySpeed(s: ReplaySpeed) {
+  replaySpeed.value = s;
+  replayCtrl?.setSpeed(s);
+}
+
+function closeReplay() {
+  showReplay.value = false;
+  stopReplaySync();
+  replayCtrl?.destroy();
+  replayCtrl = null;
+  replayTotal.value = 0;
+  replayCursor.value = 0;
+  replaySegments.value = [];
+  replayPlaying.value = false;
+  replayError.value = '';
+  if (selectedId.value) void open(selectedId.value);
+}
+
 onMounted(fetchHistory);
 onBeforeUnmount(() => {
+  stopReplaySync();
+  replayCtrl?.destroy();
+  replayCtrl = null;
   renderer?.destroy?.();
   renderer = null;
 });
@@ -216,6 +349,20 @@ defineExpose({ fetchHistory, open, pages, pageIdx, items, error, selectedId });
         justify-content: center;
         gap: 16px;
         padding: 8px;
+        font-size: 12px;
+        .br-nav {
+          cursor: pointer;
+          &:hover {
+            color: #fff;
+          }
+        }
+      }
+      .br-replaybar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 0 8px 4px;
         font-size: 12px;
         .br-nav {
           cursor: pointer;
