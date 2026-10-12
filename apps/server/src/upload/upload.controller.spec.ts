@@ -10,7 +10,8 @@ const h = vi.hoisted(() => ({
   written: [] as string[],
   exec: [] as Array<{ file: string; args: string[]; opts?: { timeout?: number } }>,
   execError: null as Error | null,
-  producePdf: false
+  producePdf: false,
+  pdfSize: 1024
 }));
 
 vi.mock('fs', async importOriginal => {
@@ -23,7 +24,8 @@ vi.mock('fs', async importOriginal => {
     },
     writeFileSync: (p: string) => {
       h.written.push(p);
-    }
+    },
+    statSync: (p: string) => ({ size: p.endsWith('.pdf') ? h.pdfSize : 1 })
   };
 });
 
@@ -72,6 +74,7 @@ beforeEach(() => {
   h.exec.length = 0;
   h.execError = null;
   h.producePdf = false;
+  h.pdfSize = 1024;
   delete process.env.BASE_URL;
   delete process.env.SOFFICE_PATH;
 });
@@ -142,32 +145,53 @@ describe('UploadController.uploadPPT', () => {
     expect(h.exec[0]?.file).toBe('/opt/custom/soffice');
   });
 
-  it('转换进程失败返回空 fileUrl', async () => {
+  it('转换进程失败返回判别对象 convertError（convert/可重试）', async () => {
     h.execError = new Error('spawn failed');
     const controller = new UploadController();
     const res = await controller.uploadPPT(makeFile('deck.pptx', 'application/vnd.ms-powerpoint'));
-    expect(res).toEqual({ fileUrl: '' });
+    expect(res.fileUrl).toBe('');
+    expect(res.convertError?.stage).toBe('convert');
+    expect(res.convertError?.retryable).toBe(true);
+    expect(res.convertError?.message).toContain('spawn failed');
+    expect(res.convertError?.originalUrl).toMatch(
+      /^http:\/\/localhost:3001\/uploads\/ppt\/\d+-\d+\.pptx$/
+    );
     expect(Logger.prototype.error).toHaveBeenCalledWith(
       'PPT转PDF失败: spawn failed',
       expect.anything()
     );
   });
 
-  it('转换成功但未生成 PDF 返回空 fileUrl', async () => {
+  it('转换成功但未生成 PDF 返回 missing-pdf（不可重试）', async () => {
     const controller = new UploadController();
     const res = await controller.uploadPPT(makeFile('deck.pptx', 'application/vnd.ms-powerpoint'));
-    expect(res).toEqual({ fileUrl: '' });
+    expect(res.fileUrl).toBe('');
+    expect(res.convertError?.stage).toBe('missing-pdf');
+    expect(res.convertError?.retryable).toBe(false);
     expect(Logger.prototype.error).toHaveBeenCalledWith(
-      'PPT转PDF失败: LibreOffice 未生成 PDF 文件',
+      'PPT转PDF失败: 未生成有效 PDF 文件',
       expect.anything()
     );
   });
 
-  it('ENOENT 额外记录 LibreOffice 缺失提示', async () => {
+  it('PDF 产物 0 字节按 missing-pdf 处理', async () => {
+    h.producePdf = true;
+    h.pdfSize = 0;
+    const controller = new UploadController();
+    const res = await controller.uploadPPT(makeFile('deck.pptx', 'application/vnd.ms-powerpoint'));
+    expect(res.fileUrl).toBe('');
+    expect(res.convertError?.stage).toBe('missing-pdf');
+    expect(res.convertError?.retryable).toBe(false);
+  });
+
+  it('ENOENT 返回 soffice-missing 且附原文件地址', async () => {
     h.execError = new Error('spawn soffice ENOENT');
     const controller = new UploadController();
     const res = await controller.uploadPPT(makeFile('deck.pptx', 'application/vnd.ms-powerpoint'));
-    expect(res).toEqual({ fileUrl: '' });
+    expect(res.fileUrl).toBe('');
+    expect(res.convertError?.stage).toBe('soffice-missing');
+    expect(res.convertError?.retryable).toBe(false);
+    expect(res.convertError?.originalUrl).toMatch(/\.pptx$/);
     expect(Logger.prototype.error).toHaveBeenCalledWith(
       '未找到 LibreOffice，请安装或配置 SOFFICE_PATH'
     );

@@ -8,10 +8,16 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { extname, join } from 'path';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'fs';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { buildPptToPdfArgs, PPT_TO_PDF_TIMEOUT_MS } from './ppt-convert';
+import {
+  buildPptToPdfArgs,
+  buildConvertError,
+  classifyConvertFailure,
+  PPT_TO_PDF_TIMEOUT_MS,
+  type ConvertErrorInfo
+} from './ppt-convert';
 
 const execFileAsync = promisify(execFile);
 const UPLOAD_DIR = join(process.cwd(), 'uploads');
@@ -101,6 +107,7 @@ export class UploadController {
     // LO 以输入文件名（baseName.pptx）命名输出，直出 pptDir/baseName.pdf
     const pdfUrl = `${baseUrl}/uploads/ppt/${baseName}.pdf`;
     const pdfPath = join(pptDir, `${baseName}.pdf`);
+    const originalUrl = `${baseUrl}/uploads/ppt/${pptFilename}`;
 
     try {
       const sofficePath =
@@ -114,18 +121,26 @@ export class UploadController {
       this.logger.log(`执行: ${sofficePath} ${pdfArgs.join(' ')}`);
       await execFileAsync(sofficePath, pdfArgs, { timeout: PPT_TO_PDF_TIMEOUT_MS });
 
-      if (!existsSync(pdfPath)) {
-        throw new Error('LibreOffice 未生成 PDF 文件');
+      if (!existsSync(pdfPath) || statSync(pdfPath).size === 0) {
+        throw Object.assign(new Error('未生成有效 PDF 文件'), {
+          convertStage: 'missing-pdf' as const
+        });
       }
       this.logger.log(`PPT转PDF完成: ${baseName}.pdf`);
       return { fileUrl: pdfUrl };
     } catch (err) {
       const msg = (err as Error).message;
       this.logger.error(`PPT转PDF失败: ${msg}`, (err as Error).stack);
-      if (msg.includes('ENOENT')) {
-        this.logger.error('未找到 LibreOffice，请安装或配置 SOFFICE_PATH');
+      let info: ConvertErrorInfo;
+      if ((err as { convertStage?: string }).convertStage === 'missing-pdf') {
+        info = buildConvertError('missing-pdf', false, '转换未生成有效 PDF 文件', originalUrl);
+      } else {
+        info = classifyConvertFailure(err, originalUrl);
+        if (info.stage === 'soffice-missing') {
+          this.logger.error('未找到 LibreOffice，请安装或配置 SOFFICE_PATH');
+        }
       }
-      return { fileUrl: '' };
+      return { fileUrl: '', convertError: info };
     }
   }
 }
