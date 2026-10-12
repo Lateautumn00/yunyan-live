@@ -1,0 +1,2035 @@
+{
+  "generatedAt": "2026-10-12T08:06:04.933Z",
+  "files": [
+    {
+      "file": "circuitjs/circuitjs.html",
+      "bytes": 586,
+      "sha256": "4152eadd62a03362ac7f8dffdc86f6cf5813760cf06133982d40c826fd03363a"
+    },
+    {
+      "file": "circuitjs/circuitjs/font/fontello.css",
+      "bytes": 4022,
+      "sha256": "175a5ec77320dd6eb3e9ac55792fe61c0b16fd5896b7e117b611d25363eccd07"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuitjs-BdWoPVSM.js",
+      "bytes": 27772,
+      "sha256": "3f90b630faef419dc24a78e23cef979f984aa62c7731c4e6dc02059df17e33d0"
+    },
+    {
+      "file": "circuitjs/circuitjs/CircuitElm-BgwLKygx.js",
+      "bytes": 307237,
+      "sha256": "c6a9f20f852d69b7186ac59ead80fce6818a3ca2d51d66d9fe57d4a0f6a816d7"
+    },
+    {
+      "file": "circuitjs/circuitjs/KeyNames-Ca7eztBd.js",
+      "bytes": 2240,
+      "sha256": "99d56a2161b2c0e3da5068641f6c70f79d813e21d557f6ba58d2eabfe68dabad"
+    },
+    {
+      "file": "circuitjs/circuitjs/UIManager-BUa8x0_H.js",
+      "bytes": 124223,
+      "sha256": "980d39133b5095c9c0f1aa8cbb0e43fe94fa65cd50f16f32235e02482ed777d9"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuitjs-DDWVHsFC.css",
+      "bytes": 6009,
+      "sha256": "4ba1f27abada17ee255486ff3b7ff635c347af7d52634a4906de78c616fa62d4"
+    },
+    {
+      "file": "circuitjs/circuitjs/font/fontello.eot",
+      "bytes": 17348,
+      "sha256": "d38f16d3a3bc6642bd4d4fbc410b1348787f08106aae85b00b6c11dce0c6ab77"
+    },
+    {
+      "file": "circuitjs/circuitjs/font/fontello.woff2",
+      "bytes": 9116,
+      "sha256": "e8e04bf941e4c3222230daed38417228fae2f801720cbae9d654a9c952692b37"
+    },
+    {
+      "file": "circuitjs/circuitjs/font/fontello.woff",
+      "bytes": 10780,
+      "sha256": "8722b23aabda9d578de4ffceb47982d998017f4d8c50fa57587d11acb144c8f7"
+    },
+    {
+      "file": "circuitjs/circuitjs/font/fontello.ttf",
+      "bytes": 17180,
+      "sha256": "150497f3874bca7700831b9814f9987e086bad9117b4dc42147d6cf2ec5376a6"
+    },
+    {
+      "file": "circuitjs/circuitjs/font/fontello.svg",
+      "bytes": 17733,
+      "sha256": "84c6db2d0a90e9705f346a3a6aeeeaad1d2f0739d80e4c29b1f66e28b6f4107c"
+    },
+    {
+      "file": "circuitjs/circuitjs/UIManager-B1pZKZZH.js",
+      "bytes": 67,
+      "sha256": "3586f76549103c214c45ee6e2f548e537b9b0192d8c7b00b8f8f24c8a1047432"
+    },
+    {
+      "file": "circuitjs/circuitjs/ImageExporter-CXyf2GyO.js",
+      "bytes": 75,
+      "sha256": "1d2e2fed8914e2dfae50bcd3ccd985dad875624da45a29044a6fa3428b64c1bd"
+    },
+    {
+      "file": "circuitjs/circuitjs/ImageExporter-BLOSexkw.js",
+      "bytes": 3949,
+      "sha256": "7c871d455a3d15a161c176a4405013c6fa3755b069b0289dafe5d46b843926e4"
+    },
+    {
+      "file": "circuitjs/circuitjs/CommandManager-C_-OAaLM.js",
+      "bytes": 29640,
+      "sha256": "279c85dcfec756a8deee01fe7c68d590c326e5287899e7ffa07b81007e1afe78"
+    },
+    {
+      "file": "circuitjs/circuitjs/EditDialog-B567BnPG.js",
+      "bytes": 25244,
+      "sha256": "2eac5738398f6af2252134f06e86a616fffcc9b378a888c53c1a9ecc7ccbbe97"
+    },
+    {
+      "file": "circuitjs/circuitjs/ScopeElm-C-zrTCp8.js",
+      "bytes": 18820,
+      "sha256": "cd275f7429cd982224820e665a1faab5258972789d360a7433ea88e496fe2331"
+    },
+    {
+      "file": "circuitjs/circuitjs/Adjustable-CtJHwzmM.js",
+      "bytes": 69,
+      "sha256": "b71b9f466b82c5752fe4039a098ccfea4a014ec6324c904aec1f3cdb8a6ec2bb"
+    },
+    {
+      "file": "circuitjs/circuitjs/Adjustable-BA32ckxc.js",
+      "bytes": 5582,
+      "sha256": "c2aa8b0258caa110cf34d64db6113bad4fe9d07a8591c88d1a5164f427d705ce"
+    },
+    {
+      "file": "circuitjs/circuitjs/SliderDialog-DtHTizuU.js",
+      "bytes": 5914,
+      "sha256": "a12b9deee2ecbb280ab22bfbcfe4579c7412b7ba3e0982298a8b7c4723a02feb"
+    },
+    {
+      "file": "circuitjs/circuitjs/ScopePropertiesDialog-DpsslSMU.js",
+      "bytes": 26212,
+      "sha256": "85b7a9cd6b62963d48bd12eb0d2c488d902f7d1db3dbc9574d0ac49bce6e7402"
+    },
+    {
+      "file": "circuitjs/circuitjs/ShortcutsDialog-DA_1Gm7P.js",
+      "bytes": 3569,
+      "sha256": "6ae23a8f7e67da3eed66a873873b9e12c9e01657fdbed36576abbacfbee40574"
+    },
+    {
+      "file": "circuitjs/circuitjs/ExportAsImageDialog-BNDHyKEZ.js",
+      "bytes": 1575,
+      "sha256": "b2f06287b8e624f9a1dd2a6aec4ee716967a4791ce68de1bdfb07b23faf4c8d8"
+    },
+    {
+      "file": "circuitjs/circuitjs/registerElements-CBqNWDp-.js",
+      "bytes": 569414,
+      "sha256": "08f97c0fa184fe50c20440f746243e7e465578947f78364caddab9a7435ea5ed"
+    },
+    {
+      "file": "circuitjs/circuitjs/setuplist.txt",
+      "bytes": 12595,
+      "sha256": "ff57886287e313ed28268b7415165ca05333d2580f20ffd8e132a2980cd078d5"
+    },
+    {
+      "file": "circuitjs/circuitjs/SimulationManager-CutLmn6h.js",
+      "bytes": 76,
+      "sha256": "3dc3e4c7e4437abef53fa39b73220f7f8c75264bd722a67df17cceb0a76734b8"
+    },
+    {
+      "file": "circuitjs/circuitjs/AboutBox-BLzw7xI7.js",
+      "bytes": 585,
+      "sha256": "ad2de1daeda882afc532741f9c7844d4b5a6c5544841101ac1dcd64a4f53283f"
+    },
+    {
+      "file": "circuitjs/circuitjs/SubcircuitDialog-BSmUo2Gf.js",
+      "bytes": 2646,
+      "sha256": "18b7444e7be80e5e50a330641db870f292ca915ff003c543e29f7ad46ca03f98"
+    },
+    {
+      "file": "circuitjs/circuitjs/ExportAsUrlDialog-BsJwXGXQ.js",
+      "bytes": 2243,
+      "sha256": "42d61b03fc7c395c4ef3b0210e60df18ea0613196c0fbd1d19efd583d420994a"
+    },
+    {
+      "file": "circuitjs/circuitjs/ScopeExportImageDialog-5k6WaufU.js",
+      "bytes": 1829,
+      "sha256": "1d7e30aab462fbcc0569eea5954fdf0a8f421651a29d498c0e372de25bf06715"
+    },
+    {
+      "file": "circuitjs/circuitjs/ImportFromDropboxDialog-D_4JoJ7m.js",
+      "bytes": 3426,
+      "sha256": "c37c036d2de7e3f8128e79b81a5ac024ebe50ee354906a6649b9cce62e701f30"
+    },
+    {
+      "file": "circuitjs/circuitjs/CircuitLoader-ByWVNbpR.js",
+      "bytes": 72,
+      "sha256": "cd6455bc2d84fccd42ff11fd2b17a941aa3ef37e304d02198d7c2ab89a8f8718"
+    },
+    {
+      "file": "circuitjs/circuitjs/images/hborder.png",
+      "bytes": 1995,
+      "sha256": "0f1ec9292bec78c780d8a05c3ab517c492ddec308592ac3118f3f2b982518fd6"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ohms.txt",
+      "bytes": 265,
+      "sha256": "3bcf54e14c4d49fa2927ce6544e9df58344c21240a445629bea0e17d62e60473"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/resistors.txt",
+      "bytes": 581,
+      "sha256": "bac3c17ba0986d9813f035499c264843dd2fed455d660f0322f9eed2cf4ff614"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cap.txt",
+      "bytes": 352,
+      "sha256": "c6acbd983b42c9a10f17afade1b0250d010efd5914b2a6619fa379c95333d8c3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/induct.txt",
+      "bytes": 279,
+      "sha256": "b6a924a291eaaa6dbfe1b659f159c86934b04507d294013945c7a39dce3e178b"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/lrc.txt",
+      "bytes": 426,
+      "sha256": "636b88a660157658841a58119f75166fcff3ac95727715b5f5791fd05861e66e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/voltdivide.txt",
+      "bytes": 370,
+      "sha256": "a9168e115e51acff888062cb5ae2569b6ac745d877c5b472f067b264ec491705"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/pot.txt",
+      "bytes": 229,
+      "sha256": "b628d3670f03b43f4f5d5692ee6c8141533dc741b2afec4c36235344366d26bc"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/potdivide.txt",
+      "bytes": 220,
+      "sha256": "50c8510ab6b41bcd31f8c4888f03ef3b72a088c9bb42d694a13042a3867e68d1"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/thevenin.txt",
+      "bytes": 927,
+      "sha256": "7cda4ad6bceac8c8ad463cde8ca706b7404108bf339106879233c7ed28a5f55d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/norton.txt",
+      "bytes": 959,
+      "sha256": "3a9795160fecbf9ca692a2c8d960f1e689565911a0e505b24b942fd35cc05cdc"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/capac.txt",
+      "bytes": 244,
+      "sha256": "244d51db25c9dead6c96f017842f045c7eeb0c509cb5e68e262eb06294d47a73"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/inductac.txt",
+      "bytes": 214,
+      "sha256": "fc7cf87c121b613c7cc6117bb055e31395098815de0ebf7dbf4c76e06cbb1331"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/capmultcaps.txt",
+      "bytes": 474,
+      "sha256": "b7f9d728969b36ad6fb9cbc88d8eda3a4c67c6dc4b7052cb98d0e03b9d3dec74"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/capmultfreq.txt",
+      "bytes": 517,
+      "sha256": "6f78f82b7ddf81b07a1614538e36faa51a72dc14259b1fc54601229e7b8b77e6"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/indmultind.txt",
+      "bytes": 414,
+      "sha256": "992fd65a41f1eeb1a1b450ff4604805682edfb56e60c04ffd80e9363ef283fe5"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/indmultfreq.txt",
+      "bytes": 463,
+      "sha256": "e1dbe8dd236cf391dafd6a45f66f35d2b3705229f6acdf9ce254236235e5351c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/impedance.txt",
+      "bytes": 503,
+      "sha256": "3e56cc87222d0b11186fe04077b91804ec7d45d5b07dbb70c13a6adb2a42f455"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/res-series.txt",
+      "bytes": 421,
+      "sha256": "91997d15270cf5f57edfebe013b1f44ed6a460d26c6ba8c3d20dd62904058712"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/res-par.txt",
+      "bytes": 959,
+      "sha256": "29b3c8d7ebce4463ddb9f18d82aa256494afea6411744ba046666b886378cda4"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/filt-hipass.txt",
+      "bytes": 256,
+      "sha256": "e63f62005245a8d1b1b1c812f8116c2ef5c66cbc947e8827881593b85d84701a"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/filt-lopass.txt",
+      "bytes": 250,
+      "sha256": "d0597daff90663b253606c961c7643cf365066224be264c67a7c4483aef49922"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/filt-hipass-l.txt",
+      "bytes": 251,
+      "sha256": "70ac7e63638201ef328adedac642f499c90bd9eddb2ca4b7595a6e528f11fbc6"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/filt-lopass-l.txt",
+      "bytes": 250,
+      "sha256": "857b4ecc680ed43d937effa0c8b17cb99c702305cc7093f66fa9775533304910"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/bandpass.txt",
+      "bytes": 401,
+      "sha256": "f5a870809657ba210b28906d852a7655734b1817f45cb7f68e073c22b00f30e8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/bandnoise.txt",
+      "bytes": 442,
+      "sha256": "8876cecf4fd976f1551c5e32b18cde4068114a54645a28d8e98689899da6336a"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/notch.txt",
+      "bytes": 353,
+      "sha256": "eea753bc0d7bea9c74a7019f3a31fa72acb421b8f7b0260bc91e3a3efc00b22d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/twint.txt",
+      "bytes": 491,
+      "sha256": "c8641b9af750068bf9b79775a059e5b2cc9e0737d72cff97c75078af1c6e8385"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/crossover.txt",
+      "bytes": 1025,
+      "sha256": "1a04237cd51f0ee1bc41170bb43cb4335ad6e49f2acc6531d9f5d50f185b118f"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/butter10lo.txt",
+      "bytes": 902,
+      "sha256": "e8d7321bde96ac3b796c8e9d6920b7a3362e2772bdcdb50a2d4f7e4b838879e8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/butter10hi.txt",
+      "bytes": 951,
+      "sha256": "7e5739d5a64b92e922a19d5fb7ef7d7b22827e3c0833e1a8be2aa39b4e9f501d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/butter10loaud.txt",
+      "bytes": 931,
+      "sha256": "393224bc67ad43bf392dd37080ae3ed3e1dfd16a41e5529d37de7b7365d5fd74"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/butter10hiaud.txt",
+      "bytes": 931,
+      "sha256": "1e53e583ad9c31f5a9d6eccb569caf8bcd800dfbdfb2ba6a9be7749a8ef016a7"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/butterbandstop.txt",
+      "bytes": 1427,
+      "sha256": "afa4f3156e0fabba22316d6d3b0b36d0da1b56973702ace5bab15ad97a24a15f"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/besselbutter.txt",
+      "bytes": 1776,
+      "sha256": "ffa272d575a2a7339dfca6415e3987fe877708c82f1efd35ad478f683a5ce7f7"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ringing.txt",
+      "bytes": 400,
+      "sha256": "903e7458e0aa7e56385c44cd97e0786980ffd440905ad0579d54f5c697f16715"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/comb.txt",
+      "bytes": 1267,
+      "sha256": "d13c53152700df14f4e219c3fbd3a1ff5042bd5a12360cfd4f15efc77330294f"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/indseries.txt",
+      "bytes": 443,
+      "sha256": "99b92ef063f83f63a07811f05f61e214526842c839be681fff9fabdf8ae25a95"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/indpar.txt",
+      "bytes": 561,
+      "sha256": "123425707a45b12e1a51d68b6a23646ec1aa1e3507472bc4ce8d2eb34843db48"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/capseries.txt",
+      "bytes": 468,
+      "sha256": "a7ba0d13b4472afd5016d2127671cb7aa9d59ed96ff6fba0ae11aedc2fa474cd"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cappar.txt",
+      "bytes": 689,
+      "sha256": "acc99aba0f64404fcb127ed2853b31fd2fb525bc2792ec084eb4ca1da2e16597"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/transformer.txt",
+      "bytes": 404,
+      "sha256": "378ca743add8176f762dc5fddbd78986c15444e95d2a50766fefc35ce31bf583"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/transformerdc.txt",
+      "bytes": 398,
+      "sha256": "b29895684e25c5aae0d5afa26627f57a338c5e643d09b2e6a92c5ecc86e4e381"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/transformerup.txt",
+      "bytes": 399,
+      "sha256": "9cd12d0c61b7bac99831c6a8cb16dc180759d51a65ad447485369ccab04ed920"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/transformerdown.txt",
+      "bytes": 436,
+      "sha256": "967a33e4d04891181b8797df7ca7e8c3fd79ecf1646d25ad2aecfd3a5624927b"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/longdist.txt",
+      "bytes": 835,
+      "sha256": "d4b0cedcdba3c267ac12978b56794579b9a666d74213d5cefc464e4cac6e9062"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/satcore-inductor.txt",
+      "bytes": 253,
+      "sha256": "5a9d12f46e58c20450bde4f997f996336577e8f3824f0c8855d47b66e8176b80"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/satcore-comparison.txt",
+      "bytes": 357,
+      "sha256": "dcb5f08f99f785391a54da352a05a2673b1edc1ea25c9411f34f807b282c7690"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/satcore-transformer.txt",
+      "bytes": 399,
+      "sha256": "716582d9b301074ab7b5eaa5dfef5ce7a92857fb60ae1d180678d60dd9b4ad94"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/relay.txt",
+      "bytes": 382,
+      "sha256": "07fd0990da8b8c0ca5944dcfe0ae3b10511d588e953705b708211ab915beedb7"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/relayand.txt",
+      "bytes": 745,
+      "sha256": "7b57f1019c5ea11007b082e03bd7de4cea5ac62264a571cacbb88c4d2c41778c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/relayor.txt",
+      "bytes": 870,
+      "sha256": "f9a8e38ece68eeb9a1f87992d21d546e691ca172181e55cfa16940afcd6ceff7"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/relayxor.txt",
+      "bytes": 542,
+      "sha256": "1b44bd3862fc89a06e70dfa7aea6e7800d532b13a28e86b5f7b1bc87d6c3b506"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/relaymux.txt",
+      "bytes": 955,
+      "sha256": "9f5b8e399b6db327482a8b7493243a73bdb0fe3c988db2b1b63d4ea7305ae268"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/relayff.txt",
+      "bytes": 578,
+      "sha256": "677de69e22f0b6a7b5c3daf6d96df002f52e6000c7e8d1eac41a4589f9353749"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/relaytff.txt",
+      "bytes": 875,
+      "sha256": "d0a227f9e969f5378d031aa1f3e73512ba1fcfceb70f1dcdca5f6d0f9cf9c595"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/relayosc.txt",
+      "bytes": 418,
+      "sha256": "cfa61c7be3206c8b908c29ea3046e81e7e2e205d3eda0a204041fc9786448064"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/relayctr.txt",
+      "bytes": 2891,
+      "sha256": "62dda416e8c0c77d35d6a308fc6f35efd7b8278e76b33bec7391a0060e524438"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/3way.txt",
+      "bytes": 308,
+      "sha256": "e1a06940719b4a97b9aded55a6f8f3645868feb91c7a69426b967a870dc3dc35"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/4way.txt",
+      "bytes": 526,
+      "sha256": "d737796ab0eb93804a712509d1249724b55e3db0815300aa15a915c985bfed1b"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/diff.txt",
+      "bytes": 207,
+      "sha256": "886795173783c129c2ddf179d99baef5f7723545616aaf5d8d8f461e07cd8a4c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/wheatstone.txt",
+      "bytes": 275,
+      "sha256": "e245f041bc13d23f27967f597263cc7905cfa46753bb5c6fadd84a6fc6af4955"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/lrc-critical.txt",
+      "bytes": 329,
+      "sha256": "1ab714e314e4fcb7f39e5127eb39e54c3c9c5a771a15603245bca2a1739ac006"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/currentsrcelm.txt",
+      "bytes": 590,
+      "sha256": "8ccec7e1c9cffe7b6b53807ffa397f279fd082a2d6dcda1d2dab10d67649df37"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/inductkick.txt",
+      "bytes": 342,
+      "sha256": "aa1422acda14d621dcdc456f245dadd1128bd46b888fab810b1731c99b58100d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/inductkick-snub.txt",
+      "bytes": 397,
+      "sha256": "a4dd387dcd0ed0b4c31fc1252656a6bdf4324fe921d48eb033ef745a22bea0df"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/powerfactor1.txt",
+      "bytes": 354,
+      "sha256": "9c5595886d44cb2b48f902d41e63d8ad22f6b0fb064e82967b6b6f8965896beb"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/powerfactor2.txt",
+      "bytes": 401,
+      "sha256": "f0b99f417baccc8904d2a682de4ab6fe83cd73a268388da7d9658cc3b9b1add7"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/grid.txt",
+      "bytes": 1325,
+      "sha256": "fc1cce5ab3d0a20927021cba9dd0564568a1f7f6274cd1bce22509d274362fe8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/grid2.txt",
+      "bytes": 3553,
+      "sha256": "4851744dd8a7314a94589570d0018bcb59b0983a383f50f701f01378931779a9"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cube.txt",
+      "bytes": 408,
+      "sha256": "681322ece06f672d4d4526b8b612772aa295f0e8fd9f290127670a44b88678ba"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/coupled1.txt",
+      "bytes": 558,
+      "sha256": "d2a50ea94fe590e617f738ac86f4f296ed99d106802a2f721a5328ace4db07b0"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/coupled2.txt",
+      "bytes": 615,
+      "sha256": "73d1d8189dd7c1d5a0e46ce8f3a9caaf1fad39b19c90d0ca3703df9a42fde34e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/coupled3.txt",
+      "bytes": 1609,
+      "sha256": "b7eef7934550742c8b9a3865fe567e285fb391880aa6e6d8dc63ae172e8a99e5"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ladder.txt",
+      "bytes": 1988,
+      "sha256": "69d2aed72cd819fce7cdb96ecb19866204b24430887348e5c305068ad05db2ba"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/phaseseq.txt",
+      "bytes": 2179,
+      "sha256": "53800e257e6e00e008262e7aeb680277ef90e95d2f335807d0cc1e2afc479e8a"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/3phasewye.txt",
+      "bytes": 769,
+      "sha256": "b2b2bd871dea30b3f11d5a9af1da50f8d16970f9ca7f6403aa7bb3ca3cb99319"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/diodevar.txt",
+      "bytes": 155,
+      "sha256": "717a5765bfc78bcdf5b19bfee0f47bd14d71e0d2e501eacd7868513fb07f6a57"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/diodecurve.txt",
+      "bytes": 234,
+      "sha256": "0f640c490374622df37134fe04f320ecfd78317f2c65b86a917c82d6dbf36a36"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/rectify.txt",
+      "bytes": 164,
+      "sha256": "7fb57a4a07b2e84dbfc23b7e9be9cefa5edcf05e35c9438a88dd7013867c47c6"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/fullrect.txt",
+      "bytes": 374,
+      "sha256": "1f3c856c24a400f9a44ce1fde92acd2db5b60e5ae52625ceb225e452aeeb6702"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/fullrectf.txt",
+      "bytes": 559,
+      "sha256": "ff09973c924e1205391ee21c4e3f414f2e5e6183517f45b0c10719980c42df64"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/diodelimit.txt",
+      "bytes": 292,
+      "sha256": "f1331bc1b3a01cb8c9afff7555f126222c9441bcc25c30a2835bdfee460acb1c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/zeneriv.txt",
+      "bytes": 207,
+      "sha256": "9693d4a714d98ea28f63dfdbe44107d21ee94ce4999f7b3b0826698b76c8a3a0"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/zenerref.txt",
+      "bytes": 339,
+      "sha256": "3080fcb6b8ce12ca8b0c3f0cfacc9c9a1e488c5def6d0907b85ca181dbe0c28a"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/zenerreffollow.txt",
+      "bytes": 487,
+      "sha256": "9e8b0699050dee825c4521371f0d2bb9b1fa1b7839ceaa04c92f924dd4013c4c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/dcrestoration.txt",
+      "bytes": 257,
+      "sha256": "dc99277032f1d86d34af0e5b0cd7ce5895b658303a256d85a872d8d6d6ba73aa"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/inductkick-block.txt",
+      "bytes": 312,
+      "sha256": "2252861b4d897e7d87263212ab3ae938021c8119b0c6cc36e4ca7021cd08a763"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/spikegen.txt",
+      "bytes": 262,
+      "sha256": "e2007ed1470499599b0be91a636632021b1fa171aea5d4fc73b9f0cdaa64077f"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/voltdouble.txt",
+      "bytes": 361,
+      "sha256": "a3e433dee0f9d0c51765dc98fa8d4026bf218508d6a4a9c84b78e8013c2f2ec3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/voltdouble2.txt",
+      "bytes": 337,
+      "sha256": "4c369c5b43cbe5d4097f29b34b229131d4abad395bbd1a5076210678d50dd0be"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/volttriple.txt",
+      "bytes": 428,
+      "sha256": "bce5671146e66814656adc16437bb02d39f3aa8e12bcfb02d2f475da3a8e640b"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/voltquad.txt",
+      "bytes": 490,
+      "sha256": "bd663a9586dac0b121741a94cbf94da6e789f67c57e6b7db0fa5c5b35ed59a80"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/amdetect.txt",
+      "bytes": 670,
+      "sha256": "c258b86e313500409af43109c2e30182ee3883a10e39c5ac1c01ad318029df2c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/diodeclip.txt",
+      "bytes": 279,
+      "sha256": "422c0651257331b010e55244d3a42021b83b2375aaed9cc12c6075ead3e5e733"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/sinediode.txt",
+      "bytes": 1297,
+      "sha256": "ddc915d76ae48778920b3ba295f87fe671bf2fac9bfbe0ff2f9e2e5c143a04b9"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ringmod.txt",
+      "bytes": 1032,
+      "sha256": "bff4a1e2e12123eaf914d926e0a6bc0d40372051aa77b0eadb50ba1800681632"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/opamp.txt",
+      "bytes": 201,
+      "sha256": "a60859da926cddcbb7e005161c0b351931e2d00c0505d064f75d69440ddd4f83"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/opampfeedback.txt",
+      "bytes": 207,
+      "sha256": "4e2ccec77a5140a4de05f1ac95bc366cf005d6eea9606bd98f99b5161116420d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/amp-invert.txt",
+      "bytes": 314,
+      "sha256": "14ebbcfc1d63feab92c5940f161e37bf462026df7c8445ff6c5d3c2a407cd6b3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/amp-noninvert.txt",
+      "bytes": 299,
+      "sha256": "e602ca423cb284a643ad9907f88f61548e49e224d304dff69472ed82142f14c2"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/amp-follower.txt",
+      "bytes": 378,
+      "sha256": "f131ce56bca44508e2c93cdc0feede4e2ba67ae23b09b00b4a93d181dd32922c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/amp-diff.txt",
+      "bytes": 472,
+      "sha256": "068572d506d7c6505caea08801e85d11f08b7746f26dbb4d238c7503dc030d67"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/amp-sum.txt",
+      "bytes": 447,
+      "sha256": "377bc8fd22c5e4337a2fe8997eab9a938ec5112825e19e2a8e4aad9d7f9eee28"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/logconvert.txt",
+      "bytes": 974,
+      "sha256": "d1382c6ad48368bea8ebc6bd844950e72d426f48609cbc84b9a291233a991448"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/classd.txt",
+      "bytes": 777,
+      "sha256": "72663ca51daa35f7b87943d44531c945bb654f9b1a03ed2688685ecb5f125218"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/relaxosc.txt",
+      "bytes": 463,
+      "sha256": "65227fec8af312c46f41e5838d7cbba6091e577e259393628a3994eccc6a400d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/phaseshiftosc.txt",
+      "bytes": 625,
+      "sha256": "039d999e885158e1cae7875cdaa20606db5a8c0470961ecc3f92cd279fb1bcc2"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/triangle.txt",
+      "bytes": 533,
+      "sha256": "9ba0d570814e528e1c50407e82a2b375733f7b2177728abe3349c1f9efb5ec1d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/sine.txt",
+      "bytes": 739,
+      "sha256": "fdec889af4bbb204958fc1fe7320d05737cf4aba5379c71f3e7eb1232d61e821"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/sawtooth.txt",
+      "bytes": 661,
+      "sha256": "8425b1b0145d5294da11eb8e363b0cfb26a4eb3b506639b62bfcf9440df8bebf"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/vco.txt",
+      "bytes": 1023,
+      "sha256": "d6ae9ef1cac15c86791b7e71d63cbb97a76a8b082da17f49d893fcf951a946e7"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/trianglevco.txt",
+      "bytes": 1184,
+      "sha256": "bdf52a1f05661f9e2a836a1f9030146d057be2959188a1830a366f7db44cc696"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/amp-rect.txt",
+      "bytes": 351,
+      "sha256": "d212a0c139827bee67c17edc422d67b77d66fe9be7a2640de4c8cba4ce6111ed"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/amp-fullrect.txt",
+      "bytes": 539,
+      "sha256": "295f4e65d3bf30f162c2ee1636113bbe4fe6e4edbd7f5a32d2a167ddd009c0e1"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/peak-detect.txt",
+      "bytes": 658,
+      "sha256": "1a62dce0aa09d3500a300dd3afa266ae3771b5f1919ce981da15f563349c9ae1"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/amp-integ.txt",
+      "bytes": 496,
+      "sha256": "b3e99039a162eca26934fda9bb91530aa6d7def505e57c4a1e5dd4ec8a321c98"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/amp-dfdx.txt",
+      "bytes": 341,
+      "sha256": "0d957def4ae2b5a35534ad5296aa1ea4ac5deedabe8df02442ccd7e1073e2f92"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/amp-schmitt.txt",
+      "bytes": 595,
+      "sha256": "29065a5d9371be5dd079228a6fa1f3a4c13fb75313e64506461756bed8fd17f9"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/nic-r.txt",
+      "bytes": 482,
+      "sha256": "892573ab614b82531a8706afc073f5053cd580334a3b1551015dea1de11ee6ea"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/gyrator.txt",
+      "bytes": 592,
+      "sha256": "a9295e44168ad23f3e3333e0ea71ceede9302363f80f4f85fc5cadde080f1268"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/capmult.txt",
+      "bytes": 690,
+      "sha256": "23c6d06c7cbf8c58630c251a60b5d286c30cef5899e9fa6f3336211ab2116827"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/howland.txt",
+      "bytes": 609,
+      "sha256": "8eb211bc1242f276dd0b019e4d77b3e475f343e6abdafb9da35795a32fcd5246"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/itov.txt",
+      "bytes": 412,
+      "sha256": "0010fe801b317077bdb3bc8629eebe0ed265da5b0579c8602fdd04ff906b46e5"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/delta-pwm.txt",
+      "bytes": 989,
+      "sha256": "e2733bf12d3f1ea1a676aceb9cc7ba4485dba4cdba63a4df018d22899b776814"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/opamp-regulator.txt",
+      "bytes": 899,
+      "sha256": "3f642b50b0499763e450a1e82753809a0e0832abb748a5dc9f8b2a30c1d39aed"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/opint.txt",
+      "bytes": 3221,
+      "sha256": "997f00744e1fa914a2b0415735000b7025ede3da5797f0086aafeed14c7ea9ac"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/opint-invert-amp.txt",
+      "bytes": 3276,
+      "sha256": "183572c716aeb36bc1b6214a245b1391dfae38555918d230ac14f38ea1a78098"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/opint-slew.txt",
+      "bytes": 3297,
+      "sha256": "f82a2bf6bd43bcce915b850481ef93063a08262cf059491cebeec0f32b3812b8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/opint-current.txt",
+      "bytes": 3260,
+      "sha256": "5b91e8b88bec811a815ba17e624c4f2a1682df7285cd51c8489eadb09ae831fe"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/rossler.txt",
+      "bytes": 1670,
+      "sha256": "a0ca3cc13645e5b595c1d68eef2bb857cb7e5dc625d11c2bef6b81aa0c075b3f"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/vilnius.txt",
+      "bytes": 869,
+      "sha256": "a9a2818315230ae96b36e0600cb4e6bd74f903a0e6d6d969bb93a73be6883ff7"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/chua.txt",
+      "bytes": 2083,
+      "sha256": "7c383f7b9435d5114d645c3c39f7836dc6c5cdde5de1354fc2f8aab9593d9ec3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/chaos1.txt",
+      "bytes": 1085,
+      "sha256": "84609635955ffdb2742b707a03c7cd85f8c2e8fe1d2d43d44a0d8eea17648979"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/chaos2.txt",
+      "bytes": 2091,
+      "sha256": "ff199efb5d06891dc8cc60624a8b699d7d295cada4aa35457ea2cbddf1bdba68"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/jerk.txt",
+      "bytes": 1059,
+      "sha256": "1ba8e55e71e9e5b179212eed446bf2f2ae674f0d8c44e99688b22fabc2817743"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/npn.txt",
+      "bytes": 296,
+      "sha256": "082a0566185fb67d171ea78d8a97a28dc9246c9e7944381da12aa0f0c0e2dfc3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/pnp.txt",
+      "bytes": 321,
+      "sha256": "edb6193797b4e0d6b186d57c2ed135d9470bb008319e82489277b47cc38d41ed"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/transswitch.txt",
+      "bytes": 273,
+      "sha256": "408b8d7f79b89becee7c8d322431770b0076f843ada6629f0db7d71f4c19b96d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/follower.txt",
+      "bytes": 421,
+      "sha256": "12cfeb4a69ef66b49359d71feaed9b39ebf4262fd30f2bb14b9cdb6388a6e968"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/multivib-a.txt",
+      "bytes": 916,
+      "sha256": "2f1d3c165efb6729ec6681f14acbda8539a84946debe35458850d3c342d8bbe2"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/multivib-bi.txt",
+      "bytes": 790,
+      "sha256": "47a520c428ed2a794eb1aecaf9c3bda80a69278b27df0c33f0ca2e11360479cf"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/multivib-mono.txt",
+      "bytes": 699,
+      "sha256": "8f4c73fe179dd0699f0a59d9359bc478f02af38972a329e256445a7865c0bd3f"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ceamp.txt",
+      "bytes": 574,
+      "sha256": "505e86cac0f6a8aaff4bdf39cae7459bbd23fc5f66fac26674ae4085091bdfd3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/phasesplit.txt",
+      "bytes": 652,
+      "sha256": "135ccddce5d29083bd0ba1b9734c8ac704b203a2c266f1486bbcc3dd63bb56a4"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/schmitt.txt",
+      "bytes": 827,
+      "sha256": "4c91ae38313ec099fac6d99b90eec8cc22bba3cbe28ac3ffb0d746d2f526302d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/currentsrc.txt",
+      "bytes": 399,
+      "sha256": "5b67d2402cecd13234b3c5da29b5974c6c067a5b62058f4984a633f4df740bcd"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/currentsrcramp.txt",
+      "bytes": 419,
+      "sha256": "ca70a6aa45033acb986c5ac38ccfa1acd927207f167dfeb361290ada2371bdd5"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mirror.txt",
+      "bytes": 660,
+      "sha256": "5e32c11a407add08c56debfd5f2df906fc3f622a92ac86bbfe5b4bacd5c310a8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/darlington.txt",
+      "bytes": 439,
+      "sha256": "c347668919881e5ff86991e9e5e276f13a2bfa0a63980d3ca3ca306f3b724ec9"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/trans-diffamp.txt",
+      "bytes": 751,
+      "sha256": "8dd2e15f39e59effc33c5f769db3fffeee5287c6a7e11bdb9499aed28cf8213b"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/trans-diffamp-common.txt",
+      "bytes": 749,
+      "sha256": "4199c57e5427f3089d4c79b2f5b0716aee888f29ad8cee0f2600a605f14c872b"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/trans-diffamp-cursrc.txt",
+      "bytes": 902,
+      "sha256": "c774ea73f410c63003b086bf1cfaad64d6af53b5fe1c6d0dab2d9074613e637b"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/pushpullxover.txt",
+      "bytes": 564,
+      "sha256": "6e7eedbebdbcd242bfa83b6dbf04796e9d5224f21da30e53b95ec080c1fe1f2e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/pushpull.txt",
+      "bytes": 650,
+      "sha256": "f867451e0b98d6670d48fdb5b1406b7e4793d11c5eb7c2927cc54650f077f284"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/colpitts.txt",
+      "bytes": 626,
+      "sha256": "173ccc427064ed79404684d106b3a737255287319c8debc13e294e5776ecf999"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/hartley.txt",
+      "bytes": 600,
+      "sha256": "3980cca9fc1b824922df6031993d4cd61cae3da26bca268137b969eaa3f55bdb"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/eclosc.txt",
+      "bytes": 1152,
+      "sha256": "d48a3bbcada0358582509e6ec7f15cbe379b05dd68a4f3ac0c98c303a7075eca"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/crystalosc2.txt",
+      "bytes": 1271,
+      "sha256": "d59cd0feaaec9b520ca9d563d7068275a8c5ab8de426dcaa58ccb580c42c39f6"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/gilbertcell.txt",
+      "bytes": 2967,
+      "sha256": "afe71e7aa921388976b5f155a05335acd44ec2533a34d54a6dd574c53e7fb239"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/rmsconverter.txt",
+      "bytes": 2337,
+      "sha256": "a83a931f710b8cfb47387f0f896222d6143347844bbb0f49660c0fcbf81f35ac"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/joule-thief.txt",
+      "bytes": 792,
+      "sha256": "823723134cd2a655af661b3cb4f72958c6c615ee05c6fbe5ced1853eb3e8523f"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/transrectifier.txt",
+      "bytes": 402,
+      "sha256": "68708c990451352383caf46b65ad138b5dd4cf3e49a6ac31bc5a0a91bab8487c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/early.txt",
+      "bytes": 670,
+      "sha256": "41c03f7082c052e8aa22ded70b356ddd6f6f42f899c3273a363c974023ffd2d8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/nmosfet.txt",
+      "bytes": 270,
+      "sha256": "e2c906369ef6f2a9d89dd0be1e9b497647381cd3f9d62379393d73d85f53d29e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/pmosfet.txt",
+      "bytes": 293,
+      "sha256": "fbac9aa7f2b7f22e76a66055ffa84e9f059ae8c23d3adca22b78c2ca9cc69819"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mosswitch.txt",
+      "bytes": 241,
+      "sha256": "102539d70c7df36e72255c6aff04a78bf638bd8b8fafa8fee536491c4d5a3ead"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mosfollower.txt",
+      "bytes": 303,
+      "sha256": "d4dd4e1196912b2b26101b8c40c762f0ee03b7a43d7393baac99539d0e9af184"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/moscurrentsrc.txt",
+      "bytes": 305,
+      "sha256": "a1cab250ff90610c40e09ddd82f9624bae98fbc40f06765a3bfbd77fb49b0b3f"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/moscurrentramp.txt",
+      "bytes": 427,
+      "sha256": "db4d9a83b0320a70454506264d90eed4e6473c6e21ac5cfd4b94155ef2f778ff"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mosmirror.txt",
+      "bytes": 566,
+      "sha256": "c4bd3dbbca531439d27fdfa5ab0102220de1ad7b74954a23f322ecd0240e11a5"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mosfetamp.txt",
+      "bytes": 537,
+      "sha256": "2a0edad14bc728198a94db13ed685be8aaf3287a1ef9730d7e4c808a5cc9b220"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cmosinverter.txt",
+      "bytes": 248,
+      "sha256": "f4c79f256ae3d51719c356d19798d381031df276f5b6c635cc1c1f6f93cd9f1d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cmosinvertercap.txt",
+      "bytes": 793,
+      "sha256": "c7861edf2daf6227beaad6d55926dfcda99abf28a3a219fe26b9d6f4180388a1"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cmosinverterslow.txt",
+      "bytes": 466,
+      "sha256": "e8e3f3147cb2693f0b5fe1da86dc221a7bd32bd9f0604e7cf86a660059f628ee"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cmostransgate.txt",
+      "bytes": 549,
+      "sha256": "4457098e0b538c6b1e8c5e27a5e8edea392eddf6b4ed7d3649a97e463f709942"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mux.txt",
+      "bytes": 942,
+      "sha256": "229c98735a7fc7f796825546c5ee97b8f1bee3fe0f35acc9929dfa36b3bed3ee"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/samplenhold.txt",
+      "bytes": 852,
+      "sha256": "d217bd35b7e3731debe84534c8468a9893e7bd66fc2f2166b70282925c251ad3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/delayrc.txt",
+      "bytes": 602,
+      "sha256": "a37cb30de6ba0161108ce1f02c2fad671d52bfb0c5ed5af7e8f7e70f55a2c6f4"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/leadingedge.txt",
+      "bytes": 991,
+      "sha256": "2cba39f6cc30e04a8edad690f27609ba3e758504cc786d7dabc122f203dfdb14"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/switchfilter.txt",
+      "bytes": 1083,
+      "sha256": "cc1a56841c39a9cd0fec2b80263878a7e5e61b3402ea2ffc9baf739874bb3936"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/voltinvert.txt",
+      "bytes": 487,
+      "sha256": "3522f7904f4dbb1555a997213b348cc6123667336ba214cd0ad15929085e59c2"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/invertamp.txt",
+      "bytes": 433,
+      "sha256": "d05fcf4dfc7211099a73af4e49afc1a5d6e60677f4e911f529054daaa9c341ef"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/inv-osc.txt",
+      "bytes": 321,
+      "sha256": "1b7421c5c1eec5877cf1e498594e4aa5698d7a9c0e38abc93c5c92dfad16c11b"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/crystalosc.txt",
+      "bytes": 1471,
+      "sha256": "459b8656b08fec77ea665ca4444e673bc0aa28bcb5ca872efef818d150b6c207"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/555square.txt",
+      "bytes": 499,
+      "sha256": "3b06c96614a7414c7c9fd572d4865f96f10f56d53e5e2c17b44ef9e1040e59da"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/555int.txt",
+      "bytes": 1260,
+      "sha256": "8bb273ac97adef24b9e23cc65ed8400baad7e8cd7f23f3c45947f81109fe4fa0"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/555saw.txt",
+      "bytes": 592,
+      "sha256": "44a815215360df10256c7c1a891c6c3347b83ffef62bd4204982e7114df53dce"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/555lowduty.txt",
+      "bytes": 502,
+      "sha256": "104809f6d2ae513729f9046058928158f8debfeb143b7b88597f55a2b467be51"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/555monostable.txt",
+      "bytes": 561,
+      "sha256": "67f46e66ba7c21da6be1c2564cb0b2890ba6ae13949c978e3518aad6ca253460"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/555pulsemod.txt",
+      "bytes": 489,
+      "sha256": "d67fe7f7f61124741ca1de9080e06a8db9e2ac2edc7661596ac12610359bab36"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/555sequencer.txt",
+      "bytes": 1735,
+      "sha256": "506ae497b5beefcda15cdfb266bae6fb619fd8d07557807650e101cf986ab73d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/555schmitt.txt",
+      "bytes": 445,
+      "sha256": "cc94c582e9f189383e1a536425122296277eccb930e9f5cc027e83f049f8a439"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/555missing.txt",
+      "bytes": 734,
+      "sha256": "30084becd640e0dc152c33d099e0a5a3d6b22d33f74aec8a8b0497cc39fe0f65"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/555dutycycle.txt",
+      "bytes": 604,
+      "sha256": "7cfcc932ac0cf5cc89a8f41b6d1318af7cbab1e235b8c6fb5dedbe3a33b95443"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/filt-vcvs-lopass.txt",
+      "bytes": 608,
+      "sha256": "50b7e91eb675dc3465577a060e35b0d3a2eb2c3d1f98cf3068fec1403e901983"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/filt-vcvs-hipass.txt",
+      "bytes": 605,
+      "sha256": "220728b32252da8f4ad74713a6a1d1d61e2e0925a1b833fadd0bf4c29fe047ef"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/switchedcap.txt",
+      "bytes": 587,
+      "sha256": "b9a2fb949f3959ca53cb7ede3f4424697f9c4693c98397e634aef2da271b1bfc"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/allpass1.txt",
+      "bytes": 415,
+      "sha256": "2bd20a29a2676d2c07fd6a605bd20d475b1623929e57bb954f72c595e4b21280"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/allpass2.txt",
+      "bytes": 384,
+      "sha256": "198fe0be81e605b41d5b9ca863530659907f8ce8b5f772efeb85c630489a391e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/actbutterlo.txt",
+      "bytes": 1528,
+      "sha256": "076b1e8e8ea6d141834ca7a48c0bc11c7bdde7d20b66f3d77cc6a6c049ee2727"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/actbutterhi.txt",
+      "bytes": 1502,
+      "sha256": "fe7d9addd23380d300351952092a4cfb0d71305db9f5a8b049fed11b6c90c504"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/actbutterband.txt",
+      "bytes": 1899,
+      "sha256": "5ea55ffda6b5ed9f559a89fd6a28ac016fae5f8ba543a3b6d2049429c8fc014a"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/rtlinverter.txt",
+      "bytes": 268,
+      "sha256": "5936c772de783bb742888a30519e5f8b956fc2c23dfcf8d494b89e33d693ec36"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/rtlnor.txt",
+      "bytes": 704,
+      "sha256": "a93f09035c69108d2859a1f6e045bf225b8f94144c2ba494670b856f6ed72493"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/rtlnand.txt",
+      "bytes": 577,
+      "sha256": "cc6273878c8249ef54dbee0be6430a1537e2930a6e0b3e05d1c419c845f948d8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/dtlinverter.txt",
+      "bytes": 335,
+      "sha256": "e4ea806b9d5cb552be1b9f5215e4c3e7b0238cb8553a7b9182297ddb848ae841"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/dtlnand.txt",
+      "bytes": 479,
+      "sha256": "bc229620ba58dcf6198e5dd98653d9ddd1df87825db5d143fa0da29a9ee3a71d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/dtlnor.txt",
+      "bytes": 692,
+      "sha256": "8827a94c0eab5f103523ef0b0119364a167c77170a95257813e3da7224edffac"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ttlinverter.txt",
+      "bytes": 343,
+      "sha256": "62b811c83392906e26cec95e4c58a8b0bad53b090784e219c77062eef17b22c8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ttlnand.txt",
+      "bytes": 513,
+      "sha256": "2e268e06b08f0645a9dc1ae55cd2a736f82ef57c262c6791ddeffc8417aaad6c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ttlnor.txt",
+      "bytes": 709,
+      "sha256": "54e44e79273e0465bc908008ca0f7e57bc6c9662659b94b6fb0741c17e07fe4a"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/fanout.txt",
+      "bytes": 2951,
+      "sha256": "5c65835751f9afb67ecda17444865ce456e7eb94ba8282abf8a50f50596950ae"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/nmosinverter.txt",
+      "bytes": 195,
+      "sha256": "cfb517ede7a1284a758679413d9e6b2ced3f3984dd299bec6861561c345f13b3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/nmosinverter2.txt",
+      "bytes": 311,
+      "sha256": "9c85c105acc729ebae74bc3495883de2cb11aaba361d72a45aaecebd1a88a86c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/nmosinverter3.txt",
+      "bytes": 360,
+      "sha256": "03d49ed3af099674c4e0eb651207922fbd5ac1c93ca34fdb0a0cd7149761e963"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/nmosnand.txt",
+      "bytes": 342,
+      "sha256": "04e22c344a16cd2e25bb6c04fa2d0257d62ec07dab5a84224b367444612b6013"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cmosinverter.txt",
+      "bytes": 248,
+      "sha256": "f4c79f256ae3d51719c356d19798d381031df276f5b6c635cc1c1f6f93cd9f1d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cmosnand.txt",
+      "bytes": 454,
+      "sha256": "d72a72eafa03bdf0c9e1dbf5d71045439c1e9360a2009505e05aea264e33dfb9"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cmosnor.txt",
+      "bytes": 419,
+      "sha256": "ebfaeeb01110c33a652a8f7d20807dd303cb211c0bf8e6aee08cedc2d466b2d4"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cmosxor.txt",
+      "bytes": 583,
+      "sha256": "58a45cc4e8d958fefb177bec1b3a03bcf689a989146c7f9fe8ec9050722dce2d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cmosff.txt",
+      "bytes": 1035,
+      "sha256": "1e5e627c3c73e353acc8797d394f6cca2ede7268a40366b26a2bb531c73a77ed"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cmosmsff.txt",
+      "bytes": 683,
+      "sha256": "b91d2ab3ffd14a49c0dd744c103094d32be22d8c58dd04fa7ee107e8e388f411"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/eclnor.txt",
+      "bytes": 1685,
+      "sha256": "c8850d2169d0ec677c712cd3e68f7d3cbe1816991231fb756ed85da3d326af50"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/3-cgand.txt",
+      "bytes": 1070,
+      "sha256": "ebff1aa6a8f8aa74ac90520417ad988aa2571b686e8e9c1b5fac1c355b75bf6a"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/3-cgor.txt",
+      "bytes": 1091,
+      "sha256": "42a64a4e98de08e7ec5ecfe312af1541b6e7c404053e654492dbe9875a34ec63"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/3-invert.txt",
+      "bytes": 527,
+      "sha256": "0e94ca80894640379cd9e52064abb49bbad1c662ed234f6ab38239b357031c1e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/3-f211.txt",
+      "bytes": 317,
+      "sha256": "75a2db30ed2274ffdaf6cd58cd7e6c426c5ee5534766f90bf874dcb98c317a1e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/3-f220.txt",
+      "bytes": 293,
+      "sha256": "89df640134236d2f2380935eab7850b1ab259d5301a8958ffc9a42ceb54c4097"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/3-f221.txt",
+      "bytes": 316,
+      "sha256": "5af31463ebcdb9e39545a88dd352dcb45b4ab7bbfeff28dc0e1043a77a3d47eb"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/xor.txt",
+      "bytes": 357,
+      "sha256": "c16ff9c50b3c7d0a0cd21d601f01f674a78e4ab1c146ebfa8e18fd5b13b33f45"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/halfadd.txt",
+      "bytes": 338,
+      "sha256": "1e39fec931eca5571cc63f76c9c96ff2ebc57a0330a4acacda76036aa712a1ca"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/fulladd.txt",
+      "bytes": 669,
+      "sha256": "bf510f1baf262a8216649caea8c8dedb98401a572ca92b1e37029a2797262894"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/decoder.txt",
+      "bytes": 666,
+      "sha256": "6a0092b67be71b7bbf05575f553407d220ed25946279b8cd0e8840e3dc3955fd"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/priencoder.txt",
+      "bytes": 637,
+      "sha256": "6dbe1625ee9909467440ac67c8700af2e8fb6905b8be89c34c64268627878be6"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mux3state.txt",
+      "bytes": 953,
+      "sha256": "f959b2238335adca80f930743a14908d6ef926168a00799b72c949451f22abd5"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/majority.txt",
+      "bytes": 525,
+      "sha256": "1ad09cf74c3a3fd4dd6f011be7a47e0d971f1e1f5341440dc5b84bb3469e2891"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/digcompare.txt",
+      "bytes": 1366,
+      "sha256": "619e79fb3e4a92d8c01c73706674e012c8be5919ad30d555a0d7c6442135ee75"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/7segdecoder.txt",
+      "bytes": 5524,
+      "sha256": "714cb83ba0fb731c05a91b56f9592183dfdc73679396e670e88bbddf095e6364"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/brentkung.txt",
+      "bytes": 13330,
+      "sha256": "28833ba78c1663b35711c02c0e1a833430a90b8c0a519e207c34b6b53eef65fd"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/alu74181.txt",
+      "bytes": 16179,
+      "sha256": "e9797f88d40f0bf86c8769e319e1f47b3bc37e9ecaa9d5ab84ba0f48670122b3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/nandff.txt",
+      "bytes": 433,
+      "sha256": "55cb4d14ed72dfcc71796ee2b105478e6e6d7500d615ff55fd46a0d38e4c7cea"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/clockedsrff.txt",
+      "bytes": 568,
+      "sha256": "616f75b80f9222e9271d269e7a44878aec395ad05c74a3c21f652879eedd9836"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/masterslaveff.txt",
+      "bytes": 1039,
+      "sha256": "0b64196d89564a87ffc0ed2aba2c6406840fee2e9ba629b51f82329ac3f8487e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/edgedff.txt",
+      "bytes": 1037,
+      "sha256": "06781ad72d8b016ba5f2e815fc14ad1bb3608634a737d62bee0efb0e80efc814"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/jkff.txt",
+      "bytes": 1451,
+      "sha256": "040d5cb9677d3693a5e97174a6ef22b311e63d5d6907946184730372c0dad9b7"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/counter.txt",
+      "bytes": 1106,
+      "sha256": "b7be18a50305881ca5000ed0748ce1d078a2563986e00c3a40ecd16da3876342"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/counter8.txt",
+      "bytes": 2410,
+      "sha256": "7b4a0e84fe60984b33c7048a94663ebe04e34fa63677ebb4bc3651d7a77e19d4"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/synccounter.txt",
+      "bytes": 1031,
+      "sha256": "063cac9109d8033721d6bae28284ff28a306d4d0a75fffd45876e233399c846c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/updownctr.txt",
+      "bytes": 1507,
+      "sha256": "a5ecd7603579cf195a85f905ffc3350b672d3428aa44b06e4b2cdd6d9bdfa9e8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/deccounter.txt",
+      "bytes": 1690,
+      "sha256": "1cfdc4ce14d06346bb0eaf1a782af712157ef93f99f73a742d12463d61a39784"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/graycode.txt",
+      "bytes": 686,
+      "sha256": "277ddee42501342b037fbf40307de1f78721a610359bc04ecb5523ed10707806"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/johnsonctr.txt",
+      "bytes": 2674,
+      "sha256": "89b423d96c358b69bee682d645950f1fad063dc12b73a5686ecf7178fced215f"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ringcascade.txt",
+      "bytes": 1128,
+      "sha256": "6a908e9923d61f0e67cc772f82eafc8c4fe4a39ee5e050fb848926956c9ca384"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/sipo-sr.txt",
+      "bytes": 602,
+      "sha256": "0104150753c985473c5eb2681ff20a3542cb8a2c81815a214f86f6dc9569c9e1"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/piso-sr.txt",
+      "bytes": 917,
+      "sha256": "2c3d5c73f9be6c218d4caee37fbcc02567ea4b7d0dff8616cb4a463bdd3265f5"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/unishiftreg.txt",
+      "bytes": 4862,
+      "sha256": "6520a6fc4fd6c629317e6297c97c98c0105a7bfb03acb2194e816277ea7ceda4"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/divideby2.txt",
+      "bytes": 214,
+      "sha256": "599ebc3f917bac95c54b4b7bb41d07ee51b6ba53a7fa9742d60f7eadf15b964a"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/divideby3.txt",
+      "bytes": 398,
+      "sha256": "0a9bdece3ca651e997439af231720ec780136a464d819b09a122e1a6c20f1673"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ledflasher.txt",
+      "bytes": 1021,
+      "sha256": "40145255a5a4307c4a1c2cd0007ce6031919b13970ed640af46ef20dd3299f76"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/traffic.txt",
+      "bytes": 1653,
+      "sha256": "fb880658dab0c7742807e2d473f91d395c2274d763ce743a1605d6516f5ae3c1"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/sram.txt",
+      "bytes": 2227,
+      "sha256": "fa218db982739e48493e489769d3ebc589cf7afa029ff3ce04328c7d8bab6813"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/dram.txt",
+      "bytes": 1674,
+      "sha256": "71c91b3c41f09de89dbaea90264d0e29cda3325ec7d8af81a06eb168001e1dcf"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/td4.txt",
+      "bytes": 7730,
+      "sha256": "67d361d77ee68806ebd95515c0573353decff9843b0caaedc83b1c8dc6b9f0b0"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/td4-ctr.txt",
+      "bytes": 7697,
+      "sha256": "5767eb96bf6dd25058665aba4b8d31e5753d71330ba16264f68f0d6c2e0d4f1e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/td4-ctr-dn.txt",
+      "bytes": 7877,
+      "sha256": "e8f4da924b616911e74cd780a116a077502ba99d3df3c11197379c315b8caa09"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/td4-ctr-up-dn.txt",
+      "bytes": 7833,
+      "sha256": "699a4b8f6b8b0969c02812ee23d93f12a88cb2359ea84591eb0f059fb25863e0"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/td4-add2.txt",
+      "bytes": 7865,
+      "sha256": "56a4105e2588c49b2ea2a958a729c3999f98a6da9405775b0e7279341605db6c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/flashadc.txt",
+      "bytes": 2027,
+      "sha256": "4e8b7e24875e2e9f42b1b174ce03295b52427519b19b88e214b899116c628acb"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/deltasigma.txt",
+      "bytes": 1196,
+      "sha256": "0ef24d62e24567bb00a7004dd821cccd47e42340e74b193a2f88a24aaa5d3288"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/hfadc.txt",
+      "bytes": 1189,
+      "sha256": "7f80aead3162290bf02abe578223dcad2b433b22fe65ba23219d0e3375704c31"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/dac.txt",
+      "bytes": 531,
+      "sha256": "89a11d19e474317a49f19499182330ce3f074d76672c0361343ec0334855f3b1"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/r2rladder.txt",
+      "bytes": 1033,
+      "sha256": "5dc7c15d002a4e260b437124a989401d210231c245d10f3f89d288aa5ba04643"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/swtreedac.txt",
+      "bytes": 1177,
+      "sha256": "4b439ee972a8a39570f2d3e92fa89274fb9fc706bdfc42a08b29d955ff242df3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/digsine.txt",
+      "bytes": 1360,
+      "sha256": "44481262297067e58d69b07fee61bb7ef9687b5492139aeae6ad0fb09550ab61"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/qam-256.txt",
+      "bytes": 4787,
+      "sha256": "a83bda27def503db927b020a188b27ed5bc303283b3d8c117aafb8de25c4b7b8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/conv-boost.txt",
+      "bytes": 1030,
+      "sha256": "ae60dea89338c66b7c30eadbf3c9f6233ce87f979d6ebcc905c83e6e98530fd3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/conv-buck.txt",
+      "bytes": 1036,
+      "sha256": "c0f14d48715a3cdb2969c9ed4a39979bfc483962d69740a7276f00f90aa82d9f"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/conv-buckboost.txt",
+      "bytes": 528,
+      "sha256": "b045b2239c35c48caf217551ac43977405d8db8315bf121503f8f3d415e02de9"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/conv-cuk.txt",
+      "bytes": 1199,
+      "sha256": "1f55ef90f9ca37042f1158b72433be8b3aa3926e8b6c3a8c8756f7f6b3ed92a1"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/conv-sepic.txt",
+      "bytes": 1297,
+      "sha256": "ea3696d179a2be1bd5a8d3c4ca0f0cb881092066df638e55a2beb20583839413"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/xorphasedet.txt",
+      "bytes": 268,
+      "sha256": "bd2f4fb987b9552c38825f7d6fa9e73408ee29e401b64f3557775ffaef707e40"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/pll.txt",
+      "bytes": 704,
+      "sha256": "fb46a0a37ce4c119108a714ddf60f904740fa3b59b896a7cba790ef57bc00d53"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/phasecomp.txt",
+      "bytes": 391,
+      "sha256": "54344cc91cd0198fe94f5ae4a583960a58e4128f2055db2b3270cb046d5b5601"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/phasecompint.txt",
+      "bytes": 804,
+      "sha256": "8fb46a881f26802ec3a0363a6aa0ac6879e5e157ae90f259ab3d450602b0d171"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/pll2.txt",
+      "bytes": 1339,
+      "sha256": "0e598cd9ba123f9e19f15d92cd44733f0c297fccb2afb136ccb7e8a4a231a2f3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/pll2a.txt",
+      "bytes": 1388,
+      "sha256": "ec9caafbbb8b07a9b0d398c34262860981580559df52977050b8991719c023d7"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/freqdouble.txt",
+      "bytes": 1624,
+      "sha256": "593e394eb6e907b7191ea1e0a7f6007bb526a67fd555d7e1292000a4b996f23e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tl.txt",
+      "bytes": 240,
+      "sha256": "cae2e11b03a1e81dc1a68ab38b8194bb646a6a1e755acbffe62d6edcd3f5593e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tlstand.txt",
+      "bytes": 312,
+      "sha256": "355471eb51a7eb489bd86d52240b08d570d0825bce6db8b404a3ccc58b53077d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tlterm.txt",
+      "bytes": 880,
+      "sha256": "43b7ea735d580a93ea8b7304f9fe9790ba754f0c38b6ddc6fb3050229b3cd6ba"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tlmismatch.txt",
+      "bytes": 376,
+      "sha256": "cd83613e11ca21e24256abdaf75cb74109beb2d310ee9d432292c810a8cae836"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tlmis1.txt",
+      "bytes": 412,
+      "sha256": "5f1c4c9547b46a8c27192ad860ffe7120b8f04ded56e0b7988a61a1e3fca7e5d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tlmatch1.txt",
+      "bytes": 925,
+      "sha256": "dc6b81f44722366d2e800e0584d20f5cc2549e7b469a4bff877cd39dc6ad1eb8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tlmatch2.txt",
+      "bytes": 1048,
+      "sha256": "dfebd833909860f64f45978a3b36e435f129396f78a6d467b97f63e22adefd1a"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tlfreq.txt",
+      "bytes": 513,
+      "sha256": "f8cdf1efe3b0215939cd26ccf18584fa848a3a43a5c4829bbff419c8b480df44"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tllopass.txt",
+      "bytes": 899,
+      "sha256": "fa2068e6f4a1a9ec8f37921c32097b0e7392774abc45371ad5d1b42ca11898a7"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tllight.txt",
+      "bytes": 473,
+      "sha256": "996c584e3897f3607146e38b985a565de4b9f042f2281615ff379eed0bd2f8c5"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cs-resistor.txt",
+      "bytes": 384,
+      "sha256": "0577a080495c38ff5cbcfa3bc1604d8abe60c0d3c917a9c75080bedd256eed63"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cs-varyresistor.txt",
+      "bytes": 502,
+      "sha256": "1b04efd44ea04a350ab0469822bbcb0fcb03d0be179af0846e7d78f06b5fde22"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cs-opamp.txt",
+      "bytes": 714,
+      "sha256": "f7f56cb1e889681c352bd3cbaff9bf5f4307b8a90bd53e09e59790ed6226a877"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cs-opamprail.txt",
+      "bytes": 830,
+      "sha256": "1aa612396b8d9e86fd22afdd306793e2bcb9ffd468aa7d0bbcbbae963480591b"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cs-multiplier.txt",
+      "bytes": 593,
+      "sha256": "c3df13b4204e04a8cda96559e9ae903b6946b6de04eaa261f716b0964d4eb46c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cs-fullrectifier.txt",
+      "bytes": 467,
+      "sha256": "de26f82d0bb3c35a7d4ecd317d5eba4b4acc595bc2024e104c446bb8a4a80d3d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cs-ramp.txt",
+      "bytes": 379,
+      "sha256": "fa6d369de9ea0b6f593c2dcfda40f2ec54bd1d30db6b7029a26ba2e2a0c9c26d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cs-currentadder.txt",
+      "bytes": 803,
+      "sha256": "044334212e5c83e89e643f186aee4b06881382c19e85646ab15ea9b10b1b458c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cs-integrator.txt",
+      "bytes": 704,
+      "sha256": "a8362769badc23ac36e20874b76ce10a7c22558ddccdcfd53dbef2e4467630b9"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cs-diff.txt",
+      "bytes": 539,
+      "sha256": "2f21aa835a87c4dd9e633f3808630030910d0aee781def55e31e28405bc94bd9"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cs-varinduct.txt",
+      "bytes": 765,
+      "sha256": "f5708299f9ed65ff4b2f4152a7cb6532004189a4defb7dd57e55ad049251e45e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cs-varicap.txt",
+      "bytes": 741,
+      "sha256": "0d917c56a2d9b6f6a6fef529699d5b4ce0ef988b113c50b21adcf92a481da12d"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/fullrect-sc.txt",
+      "bytes": 1464,
+      "sha256": "ce1658b20b7838eff66c5bd30bde13c173d434a408e1413d46da776541566236"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/adder4-sc.txt",
+      "bytes": 7780,
+      "sha256": "bca98dc423d8ddc39a190dafb6bfa8eae81ac7f1db6aa58ff2c3b6688e138ac2"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/jfetcurrentsrc.txt",
+      "bytes": 300,
+      "sha256": "bf3be510dab9c181533901f47a4b15acf0f74e6038731ff88d40640b8c0e99af"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/jfetfollower.txt",
+      "bytes": 255,
+      "sha256": "1ccd0e62a286cef0758d73e16cbe866db0ddbefd32c012ae8728655a56348efc"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/jfetfollower-nooff.txt",
+      "bytes": 338,
+      "sha256": "97120b7ebe288bed5add119456b5354f414c62f0b3022df4a1a261dca6dc0343"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/jfetamp.txt",
+      "bytes": 467,
+      "sha256": "5b253c287801d759ed31c4b130cb12f55b41c879a7ccd04ef42ba5f72cea9968"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/volume.txt",
+      "bytes": 361,
+      "sha256": "964166768100a7f3ab7aef53a4a0f8614990c5328910a74d2f474d023b0832a9"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/lambda-diode.txt",
+      "bytes": 306,
+      "sha256": "d998065682e28403753e1689ac343858a99fc43fd445783c3203d55684214197"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/lambda-diode-osc.txt",
+      "bytes": 602,
+      "sha256": "d756a155740117dd826342cf28783ad0f8850ae10f006088610b62a88f78a171"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tdiode.txt",
+      "bytes": 187,
+      "sha256": "3d2681938eacc12da682c513ddadd7d82d766b001fad4994aec5f55fea82422c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tdosc.txt",
+      "bytes": 538,
+      "sha256": "d458b5cb6c8c2308cdf5cb4082a3ba0bfe577aa0be94479d27855a04c84389d3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tdrelax.txt",
+      "bytes": 374,
+      "sha256": "6914561c8d281693cfe9e208cdbb139bb33af20481ed67cc1462e453759bf134"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mr.txt",
+      "bytes": 254,
+      "sha256": "11de0afb5dc7b72930616e7b7ecd3482f68960d42810b63a0273469fdff80f2c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mr-sine.txt",
+      "bytes": 258,
+      "sha256": "2854da697b74271734a4a57bdaffd0ec56f236a2424bb303aba44257d0aa4171"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mr-square.txt",
+      "bytes": 255,
+      "sha256": "2c12c29a4007336c4823cac4f1c25641c319499de0de235ca5664e96ab06eef1"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mr-triangle.txt",
+      "bytes": 259,
+      "sha256": "5d3649d9b6e4c4a876033972d4a603c86718e6da085908e33bf97ac6066c42c7"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mr-sine2.txt",
+      "bytes": 255,
+      "sha256": "eb24c1f961b2e7f2e46cc04dc15e8c1dda3354720d75fa96bf55d2b321934111"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mr-sine3.txt",
+      "bytes": 264,
+      "sha256": "c8ca371bf89e1d029156d414879a5da19ff47d3ec16919554ac2a419fd16f0d8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/mr-crossbar.txt",
+      "bytes": 1331,
+      "sha256": "31ace32a64d4415645176f37208aef1a960659aac0e8e5f9f68174abc27dc96c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/triode.txt",
+      "bytes": 279,
+      "sha256": "b947c3999bf7b9e30a737f9b07f487ef1978e8827f072873b970cf0f898953a5"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/triodeamp.txt",
+      "bytes": 666,
+      "sha256": "472ae6a0977d9edb212edb30faad528d2399ae611a0a224119760a50ee13991e"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/scr.txt",
+      "bytes": 280,
+      "sha256": "0e31528b4d1b3748a19ebe807111c7083ade8b69bbfc5fb7432d8b6a1ae454ec"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/scractrig.txt",
+      "bytes": 351,
+      "sha256": "946ac3bc29929e026bc56d1b18f6026b5d3fdcff800cb320155242445071e546"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cc2.txt",
+      "bytes": 257,
+      "sha256": "e7b4691a5b81fc841d977a7abddfb87c421829cafc64e6f7126b8621b49bcb9a"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cc2n.txt",
+      "bytes": 258,
+      "sha256": "1f9bac1a24dd63ed2d3a4d224fd5ea74dfbed028e8ed363d6cb9bace46306fed"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ccinductor.txt",
+      "bytes": 700,
+      "sha256": "8091a8484aba32272c18c858cb09d66c3e6d9446cfb859f06a2e6a43b5969593"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cc2imp.txt",
+      "bytes": 1028,
+      "sha256": "012f566e08ce7a2a1032eb7068ded33e5e69a7b92caca6d25747f94c9deb6f74"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cc2impn.txt",
+      "bytes": 1509,
+      "sha256": "ae50b5df372d8b6d56e0799d7aca29e0b2e404b4a139f9612332bebcde447868"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/cciamp.txt",
+      "bytes": 361,
+      "sha256": "e5b1a7cb2c6d9ed70b0d3fabc0d8d435c8d6b916e43a0699ddaa50721b2bddaa"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ccvccs.txt",
+      "bytes": 326,
+      "sha256": "38a3af16423107e803eeea36c308cb12af5b05b551fa68ccb26304d33b1726d0"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ccdiff.txt",
+      "bytes": 479,
+      "sha256": "cf8f9b4d2684e894b8898d945935db356957356d0d3a03da85510d76350b225a"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ccint.txt",
+      "bytes": 488,
+      "sha256": "1bb0636bcf968becd40bf665dbd0254a7a8e4d6e25ef1b41f1e16bf0457aeef6"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ccitov.txt",
+      "bytes": 457,
+      "sha256": "45b0f56d7c7d68c296c10059389fdf9b89dd2239fd0e5bbbaa4f1dc0c7ef6863"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/spark-sawtooth.txt",
+      "bytes": 302,
+      "sha256": "27241e0e844f5b5e8822f8b1c66e5bfa3df2d54abdaae946f271bb447c46305c"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/tesla.txt",
+      "bytes": 773,
+      "sha256": "73f1f08080f034ce4b79a02c77054dcc5f61e917cffd90278a5e395c0c091e28"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/spark-marx.txt",
+      "bytes": 1258,
+      "sha256": "09078e29538a4520ebf7671c1903c003fdc1183cb0edfa9970c91cffac181fc9"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ota-vca.txt",
+      "bytes": 1364,
+      "sha256": "3df4c4342e8fbed9caf74e1927f210bd21175abbadebf7508ac45104d6edba45"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ota-vcf-single.txt",
+      "bytes": 1872,
+      "sha256": "8f61f538728e8a79fec3385e28d6131d35945e3573c0406c9b7baeddbd4314bf"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ota-ringmod.txt",
+      "bytes": 1455,
+      "sha256": "8538d2574eb0d679ec87e8ec0185beb728e7521ac512205ecedb8da40111b0ec"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ota-gain.txt",
+      "bytes": 1917,
+      "sha256": "50bbad4ae005e7f32c59bf89f45a0f6e333a002798144d54a0fb31613e17908a"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/lightbulb.txt",
+      "bytes": 328,
+      "sha256": "d91400fb4aa70c0e518c7d96c9859ee7c60bf378686bf741c8b9f4da67a3daa8"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/wienbridge.txt",
+      "bytes": 543,
+      "sha256": "eed9638e02551530dbbe388a18795a28ca8dd41bae2f3028a0d1733eb9910813"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/varactor.txt",
+      "bytes": 603,
+      "sha256": "ef33280177fdbcf116b79adf085525d06890df4780b888375ff8810b47f2afb3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/varactorvco.txt",
+      "bytes": 1109,
+      "sha256": "b6d7bcfd7fa8b164d0316ad8600e2af1ac6357eaf21eee46263ef484fae55164"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/norton-invert.txt",
+      "bytes": 882,
+      "sha256": "0a185b9eb8a95411f6fb45da47ad8be6965efc085a5a8f87251238c01a9bb1d1"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/norton-noninvert.txt",
+      "bytes": 949,
+      "sha256": "7c32291f8fd98a948ff6a04eda56d1796f9c04ccb83b198019065005b0843ca0"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/norton-saw.txt",
+      "bytes": 1117,
+      "sha256": "da5a25b49ef02ce10b5ea91daadd8898f78a00c184379c4096b5967702931fe2"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ledarray.txt",
+      "bytes": 2062,
+      "sha256": "b000ce85226e6f2bdd0c762783c11ed0d3ed910494705595f89390de7f3c2179"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/triacdimmer.txt",
+      "bytes": 451,
+      "sha256": "109d529ac14dfbe0bf73901858f5e37336b0a814b12a9fc55bf3cf0f735ff91f"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/ujtosc.txt",
+      "bytes": 411,
+      "sha256": "7426c705c10bfecd82c3eb26d83e2a8726a6733fabea405b83e1f0daae98b2fa"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/3motor.txt",
+      "bytes": 408,
+      "sha256": "b0ca52c66c2a2becbf2262422286c1d0ac38fbe250573736e8cd333599f0f401"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/latchingrelay.txt",
+      "bytes": 280,
+      "sha256": "8643a2ec91fcb81d6f99df44b31e069aa6da0bac1ced40d4bbf3a8edcf36a4b9"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/gyratorelm.txt",
+      "bytes": 1400,
+      "sha256": "393f8883818a0d746c6df6c0a4ac23fb0a09ec820d778f6ad22d1baa80d5d693"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/lissa.txt",
+      "bytes": 739,
+      "sha256": "a59ef1a3c4b6899b418f3a45deee723f62e7d1eac12cc0e8616d5aa1b44ebe89"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/plot2d-checker.txt",
+      "bytes": 1705,
+      "sha256": "dd2674f8188569d86bf15004b48df998d8c4bf5c97b741a4f8832b098af11278"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/plot2d-color.txt",
+      "bytes": 2175,
+      "sha256": "c5964304d5372d66e71b8ab7052714b78cdf7d8d84e3bc4a27e07b6f595d80a3"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/plot2d-smile.txt",
+      "bytes": 2954,
+      "sha256": "61efc1d02934462bfeedd059918107f9817c6ba66292d7489a36f5aaf14900d4"
+    },
+    {
+      "file": "circuitjs/circuitjs/circuits/blank.txt",
+      "bytes": 21,
+      "sha256": "c71e097f687c15635690f33576e354858b0572904a385b80a5d7120652f8351a"
+    },
+    {
+      "file": "molecule/3Dmol-min.js",
+      "bytes": 545215,
+      "sha256": "4ab374e1830bccec950b280fd285a430e05e91bd13c9ef0097c611c66de6cb36"
+    },
+    {
+      "file": "models/1CRN.pdb",
+      "bytes": 49491,
+      "sha256": "42199a30a0701864a2a5cc76cd7f35cc544cd0e65fbcf63e03c166543249b811"
+    },
+    {
+      "file": "models/4N8T.pdb",
+      "bytes": 243972,
+      "sha256": "a3f2826d860c3fa1a0b3e13bb964a160dce38fbb682c3df30bda3882e0d74d6c"
+    },
+    {
+      "file": "models/7MQ.cif",
+      "bytes": 16679,
+      "sha256": "856a945141530c8ba2fff21dcddea67b34f9b4fdedad4cb6f01ac212b96d19aa"
+    },
+    {
+      "file": "licenses/GPL-2.0.txt",
+      "bytes": 17337,
+      "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+    }
+  ]
+}

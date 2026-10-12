@@ -24,3 +24,6 @@ eeb8*.json
 # spikes: third-party vendor downloads + binary evidence
 spikes/vendor/
 spikes/evidence/*.png
+
+# formal vendor mirrors (unmodified third-party products; GPL-safe, do not reformat)
+apps/desktop/src/renderer/public/vendor/

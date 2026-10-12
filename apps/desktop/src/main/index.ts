@@ -8,6 +8,15 @@ import { isHttpUrl, PROTOCOL_SCHEME } from './constants';
 
 const config = loadConfig(import.meta.env as unknown as Record<string, string | undefined>);
 
+// F3.4/F3.5：vendor iframe 子资源（circuits/*.txt、字体、fetch）需要 privileged scheme；
+// 必须在 app.ready 之前注册（与 spike run-spike.mjs 同形态）
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: PROTOCOL_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true }
+  }
+]);
+
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {

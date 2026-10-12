@@ -43,6 +43,9 @@ const api: ElectronApi = {
   },
   mediaImportFile: (data: MediaImportFileArgs) => {
     return ipcRenderer.invoke(IpcChannels.mediaImportFile, data) as Promise<string | null>;
+  },
+  vendorGetUrl: (relPath: string) => {
+    return ipcRenderer.invoke(IpcChannels.vendorGetUrl, relPath) as Promise<string>;
   }
 };
 

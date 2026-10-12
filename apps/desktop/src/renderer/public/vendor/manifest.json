@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-10-12T08:06:04.933Z",
+  "circuit": {
+    "repo": "https://github.com/pfalstad/circuitjs1",
+    "license": "GPL-2.0-or-later",
+    "ref": "github-pages",
+    "html": "circuitjs/circuitjs.html"
+  },
+  "molecule": {
+    "lib": "molecule/3Dmol-min.js",
+    "models": [
+      "models/1CRN.pdb",
+      "models/4N8T.pdb",
+      "models/7MQ.cif"
+    ]
+  },
+  "licenses": [
+    "licenses/GPL-2.0.txt",
+    "licenses/NOTICE"
+  ]
+}

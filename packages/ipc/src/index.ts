@@ -8,7 +8,9 @@ export const IpcChannels = {
   recordingGetFileUrl: 'recording:get-file-url',
   recordingSaveBlob: 'recording:save-blob',
   /** F5.3：本地媒体导入（复制入 userData/media，返回绝对路径；失败 null） */
-  mediaImportFile: 'media:import-file'
+  mediaImportFile: 'media:import-file',
+  /** F3.4/F3.5：外挂 vendor 资源寻址（dev→Vite public，prod→atom:// 绝对路径） */
+  vendorGetUrl: 'vendor:get-url'
 } as const;
 
 export interface DesktopSource {
@@ -70,4 +72,6 @@ export interface ElectronApi {
   recordingSaveBlob: (data: RecordingSaveBlobArgs) => Promise<RecordingSaveBlobResult>;
   /** F5.3：本地媒体导入 → userData/media 绝对路径；失败/取消返回 null */
   mediaImportFile: (data: MediaImportFileArgs) => Promise<string | null>;
+  /** F3.4/F3.5：vendor 相对路径 → 可加载完整 URL（路径非法时 reject） */
+  vendorGetUrl: (relPath: string) => Promise<string>;
 }

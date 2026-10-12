@@ -1,0 +1,18 @@
+Third-party components bundled under apps/desktop/src/renderer/public/vendor/
+(aggregate distribution; upstream products are unmodified mirrors)
+
+1. CircuitJS1 — GPL-2.0-or-later
+   Source: https://github.com/pfalstad/circuitjs1
+   Mirrored from: https://pfalstad.github.io/circuitjs1/
+   Full license text: ./GPL-2.0.txt (same directory)
+   This application does not modify CircuitJS1; it is aggregated as an
+   independent program communicating via iframe only.
+
+2. 3Dmol.js — BSD-3-Clause
+   Source: https://github.com/3dmol/3Dmol.js
+   Mirrored build: https://3dmol.org/build/3Dmol-min.js
+   License: https://github.com/3dmol/3Dmol.js/blob/master/LICENSE (BSD-3-Clause;
+   bundles GLmol MIT/LGPL dual and Three.js MIT as noted upstream)
+
+3. PDB/CCD model files (1CRN, 4N8T, 7MQ.cif) — obtained from RCSB PDB (https://www.rcsb.org),
+   released under CC0 1.0 (https://www.rcsb.org/pages/policies)

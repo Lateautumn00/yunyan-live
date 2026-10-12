@@ -2,6 +2,7 @@
 import { DesktopSource, IpcChannels } from '@yunyan-live/ipc';
 import { registerRecordingHandlers } from './recording';
 import { registerMediaHandlers } from './media';
+import { registerVendorHandlers } from './vendor';
 
 type GetWindow = () => BrowserWindow | null;
 
@@ -46,4 +47,5 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
 
   registerRecordingHandlers(getWindow);
   registerMediaHandlers();
+  registerVendorHandlers();
 }
