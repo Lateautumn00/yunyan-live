@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>F3.4 spike harness</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: sans-serif;
+      }
+      #status {
+        padding: 4px 8px;
+        font-size: 12px;
+        background: #eee;
+      }
+      iframe {
+        border: 0;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">boot</div>
+    <iframe
+      id="sim"
+      style="width: 1000px; height: 680px"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+    ></iframe>
+    <script>
+      window.__spike = { iframeKeys: [], parentKeys: [], ready: false };
+      window.addEventListener('keydown', e => {
+        window.__spike.parentKeys.push(e.key);
+      });
+      (async () => {
+        try {
+          const manifest = await (await fetch('/vendor/manifest.json')).json();
+          const iframe = document.getElementById('sim');
+          iframe.src = '/' + manifest.circuit.html;
+          await new Promise(resolve => iframe.addEventListener('load', resolve));
+          const doc = iframe.contentDocument;
+          window.__spike.iframeAccessible = !!doc;
+          if (!doc) {
+            throw new Error('contentDocument inaccessible');
+          }
+          doc.addEventListener('keydown', e => {
+            window.__spike.iframeKeys.push(e.key);
+          });
+          const t0 = performance.now();
+          while (performance.now() - t0 < 20000) {
+            const cv = doc.querySelector('canvas');
+            if (cv) {
+              window.__spike.ready = true;
+              window.__spike.bootMs = Math.round(performance.now() - t0);
+              window.__spike.canvasW = cv.width;
+              window.__spike.canvasH = cv.height;
+              window.__spike.menuText = (doc.body.innerText || '').slice(0, 240);
+              break;
+            }
+            await new Promise(r => setTimeout(r, 250));
+          }
+        } catch (err) {
+          window.__spike.error = String(err);
+        }
+        document.getElementById('status').textContent = window.__spike.ready
+          ? 'ready'
+          : 'not-ready';
+      })();
+    </script>
+  </body>
+</html>

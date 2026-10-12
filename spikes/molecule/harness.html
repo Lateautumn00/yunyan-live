@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>F3.5 spike harness</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: sans-serif;
+      }
+      #viewer {
+        width: 800px;
+        height: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="viewer"></div>
+    <script src="/vendor/3dmol/3Dmol-min.js"></script>
+    <script>
+      window.__spike = { ready: false, error: null };
+      window.addEventListener('error', e => {
+        window.__spike.error = String(e.message);
+      });
+      window.addEventListener('load', async () => {
+        try {
+          const t0 = performance.now();
+          const pdb = await (await fetch('/vendor/models/1CRN.pdb')).text();
+          const viewer = $3Dmol.createViewer('viewer', { backgroundColor: 'white' });
+          viewer.addModel(pdb, 'pdb');
+          viewer.setStyle({}, { cartoon: { color: 'spectrum' } });
+          await viewer.addSurface($3Dmol.SurfaceType.VDW, { opacity: 0.6, color: 'white' }, {}, {});
+          viewer.render();
+          const bootMs = performance.now() - t0;
+          const canvas = document.querySelector('#viewer canvas');
+          if (!canvas) throw new Error('no webgl canvas after render');
+          const probe = document.createElement('canvas');
+          probe.width = canvas.width;
+          probe.height = canvas.height;
+          const ctx = probe.getContext('2d');
+          const sample = () => {
+            ctx.drawImage(canvas, 0, 0);
+            return probe.toDataURL();
+          };
+          const dataUrlBefore = sample();
+          ctx.drawImage(canvas, 0, 0);
+          const px = ctx.getImageData(0, 0, probe.width, probe.height).data;
+          let colored = 0;
+          for (let i = 0; i < px.length; i += 4) {
+            if (Math.min(px[i], px[i + 1], px[i + 2]) < 240) colored += 1;
+          }
+          viewer.rotate(30, 'y');
+          viewer.render();
+          const dataUrlRotated = sample();
+          viewer.rotate(-30, 'y');
+          viewer.render();
+          sample();
+          window.__measureFps = spin =>
+            new Promise(resolve => {
+              let frames = 0;
+              const start = performance.now();
+              const tick = () => {
+                frames += 1;
+                if (spin) {
+                  viewer.rotate(1, 'y');
+                  viewer.render();
+                }
+                if (performance.now() - start < 1000) requestAnimationFrame(tick);
+                else resolve(frames);
+              };
+              requestAnimationFrame(tick);
+            });
+          window.__spike = {
+            ready: true,
+            error: null,
+            version: typeof $3Dmol.version === 'string' ? $3Dmol.version : null,
+            bootMs: Math.round(bootMs),
+            atomCount: viewer.selectedAtoms({}).length,
+            canvasW: canvas.width,
+            canvasH: canvas.height,
+            coloredRatio: Number((colored / (px.length / 4)).toFixed(4)),
+            rotateRedraws: dataUrlBefore !== dataUrlRotated,
+            heapUsedBytes: performance.memory ? performance.memory.usedJSHeapSize : null
+          };
+        } catch (err) {
+          window.__spike.error = String(err);
+        }
+      });
+    </script>
+  </body>
+</html>

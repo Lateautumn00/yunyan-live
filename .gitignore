@@ -48,3 +48,6 @@ pnpm-debug.log*
 # --- auto-generated types ---
 **/auto-imports.d.ts
 **/components.d.ts
+
+# --- spikes: third-party vendor downloads (reports record sha256) ---
+spikes/vendor/

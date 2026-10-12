@@ -20,3 +20,7 @@ README.md
 README.en.md
 # legacy binary dumps (root, untracked)
 eeb8*.json
+
+# spikes: third-party vendor downloads + binary evidence
+spikes/vendor/
+spikes/evidence/*.png

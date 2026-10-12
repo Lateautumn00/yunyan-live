@@ -1,0 +1,66 @@
+{
+  "startedAt": "2026-10-12T04:39:21.046Z",
+  "env": {
+    "electron": "43.4.1",
+    "chrome": "150.0.7871.224",
+    "node": "24.18.1",
+    "platform": "win32"
+  },
+  "circuit": {
+    "pageLoadMs": 2393,
+    "harness": {
+      "iframeKeys": [],
+      "parentKeys": [],
+      "ready": true,
+      "iframeAccessible": true,
+      "bootMs": 764,
+      "canvasW": 166,
+      "canvasH": 14,
+      "menuText": "File\tEdit\tDraw\tScopes\tOptions\tTools\nResetRUN / Stop\nSimulation Speed\nCurrent Speed\nPower Brightness\nCurrent Circuit:\nLabel\n+5V\n-\n+"
+    },
+    "keyboard": {
+      "focusedFirst": true,
+      "iframeKeys": ["v"],
+      "parentKeys": ["p"]
+    },
+    "fullscreenIframeApi": {
+      "enabled": true,
+      "err": null,
+      "fsEl": true
+    },
+    "fullscreenWindow": true,
+    "rendererHeapBytes": 7144372,
+    "rendererProcess": {
+      "workingSetKb": 110884,
+      "privateBytesKb": 55508
+    },
+    "mainRssBytes": 109142016,
+    "screenshot": "evidence/circuit-boot.png"
+  },
+  "molecule": {
+    "pageLoadMs": 253,
+    "harness": {
+      "ready": true,
+      "error": null,
+      "version": null,
+      "bootMs": 599,
+      "atomCount": 327,
+      "canvasW": 1600,
+      "canvasH": 1200,
+      "coloredRatio": 0.0975,
+      "rotateRedraws": true,
+      "heapUsedBytes": 25341682
+    },
+    "fpsWithSpin": 61,
+    "fpsIdle": 61,
+    "rendererHeapBytes": 19872785,
+    "rendererProcess": {
+      "workingSetKb": 146192,
+      "privateBytesKb": 69408
+    },
+    "mainRssBytes": 118538240,
+    "screenshot": "evidence/molecule-boot.png"
+  },
+  "externalRequests": [],
+  "externalRequestCount": 0
+}
