@@ -9,7 +9,8 @@ describe('IpcChannels', () => {
       getSources: 'desktop-capturer:get-sources',
       clipboardWrite: 'clipboard:write-text',
       recordingGetFileUrl: 'recording:get-file-url',
-      recordingSaveBlob: 'recording:save-blob'
+      recordingSaveBlob: 'recording:save-blob',
+      mediaImportFile: 'media:import-file'
     });
   });
 

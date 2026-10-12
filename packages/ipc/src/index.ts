@@ -6,7 +6,9 @@ export const IpcChannels = {
   clipboardWrite: 'clipboard:write-text',
   clipboardReadImage: 'clipboard:read-image',
   recordingGetFileUrl: 'recording:get-file-url',
-  recordingSaveBlob: 'recording:save-blob'
+  recordingSaveBlob: 'recording:save-blob',
+  /** F5.3：本地媒体导入（复制入 userData/media，返回绝对路径；失败 null） */
+  mediaImportFile: 'media:import-file'
 } as const;
 
 export interface DesktopSource {
@@ -49,6 +51,12 @@ export interface RecordingSaveBlobResult {
   error?: string;
 }
 
+/** F5.3：本地媒体导入入参（buffer 从渲染端 File.arrayBuffer 来） */
+export interface MediaImportFileArgs {
+  name: string;
+  buffer: ArrayBuffer;
+}
+
 export interface ElectronApi {
   checkForUpdate: () => void;
   onMessage: (callback: (payload: AppMessagePayload) => void) => () => void;
@@ -60,4 +68,6 @@ export interface ElectronApi {
   clipboardReadImage: () => Promise<string>;
   recordingGetFileUrl: (filePath: string) => Promise<string>;
   recordingSaveBlob: (data: RecordingSaveBlobArgs) => Promise<RecordingSaveBlobResult>;
+  /** F5.3：本地媒体导入 → userData/media 绝对路径；失败/取消返回 null */
+  mediaImportFile: (data: MediaImportFileArgs) => Promise<string | null>;
 }

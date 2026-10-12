@@ -4,6 +4,7 @@ import {
   DesktopSource,
   ElectronApi,
   IpcChannels,
+  type MediaImportFileArgs,
   type RecordingSaveBlobArgs,
   type RecordingSaveBlobResult
 } from '@yunyan-live/ipc';
@@ -39,6 +40,9 @@ const api: ElectronApi = {
       IpcChannels.recordingSaveBlob,
       data
     ) as Promise<RecordingSaveBlobResult>;
+  },
+  mediaImportFile: (data: MediaImportFileArgs) => {
+    return ipcRenderer.invoke(IpcChannels.mediaImportFile, data) as Promise<string | null>;
   }
 };
 
