@@ -280,6 +280,21 @@
             <el-icon><FullScreen /></el-icon>
           </div>
         </el-tooltip>
+        <!-- F6.5：微课录制（区分 Top.vue 的直播录制）：空闲点击开始，录制中暂停/继续 -->
+        <el-tooltip content="微课录制 · 屏幕录成本地视频（录制中点击暂停/继续）" placement="top">
+          <div class="microlecture" :class="{ on: microState !== 'idle' }" @click="onMicroToggle">
+            <el-icon><VideoCameraFilled /></el-icon>
+          </div>
+        </el-tooltip>
+        <el-tooltip
+          v-if="microState === 'recording' || microState === 'paused'"
+          content="结束微课录制并保存（webm）"
+          placement="top"
+        >
+          <div class="micro-stop" @click="onMicroStop">
+            <el-icon><VideoPause /></el-icon>
+          </div>
+        </el-tooltip>
       </div>
 
       <!-- 底部页面栏（仅教师：增删页/翻页写入共享文档并强制其他端跟随） -->
@@ -927,6 +942,7 @@ import {
 import { useUserStore } from '@/store/user';
 import Live from '@/api/backstage';
 import { useConfirmDelete } from '@/composables/useConfirmDelete';
+import { useMicroLecture } from '@/composables/useMicroLecture';
 
 const props = defineProps<{
   roomId: string;
@@ -1681,6 +1697,25 @@ function onSimHandle(id: string, patch: Record<string, number>): boolean {
   return provider.updateElement(id, patch);
 }
 
+// F6.5：微课录制（底部 ctrl-tools 入口；录制状态机见 useMicroLecture，产物本地 webm）
+const {
+  state: microState,
+  start: startMicroLecture,
+  pause: pauseMicroLecture,
+  resume: resumeMicroLecture,
+  stop: stopMicroLecture
+} = useMicroLecture();
+
+function onMicroToggle() {
+  if (microState.value === 'idle') void startMicroLecture();
+  else if (microState.value === 'recording') pauseMicroLecture();
+  else if (microState.value === 'paused') resumeMicroLecture();
+}
+
+function onMicroStop() {
+  void stopMicroLecture();
+}
+
 // --- F4.7 思维导图：双击建根 / Tab 增子 / Enter 增同级（自动布局初版不做，手动摆位） ---
 
 function mindContextEl(): Y.Map<any> | null {
@@ -2159,6 +2194,8 @@ onUnmounted(() => {
   }
   window.removeEventListener('resize', onResize);
   broadcastViewport.cancel();
+  // F6.5：卸载时若仍在录制 → 停止并走保存流程（采集轨随 cleanup 释放）
+  if (microState.value !== 'idle') void stopMicroLecture();
   document.removeEventListener('keydown', onSelectionKeydown);
   document.removeEventListener('mousemove', throttledWheelMove);
   document.removeEventListener('mouseup', onWheelUp);
@@ -5511,6 +5548,18 @@ defineExpose({
     background-color: #35543f;
     .el-icon {
       color: #fff;
+    }
+  }
+  // F6.5：微课录制（录制中红点高亮；停止键方块红）
+  .microlecture.on {
+    background-color: #fde2e2;
+    .el-icon {
+      color: #e0383e;
+    }
+  }
+  .micro-stop {
+    .el-icon {
+      color: #e0383e;
     }
   }
   .num {
