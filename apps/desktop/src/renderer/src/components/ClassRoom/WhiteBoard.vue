@@ -929,6 +929,7 @@ import { debounce, formatFileSize, frameThrottle, throttle, uid } from '@yunyan-
 import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
+import { PptConvertError } from './whiteboard/pptConvertError';
 import { runExport, type ExportFormat, type ExportScope } from './whiteboard/exportBoard';
 import { renderPageSnapshot } from './whiteboard/pageSnapshot';
 import { regularizePath } from './whiteboard/regularize';
@@ -5043,7 +5044,11 @@ async function uploadPPT(file: File): Promise<boolean> {
     try {
       fileUrl = await uploadPptFile(uploadPptApi, file);
     } catch (err) {
-      toast((err as Error).message);
+      if (err instanceof PptConvertError) {
+        toast(`课件转换失败: ${err.detail}（可到课件上传窗口获取原文件）`);
+      } else {
+        toast((err as Error).message);
+      }
       return false;
     }
 

@@ -3,6 +3,7 @@ import { enableAutoUnmount, flushPromises, mount, type VueWrapper } from '@vue/t
 import ElementPlus, { ElMessageBox } from 'element-plus';
 import { ok } from '@/testing/utils';
 import CoursewareUpload from '@/components/teacher/CoursewareUpload.vue';
+import { PptConvertError } from '@/components/ClassRoom/whiteboard/pptConvertError';
 
 enableAutoUnmount(afterEach);
 
@@ -181,5 +182,82 @@ describe('components/teacher/CoursewareUpload.vue', () => {
     expect(mocks.deleteCourseware).not.toHaveBeenCalled();
     expect(bodyText()).toContain('缺少ID');
     wrapper.unmount();
+  });
+});
+
+describe('CoursewareUpload 转换失败降级（F5.4）', () => {
+  it('convertError：展示转换错误文案且不登记课件', async () => {
+    mocks.uploadPptFile.mockRejectedValue(
+      new PptConvertError({
+        stage: 'convert',
+        retryable: true,
+        message: '转换超时，请重试或拆分课件',
+        originalUrl: 'http://mock.test/ppt/1.pptx'
+      })
+    );
+    const wrapper = await mountUpload();
+    await openDialog(wrapper);
+    const { input } = pickFile('超时课件.pptx');
+    await input.dispatchEvent(new Event('change', { bubbles: true }));
+    await flushPromises();
+    expect(mocks.saveCourseware).not.toHaveBeenCalled();
+    expect(mocks.loadPptMeta).not.toHaveBeenCalled();
+    expect(bodyText()).toContain('课件转换失败');
+    expect(bodyText()).toContain('转换超时');
+    wrapper.unmount();
+  });
+
+  it('convertError 带原文件：确认后打开 originalUrl', async () => {
+    const boxed = ElMessageBox as unknown as { confirm: (message?: string) => Promise<unknown> };
+    const confirmSpy = vi.spyOn(boxed, 'confirm').mockResolvedValue('confirm');
+    const openSpy = vi.fn();
+    vi.stubGlobal('open', openSpy);
+    try {
+      mocks.uploadPptFile.mockRejectedValue(
+        new PptConvertError({
+          stage: 'soffice-missing',
+          retryable: false,
+          message: '未找到 LibreOffice 转换器，请安装或配置 SOFFICE_PATH',
+          originalUrl: 'http://mock.test/ppt/orig.pptx'
+        })
+      );
+      const wrapper = await mountUpload();
+      await openDialog(wrapper);
+      const { input } = pickFile('缺转换器.pptx');
+      await input.dispatchEvent(new Event('change', { bubbles: true }));
+      await flushPromises();
+      expect(confirmSpy).toHaveBeenCalled();
+      expect(String(confirmSpy.mock.calls[0]?.[0] ?? '')).toContain('原');
+      expect(openSpy).toHaveBeenCalledWith('http://mock.test/ppt/orig.pptx', '_blank');
+      wrapper.unmount();
+    } finally {
+      confirmSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('convertError 无原文件地址：不弹确认框', async () => {
+    const boxed = ElMessageBox as unknown as { confirm: (message?: string) => Promise<unknown> };
+    const confirmSpy = vi.spyOn(boxed, 'confirm').mockResolvedValue('confirm');
+    try {
+      mocks.uploadPptFile.mockRejectedValue(
+        new PptConvertError({
+          stage: 'convert',
+          retryable: true,
+          message: '转换失败: boom',
+          originalUrl: ''
+        })
+      );
+      const wrapper = await mountUpload();
+      await openDialog(wrapper);
+      const { input } = pickFile('坏课件.pptx');
+      await input.dispatchEvent(new Event('change', { bubbles: true }));
+      await flushPromises();
+      expect(confirmSpy).not.toHaveBeenCalled();
+      expect(bodyText()).toContain('课件转换失败');
+      wrapper.unmount();
+    } finally {
+      confirmSpy.mockRestore();
+    }
   });
 });

@@ -37,12 +37,13 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { formatFileSize } from '@yunyan-live/utils';
 import Live from '@/api/backstage';
 import { useConfirmDelete } from '@/composables/useConfirmDelete';
 import { useAsyncAction } from '@/composables/useAsyncAction';
 import { uploadPptFile, loadPptMeta } from '@/components/ClassRoom/whiteboard/pptImport';
+import { PptConvertError } from '@/components/ClassRoom/whiteboard/pptConvertError';
 
 interface CoursewareItem {
   id: string;
@@ -109,7 +110,24 @@ const { loading: uploading, run: runUpload } = useAsyncAction(
     ElMessage.success('课件已上传，进入直播间后自动导入');
     await refresh();
   },
-  { onError: err => ElMessage.error((err as Error).message || '课件上传失败') }
+  {
+    onError: err => {
+      if (err instanceof PptConvertError) {
+        ElMessage.error(`课件转换失败: ${err.detail}`);
+        if (err.originalUrl) {
+          void ElMessageBox.confirm('转换失败不影响原文件，是否打开原始 PPT？', '获取原文件', {
+            type: 'warning',
+            confirmButtonText: '打开',
+            cancelButtonText: '取消'
+          })
+            .then(() => window.open(err.originalUrl, '_blank'))
+            .catch(() => undefined);
+        }
+        return;
+      }
+      ElMessage.error((err as Error).message || '课件上传失败');
+    }
+  }
 );
 
 async function takeFile(e: Event) {

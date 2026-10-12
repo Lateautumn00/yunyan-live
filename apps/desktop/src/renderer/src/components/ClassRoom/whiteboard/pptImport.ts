@@ -1,6 +1,9 @@
 import { uid } from '@yunyan-live/utils';
 import { getPdfPageCount, getPdfPageDims } from './pdfAsset';
+import { PptConvertError } from './pptConvertError';
 import type { YjsProvider } from './YjsProvider';
+
+export { PptConvertError };
 
 export interface PptMeta {
   numPages: number;
@@ -8,7 +11,8 @@ export interface PptMeta {
 }
 
 // 阶段0：上传 PPT 到网关（LibreOffice 转 PDF），返回 fileUrl。
-// 抛出的 Error.message 即为可直接展示的最终文案（与原 uploadPPT 的 toast 一一对应）。
+// 服务端返回 convertError 时抛 PptConvertError（保留 stage/retryable/originalUrl）；
+// 其余 Error.message 即为可直接展示的最终文案（与原 uploadPPT 的 toast 一一对应）。
 export async function uploadPptFile(api: string, file: File): Promise<string> {
   if (!api) throw new Error('未配置PPT上传接口');
   try {
@@ -17,9 +21,14 @@ export async function uploadPptFile(api: string, file: File): Promise<string> {
     const res = await fetch(api, { method: 'POST', body: fd });
     if (!res.ok) throw new Error(`PPT上传失败: ${res.status} ${res.statusText}`);
     const data = await res.json();
-    if (data.code !== 1000 || !data.data?.fileUrl) throw new Error('PPT上传失败');
+    if (data.code !== 1000 || !data.data?.fileUrl) {
+      const ce = data.data?.convertError;
+      if (ce && typeof ce.message === 'string') throw new PptConvertError(ce);
+      throw new Error('PPT上传失败');
+    }
     return data.data.fileUrl as string;
   } catch (e) {
+    if (e instanceof PptConvertError) throw e;
     const msg = (e as Error)?.message || String(e);
     throw new Error(msg.startsWith('PPT上传') ? msg : `PPT上传出错: ${msg}`, { cause: e });
   }
