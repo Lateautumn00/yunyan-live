@@ -18,6 +18,7 @@ export type ToolMode =
   | 'move'
   | 'laser'
   | 'mask'
+  | 'mindmap'
   | 'file';
 
 /** 笔型分段控件状态（F4.1）：钢笔/荧光笔，持久工具态（切换工具后记忆，重进房恢复） */
@@ -51,8 +52,14 @@ export const ELEMENT_TYPES = [
   'table',
   'coord',
   'curve',
-  'mask'
+  'mask',
+  'gridTemplate',
+  'mindmap',
+  'simTool'
 ] as const;
+
+/** F1.4：书写格线模板变体（四线三格 / 拼音格 / 田字格） */
+export type GridKind = 'four-line' | 'pinyin' | 'tian';
 
 export type ElementType = (typeof ELEMENT_TYPES)[number];
 
@@ -76,7 +83,8 @@ export const MODE_TO_ELEMENT: Partial<Record<ToolMode, ElementType>> = {
   polygon: 'polygon',
   table: 'table',
   coord: 'coord',
-  mask: 'mask'
+  mask: 'mask',
+  mindmap: 'mindmap'
 };
 
 export interface CursorData {

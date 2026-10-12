@@ -3,6 +3,19 @@ import Konva from 'konva';
 import * as Y from 'yjs';
 import { uid } from '@yunyan-live/utils';
 import { renderPdfPage } from './pdfAsset';
+import { computeMetrics } from './metrics';
+import { MIND_H, MIND_W, type MindNodeData } from './mindmap';
+import {
+  COMPASS_R,
+  PROTRACTOR_R,
+  RULER_H,
+  RULER_W,
+  SIM_R_MAX,
+  SIM_R_MIN,
+  compassRadiusFrom,
+  needleAngleDeg,
+  normDeg
+} from './simtool';
 import { ERASER_WIDTH_MULT, HIT_STROKE_MIN, isElementType } from './types';
 
 /** 点到线段距离（F4.1 橡皮按元素命中判定） */
@@ -60,6 +73,10 @@ export class KonvaRenderer {
   onShapeDblClick?: (id: string, e?: any) => void;
   onShapeDragEnd?: (id: string, x: number, y: number, altKey?: boolean) => void;
   onShapeTransformEnd?: (id: string, attrs: Record<string, any>) => void;
+  // F1.4：锁定格线（unlockable）点锁定框 → 组件弹解锁浮钮
+  onUnlockRequest?: (id: string) => void;
+  // F2.5：教具手柄拖动（量角器指针/圆规半径）→ 组件换算写回；返回 false 表示拒写
+  onSimHandle?: (id: string, patch: Record<string, number>) => boolean;
   // 手势（拖动/缩放）期间收到的刷新延后到手势结束，避免销毁正在操作的节点
   onRefreshRequest?: () => void;
 
@@ -417,6 +434,7 @@ export class KonvaRenderer {
       }
     });
     this.rebuildMarks(elements);
+    this.rebuildMetrics(elements);
     this.layer.batchDraw();
     if (this.selectedId) {
       if (this.selectEnabled && this.nodeMap.has(this.selectedId)) this.selectNode(this.selectedId);
@@ -453,6 +471,31 @@ export class KonvaRenderer {
     });
   }
 
+  // --- F2.4 度量标注：几何量派生文本 ---
+  // 与 rebuildMarks 同管线：不入 nodeMap（纯视觉、不参与命中/选择/拖拽）、随 bindElements
+  // 重建——改开关/改色/远端同步/拖动落笔/撤销重做都自动跟随；导出与缩略图走同一 bindElements，天然包含
+  private rebuildMetrics(elements: Y.Array<any>) {
+    elements.forEach((el: any) => {
+      const color = String(el.get('measureColor') || '#2563eb');
+      computeMetrics(el).forEach(l => {
+        this.layer.add(
+          new Konva.Text({
+            x: l.x,
+            y: l.y,
+            width: l.w,
+            align: 'center',
+            text: l.text,
+            fontSize: 12,
+            fill: color,
+            stroke: '#ffffff',
+            strokeWidth: 3,
+            listening: false
+          }) as any
+        );
+      });
+    });
+  }
+
   // --- 选择器：cur 模式下节点可点选/拖动/缩放 ---
   setSelectMode(on: boolean) {
     this.selectEnabled = on;
@@ -464,7 +507,12 @@ export class KonvaRenderer {
     node.off('click dblclick dragstart dragend transformstart transformend');
     if (!this.selectEnabled) return;
     // F2.1 锁定态：不接选择/拖拽（锁定背景不参与交互）
-    if (node.getAttr('locked')) return;
+    if (node.getAttr('locked')) {
+      node.draggable(false);
+      // F1.4：锁定格线特批——锁定态唯一可点节点，点框触发组件的解锁入口
+      if (node.getAttr('unlockable')) node.on('click', () => this.onUnlockRequest?.(id));
+      return;
+    }
     node.draggable(true);
     node.on('click', () => this.onShapeClick?.(id));
     node.on('dblclick', (e: any) => this.onShapeDblClick?.(id, e));
@@ -487,6 +535,66 @@ export class KonvaRenderer {
       this.onShapeTransformEnd?.(id, attrs);
       this.flushPendingBind();
     });
+    // F2.5 教具手柄：量角器指针/圆规半径（子节点独立拖拽，坐标换算回元素局部）
+    if (node.getAttr('type') === 'simTool') {
+      const handle = (node as any).getChildren?.()?.find?.((c: any) => c.getAttr?.('shandle'));
+      if (handle) {
+        handle.draggable(true);
+        handle.on('dragstart', () => {
+          this.gesturing = true;
+        });
+        handle.on('dragmove', () => this.simHandleMove(node, id));
+        handle.on('dragend', () => {
+          this.simHandleMove(node, id);
+          this.gesturing = false;
+          this.flushPendingBind();
+        });
+      }
+    }
+  }
+
+  /** F2.5：手柄指针 → 元素局部坐标（去层变换/去平移/去旋转）→ 按 kind 派生补丁写回 */
+  private simHandleMove(group: any, id: string) {
+    const sp = this.stage.getPointerPosition();
+    if (!sp) return;
+    const layer = this.layer;
+    const s = layer.scaleX() || 1;
+    const lx = (sp.x - layer.x()) / s;
+    const ly = (sp.y - layer.y()) / s;
+    const rad = ((Number(group.rotation?.()) || 0) * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const dx = lx - (Number(group.x()) || 0);
+    const dy = ly - (Number(group.y()) || 0);
+    const cx = dx * cos + dy * sin;
+    const cy = -dx * sin + dy * cos;
+    const kind = String(group.getAttr('kind') || '');
+    let patch: Record<string, number> | null = null;
+    if (kind === 'protractor') {
+      patch = { angle: needleAngleDeg(cx, cy) };
+    } else if (kind === 'compass') {
+      patch = { radius: compassRadiusFrom(cx, cy) };
+    }
+    if (!patch || !this.onSimHandle?.(id, patch)) return;
+    // 拖拽期局部刷新（Yjs 观察因 gesturing 挂起重建，抬手 flush 统一按数据重建）
+    const kids = (group as any).getChildren?.();
+    if (patch.angle !== undefined) {
+      const deg = patch.angle;
+      const prad = (deg * Math.PI) / 180;
+      const line = kids?.find?.((c: any) => c.getAttr?.('rline'));
+      line?.points([0, 0, PROTRACTOR_R * Math.cos(prad), -PROTRACTOR_R * Math.sin(prad)]);
+      const needle = kids?.find?.((c: any) => c.getAttr?.('shandle') === 'needle');
+      needle?.x(PROTRACTOR_R * Math.cos(prad));
+      needle?.y(-PROTRACTOR_R * Math.sin(prad));
+      const text = kids?.find?.((c: any) => c.getAttr?.('rtext'));
+      text?.text(`${Math.round(deg)}°`);
+    } else if (patch.radius !== undefined) {
+      const circle = kids?.find?.((c: any) => c.getAttr?.('rcircle'));
+      circle?.radius(patch.radius);
+      const knob = kids?.find?.((c: any) => c.getAttr?.('shandle') === 'radius');
+      knob?.x(patch.radius);
+      knob?.y(0);
+    }
   }
 
   private flushPendingBind() {
@@ -511,6 +619,8 @@ export class KonvaRenderer {
     }
     // 自由缩放（圆可拉成椭圆）；Konva 默认 shiftBehavior='default' → 按住 Shift 自动约束比例
     this.transformer.keepRatio(false);
+    // F2.5：仅教具开旋转手柄（普通元素维持不可旋转，避免与选择框语义冲突）
+    this.transformer.rotateEnabled(node.getAttr('type') === 'simTool');
     this.transformer.nodes([node]);
     this.tempLayer.batchDraw();
     return true;
@@ -643,11 +753,14 @@ export class KonvaRenderer {
     this.guideLayer.batchDraw();
   }
 
-  // 把 transformer 施加的 scale 烘焙进节点属性（Yjs 只存绝对属性）
+  // 把 transformer 施加的 scale/rotation 烘焙进节点属性（Yjs 只存绝对属性）
   private bakeTransform(node: any): Record<string, any> {
     const sx = Number(node.scaleX()) || 1;
     const sy = Number(node.scaleY()) || 1;
     const attrs: Record<string, any> = { x: Number(node.x()) || 0, y: Number(node.y()) || 0 };
+    // F2.5：旋转烘焙（教具等可旋元素；归一到 [0,360)），纯旋转也须入 attrs
+    const rot = Number(node.rotation?.()) || 0;
+    if (rot) attrs.rotation = normDeg(rot);
     if (sx === 1 && sy === 1) return attrs;
     const cls = node.getClassName ? node.getClassName() : '';
     if (cls === 'Circle') {
@@ -930,6 +1043,276 @@ export class KonvaRenderer {
               })
             );
           }
+        }
+        return group;
+      }
+      // F1.4：书写格线模板——局部坐标子线 + 双 attr（locked 拦选择/拖拽，unlockable 特批解锁点击）
+      case 'gridTemplate': {
+        const x = data.get('x') || 0;
+        const y = data.get('y') || 0;
+        const kind = String(data.get('kind') || 'four-line');
+        const w = Number(data.get('width')) || 0;
+        const h = Number(data.get('height')) || 0;
+        const rowH = Number(data.get('rowHeight')) || 40;
+        const color = String(data.get('color') || '#3b82f6');
+        const locked = !!data.get('locked');
+        const group = new Konva.Group({ x, y, opacity, locked, unlockable: true });
+        if (w <= 0 || h <= 0) return group;
+        if (kind === 'tian') {
+          // 田字格外框 + 分格线 + 每格虚十字
+          group.add(new Konva.Rect({ width: w, height: h, stroke: color, strokeWidth: 1.5 }));
+          const cols = Math.max(1, Math.round(w / rowH));
+          const rows = Math.max(1, Math.round(h / rowH));
+          const cw = w / cols;
+          const ch = h / rows;
+          for (let i = 1; i < cols; i++)
+            group.add(
+              new Konva.Line({ points: [i * cw, 0, i * cw, h], stroke: color, strokeWidth: 1 })
+            );
+          for (let j = 1; j < rows; j++)
+            group.add(
+              new Konva.Line({ points: [0, j * ch, w, j * ch], stroke: color, strokeWidth: 1 })
+            );
+          for (let r = 0; r < rows; r++)
+            for (let c = 0; c < cols; c++) {
+              const x0 = c * cw;
+              const y0 = r * ch;
+              group.add(
+                new Konva.Line({
+                  points: [x0, y0 + ch / 2, x0 + cw, y0 + ch / 2],
+                  stroke: color,
+                  strokeWidth: 0.8
+                })
+              );
+              group.add(
+                new Konva.Line({
+                  points: [x0 + cw / 2, y0, x0 + cw / 2, y0 + ch],
+                  stroke: color,
+                  strokeWidth: 0.8
+                })
+              );
+            }
+          return group;
+        }
+        // 四线三格/拼音格：4 条横线（3 等分行高），拼音格加中线虚线共 5 条
+        for (let k = 0; k <= 3; k++)
+          group.add(
+            new Konva.Line({
+              points: [0, k * rowH, w, k * rowH],
+              stroke: color,
+              strokeWidth: k === 2 ? 1.5 : 1.2
+            })
+          );
+        if (kind === 'pinyin')
+          group.add(
+            new Konva.Line({
+              points: [0, rowH * 1.5, w, rowH * 1.5],
+              stroke: color,
+              strokeWidth: 0.8,
+              dash: [4, 4]
+            })
+          );
+        return group;
+      }
+      // F2.5 教具仿真：单元素整组（中心定位 + rotation 整组旋转）；手柄带 shandle 供拖拽换算
+      case 'simTool': {
+        const x = data.get('x') || 0;
+        const y = data.get('y') || 0;
+        const kind = String(data.get('kind') || 'ruler');
+        const color = String(data.get('color') || '#2563eb');
+        const rot = Number(data.get('rotation')) || 0;
+        const group = new Konva.Group({
+          x,
+          y,
+          opacity,
+          rotation: rot,
+          type: 'simTool',
+          kind,
+          sid: data.get('id')
+        });
+        if (kind === 'protractor') {
+          const r = PROTRACTOR_R;
+          const arc: number[] = [];
+          for (let a = 180; a >= 0; a -= 6) {
+            const rad = (a * Math.PI) / 180;
+            arc.push(r * Math.cos(rad), -r * Math.sin(rad));
+          }
+          group.add(
+            new Konva.Line({ points: arc, stroke: color, strokeWidth: 1.5, listening: false })
+          );
+          group.add(
+            new Konva.Line({
+              points: [-r, 0, r, 0],
+              stroke: color,
+              strokeWidth: 1.5,
+              listening: false
+            })
+          );
+          for (let a = 30; a < 180; a += 30) {
+            const rad = (a * Math.PI) / 180;
+            group.add(
+              new Konva.Line({
+                points: [
+                  (r - 10) * Math.cos(rad),
+                  -(r - 10) * Math.sin(rad),
+                  r * Math.cos(rad),
+                  -r * Math.sin(rad)
+                ],
+                stroke: color,
+                strokeWidth: 1,
+                listening: false
+              })
+            );
+          }
+          const angle = Number(data.get('angle')) || 0;
+          const rad = (angle * Math.PI) / 180;
+          group.add(
+            new Konva.Line({
+              points: [0, 0, r * Math.cos(rad), -r * Math.sin(rad)],
+              stroke: '#e6a23c',
+              strokeWidth: 2,
+              rline: true,
+              listening: false
+            })
+          );
+          group.add(
+            new Konva.Circle({
+              x: r * Math.cos(rad),
+              y: -r * Math.sin(rad),
+              radius: 7,
+              fill: '#e6a23c',
+              shandle: 'needle'
+            })
+          );
+          group.add(
+            new Konva.Text({
+              x: -30,
+              y: 8,
+              width: 60,
+              align: 'center',
+              text: `${Math.round(angle)}°`,
+              fontSize: 13,
+              fill: color,
+              listening: false,
+              rtext: true
+            })
+          );
+        } else if (kind === 'compass') {
+          const radius = Math.min(
+            SIM_R_MAX,
+            Math.max(SIM_R_MIN, Number(data.get('radius')) || COMPASS_R)
+          );
+          group.add(
+            new Konva.Circle({
+              x: 0,
+              y: 0,
+              radius,
+              stroke: color,
+              strokeWidth: 1.5,
+              rcircle: true,
+              listening: false
+            })
+          );
+          group.add(new Konva.Line({ points: [0, 0, radius, 0], stroke: '#555', strokeWidth: 2 }));
+          group.add(
+            new Konva.Line({
+              points: [0, 0, 0, -18],
+              stroke: '#555',
+              strokeWidth: 2,
+              listening: false
+            })
+          );
+          group.add(new Konva.Circle({ x: 0, y: -18, radius: 4, fill: '#555', listening: false }));
+          group.add(
+            new Konva.Circle({ x: radius, y: 0, radius: 7, fill: '#e6a23c', shandle: 'radius' })
+          );
+        } else {
+          const w = Number(data.get('w')) || RULER_W;
+          const h = Number(data.get('h')) || RULER_H;
+          group.add(
+            new Konva.Rect({
+              x: -w / 2,
+              y: -h / 2,
+              width: w,
+              height: h,
+              fill: '#f6e6c8',
+              stroke: color,
+              strokeWidth: 1.5,
+              cornerRadius: 4
+            })
+          );
+          for (let i = -w / 2 + 20; i < w / 2; i += 20) {
+            group.add(
+              new Konva.Line({
+                points: [i, -h / 2, i, -h / 2 + (Math.abs(i) < 1 ? h / 2 : 10)],
+                stroke: '#8a6d3b',
+                strokeWidth: 1,
+                listening: false
+              })
+            );
+          }
+          group.add(
+            new Konva.Line({
+              points: [-w / 2, 0, w / 2, 0],
+              stroke: '#c9b896',
+              strokeWidth: 0.5,
+              listening: false
+            })
+          );
+        }
+        return group;
+      }
+      // F4.7 思维导图：单元素整组（连线先画垫底 + 节点 Rect/Text 带 mid 回指）；
+      // 节点坐标为组内相对坐标，整组移动只改元素 x/y —— 连线刚性随动、不重算
+      case 'mindmap': {
+        const x = data.get('x') || 0;
+        const y = data.get('y') || 0;
+        const color = String(data.get('color') || '#2563eb');
+        const nodes = ((data.get('nodes') as MindNodeData[]) || []).filter(
+          n => n && typeof n.x === 'number'
+        );
+        const group = new Konva.Group({ x, y, opacity });
+        const byId = new Map(nodes.map(n => [n.id, n]));
+        for (const n of nodes) {
+          if (!n.parentId) continue;
+          const p = byId.get(n.parentId);
+          if (!p) continue;
+          group.add(
+            new Konva.Line({
+              points: [p.x + MIND_W, p.y + MIND_H / 2, n.x, n.y + MIND_H / 2],
+              stroke: color,
+              strokeWidth: 2,
+              hitStrokeWidth: Math.max(2, HIT_STROKE_MIN)
+            })
+          );
+        }
+        for (const n of nodes) {
+          group.add(
+            new Konva.Rect({
+              x: n.x,
+              y: n.y,
+              width: MIND_W,
+              height: MIND_H,
+              fill: '#ffffff',
+              stroke: color,
+              strokeWidth: 1.5,
+              cornerRadius: 6,
+              mid: n.id
+            })
+          );
+          group.add(
+            new Konva.Text({
+              x: n.x,
+              y: n.y + MIND_H / 2 - 9,
+              width: MIND_W,
+              align: 'center',
+              text: n.text || ' ',
+              fontSize: 13,
+              fill: '#111827',
+              listening: false,
+              mid: n.id
+            })
+          );
         }
         return group;
       }

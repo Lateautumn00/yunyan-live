@@ -187,6 +187,13 @@ const konvaMocks = vi.hoisted(() => {
       if (attrs?.y !== undefined) this._y = attrs.y as number;
       if (attrs?.width !== undefined) this._width = attrs.width as number;
       if (attrs?.height !== undefined) this._height = attrs.height as number;
+      if (attrs?.rotation !== undefined) this._rotation = attrs.rotation as number;
+    }
+    // F2.5：教具可旋转（Konva 旋转访问器；transformend 烘焙读取）
+    _rotation = 0;
+    rotation(_val?: number) {
+      if (_val !== undefined) this._rotation = _val;
+      return this._rotation;
     }
     getLayer() {
       return this._layer;
@@ -417,6 +424,7 @@ const konvaMocks = vi.hoisted(() => {
   class MockTransformer extends MockNode {
     _nodes: unknown[] = [];
     _keepRatio = false;
+    _rotateEnabled = false;
     nodes(v?: unknown[]) {
       if (v !== undefined) this._nodes = v;
       return this._nodes;
@@ -424,6 +432,11 @@ const konvaMocks = vi.hoisted(() => {
     keepRatio(v?: boolean) {
       if (v !== undefined) this._keepRatio = v;
       return this._keepRatio;
+    }
+    // F2.5：仅选中教具时动态开启旋转手柄
+    rotateEnabled(v?: boolean) {
+      if (v !== undefined) this._rotateEnabled = v;
+      return this._rotateEnabled;
     }
   }
 
@@ -6015,5 +6028,700 @@ describe('F2.3d 平行/垂直标记', () => {
     expect(vm.selIsMarkable).toBe(false);
     expect(vm.selMark).toBeNull();
     wrapper.unmount();
+  });
+});
+
+// ── F2.4 度量标注（选中开度量、字段入 Yjs、标注随动重建） ─────────────────
+type MeasureVM = GeoSnapVM & {
+  selIsMeasureable: boolean;
+  selMeasure: boolean;
+  selMeasureColor: string;
+  toggleMeasure: () => void;
+  setMeasureColor: (c: string) => void;
+  selectShape: (id: string) => void;
+  commitShapeMove: (id: string, x: number, y: number) => void;
+  renderer: {
+    previewLayer: { getChildren: () => unknown[] };
+    layer: { getChildren: () => unknown[] };
+  };
+};
+
+function seedMeasure(vm: MeasureVM): void {
+  const provider = vm.provider!;
+  if (!provider.getActiveElements()) provider.addPage();
+  provider.addShape({
+    id: 'fm-line',
+    type: 'line',
+    points: [0, 0, 100, 0],
+    color: '#000',
+    lineWidth: 2,
+    opacity: 1
+  });
+  provider.addShape({
+    id: 'fm-poly',
+    type: 'polygon',
+    points: [0, 0, 100, 0, 100, 80, 0, 80],
+    color: '#000',
+    lineWidth: 2,
+    opacity: 1
+  });
+}
+
+function metricNodes(vm: MeasureVM): Array<{ getAttr: (k: string) => unknown }> {
+  return vm.renderer.layer.getChildren() as unknown as Array<{ getAttr: (k: string) => unknown }>;
+}
+
+function labelText(vm: MeasureVM, text: string) {
+  return metricNodes(vm).find(n => n.getAttr('text') === text);
+}
+
+describe('F2.4 度量标注', () => {
+  it('正向：开度量写字段并画标注，改色生效，移动后标注跟随', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as MeasureVM;
+    seedMeasure(vm);
+    vm.tool('cur');
+    vm.selectShape('fm-line');
+    expect(vm.selIsMeasureable).toBe(true);
+    expect(vm.selMeasure).toBe(false);
+
+    vm.toggleMeasure();
+    expect(vm.selMeasure).toBe(true);
+    expect(vm.getCurrentPageShapes().find(s => s.id === 'fm-line')!.measure).toBe(true);
+    await nextTick();
+    expect(labelText(vm, '100')).toBeTruthy();
+
+    vm.setMeasureColor('#f00');
+    expect(vm.getCurrentPageShapes().find(s => s.id === 'fm-line')!.measureColor).toBe('#f00');
+    await nextTick();
+    expect(labelText(vm, '100')!.getAttr('fill')).toBe('#f00');
+
+    // 拖动落库 → 层重建 → 标注跟随（中点 (40+50,10+0) → x = 90-30）
+    vm.commitShapeMove('fm-line', 40, 10);
+    await nextTick();
+    expect(labelText(vm, '100')!.getAttr('x')).toBe(60);
+
+    // 多边形：面积/周长 + 顶点内角
+    vm.selectShape('fm-poly');
+    expect(vm.selIsMeasureable).toBe(true);
+    vm.toggleMeasure();
+    await nextTick();
+    const texts = metricNodes(vm).map(n => String(n.getAttr('text')));
+    expect(texts).toContain('S=8000 · C=360');
+    expect(texts.filter(t => t.endsWith('°'))).toHaveLength(4);
+    wrapper.unmount();
+  });
+
+  it('负向：文本无入口；关度量字段与标注消失；学生端只读不可开', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as MeasureVM;
+    seedMeasure(vm);
+    vm.provider!.addShape({
+      id: 'fm-text',
+      type: 'text',
+      x: 0,
+      y: 0,
+      text: 'hi',
+      fontSize: 14,
+      color: '#000',
+      opacity: 1
+    });
+    vm.tool('cur');
+
+    // 文本元素：无度量入口
+    vm.selectShape('fm-text');
+    expect(vm.selIsMeasureable).toBe(false);
+
+    // 开再关：字段删、标注清
+    vm.selectShape('fm-line');
+    vm.toggleMeasure();
+    await nextTick();
+    expect(labelText(vm, '100')).toBeTruthy();
+    vm.toggleMeasure();
+    expect(vm.selMeasure).toBe(false);
+    expect(vm.getCurrentPageShapes().find(s => s.id === 'fm-line')!.measure).toBeUndefined();
+    await nextTick();
+    expect(labelText(vm, '100')).toBeFalsy();
+
+    // 学生端：selectShape 被只读守卫拦下，开关与字段都不可达
+    const s = mountWB({ isTeacher: false });
+    const svm = s.vm as unknown as MeasureVM;
+    const sp = new Y.Map();
+    sp.set('id', 'sp');
+    sp.set('name', 'P');
+    sp.set('visible', true);
+    sp.set('elements', new Y.Array());
+    svm.provider!.getPages().push([sp]);
+    const el = new Y.Map();
+    el.set('id', 'fm-line');
+    el.set('type', 'line');
+    el.set('points', [0, 0, 100, 0]);
+    el.set('color', '#000');
+    el.set('lineWidth', 2);
+    el.set('opacity', 1);
+    (sp.get('elements') as Y.Array<unknown>).push([el]);
+    await nextTick();
+    svm.tool('cur');
+    svm.selectShape('fm-line');
+    expect(svm.selIsMeasureable).toBe(false);
+    svm.toggleMeasure();
+    expect(svm.getCurrentPageShapes().find(x => x.id === 'fm-line')!.measure).toBeUndefined();
+    wrapper.unmount();
+    s.unmount();
+  });
+});
+
+// ── F1.4 四线三格/拼音格/田字格模板：素材入口放置 → 渲染线数 → 调参自动锁 → 解锁闭环 ──
+type GridVM = DrawVM & {
+  placeGridTemplate: (kind: 'four-line' | 'pinyin' | 'tian') => void;
+  selIsGrid: boolean;
+  gridRowHeight: number;
+  gridColor: string;
+  adjustGridRow: (delta: number) => void;
+  setGridColor: (c: string) => void;
+  unlockPos: { x: number; y: number } | null;
+  unlockGrid: () => void;
+  renderer: {
+    layer: { getChildren: () => unknown[] };
+    getSelectedId: () => string | null;
+    selectNode: (id: string) => boolean;
+    onUnlockRequest?: (id: string) => void;
+  };
+};
+
+interface GridGroupNode {
+  getChildren: () => { length: number };
+  fire: (evt: string, e?: unknown) => void;
+  draggable: (v?: boolean) => boolean;
+}
+
+function gridGroup(vm: GridVM): GridGroupNode {
+  const kids = vm.renderer.layer.getChildren() as unknown as GridGroupNode[];
+  return kids[kids.length - 1]!;
+}
+
+describe('F1.4 四线三格/拼音格模板', () => {
+  it('正向：素材入口放置四线三格（4 条格线），调行高自动锁定且不可拖', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as GridVM;
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+    vm.placeGridTemplate('four-line');
+    await nextTick();
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]).toMatchObject({
+      type: 'gridTemplate',
+      kind: 'four-line',
+      locked: false,
+      rowHeight: 40,
+      width: 480,
+      height: 120,
+      color: '#3b82f6'
+    });
+    expect(gridGroup(vm).getChildren().length).toBe(4);
+
+    vm.tool('cur');
+    vm.selectShape(String(shapes[0]!.id));
+    expect(vm.selIsGrid).toBe(true);
+    expect(vm.gridRowHeight).toBe(40);
+
+    vm.adjustGridRow(4);
+    await nextTick();
+    const after = vm.getCurrentPageShapes()[0]!;
+    expect(after.rowHeight).toBe(44);
+    expect(after.height).toBe(132);
+    expect(after.locked).toBe(true);
+    expect(vm.gridRowHeight).toBe(44);
+    // 锁定后节点不再可拖
+    expect(gridGroup(vm).draggable()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('正向：点锁定框浮出解锁按钮，解锁后可再选中；拼音格含中线共 5 条', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as GridVM;
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+    vm.placeGridTemplate('pinyin');
+    await nextTick();
+    expect(gridGroup(vm).getChildren().length).toBe(5);
+
+    const id = String(vm.getCurrentPageShapes()[0]!.id);
+    vm.tool('cur');
+    vm.selectShape(id);
+    vm.adjustGridRow(-4);
+    await nextTick();
+    expect(vm.getCurrentPageShapes()[0]!.locked).toBe(true);
+
+    // 点锁定框（wireNode 对 unlockable 特批绑定）→ 解锁浮钮出现
+    gridGroup(vm).fire('click');
+    expect(vm.unlockPos).toBeTruthy();
+    vm.unlockGrid();
+    await nextTick();
+    expect(vm.getCurrentPageShapes()[0]!.locked).toBe(false);
+    expect(vm.unlockPos).toBeNull();
+
+    vm.selectShape(id);
+    expect(vm.renderer.getSelectedId()).toBe(id);
+    expect(vm.selIsGrid).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('正向：田字格外框+分格+每格十字共 26 个子节点，默认 320×128', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as GridVM;
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+    vm.placeGridTemplate('tian');
+    await nextTick();
+    expect(vm.getCurrentPageShapes()[0]).toMatchObject({
+      width: 320,
+      height: 128,
+      rowHeight: 64
+    });
+    expect(gridGroup(vm).getChildren().length).toBe(26);
+    wrapper.unmount();
+  });
+
+  it('负向：行高钳制 16~96；锁定不可选；学生端无入口且拒写拒解锁', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as GridVM;
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+    vm.placeGridTemplate('tian');
+    await nextTick();
+    const id = String(vm.getCurrentPageShapes()[0]!.id);
+    vm.tool('cur');
+    vm.selectShape(id);
+    for (let i = 0; i < 40; i++) vm.adjustGridRow(4);
+    expect(vm.gridRowHeight).toBe(96);
+    for (let i = 0; i < 60; i++) vm.adjustGridRow(-4);
+    expect(vm.gridRowHeight).toBe(16);
+    expect(vm.getCurrentPageShapes()[0]!.locked).toBe(true);
+    expect(vm.renderer.selectNode(id)).toBe(false);
+    wrapper.unmount();
+
+    // 学生端：种子锁定格线 + 无放置入口 + 解锁守卫
+    const s = mountWB({ isTeacher: false });
+    const svm = s.vm as unknown as GridVM;
+    const sp = new Y.Map();
+    sp.set('id', 'sp');
+    sp.set('name', 'P');
+    sp.set('visible', true);
+    sp.set('elements', new Y.Array());
+    svm.provider!.getPages().push([sp]);
+    const g = new Y.Map();
+    g.set('id', 'g-lock');
+    g.set('type', 'gridTemplate');
+    g.set('kind', 'four-line');
+    g.set('x', 0);
+    g.set('y', 0);
+    g.set('width', 480);
+    g.set('height', 120);
+    g.set('rowHeight', 40);
+    g.set('color', '#3b82f6');
+    g.set('locked', true);
+    (sp.get('elements') as Y.Array<unknown>).push([g]);
+    await nextTick();
+    svm.tool('cur');
+    svm.selectShape('g-lock');
+    expect(svm.selIsGrid).toBe(false);
+    svm.placeGridTemplate('pinyin');
+    expect(svm.getCurrentPageShapes()).toHaveLength(1);
+    svm.renderer.onUnlockRequest?.('g-lock');
+    expect(svm.unlockPos).toBeNull();
+    s.unmount();
+  });
+});
+
+// ── F4.7 思维导图：4.9.2 双击真值表 + Tab/Enter 增节点 + 整组移动（连线刚性随动） ──
+type MindNode = { id: string; text: string; parentId: string | null; x: number; y: number };
+type MindShape = { id: string; type: string; x: number; y: number; nodes: MindNode[] };
+type MindVM = DrawVM & {
+  mode: string;
+  selectShape: (id: string) => void;
+  renderer: {
+    getStage: () => {
+      fire: (evt: string, e?: unknown) => void;
+      _pointer: { x: number; y: number } | null;
+    };
+    getSelectedId: () => string | null;
+    layer: { getChildren: () => unknown[] };
+  };
+};
+
+function mindShapes(vm: MindVM): MindShape[] {
+  return vm.getCurrentPageShapes() as unknown as MindShape[];
+}
+
+interface MindGroupNode {
+  x: (v?: number) => number;
+  y: (v?: number) => number;
+  getClassName: () => string;
+  getChildren: () => {
+    toArray: () => Array<{
+      getClassName: () => string;
+      points?: () => number[];
+      getAttr: (k: string) => unknown;
+    }>;
+  };
+}
+
+function mindGroup(vm: MindVM): MindGroupNode {
+  const kids = vm.renderer.layer.getChildren() as unknown as MindGroupNode[];
+  return kids[kids.length - 1]!;
+}
+
+function fireMindDblClick(vm: MindVM) {
+  const stage = vm.renderer.getStage();
+  stage._pointer = { x: 300, y: 200 };
+  stage.fire('dblclick', { target: stage, evt: {} });
+}
+
+function fireMindKey(key: string) {
+  document.dispatchEvent(new KeyboardEvent('keydown', { key }));
+}
+
+describe('F4.7 思维导图', () => {
+  it('正向：导图态双击建根，Tab 增子、Enter 增同级，连线几何跟随，整组平移刚性', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as MindVM;
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+    vm.tool('mindmap');
+    expect(vm.mode).toBe('mindmap');
+    fireMindDblClick(vm);
+    await nextTick();
+    const shapes = mindShapes(vm);
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]).toMatchObject({ type: 'mindmap', x: 300, y: 200 });
+    const root = shapes[0]!.nodes[0]!;
+    expect(root.parentId).toBeNull();
+    expect(root.text).toBe('中心主题');
+    // 根节点以双击点为中心（120×36 节点半宽/半高）
+    expect(root).toMatchObject({ x: -60, y: -18 });
+
+    fireMindKey('Tab');
+    await nextTick();
+    let nodes = mindShapes(vm)[0]!.nodes;
+    expect(nodes).toHaveLength(2);
+    const child = nodes.find(n => n.parentId === root.id)!;
+    expect(child.x).toBe(root.x + 150);
+    expect(child.y).toBe(root.y);
+
+    fireMindKey('Enter');
+    await nextTick();
+    nodes = mindShapes(vm)[0]!.nodes;
+    expect(nodes).toHaveLength(3);
+    const sib = nodes.find(n => n.id !== root.id && n.id !== child.id)!;
+    expect(sib.parentId).toBe(child.parentId);
+    expect(sib.x).toBe(child.x);
+    expect(sib.y).toBe(child.y + 44);
+
+    // 连线：两条边，父右缘 → 子左缘（120×36 节点）
+    const lines = mindGroup(vm)
+      .getChildren()
+      .toArray()
+      .filter(n => n.getClassName() === 'Line') as Array<{ points: () => number[] }>;
+    expect(lines).toHaveLength(2);
+    expect(lines[0]!.points()).toEqual([root.x + 120, root.y + 18, child.x, child.y + 18]);
+
+    // 整组选中移动：元素 x/y 平移，节点相对坐标不变（连线刚性随动、不重算）
+    vm.tool('cur');
+    const mindId = shapes[0]!.id;
+    vm.selectShape(mindId);
+    expect(vm.renderer.getSelectedId()).toBe(mindId);
+    vm.commitShapeMove(mindId, 40, 10);
+    await nextTick();
+    const moved = mindShapes(vm)[0]!;
+    expect(moved.x).toBe(40);
+    expect(moved.y).toBe(10);
+    expect(moved.nodes).toEqual(nodes);
+    const g = mindGroup(vm);
+    expect(g.x()).toBe(40);
+    expect(g.y()).toBe(10);
+    wrapper.unmount();
+  });
+
+  it('正向：双击节点进编辑，提交写回节点文本（复用文本编辑框管线）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as MindVM;
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+    vm.tool('mindmap');
+    fireMindDblClick(vm);
+    await nextTick();
+    vm.tool('cur');
+    vm.selectShape(mindShapes(vm)[0]!.id);
+    // 双击根节点的 Rect 子图形（带 mid 属性）
+    const rect = mindGroup(vm)
+      .getChildren()
+      .toArray()
+      .find(n => {
+        const mid = n.getAttr('mid');
+        return mid !== 0 && mid !== undefined && mid !== null;
+      });
+    expect(rect).toBeTruthy();
+    (mindGroup(vm) as unknown as { fire: (evt: string, e?: unknown) => void }).fire('dblclick', {
+      target: rect
+    });
+    const ta = document.querySelector('textarea') as HTMLTextAreaElement;
+    expect(ta).toBeTruthy();
+    ta.value = '改名了';
+    ta.blur();
+    await nextTick();
+    expect(mindShapes(vm)[0]!.nodes[0]!.text).toBe('改名了');
+    expect(document.querySelector('textarea')).toBeNull();
+    wrapper.unmount();
+  });
+
+  it('负向真值表：cur 态双击空白无操作、文本态首击起编辑框；Esc 退导图态；学生端只读', async () => {
+    const w = mountWB();
+    const vm = w.vm as unknown as MindVM;
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+
+    // cur 态双击空白 → 无操作（不新建，防误触）
+    vm.tool('cur');
+    fireMindDblClick(vm);
+    await nextTick();
+    expect(vm.getCurrentPageShapes()).toHaveLength(0);
+
+    // 文本态：首击即起编辑框（真实双击的第一落点），提交产生文本且不产生导图
+    vm.tool('text');
+    const stage = vm.renderer.getStage();
+    stage._pointer = { x: 80, y: 90 };
+    stage.fire('mousedown', { target: stage, evt: { clientX: 80, clientY: 90 } });
+    await new Promise(r => setTimeout(r, 10));
+    const ta = document.querySelector('textarea') as HTMLTextAreaElement;
+    expect(ta).toBeTruthy();
+    ta.value = 'hello';
+    ta.blur();
+    await nextTick();
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes.some(s => String(s.type) === 'text')).toBe(true);
+    expect(shapes.some(s => String(s.type) === 'mindmap')).toBe(false);
+
+    // 导图态 → Esc 退到选择器
+    vm.tool('mindmap');
+    expect(vm.mode).toBe('mindmap');
+    fireMindKey('Escape');
+    expect(vm.mode).toBe('cur');
+    w.unmount();
+
+    // 学生端：无工具入口，双击/快捷键拒写
+    const s = mountWB({ isTeacher: false });
+    const svm = s.vm as unknown as MindVM;
+    const p = new Y.Map();
+    p.set('id', 'page_mind_student');
+    p.set('name', 'P');
+    p.set('visible', true);
+    p.set('elements', new Y.Array());
+    svm.provider!.getPages().push([p]);
+    await nextTick();
+    expect(s.find('.tools .mindmap-tool').exists()).toBe(false);
+    svm.tool('mindmap');
+    fireMindDblClick(svm);
+    fireMindKey('Tab');
+    await nextTick();
+    expect(svm.getCurrentPageShapes()).toHaveLength(0);
+    s.unmount();
+  });
+});
+
+// ── F2.5 教具仿真（直尺/量角器/圆规）：呼出/旋转/平移、贴边画线、读数渲染、钳制/跨页/学生只读 ──
+type SimKind = 'ruler' | 'protractor' | 'compass';
+type SimVM = Omit<SelVM, 'renderer'> & {
+  placeSimTool: (kind: SimKind) => void;
+  jumpToThumb: (index: number) => void;
+  openAssets: () => void;
+  renderer: {
+    layer: { getChildren: () => unknown[] };
+    tempLayer: { getChildren: () => unknown[] };
+  };
+};
+type SimShape = {
+  id: string;
+  type: string;
+  kind: SimKind;
+  x: number;
+  y: number;
+  rotation?: number;
+  angle?: number;
+  radius?: number;
+  points?: number[];
+};
+type SimChild = {
+  getAttr: (k: string) => unknown;
+  text: () => string;
+  fire: (evt: string, e?: unknown) => void;
+};
+type SimNode = SimChild & {
+  rotation: (v?: number) => number;
+  getChildren: () => { find: (fn: (c: SimChild) => boolean) => SimChild | undefined };
+};
+
+function simShapes(vm: SimVM): SimShape[] {
+  return (vm.getCurrentPageShapes() as unknown as SimShape[]).filter(s => s.type === 'simTool');
+}
+function simNode(vm: SimVM, id: string): SimNode | undefined {
+  return vm.renderer.layer.getChildren().find(n => (n as SimNode).getAttr?.('sid') === id) as
+    SimNode | undefined;
+}
+
+describe('F2.5 教具仿真', () => {
+  it('正向：呼出放置教具，选中开旋转手柄，旋转烘焙入 Yjs，平移不丢旋转', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SimVM;
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+
+    // 呼出：素材面板三个教具入口 + 点击落点放置（近似「拖入」）
+    vm.openAssets();
+    await nextTick();
+    expect(wrapper.findAll('.sim-tile')).toHaveLength(3);
+    vm.placeSimTool('ruler');
+    const shapes = simShapes(vm);
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]).toMatchObject({ type: 'simTool', kind: 'ruler' });
+    const id = shapes[0]!.id;
+
+    // 选中教具 → 旋转手柄开启（其它元素仍关）
+    vm.selectShape(id);
+    const tf = vm.renderer.tempLayer
+      .getChildren()
+      .find(n => typeof (n as { rotateEnabled?: unknown }).rotateEnabled === 'function') as
+      { rotateEnabled: () => boolean } | undefined;
+    expect(tf).toBeTruthy();
+    expect(tf!.rotateEnabled()).toBe(true);
+
+    // 模拟 Transformer 旋转 45° → transformend 烘焙写回 Yjs
+    const node = simNode(vm, id);
+    expect(node).toBeTruthy();
+    node!.rotation(45);
+    node!.fire('transformend');
+    await nextTick();
+    expect(simShapes(vm)[0]!.rotation).toBe(45);
+
+    // 平移不丢旋转
+    vm.commitShapeMove(id, 500, 360);
+    await nextTick();
+    expect(simShapes(vm)[0]).toMatchObject({ x: 500, y: 360, rotation: 45 });
+    wrapper.unmount();
+  });
+
+  it('正向：直尺贴边画线沿边 ≤2px；量角器读数渲染、拖指针写回角度；圆规拖半径', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SimVM;
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+    const stage = konvaMocks.MockStage.last()!;
+
+    // 直尺放置于视口中心 (400,300)（240×48，中心定位）→ 下缘 y=324
+    vm.placeSimTool('ruler');
+    const ruler = simShapes(vm).find(s => s.kind === 'ruler');
+    expect(ruler).toBeTruthy();
+    expect(ruler!.x).toBe(400);
+    expect(ruler!.y).toBe(300);
+
+    // 沿尺身下缘画线：指针在吸附半径内偏离 4px/3px，落点须贴边（DoD ≤2px）
+    vm.tool('line');
+    stage._pointer = { x: 300, y: 328 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 480, y: 321 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    stage.fire('mouseup', { target: stage, evt: {} });
+    const line = (vm.getCurrentPageShapes() as unknown as SimShape[]).find(s => s.type === 'line');
+    expect(line).toBeTruthy();
+    const pts = line!.points!;
+    expect(pts.length).toBeGreaterThanOrEqual(4);
+    for (let i = 1; i < pts.length; i += 2) {
+      expect(Math.abs(pts[i]! - 324)).toBeLessThanOrEqual(2);
+      // 且确实被吸附（不是原样落点）
+      expect(Math.abs(pts[i]! - 321)).toBeGreaterThan(2);
+    }
+    // 落笔回选择器态再操作教具（真实用户流：画完线切回选择器拖手柄）
+    vm.tool('cur');
+
+    // 量角器：默认读数 0° 已渲染；拖指针到正上方 → 90° 写回，flush 后重渲染
+    vm.placeSimTool('protractor');
+    const pro = simShapes(vm).find(s => s.kind === 'protractor');
+    expect(pro).toBeTruthy();
+    const proNode = simNode(vm, pro!.id)!;
+    const reading0 = proNode.getChildren().find(c => !!c.getAttr('rtext'));
+    expect(reading0).toBeTruthy();
+    expect(reading0!.text()).toBe('0°');
+    const needle = proNode.getChildren().find(c => c.getAttr('shandle') === 'needle');
+    expect(needle).toBeTruthy();
+    stage._pointer = { x: 400, y: 240 };
+    needle!.fire('dragmove');
+    await nextTick();
+    expect(simShapes(vm).find(s => s.kind === 'protractor')!.angle).toBeCloseTo(90, 1);
+    needle!.fire('dragend');
+    await nextTick();
+    const reading1 = simNode(vm, pro!.id)!
+      .getChildren()
+      .find(c => !!c.getAttr('rtext'));
+    expect(reading1!.text()).toBe('90°');
+
+    // 圆规：拖半径手柄（距圆心 250）→ 半径写回
+    vm.placeSimTool('compass');
+    const comp = simShapes(vm).find(s => s.kind === 'compass');
+    expect(comp).toBeTruthy();
+    const chandle = simNode(vm, comp!.id)!
+      .getChildren()
+      .find(c => c.getAttr('shandle') === 'radius');
+    expect(chandle).toBeTruthy();
+    stage._pointer = { x: 650, y: 300 };
+    chandle!.fire('dragmove');
+    await nextTick();
+    expect(simShapes(vm).find(s => s.kind === 'compass')!.radius).toBeCloseTo(250, 0);
+    wrapper.unmount();
+  });
+
+  it('负向：旋转角非法钳制归一；教具跨页不残留；学生端无入口且放置拒写', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as SimVM;
+    if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+    vm.placeSimTool('ruler');
+    const id = simShapes(vm)[0]!.id;
+
+    // 旋转角非法值钳制归一到 [0,360)
+    vm.commitShapeTransform(id, { rotation: -45 });
+    expect(simShapes(vm)[0]!.rotation).toBe(315);
+    vm.commitShapeTransform(id, { rotation: 720 });
+    expect(simShapes(vm)[0]!.rotation).toBe(0);
+
+    // 跨页不残留：新页无本页教具，翻回仍在原处
+    vm.provider!.addPage();
+    await nextTick();
+    expect(simShapes(vm)).toHaveLength(0);
+    vm.jumpToThumb(0);
+    await nextTick();
+    expect(simShapes(vm)).toHaveLength(1);
+    wrapper.unmount();
+
+    // 学生端只读：无呼出入口、放置拒写、既有教具选不中
+    const s = mountWB({ isTeacher: false });
+    const svm = s.vm as unknown as SimVM;
+    const p = new Y.Map();
+    p.set('id', 'page_sim_student');
+    p.set('name', 'P');
+    p.set('visible', true);
+    p.set('elements', new Y.Array());
+    const mk = new Y.Map();
+    mk.set('id', 'sim_stu1');
+    mk.set('type', 'simTool');
+    mk.set('kind', 'ruler');
+    mk.set('x', 400);
+    mk.set('y', 300);
+    mk.set('w', 240);
+    mk.set('h', 48);
+    mk.set('rotation', 0);
+    mk.set('color', '#2563eb');
+    mk.set('opacity', 1);
+    svm.provider!.getPages().push([p]);
+    (p.get('elements') as Y.Array<unknown>).push([mk]);
+    await nextTick();
+    expect(simShapes(svm)).toHaveLength(1);
+    expect(s.find('.tools .sim-tile').exists()).toBe(false);
+    svm.placeSimTool('ruler');
+    await nextTick();
+    expect(simShapes(svm)).toHaveLength(1);
+    svm.selectShape('sim_stu1');
+    expect(svm.getSelectedShapeId()).toBeNull();
+    s.unmount();
   });
 });

@@ -129,6 +129,14 @@
             <el-icon><Aim /></el-icon>
           </div>
         </el-tooltip>
+        <el-tooltip
+          content="思维导图 · 双击空白建根节点，Tab/Enter 增子/同级，Esc 退出"
+          placement="right"
+        >
+          <div :class="['mindmap-tool', { on: mode === 'mindmap' }]" @click="tool('mindmap')">
+            <el-icon><Share /></el-icon>
+          </div>
+        </el-tooltip>
         <el-tooltip content="素材收藏 · 导入本地图入收藏，点击入画布" placement="right">
           <div :class="['asset-tool', { on: showAssets }]" @click="openAssets">
             <el-icon><Picture /></el-icon>
@@ -447,6 +455,37 @@
             ⊥
           </div>
         </div>
+        <!-- F2.4：度量标注开关 + 度量色（几何图元选中时显示） -->
+        <div v-if="selIsMeasureable" class="measure-bar">
+          <span class="mark-label">度量</span>
+          <el-switch :model-value="selMeasure" size="small" @change="toggleMeasure()" />
+          <div class="measure-colors">
+            <div
+              v-for="mc in MEASURE_COLORS"
+              :key="mc"
+              :class="['mc-btn', { on: selMeasureColor === mc }]"
+              :style="{ background: mc }"
+              :title="'度量标注颜色'"
+              @click="setMeasureColor(mc)"
+            />
+          </div>
+        </div>
+        <!-- F1.4：格线调参——调后自动锁定，解锁走锁定框右上浮钮 -->
+        <div v-if="selIsGrid" class="grid-ops">
+          <span class="mark-label">行高</span>
+          <div class="grid-btn" @click="adjustGridRow(-4)">−</div>
+          <span class="grid-val">{{ gridRowHeight }}</span>
+          <div class="grid-btn" @click="adjustGridRow(4)">+</div>
+          <span class="mark-label">颜色</span>
+          <div
+            v-for="gc in GRID_COLORS"
+            :key="gc"
+            :class="['mc-btn', { on: gridColor === gc }]"
+            :style="{ background: gc }"
+            title="格线颜色"
+            @click="setGridColor(gc)"
+          />
+        </div>
         <div class="edit-color">
           <div
             v-for="(c, i) in presetColors"
@@ -665,6 +704,36 @@
               @change="importAsset"
             />
           </div>
+          <!-- F1.4：书写格线模板（不依赖收藏列表，常显入口） -->
+          <div class="assets-grids">
+            <div class="assets-sub">书写格线</div>
+            <div class="grid-tiles">
+              <div
+                v-for="g in GRID_KINDS"
+                :key="g.kind"
+                class="grid-tile"
+                @click="placeGridTemplate(g.kind)"
+              >
+                <div class="grid-art" :class="`ga-${g.kind}`" />
+                <div class="assets-name">{{ g.label }}</div>
+              </div>
+            </div>
+          </div>
+          <!-- F2.5：仿真教具（点击放置到视口中心，选中后可拖/旋转；贴边画线见直尺） -->
+          <div class="assets-sims">
+            <div class="assets-sub">仿真教具</div>
+            <div class="sim-tiles">
+              <div
+                v-for="t in SIM_KINDS"
+                :key="t.kind"
+                class="sim-tile"
+                @click="placeSimTool(t.kind)"
+              >
+                <div class="sim-art" :class="`sa-${t.kind}`" />
+                <div class="assets-name">{{ t.label }}</div>
+              </div>
+            </div>
+          </div>
           <div v-if="assetsLoading" class="assets-empty">加载中…</div>
           <div v-else-if="assets.length === 0" class="assets-empty">
             还没有收藏，点击"导入本地图"添加常用素材
@@ -680,6 +749,16 @@
           </div>
           <div class="assets-hint">点击缩略图插入画布中心 · Esc 关闭</div>
         </div>
+      </div>
+
+      <!-- F1.4：锁定格线解锁浮钮（点锁定框后出现于框右上，固定定位同文本编辑框换算） -->
+      <div
+        v-if="unlockPos"
+        class="unlock-badge"
+        :style="{ left: `${unlockPos.x}px`, top: `${unlockPos.y}px` }"
+        @click.stop="unlockGrid"
+      >
+        解锁
       </div>
 
       <!-- F2.2 函数图像浮层：表达式 + 定义域 → 采样落点（白名单校验见 curve.ts） -->
@@ -820,6 +899,17 @@ import {
   type SnapContext,
   type SnapKind
 } from './whiteboard/geoSnap';
+import { MIND_GAP_X, MIND_GAP_Y, MIND_H, MIND_W, type MindNodeData } from './whiteboard/mindmap';
+import {
+  COMPASS_R,
+  RULER_H,
+  RULER_W,
+  SIM_KINDS,
+  type SimToolKind,
+  normDeg,
+  snapToRulerEdges,
+  type RulerBox
+} from './whiteboard/simtool';
 import BoardReview from './BoardReview.vue';
 import {
   PRESET_COLORS,
@@ -831,7 +921,8 @@ import {
   type PenType,
   type CursorData,
   type SpotlightState,
-  type MagnifierState
+  type MagnifierState,
+  type GridKind
 } from './whiteboard/types';
 import { useUserStore } from '@/store/user';
 import Live from '@/api/backstage';
@@ -863,6 +954,37 @@ const selIsMarkable = ref(false);
 const selMark = ref<'parallel' | 'perpendicular' | null>(null);
 // 平行/垂直仅对「有方向的线」有意义：直线/箭头/受力箭头/引线
 const MARKABLE_TYPES = ['line', 'arrow', 'force-arrow', 'leader-label'];
+// F2.4：度量标注——几何图元可开度量；标注由渲染端派生（不同步数值，避免陈旧值）
+const MEASUREABLE_TYPES = ['line', 'arrow', 'rect', 'circle', 'polygon'];
+const MEASURE_COLORS = ['#2563eb', '#dc2626', '#111827'];
+const selIsMeasureable = ref(false);
+const selMeasure = ref(false);
+const selMeasureColor = ref('#2563eb');
+// F1.4：书写格线模板——素材入口放置，调参后自动锁定，点锁定框解锁
+const GRID_KINDS: Array<{ kind: GridKind; label: string }> = [
+  { kind: 'four-line', label: '四线三格' },
+  { kind: 'pinyin', label: '拼音格' },
+  { kind: 'tian', label: '田字格' }
+];
+const GRID_COLORS = ['#3b82f6', '#dc2626', '#111827'];
+const GRID_DEFAULTS: Record<GridKind, { width: number; rowHeight: number }> = {
+  'four-line': { width: 480, rowHeight: 40 },
+  pinyin: { width: 480, rowHeight: 40 },
+  tian: { width: 320, rowHeight: 64 }
+};
+// 四线三格/拼音格 = 3 等分行高，田字格 = 2 行
+function gridHeight(kind: GridKind, rowH: number): number {
+  return kind === 'tian' ? rowH * 2 : rowH * 3;
+}
+const selIsGrid = ref(false);
+const gridRowHeight = ref(40);
+const gridColor = ref('#3b82f6');
+// 解锁浮钮：点锁定格线框后显示在框右上（层坐标换算的屏幕坐标）
+const unlockPos = ref<{ x: number; y: number } | null>(null);
+const unlockTargetId = ref<string | null>(null);
+// F4.7：导图上下文——最近创建/编辑过的导图（导图态选择器不可用时的 Tab/Enter 落点）
+let lastMindElId: string | null = null;
+const activeMindNodeId = ref<string | null>(null);
 // F4.3：对齐选项（中文标签，element-plus 无对齐图标）
 const alignOptions = [
   { value: 'left' as const, label: '左' },
@@ -904,6 +1026,9 @@ watch(curLayerIndex, () => {
   syncScratchOpen();
   // 换页重绑 scratch 观察器到新页数组（关板页数组为 null 时仅解绑）
   rebindScratch();
+  // F1.4：换页清解锁浮钮（目标格线可能不在新页）
+  unlockPos.value = null;
+  unlockTargetId.value = null;
 });
 /** 课件页判定：页内含 ppt-image 底图即整页为课件讲义，禁用黑板模式 */
 function currentHasPptImage() {
@@ -1499,6 +1624,138 @@ function placeAsset(a: FavoriteAsset): void {
   closeAssets();
 }
 
+// F1.4：放置书写格线模板（素材面板点击入口，视口中心落点，初始未锁定）
+function placeGridTemplate(kind: GridKind): void {
+  if (!provider || !renderer) return;
+  const stage = renderer.getStage();
+  const lp = toLayerCoords({ x: stage.width() / 2, y: stage.height() / 2 });
+  const d = GRID_DEFAULTS[kind];
+  const h = gridHeight(kind, d.rowHeight);
+  provider.addShape({
+    id: uid(),
+    type: 'gridTemplate',
+    kind,
+    x: Math.round(lp.x - d.width / 2),
+    y: Math.round(lp.y - h / 2),
+    width: d.width,
+    height: h,
+    rowHeight: d.rowHeight,
+    color: GRID_COLORS[0] ?? '#3b82f6',
+    locked: false,
+    opacity: currentOpacity.value
+  });
+  refreshLayer();
+  closeAssets();
+}
+
+// F2.5：放置仿真教具（素材面板点击入口，视口中心落点 = 点击落点近似「拖入」；学生端拒写）
+function placeSimTool(kind: SimToolKind): void {
+  if (!props.isTeacher || !provider || !renderer) return;
+  const stage = renderer.getStage();
+  const lp = toLayerCoords({ x: stage.width() / 2, y: stage.height() / 2 });
+  if (!provider.getActiveElements()) provider.addPage();
+  const base = {
+    id: uid(),
+    type: 'simTool',
+    kind,
+    x: Math.round(lp.x),
+    y: Math.round(lp.y),
+    rotation: 0,
+    color: currentColor.value,
+    opacity: currentOpacity.value
+  };
+  const extra =
+    kind === 'ruler'
+      ? { w: RULER_W, h: RULER_H }
+      : kind === 'compass'
+        ? { radius: COMPASS_R }
+        : { angle: 0 };
+  provider.addShape({ ...base, ...extra });
+  refreshLayer();
+  closeAssets();
+}
+
+// F2.5：教具手柄拖动写回（拖拽期 Yjs 观察被 gesturing 挂起，抬手统一重建）
+function onSimHandle(id: string, patch: Record<string, number>): boolean {
+  if (!props.isTeacher || !provider || !renderer) return false;
+  return provider.updateElement(id, patch);
+}
+
+// --- F4.7 思维导图：双击建根 / Tab 增子 / Enter 增同级（自动布局初版不做，手动摆位） ---
+
+function mindContextEl(): Y.Map<any> | null {
+  if (!provider) return null;
+  const selId = renderer?.getSelectedId() ?? null;
+  const sel = selId ? getShape(selId) : null;
+  if (sel && sel.get('type') === 'mindmap') return sel;
+  const last = lastMindElId ? getShape(lastMindElId) : null;
+  return last && last.get('type') === 'mindmap' ? last : null;
+}
+
+// 双击真值表（§4.9.2）：仅导图态双击空白建根；文本态首击已起编辑框；
+// 其余态双击空白无操作（不新建，防误触）；对象上的双击走 onShapeDblClick 不在此列
+function onStageDblClick(e: any) {
+  if (!props.isTeacher || !provider || !renderer) return;
+  const t = e?.target;
+  if (t !== renderer.getStage() && t?.getClassName?.() !== 'Layer') return;
+  if (mode.value !== 'mindmap') return;
+  const pos = getPointerPos(e);
+  if (!pos) return;
+  createMindRoot(toLayerCoords(pos));
+}
+
+function createMindRoot(lp: { x: number; y: number }): void {
+  if (!provider) return;
+  if (!provider.getActiveElements()) provider.addPage();
+  const elId = uid();
+  const rootId = uid();
+  provider.addShape({
+    id: elId,
+    type: 'mindmap',
+    x: Math.round(lp.x),
+    y: Math.round(lp.y),
+    color: currentColor.value,
+    opacity: currentOpacity.value,
+    nodes: [{ id: rootId, text: '中心主题', parentId: null, x: -MIND_W / 2, y: -MIND_H / 2 }]
+  });
+  lastMindElId = elId;
+  activeMindNodeId.value = rootId;
+  refreshLayer();
+}
+
+// Tab 增子 / Enter 增同级（根节点无同级 → 退化为增子）；新节点占位文本，双击改名
+function addMindNode(kind: 'child' | 'sibling'): void {
+  if (!props.isTeacher || !provider || !renderer) return;
+  const m = mindContextEl();
+  if (!m) return;
+  const elId = String(m.get('id'));
+  const nodes = ((m.get('nodes') as MindNodeData[]) || []).map(n => ({ ...n }));
+  if (!nodes.length) return;
+  const active =
+    (activeMindNodeId.value ? nodes.find(n => n.id === activeMindNodeId.value) : null) ??
+    nodes.find(n => !n.parentId) ??
+    nodes[0]!;
+  const isSibling = kind === 'sibling' && !!active.parentId;
+  const parent = isSibling ? nodes.find(n => n.id === active.parentId) : active;
+  if (!parent) return;
+  const fresh: MindNodeData = isSibling
+    ? { id: uid(), text: '新节点', parentId: parent.id, x: active.x, y: active.y + MIND_GAP_Y }
+    : {
+        id: uid(),
+        text: '新节点',
+        parentId: parent.id,
+        x: parent.x + MIND_GAP_X,
+        y: parent.y + nodes.filter(n => n.parentId === parent.id).length * MIND_GAP_Y
+      };
+  const before = snapshotShape(elId, ['nodes']);
+  if (!before) return;
+  nodes.push(fresh);
+  if (!applyShapeUpdate(elId, { nodes }, before)) return;
+  lastMindElId = elId;
+  activeMindNodeId.value = fresh.id;
+  refreshLayer();
+}
+
 async function removeAsset(id: string): Promise<void> {
   await removeFavorite(id);
   await loadAssets();
@@ -1699,6 +1956,8 @@ onMounted(() => {
   renderer = new KonvaRenderer(document.getElementById(containerId.value)!);
   renderer.onShapeClick = handleShapeClick;
   renderer.onShapeDblClick = editTextShape;
+  // F1.4：锁定格线点框 → 组件弹解锁浮钮（isTeacher 守卫在回调内）
+  renderer.onUnlockRequest = onUnlockGridRequest;
   renderer.onShapeDragEnd = (id, x, y, alt) => {
     commitShapeMove(id, x, y, alt);
     // F4.8：mask 拖动移开后保持选中（呈选中态，可 Delete 删除——单击之外的另一种揭开方式）
@@ -1709,6 +1968,7 @@ onMounted(() => {
     if (moved && String(moved.get('type')) === 'mask') selectShape(id);
   };
   renderer.onShapeTransformEnd = commitShapeTransform;
+  renderer.onSimHandle = onSimHandle;
   renderer.onRefreshRequest = refreshLayer;
   renderer.setSelectMode(mode.value === 'cur' && props.isTeacher);
   renderer.showPage(0);
@@ -1719,6 +1979,7 @@ onMounted(() => {
   stage.on('mousemove touchmove', onPointerMove);
   stage.on('mouseup touchend', onPointerUp);
   stage.on('wheel', onWheel);
+  stage.on('dblclick', onStageDblClick);
 
   window.addEventListener('resize', onResize);
   document.addEventListener('keydown', onSelectionKeydown);
@@ -2212,7 +2473,7 @@ function handleShapeClick(id: string) {
 
 function selectShape(id: string) {
   if (!props.isTeacher || mode.value !== 'cur' || !renderer) return;
-  renderer.selectNode(id);
+  const selected = renderer.selectNode(id);
   // 选中即打开属性面板并回填该图形当前值（仅本地显示，不广播 toolState）
   const m = provider
     ?.getActiveElements()
@@ -2232,6 +2493,16 @@ function selectShape(id: string) {
   selMark.value = selIsMarkable.value
     ? ((m.get('mark') as 'parallel' | 'perpendicular') ?? null)
     : null;
+  // F2.4：回填度量开关与度量色
+  selIsMeasureable.value = MEASUREABLE_TYPES.includes(type);
+  selMeasure.value = selIsMeasureable.value && !!m.get('measure');
+  selMeasureColor.value = String(m.get('measureColor') || '#2563eb');
+  // F1.4：仅选中成功的格线回填调参面板（锁定态 selectNode 失败 → 不开面板）
+  selIsGrid.value = selected && type === 'gridTemplate';
+  if (selIsGrid.value) {
+    gridRowHeight.value = Number(m.get('rowHeight')) || 40;
+    gridColor.value = String(m.get('color') || '#3b82f6');
+  }
   if (m.get('color') !== undefined) currentColor.value = String(m.get('color'));
   if (m.get('opacity') !== undefined) currentOpacity.value = Number(m.get('opacity'));
   const isText = type === 'text';
@@ -2260,11 +2531,77 @@ function clearSelection() {
   selIsTable.value = false;
   selIsMarkable.value = false;
   selMark.value = null;
+  selIsMeasureable.value = false;
+  selMeasure.value = false;
+  selIsGrid.value = false;
+  unlockPos.value = null;
+  unlockTargetId.value = null;
   if (mode.value === 'cur') {
     showEditer.value = false;
     showFillToggle.value = false;
     showFillPalette.value = false;
   }
+}
+
+// F4.7：导图节点原位编辑——复用 editingTextId 互斥与固定定位编辑框约定；
+// Enter/失焦提交、Esc 弃改（截断冒泡：本框的键不再进全局 Tab/Enter/Esc 处理）
+function openMindNodeEditor(id: string, e?: any) {
+  if (!props.isTeacher || !provider || !renderer) return;
+  if (editingTextId) return;
+  const m = getShape(id);
+  if (!m) return;
+  const nodes = ((m.get('nodes') as MindNodeData[]) || []).map(n => ({ ...n }));
+  if (!nodes.length) return;
+  const midRaw = e?.target?.getAttr?.('mid');
+  const mid =
+    typeof midRaw === 'string' && nodes.some(n => n.id === midRaw)
+      ? midRaw
+      : (nodes.find(n => !n.parentId)?.id ?? nodes[0]!.id);
+  const idx = nodes.findIndex(n => n.id === mid);
+  if (idx < 0) return;
+  const target = nodes[idx]!;
+  const layer = renderer.layer;
+  const s = layer.scaleX() || 1;
+  const screenX = layer.x() + (Number(m.get('x')) || 0) * s + target.x * s;
+  const screenY = layer.y() + (Number(m.get('y')) || 0) * s + target.y * s;
+  const ta = document.createElement('textarea');
+  ta.value = target.text;
+  ta.style.cssText = `position:fixed; left:${screenX}px; top:${screenY}px; width:${MIND_W * s}px; height:${MIND_H * s}px; box-sizing:border-box; font-size:13px; line-height:${MIND_H * s}px; text-align:center; border:1px dashed #88b8cc; background:rgba(255,255,255,0.95); outline:none; resize:none; padding:0 4px; margin:0; overflow:hidden; z-index:999; font-family:sans-serif;`;
+  editingTextId = id;
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  let done = false;
+  const finish = (commit: boolean) => {
+    if (done) return;
+    done = true;
+    const val = ta.value.trim();
+    ta.remove();
+    editingTextId = null;
+    if (commit && val && val !== target.text) {
+      const before = snapshotShape(id, ['nodes']);
+      if (before) {
+        const next = nodes.map((n, i) => (i === idx ? { ...n, text: val } : n));
+        if (applyShapeUpdate(id, { nodes: next }, before)) refreshLayer();
+      }
+    }
+    lastMindElId = id;
+    activeMindNodeId.value = mid;
+  };
+  ta.addEventListener('blur', () => finish(true));
+  ta.addEventListener('keydown', ke => {
+    ke.stopPropagation();
+    if (ke.key === 'Enter' && !ke.shiftKey) {
+      ke.preventDefault();
+      finish(true);
+    } else if (ke.key === 'Escape') {
+      ke.preventDefault();
+      finish(false);
+    } else if (ke.key === 'Tab') {
+      ke.preventDefault();
+      finish(true);
+    }
+  });
 }
 
 // 双击已有文本：原位弹出编辑框；Enter/失焦提交，Esc 弃改；
@@ -2283,6 +2620,11 @@ function editTextShape(id: string, e?: any) {
   // 双击已有公式（F1.1）：预填源码重编辑，提交走 updateElement 同一通道
   if (elType === 'formula') {
     openFormulaFor(id, String(m.get('latex') ?? ''));
+    return;
+  }
+  // F4.7：双击导图节点 → 原位编辑该节点文本（子图形 mid 回指；提交写回 nodes 数组）
+  if (elType === 'mindmap') {
+    openMindNodeEditor(id, e);
     return;
   }
   // F3.1：受力箭头双击改标签——定位标签中点偏移（与 createNode 同款），仅写 label 键
@@ -2688,6 +3030,82 @@ function toggleMark(kind: 'parallel' | 'perpendicular') {
   selMark.value = (getShape(id)?.get('mark') as 'parallel' | 'perpendicular') ?? null;
 }
 
+// F2.4：显示度量开关——字段入 Yjs（入 undo 栈），标注由 rebuildMetrics 派生实时重建；
+// 关闭走空 patch + 显式快照键，由键集差把 measure 字段删掉
+function toggleMeasure() {
+  if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  if (!selIsMeasureable.value) return;
+  const id = renderer.getSelectedId();
+  if (!id) return;
+  const cur = !!getShape(id)?.get('measure');
+  if (cur) commitSelectedStyle({}, ['measure']);
+  else commitSelectedStyle({ measure: true }, ['measure']);
+  selMeasure.value = !!getShape(id)?.get('measure');
+}
+
+// F2.4：度量色切换（蓝/红/黑三档，写 measureColor 字段）
+function setMeasureColor(c: string) {
+  if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  if (!selIsMeasureable.value) return;
+  const id = renderer.getSelectedId();
+  if (!id) return;
+  selMeasureColor.value = c;
+  commitSelectedStyle({ measureColor: c }, ['measureColor']);
+}
+
+// F1.4：格线行高调节（16~96 钳制）——调参即自动锁定，防误拖；解锁走锁定框浮钮
+function adjustGridRow(delta: number) {
+  if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  if (!selIsGrid.value) return;
+  const id = renderer.getSelectedId();
+  if (!id) return;
+  const m = getShape(id);
+  if (!m) return;
+  const kind = (String(m.get('kind') || 'four-line') || 'four-line') as GridKind;
+  const next = Math.min(96, Math.max(16, (Number(m.get('rowHeight')) || 40) + delta));
+  gridRowHeight.value = next;
+  commitSelectedStyle({ rowHeight: next, height: gridHeight(kind, next), locked: true }, [
+    'rowHeight',
+    'height',
+    'locked'
+  ]);
+}
+
+// F1.4：格线颜色——同款调参即锁定
+function setGridColor(c: string) {
+  if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  if (!selIsGrid.value) return;
+  const id = renderer.getSelectedId();
+  if (!id) return;
+  gridColor.value = c;
+  commitSelectedStyle({ color: c, locked: true }, ['color', 'locked']);
+}
+
+// F1.4：点锁定格线框 → 解锁浮钮定位到框右上（层坐标 → 屏幕坐标，同文本编辑框换算）
+function onUnlockGridRequest(id: string) {
+  if (!props.isTeacher || !provider || !renderer) return;
+  const m = getShape(id);
+  if (!m) return;
+  const layer = renderer.layer;
+  const s = layer.scaleX() || 1;
+  unlockTargetId.value = id;
+  unlockPos.value = {
+    x: layer.x() + ((Number(m.get('x')) || 0) + (Number(m.get('width')) || 0)) * s + 6,
+    y: layer.y() + (Number(m.get('y')) || 0) * s - 26
+  };
+}
+
+// F1.4：解锁写 locked:false（入 undo 栈），收浮钮并刷新（解锁后可再选中调参）
+function unlockGrid() {
+  if (!props.isTeacher || !provider) return;
+  const id = unlockTargetId.value;
+  if (!id) return;
+  provider.updateElement(id, { locked: false });
+  unlockTargetId.value = null;
+  unlockPos.value = null;
+  refreshLayer();
+}
+
 // F4.4：表格增/删行列——读当前表格数据 → 不可变变换 → 写回 rows/cols/cells（入 undo 栈）
 function tableOp(op: 'addRow' | 'removeRow' | 'addCol' | 'removeCol') {
   if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
@@ -2732,6 +3150,8 @@ function sizeTargetsText(): boolean {
 
 function commitShapeTransform(id: string, attrs: Record<string, any>) {
   if (!props.isTeacher || mode.value !== 'cur' || !provider || !renderer) return;
+  // F2.5：旋转角归一到 [0,360)（非法/超范围值钳制）
+  if ('rotation' in attrs) attrs.rotation = normDeg(Number(attrs.rotation));
   const keys = Object.keys(attrs);
   // 圆→椭圆转换：快照里带上 radius，撤销才能还原正圆字段
   if (('radiusX' in attrs || 'radiusY' in attrs) && !keys.includes('radius')) keys.push('radius');
@@ -2804,6 +3224,14 @@ function onSelectionKeydown(e: KeyboardEvent) {
     revocation('next');
     return;
   }
+  // F4.7：导图上下文 Tab 增子、Enter 增同级（节点编辑框态由其自身处理并截断冒泡）
+  if (key === 'tab' || key === 'enter') {
+    if (props.isTeacher && (mode.value === 'cur' || mode.value === 'mindmap') && mindContextEl()) {
+      e.preventDefault();
+      addMindNode(key === 'tab' ? 'child' : 'sibling');
+      return;
+    }
+  }
   if (e.key === 'Escape') {
     // F4.6：截图框选中 Esc = 取消框选（先于选中清理，不透传）
     if (screenshotVisible.value) {
@@ -2813,8 +3241,8 @@ function onSelectionKeydown(e: KeyboardEvent) {
     // Esc：取消选中并中止进行中的绘制/拖拽（学生端由 revocation/clearSelection 自身守卫）；
     // 激光模式 → 回选择器并熄灭
     clearSelection();
-    // 激光/蒙层放置模式 → 回选择器（激光并熄灭）
-    if (mode.value === 'laser' || mode.value === 'mask') setMode('cur');
+    // 激光/蒙层/导图放置模式 → 回选择器（激光并熄灭）
+    if (mode.value === 'laser' || mode.value === 'mask' || mode.value === 'mindmap') setMode('cur');
     // F7.3：Esc 关聚光/放大（与激光同款退出；学生端开关本就为关，守卫自然跳过）
     if (spotlightOn.value) toggleSpotlight();
     if (magOn.value) toggleMagnifier();
@@ -3057,13 +3485,33 @@ function snapDrawPos(pos: { x: number; y: number }): { x: number; y: number } {
     lastSnap = null;
     return pos;
   }
-  const r = snapPoint(toLayerCoords(pos), snapCtx, GEO_SNAP_THRESHOLD);
+  const lp = toLayerCoords(pos);
+  // F2.5：直尺贴边优先（专用教具吸附，支持旋转尺）；未命中回退 F2.3 几何吸附
+  const rp = snapToRulerEdges(lp, rulerSnapTargets());
+  if (rp) return toPageCoords(rp);
+  const r = snapPoint(lp, snapCtx, GEO_SNAP_THRESHOLD);
   if (!r.snapped || r.kind === null) {
     lastSnap = null;
     return pos;
   }
   lastSnap = { x: r.x, y: r.y, kind: r.kind };
   return toPageCoords({ x: r.x, y: r.y });
+}
+
+/** 当前页直尺（层坐标几何）；画线期间逐点查询，空页/无尺自然无吸附 */
+function rulerSnapTargets(): RulerBox[] {
+  const out: RulerBox[] = [];
+  for (const s of getCurrentPageShapes() as unknown as Array<Record<string, unknown>>) {
+    if (s.type !== 'simTool' || s.kind !== 'ruler') continue;
+    out.push({
+      x: Number(s.x) || 0,
+      y: Number(s.y) || 0,
+      rotation: Number(s.rotation) || 0,
+      w: Number(s.w) || RULER_W,
+      h: Number(s.h) || RULER_H
+    });
+  }
+  return out;
 }
 
 /** 吸附状态视觉反馈：命中点圆环 + 圆心 + 中文标签（仅预览层，抬笔即清） */
@@ -4738,6 +5186,24 @@ defineExpose({
   selIsMarkable,
   selMark,
   toggleMark,
+  // F2.4：度量标注
+  selIsMeasureable,
+  selMeasure,
+  selMeasureColor,
+  toggleMeasure,
+  setMeasureColor,
+  // F1.4：书写格线模板（放置入口/调参自动锁/解锁闭环）
+  GRID_KINDS,
+  placeGridTemplate,
+  selIsGrid,
+  gridRowHeight,
+  gridColor,
+  adjustGridRow,
+  setGridColor,
+  unlockPos,
+  unlockGrid,
+  // F2.5：仿真教具放置入口（素材面板点击落点；学生端拒写）
+  placeSimTool,
   showThumbPanel,
   toggleThumbPanel,
   thumbPages,
@@ -5354,6 +5820,68 @@ defineExpose({
       }
       &.on {
         background: rgba(64, 158, 255, 0.22);
+        color: #409eff;
+      }
+    }
+  }
+  .measure-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    .mark-label {
+      font-size: 12px;
+      color: #666;
+    }
+    .measure-colors {
+      display: flex;
+      gap: 4px;
+    }
+  }
+  /* 度量/格线共用圆形色块（度量在 .measure-bar 内，格线在 .grid-ops 内） */
+  .mc-btn {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    &.on {
+      outline: 2px solid #409eff;
+      outline-offset: 1px;
+    }
+  }
+  /* F1.4：格线调参行（行高 ±/值 + 颜色三档；调后自动锁定） */
+  .grid-ops {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    .mark-label {
+      font-size: 12px;
+      color: #666;
+    }
+    .grid-val {
+      min-width: 24px;
+      text-align: center;
+      font-size: 12px;
+      color: #333;
+      font-variant-numeric: tabular-nums;
+    }
+    .grid-btn {
+      width: 24px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1;
+      color: #555;
+      background: rgba(0, 0, 0, 0.04);
+      &:hover {
+        background: rgba(64, 158, 255, 0.15);
         color: #409eff;
       }
     }
@@ -6046,6 +6574,193 @@ defineExpose({
   margin-bottom: 10px;
 }
 
+/* F1.4：书写格线模板入口（三瓦片，预览为线稿缩略） */
+.assets-grids {
+  margin-bottom: 10px;
+  .assets-sub {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 6px;
+  }
+}
+
+.grid-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.grid-tile {
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  text-align: center;
+  &:hover {
+    border-color: #409eff;
+  }
+}
+
+.grid-art {
+  width: 100%;
+  height: 34px;
+  background-color: #fff;
+  border: 1px solid #ececec;
+  border-radius: 3px;
+  margin-bottom: 4px;
+}
+
+/* 四线三格/拼音格：3 等分行高横线（拼音格加中虚线），田字格：外框+十字符号化 */
+.ga-four-line,
+.ga-pinyin {
+  background-image:
+    linear-gradient(#3b82f6, #3b82f6), linear-gradient(#3b82f6, #3b82f6),
+    linear-gradient(#3b82f6, #3b82f6), linear-gradient(#3b82f6, #3b82f6);
+  background-size:
+    100% 1px,
+    100% 1.5px,
+    100% 1px,
+    100% 1px;
+  background-position:
+    0 25%,
+    0 50%,
+    0 75%,
+    0 100%;
+  background-repeat: no-repeat;
+}
+
+.ga-pinyin {
+  background-image:
+    linear-gradient(#93c5fd, #93c5fd), linear-gradient(#3b82f6, #3b82f6),
+    linear-gradient(#3b82f6, #3b82f6), linear-gradient(#3b82f6, #3b82f6),
+    linear-gradient(#3b82f6, #3b82f6);
+  background-size:
+    100% 1px,
+    100% 1.5px,
+    100% 1px,
+    100% 1px,
+    100% 1px;
+  background-position:
+    0 62.5%,
+    0 50%,
+    0 25%,
+    0 75%,
+    0 100%;
+  background-repeat: no-repeat;
+}
+
+.ga-tian {
+  background-image: linear-gradient(#3b82f6, #3b82f6), linear-gradient(#3b82f6, #3b82f6);
+  background-size:
+    1.5px 100%,
+    100% 1.5px;
+  background-position:
+    50% 0,
+    0 50%;
+  background-repeat: no-repeat;
+  box-shadow: inset 0 0 0 1.5px #3b82f6;
+}
+
+/* F2.5：仿真教具入口（三瓦片，符号化缩略：尺/半圆量角器/圆规） */
+.assets-sims {
+  margin-bottom: 10px;
+  .assets-sub {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 6px;
+  }
+}
+
+.sim-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.sim-tile {
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  text-align: center;
+  &:hover {
+    border-color: #409eff;
+  }
+}
+
+.sim-art {
+  width: 100%;
+  height: 34px;
+  background-color: #fff;
+  border: 1px solid #ececec;
+  border-radius: 3px;
+  margin-bottom: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.sa-ruler {
+  box-shadow: inset 0 0 0 1.5px #d8b56c;
+  background-image: repeating-linear-gradient(
+    90deg,
+    #8a6d3b 0,
+    #8a6d3b 1px,
+    transparent 1px,
+    transparent 8px
+  );
+  background-size: 100% 8px;
+  background-position: 0 0;
+  background-repeat: no-repeat;
+}
+
+.sa-protractor {
+  &::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 4px;
+    width: 40px;
+    height: 20px;
+    transform: translateX(-50%);
+    border: 1.5px solid #2563eb;
+    border-bottom: none;
+    border-radius: 40px 40px 0 0;
+  }
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 4px;
+    width: 40px;
+    border-top: 1.5px solid #2563eb;
+    transform: translateX(-50%);
+  }
+}
+
+.sa-compass {
+  &::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 22px;
+    height: 22px;
+    transform: translate(-50%, -50%);
+    border: 1.5px solid #2563eb;
+    border-radius: 50%;
+  }
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 11px;
+    border-top: 1.5px solid #e6a23c;
+    transform: rotate(-30deg);
+    transform-origin: left center;
+  }
+}
+
 .assets-empty {
   padding: 24px 0;
   text-align: center;
@@ -6107,6 +6822,24 @@ defineExpose({
   margin-top: 8px;
   font-size: 12px;
   color: #999;
+}
+
+/* F1.4：锁定格线解锁浮钮（框右上定位，fixed 换算同文本编辑框） */
+.unlock-badge {
+  position: fixed;
+  z-index: 35;
+  padding: 2px 10px;
+  border-radius: 10px;
+  background: #409eff;
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  &:hover {
+    background: #66b1ff;
+  }
 }
 
 .curve-overlay {

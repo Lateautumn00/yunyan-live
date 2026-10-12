@@ -305,6 +305,7 @@ const konvaMocks = vi.hoisted(() => {
   class MockTransformer {
     _nodes: unknown[] = [];
     _keepRatio = false;
+    _rotateEnabled = false;
     _layer: MockLayer | null = null;
     nodes(v?: unknown[]) {
       if (v !== undefined) this._nodes = v;
@@ -313,6 +314,11 @@ const konvaMocks = vi.hoisted(() => {
     keepRatio(v?: boolean) {
       if (v !== undefined) this._keepRatio = v;
       return this._keepRatio;
+    }
+    // F2.5：selectNode 动态开关旋转手柄（未实现前旧用例仍走默认 false）
+    rotateEnabled(v?: boolean) {
+      if (v !== undefined) this._rotateEnabled = v;
+      return this._rotateEnabled;
     }
     getLayer() {
       return this._layer;
@@ -1657,5 +1663,83 @@ describe('KonvaRenderer reorderPages（F5.2b 拖拽排序）', () => {
     expect(r.pageIds).toEqual(['p1', 'p2', 'p3']);
     expect(r.getCurrentPageIndex()).toBe(0);
     r.destroy();
+  });
+});
+
+// ── F2.4 度量标注：几何量派生绘制（不入 nodeMap、随 bindElements 重建） ──────
+describe('KonvaRenderer 度量标注（F2.4）', () => {
+  function geoElement(overrides: Record<string, unknown> = {}) {
+    const data: Record<string, unknown> = {
+      id: 'g1',
+      type: 'line',
+      points: [0, 0, 100, 0],
+      x: 0,
+      y: 0,
+      color: '#000',
+      lineWidth: 2,
+      opacity: 1,
+      ...overrides
+    };
+    return { get: (k: string) => data[k] };
+  }
+
+  it('正向：线段开度量在中点渲染长度标注（默认蓝、白描边、不入 nodeMap）', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    renderer.bindElements([geoElement({ measure: true })] as unknown as Parameters<
+      typeof renderer.bindElements
+    >[0]);
+
+    const children = renderer.layer.getChildren() as unknown as Array<{
+      attrs: Record<string, unknown>;
+    }>;
+    expect(children.length).toBe(2);
+    const label = children[1]!;
+    expect(label.attrs.text).toBe('100');
+    expect(label.attrs.x).toBe(20);
+    expect(label.attrs.y).toBe(-8);
+    expect(label.attrs.fill).toBe('#2563eb');
+    expect(label.attrs.listening).toBe(false);
+    // 纯装饰：不进 nodeMap，选择/拖拽/命中一律看不到它
+    expect(renderer.getNodeCount()).toBe(1);
+    renderer.destroy();
+  });
+
+  it('正向：多边形渲染面积周长与顶点内角，measureColor 生效', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    renderer.bindElements([
+      geoElement({
+        id: 'g2',
+        type: 'polygon',
+        points: [0, 0, 100, 0, 100, 80, 0, 80],
+        measure: true,
+        measureColor: '#f00'
+      })
+    ] as unknown as Parameters<typeof renderer.bindElements>[0]);
+
+    const children = renderer.layer.getChildren() as unknown as Array<{
+      attrs: Record<string, unknown>;
+    }>;
+    const texts = children.map(c => String(c.attrs.text));
+    expect(texts).toContain('S=8000 · C=360');
+    expect(texts.filter(t => t.endsWith('°'))).toHaveLength(4);
+    const area = children.find(c => c.attrs.text === 'S=8000 · C=360')!;
+    expect(area.attrs.fill).toBe('#f00');
+    expect(renderer.getNodeCount()).toBe(1);
+    renderer.destroy();
+  });
+
+  it('负向：零长退化与未开度量不产标注节点', () => {
+    const renderer = new KonvaRenderer(document.createElement('div'));
+    renderer.bindElements([
+      geoElement({ id: 'g3', points: [10, 10, 10, 10], measure: true }),
+      geoElement({ id: 'g4' })
+    ] as unknown as Parameters<typeof renderer.bindElements>[0]);
+
+    const children = renderer.layer.getChildren() as unknown as Array<{
+      attrs: Record<string, unknown>;
+    }>;
+    expect(children.length).toBe(2);
+    expect(renderer.getNodeCount()).toBe(2);
+    renderer.destroy();
   });
 });
