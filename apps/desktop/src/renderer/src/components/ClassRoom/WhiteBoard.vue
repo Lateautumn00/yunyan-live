@@ -44,7 +44,12 @@
       />
 
       <!-- F3.4/F3.5 外挂视图浮层：教师开关+拖拽，学生随 awareness 跟随 -->
-      <SharedViewOverlay :kind="sharedKind" :is-teacher="isTeacher" @close="closeSharedView" />
+      <SharedViewOverlay
+        :kind="sharedKind"
+        :is-teacher="isTeacher"
+        @close="closeSharedView"
+        @capture="onSharedCapture"
+      />
 
       <!-- F7.4 板中板：页级手写演算区（第二个 KonvaRenderer；学生端只读跟随、无开关入口） -->
       <div v-if="scratchOpen" class="scratch-panel">
@@ -1709,6 +1714,26 @@ function placeAsset(a: FavoriteAsset): void {
   });
   refreshLayer();
   closeAssets();
+}
+
+/** F3.4 外挂视图截图回填：iframe canvas dataURL → 当前页 image 元素（视口中心落点） */
+function onSharedCapture(dataUrl: string): void {
+  if (!provider || !renderer || !dataUrl) return;
+  const w = 240;
+  const h = 180;
+  const stage = renderer.getStage();
+  const lp = toLayerCoords({ x: stage.width() / 2, y: stage.height() / 2 });
+  provider.addShape({
+    id: uid(),
+    type: 'image',
+    url: dataUrl,
+    x: Math.round(lp.x - w / 2),
+    y: Math.round(lp.y - h / 2),
+    width: w,
+    height: h,
+    opacity: currentOpacity.value
+  });
+  refreshLayer();
 }
 
 // F1.4：放置书写格线模板（素材面板点击入口，视口中心落点，初始未锁定）

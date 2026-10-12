@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { vendorUrl } from './whiteboard/vendorUrl';
+import { captureCanvasFromDoc } from './whiteboard/sharedViewCapture';
 import type { SharedViewKind } from './whiteboard/types';
 
 /** F3.4/F3.5 页内拖拽浮层：外挂工具视图宿主（教师开关+拖拽，学生跟随只读） */
@@ -13,6 +14,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void;
+  (e: 'capture', dataUrl: string): void;
 }>();
 
 const REL: Record<SharedViewKind, string> = {
@@ -74,6 +76,15 @@ function toggleFullscreen(): void {
   fullscreen.value = !fullscreen.value;
 }
 
+/** F3.4 截图回填：取 iframe 内 canvas → emit 给父页落画布（无 canvas/跨域不 emit） */
+function captureToBoard(): void {
+  const frame = frameRef.value;
+  const dataUrl = captureCanvasFromDoc(frame?.contentDocument ?? null);
+  if (dataUrl) emit('capture', dataUrl);
+}
+
+const frameRef = ref<HTMLIFrameElement | null>(null);
+
 function onHeaderPointerDown(e: PointerEvent): void {
   if (fullscreen.value) return;
   try {
@@ -122,6 +133,9 @@ defineExpose({ onHeaderPointerDown, onDragMove, onDragEnd });
           <button class="sv-fullscreen" type="button" @click="toggleFullscreen">
             {{ fullscreen ? '退出全屏' : '全屏' }}
           </button>
+          <button v-if="isTeacher" class="sv-capture" type="button" @click="captureToBoard">
+            插入画布
+          </button>
           <button v-if="isTeacher" class="sv-close" type="button" @click="emit('close')">
             关闭
           </button>
@@ -134,7 +148,7 @@ defineExpose({ onHeaderPointerDown, onDragMove, onDragEnd });
         </div>
         <template v-else>
           <div v-if="loading || !src" class="sv-loading">加载中…</div>
-          <iframe v-if="src" class="sv-frame" :src="src" @load="onLoad" />
+          <iframe v-if="src" ref="frameRef" class="sv-frame" :src="src" @load="onLoad" />
         </template>
       </div>
     </div>

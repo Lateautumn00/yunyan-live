@@ -97,4 +97,43 @@ describe('SharedViewOverlay（F3.4/F3.5 页内拖拽浮层）', () => {
     (w.vm as any).onDragEnd({ pointerId: 1 });
     w.unmount();
   });
+
+  it('正向：教师「插入画布」取 iframe canvas 并 emit capture', async () => {
+    // jsdom：iframe 须挂入文档才有 contentDocument，且 atom: scheme 不给文档 → about:blank
+    const w = mount(SharedViewOverlay, {
+      props: { kind: 'circuit', isTeacher: true, resolveUrl: async () => 'about:blank' },
+      attachTo: document.body
+    });
+    await vi.waitFor(() => expect(w.find('.sv-frame').exists()).toBe(true));
+    const frame = w.find('iframe').element as HTMLIFrameElement;
+    const doc = frame.contentDocument;
+    expect(doc).toBeTruthy();
+    const canvas = doc!.createElement('canvas');
+    canvas.toDataURL = () => 'data:image/png;base64,CAP';
+    doc!.body.appendChild(canvas);
+    await w.find('.sv-capture').trigger('click');
+    expect(w.emitted('capture')?.[0]).toEqual(['data:image/png;base64,CAP']);
+    w.unmount();
+  });
+
+  it('负向：学生端无「插入画布」入口（只读跟随）', async () => {
+    const w = mount(SharedViewOverlay, {
+      props: { kind: 'circuit', isTeacher: false, resolveUrl: async () => 'about:blank' },
+      attachTo: document.body
+    });
+    await vi.waitFor(() => expect(w.find('.sv-frame').exists()).toBe(true));
+    expect(w.find('.sv-capture').exists()).toBe(false);
+    w.unmount();
+  });
+
+  it('负向：iframe 无 canvas 时不 emit capture', async () => {
+    const w = mount(SharedViewOverlay, {
+      props: { kind: 'circuit', isTeacher: true, resolveUrl: async () => 'about:blank' },
+      attachTo: document.body
+    });
+    await vi.waitFor(() => expect(w.find('.sv-frame').exists()).toBe(true));
+    await w.find('.sv-capture').trigger('click');
+    expect(w.emitted('capture')).toBeUndefined();
+    w.unmount();
+  });
 });
