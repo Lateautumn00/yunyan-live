@@ -6725,3 +6725,290 @@ describe('F2.5 教具仿真', () => {
     s.unmount();
   });
 });
+
+// --- F5.3 多媒体嵌入：入口 / 放置 / 视口对齐（DoD：三态对齐误差 ≤2px） ---
+type F53VM = {
+  provider: {
+    getActiveElements(): unknown;
+    addPage(): void;
+    getPages(): { push(page: unknown[]): void };
+    awareness: {
+      setLocalStateField(key: string, value: unknown): void;
+      getLocalState(): unknown;
+    };
+  };
+  renderer: {
+    zoomIn(): number;
+    setViewport(x: number, y: number): void;
+    getStage(): { width(): number; height(): number };
+  } | null;
+  addLayer(): void;
+  showLayer(index: number): void;
+  placeMedia?: (input: Record<string, unknown>) => boolean;
+  getCurrentPageShapes(): Array<Record<string, unknown>>;
+  renderedShapeCount(): number;
+  viewState(): { zoom: number; layerScale: number; x: number; y: number };
+  layerZoomChange(type: string): void;
+};
+
+function ovNum(style: string, prop: string): number {
+  const m = style.match(new RegExp(`${prop}:\\s*(-?[\\d.]+)px`));
+  return m ? Number(m[1]) : Number.NaN;
+}
+
+function expectAligned(
+  wrapper: ReturnType<typeof mountWB>,
+  vm: F53VM,
+  el: Record<string, unknown>
+) {
+  const vs = vm.viewState();
+  const style = wrapper.find('.media-overlay').attributes('style') || '';
+  const want = {
+    left: vs.x + Number(el.x) * vs.layerScale,
+    top: vs.y + Number(el.y) * vs.layerScale,
+    width: Number(el.width) * vs.layerScale,
+    height: Number(el.height) * vs.layerScale
+  };
+  for (const k of ['left', 'top', 'width', 'height'] as const) {
+    const got = ovNum(style, k);
+    expect(Number.isFinite(got)).toBe(true);
+    // DoD：对齐误差 ≤2px
+    expect(Math.abs(got - want[k])).toBeLessThanOrEqual(2);
+  }
+}
+
+describe('F5.3-A 媒体入口、放置与视口对齐', () => {
+  it('正向：入口→URL 放置→占位渲染→overlay 缩放/平移/翻页逐态对齐', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F53VM;
+    if (!vm.provider.getActiveElements()) vm.provider.addPage();
+
+    // 工具栏入口 → 插入浮层
+    expect(wrapper.find('.tools .media-tool').exists()).toBe(true);
+    await wrapper.find('.tools .media-tool').trigger('click');
+    expect(wrapper.find('.media-picker').exists()).toBe(true);
+
+    // URL 放置（.mp3 → audio 尺寸与类型推断）
+    await wrapper.find('.media-picker .mp-url').setValue('https://cdn.test/lesson/listen.mp3');
+    await wrapper.find('.media-picker .mp-ok').trigger('click');
+    await nextTick();
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]).toMatchObject({
+      type: 'media',
+      srcKind: 'url',
+      src: 'https://cdn.test/lesson/listen.mp3',
+      name: 'listen.mp3',
+      mime: 'audio',
+      playing: false,
+      time: 0,
+      loop: false,
+      ended: false
+    });
+    expect(shapes[0]!.width).toBe(320);
+    expect(shapes[0]!.height).toBe(64);
+    // 放置即关浮层；占位进 Konva 工厂
+    expect(wrapper.find('.media-picker').exists()).toBe(false);
+    expect(vm.renderedShapeCount()).toBeGreaterThanOrEqual(1);
+
+    // 初始对齐（视口 1:1）
+    expect(wrapper.find('.media-overlay').exists()).toBe(true);
+    expectAligned(wrapper, vm, shapes[0]!);
+
+    // 缩放一档 → 逐态更新
+    vm.layerZoomChange('add');
+    await nextTick();
+    expectAligned(wrapper, vm, vm.getCurrentPageShapes()[0]!);
+
+    // 平移 → 逐态更新（setViewport 钩子驱动 viewportTick）
+    vm.renderer!.setViewport(30, -20);
+    await nextTick();
+    expectAligned(wrapper, vm, vm.getCurrentPageShapes()[0]!);
+
+    // 翻走 overlay 消失、翻回收敛回原页并保持对齐
+    vm.addLayer();
+    await nextTick();
+    expect(wrapper.find('.media-overlay').exists()).toBe(false);
+    vm.showLayer(1);
+    await nextTick();
+    expectAligned(wrapper, vm, vm.getCurrentPageShapes()[0]!);
+
+    wrapper.unmount();
+  });
+
+  it('正向：video 默认 480×270 与 URL 标题派生，placeMedia 教师直通', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F53VM;
+    if (!vm.provider.getActiveElements()) vm.provider.addPage();
+    expect(
+      vm.placeMedia!({ srcKind: 'url', src: 'https://cdn.test/v.mp4?t=1', mime: 'video' })
+    ).toBe(true);
+    await nextTick();
+    const el = vm.getCurrentPageShapes()[0]!;
+    expect(el).toMatchObject({ mime: 'video', name: 'v.mp4', width: 480, height: 270 });
+    expect(wrapper.find('.media-overlay').exists()).toBe(true);
+    expectAligned(wrapper, vm, el);
+    wrapper.unmount();
+  });
+});
+
+describe('F5.3-B 播放状态同步（教师写、学生跟）', () => {
+  type MediaAw = { media?: { elId?: string; playing?: boolean; time?: number } | null } | null;
+  const mediaAw = (vm: F53VM) => vm.provider.awareness.getLocalState() as unknown as MediaAw;
+
+  it('正向：教师点播放条 → 元素离散态 + awareness media 字段；暂停对称；断线清字段', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F53VM;
+    if (!vm.provider.getActiveElements()) vm.provider.addPage();
+    expect(vm.placeMedia!({ srcKind: 'url', src: 'https://cdn.test/v.mp4', mime: 'video' })).toBe(
+      true
+    );
+    await nextTick();
+    expect(wrapper.find('.media-overlay .mo-play').exists()).toBe(true);
+
+    await wrapper.find('.media-overlay .mo-play').trigger('click');
+    await nextTick();
+    const el = vm.getCurrentPageShapes()[0]!;
+    expect(el.playing).toBe(true);
+    expect(wrapper.find('.media-overlay').classes()).toContain('is-playing');
+    expect(mediaAw(vm)?.media).toMatchObject({ elId: el.id, playing: true });
+
+    // 暂停 → 离散态复位，awareness playing:false（time 带回暂停位）
+    await wrapper.find('.media-overlay .mo-play').trigger('click');
+    await nextTick();
+    expect(vm.getCurrentPageShapes()[0]!.playing).toBe(false);
+    expect(mediaAw(vm)?.media).toMatchObject({ playing: false });
+    wrapper.unmount();
+  });
+
+  it('正向：学生端远端离散态跟随（Yjs attrs）→ is-playing；无控制条；awareness 进度与断线零崩', async () => {
+    const s = mountWB({ isTeacher: false });
+    const svm = s.vm as unknown as F53VM;
+    expect(s.find('.tools .media-tool').exists()).toBe(false);
+    const p = new Y.Map();
+    p.set('id', 'page_media_student');
+    p.set('name', 'Page 1');
+    p.set('visible', true);
+    p.set('elements', new Y.Array());
+    const mk = new Y.Map();
+    mk.set('id', 'm1');
+    mk.set('type', 'media');
+    mk.set('srcKind', 'url');
+    mk.set('src', 'https://cdn.test/a.mp4');
+    mk.set('name', 'a.mp4');
+    mk.set('mime', 'video');
+    mk.set('x', 0);
+    mk.set('y', 0);
+    mk.set('width', 480);
+    mk.set('height', 270);
+    mk.set('playing', false);
+    mk.set('time', 0);
+    mk.set('loop', false);
+    mk.set('ended', false);
+    mk.set('opacity', 1);
+    svm.provider.getPages().push([p]);
+    (p.get('elements') as Y.Array<unknown>).push([mk]);
+    await nextTick();
+    expect(s.find('.media-overlay').exists()).toBe(true);
+    expect(s.find('.media-overlay .mo-play').exists()).toBe(false);
+    expect(s.find('.media-overlay').classes()).not.toContain('is-playing');
+
+    // 模拟教师远端写：Yjs 离散态 playing:true
+    mk.set('playing', true);
+    mk.set('time', 3);
+    await nextTick();
+    expect(s.find('.media-overlay').classes()).toContain('is-playing');
+
+    // awareness 进度广播（userId 非本端）→ data-pos 跟随；置 null（断线）不崩、状态保持
+    svm.provider.awareness.setLocalStateField('media', {
+      userId: 'teacher-x',
+      elId: 'm1',
+      playing: true,
+      time: 3,
+      rate: 1,
+      ts: Date.now()
+    });
+    await nextTick();
+    expect(s.find('.media-overlay').exists()).toBe(true);
+    svm.provider.awareness.setLocalStateField('media', null);
+    await nextTick();
+    expect(s.find('.media-overlay').classes()).toContain('is-playing');
+    s.unmount();
+  });
+});
+
+describe('F5.3-C 失败占位、取消与翻页暂停', () => {
+  it('正向：Esc 关闭媒体插入浮层', async () => {
+    const wrapper = mountWB();
+    await wrapper.find('.tools .media-tool').trigger('click');
+    expect(wrapper.find('.media-picker').exists()).toBe(true);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await nextTick();
+    expect(wrapper.find('.media-picker').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('负向：学生端无入口且 placeMedia 拒写', async () => {
+    const s = mountWB({ isTeacher: false });
+    const svm = s.vm as unknown as F53VM;
+    expect(s.find('.tools .media-tool').exists()).toBe(false);
+    expect(svm.placeMedia!({ srcKind: 'url', src: 'https://cdn.test/v.mp4', mime: 'video' })).toBe(
+      false
+    );
+    expect(svm.renderedShapeCount()).toBe(0);
+    s.unmount();
+  });
+
+  it('正向：翻页自动暂停播放中的媒体（教师写回离散态）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F53VM;
+    if (!vm.provider.getActiveElements()) vm.provider.addPage();
+    expect(vm.placeMedia!({ srcKind: 'url', src: 'https://cdn.test/v.mp4', mime: 'video' })).toBe(
+      true
+    );
+    await nextTick();
+    await wrapper.find('.media-overlay .mo-play').trigger('click');
+    await nextTick();
+    expect(vm.getCurrentPageShapes()[0]!.playing).toBe(true);
+
+    // 加新页并切走 → 原页播放态复位
+    vm.addLayer();
+    await nextTick();
+    vm.showLayer(1);
+    await nextTick();
+    expect(vm.getCurrentPageShapes()[0]!.playing).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('正向：本地文件选择 → mediaImportFile 导入 → local 元素放置', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as F53VM;
+    if (!vm.provider.getActiveElements()) vm.provider.addPage();
+    const fakePath = 'C:/Users/test/AppData/Roaming/yunyan-live/media/ab12cd34-听力.mp3';
+    const spy = vi.fn().mockResolvedValue(fakePath);
+    Object.defineProperty(window, 'electronAPI', {
+      value: { mediaImportFile: spy },
+      configurable: true,
+      writable: true
+    });
+    await wrapper.find('.tools .media-tool').trigger('click');
+    const input = wrapper.find('.media-picker input[type="file"]');
+    expect(input.exists()).toBe(true);
+    const file = new File([new Uint8Array([1, 2, 3])], '听力.mp3', { type: 'audio/mpeg' });
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+    await input.trigger('change');
+    await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    expect(spy.mock.calls[0]![0]).toMatchObject({ name: '听力.mp3' });
+    await vi.waitFor(() => {
+      const el = vm.getCurrentPageShapes()[0];
+      expect(el).toMatchObject({
+        type: 'media',
+        srcKind: 'local',
+        src: fakePath,
+        name: '听力.mp3',
+        mime: 'audio'
+      });
+    });
+    wrapper.unmount();
+  });
+});

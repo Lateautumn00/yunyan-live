@@ -9,7 +9,8 @@ import {
   FileItem,
   CursorData,
   SpotlightState,
-  MagnifierState
+  MagnifierState,
+  MediaProgressState
 } from './types';
 
 /** 快照状态帧（服务端 type 4，仅教师连接推送）：state 0=暂存已恢复 1=暂存失败重试中 */
@@ -588,11 +589,18 @@ export class YjsProvider {
     this.awareness.setLocalStateField('magnifier', state);
   }
 
+  // F5.3 媒体进度：瞬时广播（awareness），仅教师可写；离散播放态（playing/time）走元素 attrs
+  setMediaProgress(state: MediaProgressState | null) {
+    if (this.readOnly) return;
+    this.awareness.setLocalStateField('media', state);
+  }
+
   destroy() {
     this.awareness.setLocalStateField('laser', null);
     this.awareness.setLocalStateField('cursor', null);
     this.awareness.setLocalStateField('spotlight', null);
     this.awareness.setLocalStateField('magnifier', null);
+    this.awareness.setLocalStateField('media', null);
     this.awareness.setLocalStateField('user', null);
     this.provider.disconnect();
     this.undoManager.destroy();

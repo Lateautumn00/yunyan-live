@@ -31,6 +31,18 @@
         <div class="mag-lens" :style="lensStyle" />
       </div>
 
+      <!-- F5.3 页内媒体 DOM overlay：随视口逐态对齐；播放/进度同步见 MediaOverlay（离散态 Yjs、进度 awareness） -->
+      <MediaOverlay
+        v-for="m in mediaEls"
+        :key="String(m.id)"
+        :el="m"
+        :is-teacher="isTeacher"
+        :remote="mediaRemote"
+        :style="mediaOverlayStyle(m)"
+        @state="onMediaState"
+        @progress="onMediaProgress"
+      />
+
       <!-- F7.4 板中板：页级手写演算区（第二个 KonvaRenderer；学生端只读跟随、无开关入口） -->
       <div v-if="scratchOpen" class="scratch-panel">
         <div ref="scratchStageEl" class="scratch-stage" />
@@ -140,6 +152,14 @@
         <el-tooltip content="素材收藏 · 导入本地图入收藏，点击入画布" placement="right">
           <div :class="['asset-tool', { on: showAssets }]" @click="openAssets">
             <el-icon><Picture /></el-icon>
+          </div>
+        </el-tooltip>
+        <el-tooltip
+          content="媒体 · 插入页内音视频（链接跨端同步，本地文件仅本机可播）"
+          placement="right"
+        >
+          <div :class="['media-tool', { on: showMediaPicker }]" @click="toggleMediaPicker">
+            <el-icon><Film /></el-icon>
           </div>
         </el-tooltip>
         <el-tooltip content="直线工具 · 按住 Shift 锁定水平/垂直" placement="right">
@@ -295,6 +315,25 @@
             <el-icon><VideoPause /></el-icon>
           </div>
         </el-tooltip>
+      </div>
+
+      <!-- F5.3 媒体插入浮层：URL 直链 / 本地文件（Esc 关闭） -->
+      <div v-if="showMediaPicker" class="media-picker">
+        <div class="mp-title">插入媒体</div>
+        <input
+          v-model="mediaUrlInput"
+          class="mp-url"
+          placeholder="https://…（mp4/mp3 直链）"
+          @keydown.enter="placeMediaFromUrl"
+        />
+        <div class="mp-actions">
+          <div class="mp-ok" @click="placeMediaFromUrl">插入链接</div>
+          <label class="mp-file">
+            选择本地文件
+            <input type="file" accept="video/*,audio/*" @change="onMediaFilePicked" />
+          </label>
+        </div>
+        <div class="mp-hint">链接跨端同步播放 · 本地文件仅本机可播（学生端显示占位）</div>
       </div>
 
       <!-- 底部页面栏（仅教师：增删页/翻页写入共享文档并强制其他端跟随） -->
@@ -916,6 +955,13 @@ import {
 } from './whiteboard/geoSnap';
 import { MIND_GAP_X, MIND_GAP_Y, MIND_H, MIND_W, type MindNodeData } from './whiteboard/mindmap';
 import {
+  mediaDefaults,
+  mediaOverlayRect,
+  mediaSize,
+  type MediaMime,
+  type MediaSrcKind
+} from './whiteboard/media';
+import {
   COMPASS_R,
   RULER_H,
   RULER_W,
@@ -926,6 +972,7 @@ import {
   type RulerBox
 } from './whiteboard/simtool';
 import BoardReview from './BoardReview.vue';
+import MediaOverlay from './MediaOverlay.vue';
 import {
   PRESET_COLORS,
   ERASER_WIDTH_MULT,
@@ -937,6 +984,7 @@ import {
   type CursorData,
   type SpotlightState,
   type MagnifierState,
+  type MediaProgressState,
   type GridKind
 } from './whiteboard/types';
 import { useUserStore } from '@/store/user';
@@ -1716,6 +1764,149 @@ function onMicroStop() {
   void stopMicroLecture();
 }
 
+// --- F5.3 多媒体嵌入：插入浮层 / 放置 / DOM overlay 视口对齐 ---
+const showMediaPicker = ref(false);
+const mediaUrlInput = ref('');
+// 元素增删（refreshLayer 统一漏斗）→ 重算媒体列表；视口变化 → 重算 overlay 矩形
+const mediaTick = ref(0);
+const viewportTick = ref(0);
+// F5.3 播放同步：远端（教师）awareness 进度广播（断线 awareness 自动移除 → null → 停最后已知态）
+const mediaRemote = ref<MediaProgressState | null>(null);
+let lastMediaKey = '';
+
+const mediaEls = computed(() => {
+  void mediaTick.value;
+  return getCurrentPageShapes().filter(s => s.type === 'media');
+});
+
+function toggleMediaPicker() {
+  if (showMediaPicker.value) closeMediaPicker();
+  else {
+    showMediaPicker.value = true;
+    mediaUrlInput.value = '';
+  }
+}
+
+function closeMediaPicker() {
+  showMediaPicker.value = false;
+  mediaUrlInput.value = '';
+}
+
+function guessMediaMime(src: string): MediaMime {
+  return /\.(mp3|wav|aac|m4a|ogg|flac|opus|m4b)(\?|#|$)/i.test(src) ? 'audio' : 'video';
+}
+
+/** 视口中心放置（照 placeSimTool；教师守卫 + 懒建页） */
+function placeMedia(input: {
+  srcKind: MediaSrcKind;
+  src: string;
+  mime: MediaMime;
+  name?: string;
+}): boolean {
+  if (!props.isTeacher || !provider || !renderer) return false;
+  const stage = renderer.getStage();
+  const lp = toLayerCoords({ x: stage.width() / 2, y: stage.height() / 2 });
+  if (!provider.getActiveElements()) provider.addPage();
+  const size = mediaSize(input.mime);
+  provider.addShape({
+    id: uid(),
+    ...mediaDefaults({
+      ...input,
+      x: Math.round(lp.x) - size.width / 2,
+      y: Math.round(lp.y) - size.height / 2
+    })
+  });
+  refreshLayer();
+  return true;
+}
+
+function placeMediaFromUrl() {
+  const url = mediaUrlInput.value.trim();
+  if (!url) return;
+  if (placeMedia({ srcKind: 'url', src: url, mime: guessMediaMime(url) })) closeMediaPicker();
+}
+
+async function onMediaFilePicked(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  input.value = '';
+  // F5.3 本地导入：media:import-file 复制入 userData/media（失败提示，不半开放置）
+  const buffer = await file.arrayBuffer();
+  const absPath = await window.electronAPI.mediaImportFile({ name: file.name, buffer });
+  if (!absPath) {
+    toast('本地媒体导入失败');
+    return;
+  }
+  const mime: MediaMime =
+    file.type.startsWith('audio') || guessMediaMime(file.name) === 'audio' ? 'audio' : 'video';
+  placeMedia({ srcKind: 'local', src: absPath, mime, name: file.name });
+}
+
+/** .whiteBoard 内 absolute 矩形（stage 恒等 → 屏幕 = layer.x + 页坐标 × scale；读 viewportTick 驱动重算） */
+function mediaOverlayStyle(el: Record<string, unknown>): Record<string, string> {
+  void viewportTick.value;
+  if (!renderer) return {};
+  const layer = renderer.layer;
+  const r = mediaOverlayRect(
+    { x: layer.x(), y: layer.y(), scale: layer.scaleX() || 1 },
+    {
+      x: Number(el.x) || 0,
+      y: Number(el.y) || 0,
+      width: Number(el.width) || 0,
+      height: Number(el.height) || 0
+    }
+  );
+  return { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` };
+}
+
+// F5.3 播放同步：教师端播放条 → 离散态写元素 attrs（Yjs 广播）+ 立即 awareness 进度；进度节流广播
+function onMediaState(p: { elId: string; playing: boolean; time: number }) {
+  if (!props.isTeacher || !provider) return;
+  provider.updateElement(p.elId, { playing: p.playing, time: p.time, ended: false });
+  provider.setMediaProgress({
+    userId,
+    elId: p.elId,
+    playing: p.playing,
+    time: p.time,
+    rate: 1,
+    ts: Date.now()
+  });
+}
+
+function onMediaProgress(p: { elId: string; time: number }) {
+  if (!props.isTeacher || !provider) return;
+  provider.setMediaProgress({
+    userId,
+    elId: p.elId,
+    playing: true,
+    time: p.time,
+    rate: 1,
+    ts: Date.now()
+  });
+}
+
+// F5.3：翻页自动暂停（仅教师——学生端只读，暂停态经 Yjs 由教师写回同步）——扫全部页播放中的
+// 媒体统一写回暂停态（翻页时 provider 索引已切走，updateElement 只查当前页故直接 map.set）
+function pausePlayingMedia() {
+  if (!props.isTeacher || !provider) return;
+  const pages = provider.getPages();
+  if (!pages) return;
+  const targets: Array<Y.Map<unknown>> = [];
+  for (let i = 0; i < pages.length; i++) {
+    const els = pages.get(i)?.get('elements') as Y.Array<Y.Map<unknown>> | undefined;
+    if (!els) continue;
+    for (const m of els.toArray()) {
+      if (m.get('type') === 'media' && m.get('playing') === true) targets.push(m);
+    }
+  }
+  if (!targets.length) return;
+  provider.doc.transact(() => {
+    for (const m of targets) m.set('playing', false);
+  });
+  provider.setMediaProgress(null);
+}
+
 // --- F4.7 思维导图：双击建根 / Tab 增子 / Enter 增同级（自动布局初版不做，手动摆位） ---
 
 function mindContextEl(): Y.Map<any> | null {
@@ -2005,6 +2196,10 @@ onMounted(() => {
   renderer.onShapeTransformEnd = commitShapeTransform;
   renderer.onSimHandle = onSimHandle;
   renderer.onRefreshRequest = refreshLayer;
+  // F5.3：任意缩放/平移路径（本地按钮、滚轮、远端应用、插值帧）→ 重算媒体 overlay 对齐
+  renderer.onViewportChanged = () => {
+    viewportTick.value++;
+  };
   renderer.setSelectMode(mode.value === 'cur' && props.isTeacher);
   renderer.showPage(0);
   syncThumbOrder();
@@ -2300,6 +2495,7 @@ function onAwarenessChange() {
   let cursor: CursorData | null = null;
   let spotRemoteState: SpotlightState | null = null;
   let magRemoteState: MagnifierState | null = null;
+  let mediaState: MediaProgressState | null = null;
   // for-of 而非 forEach：同作用域赋值可被类型收窄跟踪（闭包内赋值会丢）
   for (const s of provider.awareness.getStates().values()) {
     if (s && s.laser) laser = s.laser;
@@ -2308,6 +2504,8 @@ function onAwarenessChange() {
     // F7.3：聚光/放大同样跳过本端（教师本端 overlay 由本地 ref 驱动，双保险）
     if (s && s.spotlight && s.spotlight.userId !== userId) spotRemoteState = s.spotlight;
     if (s && s.magnifier && s.magnifier.userId !== userId) magRemoteState = s.magnifier;
+    // F5.3：媒体进度（学生端应用；教师本端由本地 ctl 驱动）
+    if (s && s.media && s.media.userId !== userId) mediaState = s.media;
   }
   const laserKey = laser ? `${laser.x},${laser.y}` : '';
   if (laserKey !== lastLaserKey) {
@@ -2328,6 +2526,14 @@ function onAwarenessChange() {
   if (magKey !== lastMagKey) {
     lastMagKey = magKey;
     magRemote.value = magRemoteState;
+  }
+  // F5.3：媒体进度按 (elId, playing, 0.1s 时间片) 去重；断线/null → 清空（学生停最后已知态）
+  const mediaKey = mediaState
+    ? `${mediaState.elId},${mediaState.playing},${Math.round(mediaState.time * 10)}`
+    : '';
+  if (mediaKey !== lastMediaKey) {
+    lastMediaKey = mediaKey;
+    mediaRemote.value = mediaState;
   }
   const cursorKey = cursor ? `${cursor.x},${cursor.y}` : '';
   if (cursorKey === lastCursorKey) return;
@@ -3283,6 +3489,8 @@ function onSelectionKeydown(e: KeyboardEvent) {
     // F7.3：Esc 关聚光/放大（与激光同款退出；学生端开关本就为关，守卫自然跳过）
     if (spotlightOn.value) toggleSpotlight();
     if (magOn.value) toggleMagnifier();
+    // F5.3：Esc 关媒体插入浮层
+    if (showMediaPicker.value) closeMediaPicker();
     isDrawing = false;
     startPos = null;
     currentPath = [];
@@ -4014,6 +4222,8 @@ function onWheel(e: Konva.KonvaEventObject<WheelEvent>) {
 function refreshLayer() {
   const elements = provider?.getActiveElements();
   if (elements && renderer) renderer.bindElements(elements);
+  // F5.3：元素增删改统一经此 → 媒体 overlay 列表重算
+  mediaTick.value++;
   // 板书内容变了 → 当前页缩略图跟着过期（面板开着时延迟 300ms 折叠重渲）
   scheduleThumbRefresh(300);
 }
@@ -4204,6 +4414,8 @@ function applyRemotePage(teacherIdx: number) {
   if (!renderer || !provider) return;
   if (teacherIdx === renderer.getCurrentPageIndex() || teacherIdx >= renderer.getPageCount())
     return;
+  // F5.3：远端翻页同样自动暂停本页播放中的媒体
+  pausePlayingMedia();
   renderer.showPage(teacherIdx);
   curLayerIndex.value = teacherIdx + 1;
   refreshLayer();
@@ -4254,6 +4466,8 @@ function addLayer() {
 
 function showLayer(index: number) {
   if (!renderer) return;
+  // F5.3：翻页自动暂停本页播放中的媒体（学生端经 Yjs 跟随；只读端 updateElement 空转）
+  pausePlayingMedia();
   const max = renderer.getPageCount();
   index = Math.max(1, Math.min(max, index));
   renderer.showPage(index - 1);
@@ -5241,6 +5455,10 @@ defineExpose({
   unlockGrid,
   // F2.5：仿真教具放置入口（素材面板点击落点；学生端拒写）
   placeSimTool,
+  // F5.3：媒体放置入口与插入浮层（学生端拒写）
+  placeMedia,
+  toggleMediaPicker,
+  showMediaPicker,
   showThumbPanel,
   toggleThumbPanel,
   thumbPages,
@@ -5283,6 +5501,102 @@ defineExpose({
   // F7.2 黑板模式：页级深色底（墨绿板色；导出底色由 exportBoard 按页字段另绘）
   &.dark {
     background: #35543f;
+  }
+}
+// F5.3：媒体插入浮层（工具栏右侧小面板）
+.media-picker {
+  position: absolute;
+  left: 52px;
+  top: 108px;
+  z-index: 30;
+  width: 244px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 14%);
+
+  .mp-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #303133;
+    margin-bottom: 6px;
+  }
+  .mp-url {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 12px;
+    padding: 4px 6px;
+    border: 1px solid #c0c4cc;
+    border-radius: 4px;
+    outline: none;
+
+    &:focus {
+      border-color: #017aff;
+    }
+  }
+  .mp-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .mp-ok {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: #017aff;
+    color: #fff;
+    cursor: pointer;
+  }
+  .mp-file {
+    position: relative;
+    overflow: hidden;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid #c0c4cc;
+    color: #303133;
+    cursor: pointer;
+
+    input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+  }
+  .mp-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: #909399;
+  }
+}
+// F5.3：页内媒体 DOM overlay（.whiteBoard 内 absolute，随视口逐态对齐；默认不吃指针）
+.media-overlay {
+  position: absolute;
+  z-index: 5;
+  overflow: hidden;
+  background: #1f1f23;
+  border-radius: 6px;
+  pointer-events: none;
+
+  .mo-name {
+    position: absolute;
+    left: 8px;
+    top: 6px;
+    right: 8px;
+    font-size: 12px;
+    color: #d6d6d8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // 播放中的教师控制条可点（学生端全程 none——模板按 isTeacher/playing 切换类）
+  &.interactive {
+    pointer-events: auto;
   }
 }
 // F7.3 聚光灯：遮罩盖舞台（z 低于工具栏，否则教师关不掉开关），box-shadow 挖高亮窗口
@@ -5560,6 +5874,13 @@ defineExpose({
   .micro-stop {
     .el-icon {
       color: #e0383e;
+    }
+  }
+  // F5.3：媒体入口（开态高亮）
+  .media-tool.on {
+    background-color: #e7f0ff;
+    .el-icon {
+      color: #017aff;
     }
   }
   .num {

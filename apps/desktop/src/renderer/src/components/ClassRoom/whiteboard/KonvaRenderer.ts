@@ -79,6 +79,8 @@ export class KonvaRenderer {
   onSimHandle?: (id: string, patch: Record<string, number>) => boolean;
   // 手势（拖动/缩放）期间收到的刷新延后到手势结束，避免销毁正在操作的节点
   onRefreshRequest?: () => void;
+  // F5.3：视口变化（缩放/平移/远端应用）→ 组件重算 DOM overlay 对齐（媒体播放器等）
+  onViewportChanged?: () => void;
 
   constructor(container: HTMLElement, opts?: { exportMode?: boolean }) {
     this.exportMode = opts?.exportMode ?? false;
@@ -174,6 +176,7 @@ export class KonvaRenderer {
     this.previewLayer.batchDraw();
     this.cursorLayer.batchDraw();
     this.laserLayer.batchDraw();
+    this.onViewportChanged?.();
   }
 
   getView(): { x: number; y: number } {
@@ -252,6 +255,7 @@ export class KonvaRenderer {
     this.previewLayer.batchDraw();
     this.cursorLayer.batchDraw();
     this.laserLayer.batchDraw();
+    this.onViewportChanged?.();
     // F1.1：缩放变化 → 公式按新过采样重栅格（5.7.1 实测 S=clamp(2×zoom,1,8)，防抖合并连续缩放）
     this.scheduleFormulaRasterRefresh();
   }
@@ -1447,6 +1451,49 @@ export class KonvaRenderer {
           data.get('url') as string,
           opacity
         );
+      case 'media': {
+        // F5.3 页内媒体占位：真实画面/声音由 DOM overlay 承担；本组负责命中、拖拽与选中
+        const w = data.get('width') || 0;
+        const h = data.get('height') || 0;
+        const mime = (data.get('mime') as string) || 'video';
+        const playing = !!data.get('playing');
+        const ended = !!data.get('ended');
+        const name = String(data.get('name') || '');
+        const group = new Konva.Group({
+          x: data.get('x') || 0,
+          y: data.get('y') || 0,
+          // 显式 width/height 供 bakeTransform（Group 走 else 分支）与 hit 布局
+          width: w,
+          height: h,
+          opacity,
+          type: 'media',
+          mime,
+          playing
+        });
+        group.add(new Konva.Rect({ width: w, height: h, fill: '#1f1f23', cornerRadius: 6 }));
+        group.add(
+          new Konva.Text({
+            x: 10,
+            y: 10,
+            width: Math.max(0, w - 20),
+            text: mime === 'audio' ? `♪ ${name}` : `▶ ${name}`,
+            fontSize: 13,
+            fill: '#d6d6d8',
+            ellipsis: true
+          })
+        );
+        group.add(
+          new Konva.Text({
+            x: 10,
+            y: Math.max(0, h - 30),
+            width: Math.max(0, w - 20),
+            text: playing ? '● 播放中' : ended ? '■ 已结束' : '▪ 就绪',
+            fontSize: 12,
+            fill: playing ? '#61ba47' : '#8e8e93'
+          })
+        );
+        return group;
+      }
       default: {
         // 穷尽性检查：ElementType 新增成员必须在此补齐分支（否则编译报错）
         const exhaustive: never = type;

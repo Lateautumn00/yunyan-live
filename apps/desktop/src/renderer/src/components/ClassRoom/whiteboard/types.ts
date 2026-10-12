@@ -55,7 +55,8 @@ export const ELEMENT_TYPES = [
   'mask',
   'gridTemplate',
   'mindmap',
-  'simTool'
+  'simTool',
+  'media'
 ] as const;
 
 /** F1.4：书写格线模板变体（四线三格 / 拼音格 / 田字格） */
@@ -111,6 +112,18 @@ export interface MagnifierState {
   x: number;
   y: number;
   z: number;
+}
+
+/** F5.3 媒体进度广播（awareness 瞬时字段，不进文档/undo；离散播放态另入元素 attrs） */
+export interface MediaProgressState {
+  userId: string;
+  elId: string;
+  playing: boolean;
+  /** 教师端当前播放位置（秒）；学生端以收到时刻本地化推算 pos = time + elapsed */
+  time: number;
+  rate: number;
+  /** 发送端 Date.now()（毫秒）；仅供排障，跨机时钟不可比 */
+  ts: number;
 }
 
 export interface FileItem {
