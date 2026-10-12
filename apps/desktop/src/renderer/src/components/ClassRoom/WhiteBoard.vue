@@ -43,6 +43,9 @@
         @progress="onMediaProgress"
       />
 
+      <!-- F3.4/F3.5 外挂视图浮层：教师开关+拖拽，学生随 awareness 跟随 -->
+      <SharedViewOverlay :kind="sharedKind" :is-teacher="isTeacher" @close="closeSharedView" />
+
       <!-- F7.4 板中板：页级手写演算区（第二个 KonvaRenderer；学生端只读跟随、无开关入口） -->
       <div v-if="scratchOpen" class="scratch-panel">
         <div ref="scratchStageEl" class="scratch-stage" />
@@ -212,6 +215,22 @@
         <el-tooltip content="聚光灯 · 遮罩高亮窗口，拖动移窗，Esc 关闭" placement="right">
           <div :class="['spotlight', { on: spotlightOn }]" @click="toggleSpotlight">
             <el-icon><Sunny /></el-icon>
+          </div>
+        </el-tooltip>
+        <el-tooltip content="电路实验室 · 页内浮层，学生同步可见" placement="right">
+          <div
+            :class="['shared-view', { on: sharedKind === 'circuit' }]"
+            @click="sharedKind === 'circuit' ? closeSharedView() : openSharedView('circuit')"
+          >
+            <el-icon><Cpu /></el-icon>
+          </div>
+        </el-tooltip>
+        <el-tooltip content="分子模型 · 页内浮层，学生同步可见" placement="right">
+          <div
+            :class="['shared-view', { on: sharedKind === 'molecule' }]"
+            @click="sharedKind === 'molecule' ? closeSharedView() : openSharedView('molecule')"
+          >
+            <el-icon><Sugar /></el-icon>
           </div>
         </el-tooltip>
         <el-tooltip content="放大镜 · 滚轮调倍率，Esc 关闭" placement="right">
@@ -974,6 +993,8 @@ import {
 } from './whiteboard/simtool';
 import BoardReview from './BoardReview.vue';
 import MediaOverlay from './MediaOverlay.vue';
+import SharedViewOverlay from './SharedViewOverlay.vue';
+import { useSharedView } from './whiteboard/useSharedView';
 import {
   PRESET_COLORS,
   ERASER_WIDTH_MULT,
@@ -986,6 +1007,7 @@ import {
   type SpotlightState,
   type MagnifierState,
   type MediaProgressState,
+  type SharedViewState,
   type GridKind
 } from './whiteboard/types';
 import { useUserStore } from '@/store/user';
@@ -2076,6 +2098,18 @@ const userColor = (() => {
   return `hsl(${Math.abs(h) % 360}, 70%, 50%)`;
 })();
 
+// F3.4/F3.5 外挂视图：教师开关+awareness 广播，学生远端跟随（peer 断线自动清零）
+const {
+  kind: sharedKind,
+  open: openSharedView,
+  close: closeSharedView,
+  applyRemote: applySharedRemote
+} = useSharedView({
+  isTeacher: props.isTeacher,
+  userId,
+  broadcast: state => provider?.setSharedView(state)
+});
+
 let provider: YjsProvider | null = null;
 let renderer: KonvaRenderer | null = null;
 let currentElementsObserver: (() => void) | null = null;
@@ -2497,6 +2531,7 @@ function onAwarenessChange() {
   let spotRemoteState: SpotlightState | null = null;
   let magRemoteState: MagnifierState | null = null;
   let mediaState: MediaProgressState | null = null;
+  let sharedState: SharedViewState | null = null;
   // for-of 而非 forEach：同作用域赋值可被类型收窄跟踪（闭包内赋值会丢）
   for (const s of provider.awareness.getStates().values()) {
     if (s && s.laser) laser = s.laser;
@@ -2507,6 +2542,8 @@ function onAwarenessChange() {
     if (s && s.magnifier && s.magnifier.userId !== userId) magRemoteState = s.magnifier;
     // F5.3：媒体进度（学生端应用；教师本端由本地 ctl 驱动）
     if (s && s.media && s.media.userId !== userId) mediaState = s.media;
+    // F3.4/F3.5：外挂视图开合（applyRemote 内再跳过本端 userId 双保险）
+    if (s && s.sharedView && s.sharedView.userId !== userId) sharedState = s.sharedView;
   }
   const laserKey = laser ? `${laser.x},${laser.y}` : '';
   if (laserKey !== lastLaserKey) {
@@ -2536,6 +2573,8 @@ function onAwarenessChange() {
     lastMediaKey = mediaKey;
     mediaRemote.value = mediaState;
   }
+  // F3.4/F3.5：外挂视图开合（幂等应用；教师本端由本地开关驱动，applyRemote 内部忽略 kind）
+  applySharedRemote(sharedState);
   const cursorKey = cursor ? `${cursor.x},${cursor.y}` : '';
   if (cursorKey === lastCursorKey) return;
   lastCursorKey = cursorKey;

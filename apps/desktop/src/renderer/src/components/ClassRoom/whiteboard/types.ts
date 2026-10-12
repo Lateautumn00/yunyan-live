@@ -114,6 +114,15 @@ export interface MagnifierState {
   z: number;
 }
 
+/** F3.4/F3.5 外挂视图种类（vendor 镜像内的独立工具页） */
+export type SharedViewKind = 'circuit' | 'molecule';
+
+/** F3.4/F3.5 外挂视图开合广播（awareness 瞬时字段；null=关，字段存在即开） */
+export interface SharedViewState {
+  userId: string;
+  kind: SharedViewKind;
+}
+
 /** F5.3 媒体进度广播（awareness 瞬时字段，不进文档/undo；离散播放态另入元素 attrs） */
 export interface MediaProgressState {
   userId: string;

@@ -199,6 +199,27 @@ describe('YjsProvider readOnly', () => {
       (p.awareness.getLocalState() as Record<string, unknown> | null)?.laser ?? null
     ).toBeFalsy();
   });
+
+  it('readOnly setSharedView 不广播（F3.4/F3.5 学生端只渲染）', () => {
+    const p = create(true);
+    p.setSharedView({ kind: 'circuit', userId: 'u1' });
+    expect(
+      (p.awareness.getLocalState() as Record<string, unknown> | null)?.sharedView ?? null
+    ).toBeFalsy();
+  });
+
+  it('可写 setSharedView 写入 awareness 并可清除（对照）', () => {
+    const p = create(false);
+    p.setSharedView({ kind: 'molecule', userId: 'u1' });
+    expect((p.awareness.getLocalState() as Record<string, unknown> | null)?.sharedView).toEqual({
+      kind: 'molecule',
+      userId: 'u1'
+    });
+    p.setSharedView(null);
+    expect(
+      (p.awareness.getLocalState() as Record<string, unknown> | null)?.sharedView ?? null
+    ).toBeFalsy();
+  });
 });
 
 // D5：Y.UndoManager 迁移的等价性用例（阶段 0，先于迁移写定，见 docs 走查记录）

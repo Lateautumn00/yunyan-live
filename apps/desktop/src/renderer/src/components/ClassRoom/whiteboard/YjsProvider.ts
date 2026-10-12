@@ -10,7 +10,8 @@ import {
   CursorData,
   SpotlightState,
   MagnifierState,
-  MediaProgressState
+  MediaProgressState,
+  SharedViewState
 } from './types';
 
 /** 快照状态帧（服务端 type 4，仅教师连接推送）：state 0=暂存已恢复 1=暂存失败重试中 */
@@ -595,12 +596,19 @@ export class YjsProvider {
     this.awareness.setLocalStateField('media', state);
   }
 
+  // F3.4/F3.5 外挂视图开合：瞬时广播（awareness），仅教师可写（学生端只渲染）
+  setSharedView(state: SharedViewState | null) {
+    if (this.readOnly) return;
+    this.awareness.setLocalStateField('sharedView', state);
+  }
+
   destroy() {
     this.awareness.setLocalStateField('laser', null);
     this.awareness.setLocalStateField('cursor', null);
     this.awareness.setLocalStateField('spotlight', null);
     this.awareness.setLocalStateField('magnifier', null);
     this.awareness.setLocalStateField('media', null);
+    this.awareness.setLocalStateField('sharedView', null);
     this.awareness.setLocalStateField('user', null);
     this.provider.disconnect();
     this.undoManager.destroy();
