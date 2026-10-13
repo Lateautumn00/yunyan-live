@@ -43,14 +43,13 @@
 - [ ] Q10 F1.1 输入形态追认（以已交付输入浮层形态为准追认，或提出返工）
 - [ ] Q11 ≤50 人/键鼠办公机假设追认（现行性能阈值按该假设验收，或触发 §4.9 阈值上调）
 
-## 6. F5.4 保真 runner 收尾（LO 虚拟机 bug，parked）
+## 6. F5.4 保真 runner 收尾（LO 虚拟机 bug，parked）—— 已关闭（2026-10-13）
 
-- [ ] 修复生成器 OOXML 使 LO 可加载
-- [ ] 虚拟机产出 `baseline.json` 人工复核入库
-- [ ] 勾掉 `courseware-conversion-plan.md` §7 最后一项 checkbox
+- [x] 修复生成器 OOXML 使 LO 可加载 —— 实际根因为虚拟机 PATH 上的 Ubuntu `libreoffice-core` **缺 Impress 过滤器**（`libsdlo.so` 不存在），生成器 OOXML 无罪；经 `/opt/libreoffice26.8` 全功能安装直接转换成功。另修真 bug：`typeface` 未写入 XML（`11bc1e0`）
+- [x] 虚拟机产出 `baseline.json` 人工复核入库 —— LO 26.8.0.3，144/144 全绿，页数与哈希复核通过
+- [x] 勾掉 `courseware-conversion-plan.md` §7 最后一项 checkbox
 
-现状：`a5192ba` 已修复 it.each 注册时机，6 个转换用例在虚拟机正常注册执行；全部失败于 `soffice 转换失败：source file could not be loaded`——手写 OOXML 结构被 LibreOffice 拒载（CI zip 级校验通过，属更深层文档结构问题）。
-恢复路径：虚拟机 `pip install python-pptx` 生成已知可打开的参考 pptx，解包后 `diff -r` 对比 `apps/server/test/fixtures/courseware/` 下生成的 fixture，一次性定位缺失/畸形部件（疑点：slideMaster 缺 `p:txStyles`、presentation 缺 `p:defaultTextStyle`、presentation.xml.rels 非标准 theme 直引）→ 修 `generate-courseware-fixtures.mjs` → 虚拟机重跑 `FIDELITY_WRITE_BASELINE=1 COURSEWARE_FIDELITY=1 pnpm --filter @yunyan-live/server test` → 复核入库。
+处置记录：保真套件经 `SOFFICE_PATH=/opt/libreoffice26.8/program/soffice` 规避混装环境；fixtures README 已改为安装 `libreoffice-impress`（原「python-pptx 参考 diff」恢复路径未使用）。
 
 ## 7. 合并 main（用户手动执行）
 

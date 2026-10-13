@@ -59,8 +59,8 @@ node apps/server/scripts/generate-courseware-fixtures.mjs
 ## 跑法（保真回归需 LO 虚拟机 / 部署机）
 
 ```bash
-# 1. 依赖（Debian/Ubuntu）
-sudo apt install libreoffice-core fonts-noto-cjk poppler-utils
+# 1. 依赖（Debian/Ubuntu；注意是 libreoffice-impress，仅装 core 无 .pptx 过滤器）
+sudo apt install libreoffice-impress fonts-noto-cjk poppler-utils
 
 # 2. 生成样例（若 manifest.json 缺失，套件也会自动调）
 node apps/server/scripts/generate-courseware-fixtures.mjs
@@ -72,7 +72,7 @@ FIDELITY_WRITE_BASELINE=1 COURSEWARE_FIDELITY=1 pnpm --filter @yunyan-live/serve
 COURSEWARE_FIDELITY=1 pnpm --filter @yunyan-live/server test
 ```
 
-- soffice 路径非默认时用 `SOFFICE_PATH=/path/to/soffice` 指定。
+- soffice 路径非默认时用 `SOFFICE_PATH=/path/to/soffice` 指定。若机器上 `soffice` 指向不含 Impress 的 `libreoffice-core`（报 `source file could not be loaded`），补装 `libreoffice-impress` 或将 `SOFFICE_PATH` 指向完整安装（如 `/opt/libreoffice26.8/program/soffice`）。
 - 未设 `COURSEWARE_FIDELITY` 时转换套件全 skip，CI 零负担（生成器/哈希的单元测试不依赖 LO，CI 常跑）。
 
 ## 转换与比对步骤（runner 已实现）

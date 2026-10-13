@@ -1,0 +1,35 @@
+{
+  "loVersion": "LibreOffice 26.8.0.3 bce0998afefdbc355585ca324285661a2170ba77",
+  "entries": [
+    {
+      "caseId": "chart-embedded",
+      "pageCount": 2,
+      "perceptualHashes": ["0080222a2a2b2a00", "0082868cb0032a00"]
+    },
+    {
+      "caseId": "font-installed",
+      "pageCount": 1,
+      "perceptualHashes": ["0058004c00000000"]
+    },
+    {
+      "caseId": "font-missing",
+      "pageCount": 1,
+      "perceptualHashes": ["0058004600000000"]
+    },
+    {
+      "caseId": "formula-dense",
+      "pageCount": 1,
+      "perceptualHashes": ["0000000000000000"]
+    },
+    {
+      "caseId": "master-complex",
+      "pageCount": 2,
+      "perceptualHashes": ["e0fcf0c0c0dfc5c0", "0171010101010101"]
+    },
+    {
+      "caseId": "smartart",
+      "pageCount": 2,
+      "perceptualHashes": ["48080e4b4b000000", "4808002636080800"]
+    }
+  ]
+}
