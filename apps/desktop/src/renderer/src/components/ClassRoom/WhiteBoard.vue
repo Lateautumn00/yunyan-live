@@ -61,6 +61,7 @@
         <el-tooltip
           content="选择器 · 上选择下拖动（Shift 等比缩放，Delete 删除）"
           placement="right"
+          :disabled="openGroupId !== null"
         >
           <div class="cur-seg" :class="{ on: mode === 'cur' || mode === 'move' }">
             <div
@@ -81,7 +82,11 @@
             </div>
           </div>
         </el-tooltip>
-        <el-tooltip content="画笔 · 上钢笔 / 下荧光笔（笔型记忆）" placement="right">
+        <el-tooltip
+          content="画笔 · 上钢笔 / 下荧光笔（笔型记忆）"
+          placement="right"
+          :disabled="openGroupId !== null"
+        >
           <div class="brush-seg" :class="{ on: mode === 'brush' }">
             <div
               class="seg seg-pen"
@@ -111,17 +116,25 @@
             </div>
           </el-popover>
         </el-tooltip>
-        <el-tooltip content="文本工具" placement="right">
+        <el-tooltip content="文本工具" placement="right" :disabled="openGroupId !== null">
           <div :class="['text', { on: mode === 'text' }]" @click="tool('text')">
             <el-icon><Edit /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip content="橡皮擦 · 按整笔擦除（含荧光笔迹）" placement="right">
+        <el-tooltip
+          content="橡皮擦 · 按整笔擦除（含荧光笔迹）"
+          placement="right"
+          :disabled="openGroupId !== null"
+        >
           <div :class="['eraser', { on: mode === 'eraser' }]" @click="tool('eraser')" />
         </el-tooltip>
         <!-- §4.9.2 分组收纳：主区=记忆子项一键直用（图标回显），▸=右浮全组面板（互斥单开） -->
         <div v-for="g in TOOLBAR_GROUPS" :key="g.id" class="wb-group" :data-group="g.id">
-          <el-tooltip :content="groupTip(g, toolbarRemembered(g).label)" placement="right">
+          <el-tooltip
+            :content="groupTip(g, toolbarRemembered(g).label)"
+            placement="right"
+            :disabled="openGroupId === g.id"
+          >
             <div
               class="wb-g-main"
               :class="{ on: toolbarGroupOn(g) }"

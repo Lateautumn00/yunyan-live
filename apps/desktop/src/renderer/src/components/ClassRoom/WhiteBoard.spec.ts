@@ -506,7 +506,7 @@ vi.mock('vue-router', async importOriginal => {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 import WhiteBoard from './WhiteBoard.vue';
-import ElementPlus from 'element-plus';
+import ElementPlus, { ElTooltip } from 'element-plus';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import { getPdfPageCount, getPdfPageDims } from './whiteboard/pdfAsset';
 import { addFavorite, createMemoryAssetBackend, setAssetBackend } from './whiteboard/assetStore';
@@ -784,6 +784,24 @@ describe('WhiteBoard.vue', () => {
       ).toBe(true);
       await openToolGroup(wrapper, 'resource');
       expect(toolChild(wrapper, 'upload').exists()).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('面板打开时主区/直达键 tooltip 禁用（防 hover 气泡盖住右浮面板）', async () => {
+      const wrapper = mountWB();
+      const toolbarTips = () =>
+        wrapper.findAllComponents(ElTooltip).filter(t => t.props('placement') === 'right');
+      // 左侧工具栏恰好 8 个 placement=right 的 tooltip：4 直达 + 4 分组主区
+      expect(toolbarTips()).toHaveLength(8);
+      // 初始（无面板打开）全部启用
+      for (const t of toolbarTips()) expect(t.props('disabled')).toBe(false);
+      await openToolGroup(wrapper, 'shape');
+      for (const t of toolbarTips()) {
+        const content = String(t.props('content'));
+        // 分组主区 tooltip（内容含展开提示）：仅自身组禁用；直达键 4 个：任意面板打开即禁用
+        const isGroupMain = content.includes('点击使用，▸ 展开全部');
+        expect(t.props('disabled')).toBe(isGroupMain ? content.startsWith('形状 · ') : true);
+      }
       wrapper.unmount();
     });
   });
