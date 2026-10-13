@@ -52,8 +52,9 @@ function cmdAvailable(cmd: string): boolean {
   try {
     execFileSync(cmd, ['--version'], { stdio: 'pipe', timeout: 15_000 });
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    // 仅 ENOENT 视为不存在；命令存在但参数不被识别/退出码非 0 仍算可用
+    return (err as NodeJS.ErrnoException).code !== 'ENOENT';
   }
 }
 
