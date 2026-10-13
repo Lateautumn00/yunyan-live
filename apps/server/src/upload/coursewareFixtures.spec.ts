@@ -85,4 +85,21 @@ describe('courseware 样例生成器（F5.4 批A1）', () => {
     const zip = await JSZip.loadAsync(readFileSync(join(outDir, entry.file)));
     expect(zip.file('ppt/charts/chart1.xml'), 'chart1').toBeTruthy();
   });
+
+  it('font-missing/font-installed 的 slide XML 含 a:latin typeface 声明', async () => {
+    runGenerator();
+    const manifest = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf-8')) as {
+      cases: Array<{ id: string; file: string }>;
+    };
+    const expectations = [
+      { id: 'font-missing', font: 'FZLanTingHei-R-GBK' },
+      { id: 'font-installed', font: 'Noto Sans CJK SC' }
+    ];
+    for (const { id, font } of expectations) {
+      const entry = manifest.cases.find(c => c.id === id)!;
+      const zip = await JSZip.loadAsync(readFileSync(join(outDir, entry.file)));
+      const slide = await zip.file('ppt/slides/slide1.xml')!.async('string');
+      expect(slide, id).toContain(`<a:latin typeface="${font}"/>`);
+    }
+  });
 });

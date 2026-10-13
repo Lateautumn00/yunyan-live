@@ -80,8 +80,8 @@ function textBox({ x, y, cx, cy, runs, align = 'l', rot = 0 }) {
         .filter(Boolean)
         .join(' ');
       const fill = r.color ? `<a:solidFill><a:srgbClr val="${r.color}"/></a:solidFill>` : '';
-      const type = r.typeface ? ` typeface="${esc(r.typeface)}"` : '';
-      return `<a:p><a:pPr algn="${align}"/><a:r><a:rPr ${rPr} dirty="0">${fill}</a:rPr><a:t>${esc(r.text)}</a:t></a:r></a:p>`;
+      const latin = r.typeface ? `<a:latin typeface="${esc(r.typeface)}"/>` : '';
+      return `<a:p><a:pPr algn="${align}"/><a:r><a:rPr ${rPr} dirty="0">${fill}${latin}</a:rPr><a:t>${esc(r.text)}</a:t></a:r></a:p>`;
     })
     .join('');
   const rotAttr = rot ? ` rot="${rot}"` : '';
