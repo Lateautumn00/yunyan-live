@@ -16,6 +16,7 @@
           <el-menu-item index="device"> 设备检测 </el-menu-item>
           <el-menu-item index="password"> 修改密码 </el-menu-item>
           <el-menu-item index="logout"> 退出登录 </el-menu-item>
+          <el-menu-item index="licenses"> 开源许可 </el-menu-item>
         </el-menu>
       </div>
 
@@ -113,6 +114,22 @@
             退出登录
           </el-button>
         </div>
+
+        <!-- F3.4/F3.5 开源许可（外挂镜像随包分发的许可声明） -->
+        <div id="section-licenses" class="section licenses-panel">
+          <h4 class="section-title">开源许可</h4>
+          <p>本应用内置以下第三方开源组件（镜像产物未经修改，源码可从上游获取）：</p>
+          <ul>
+            <li v-for="lic in openSourceLicenses" :key="lic.name">
+              <strong>{{ lic.name }}</strong> — {{ lic.license }}；
+              <a :href="lic.source" target="_blank" rel="noreferrer">{{ lic.source }}</a>
+            </li>
+          </ul>
+          <p>
+            CircuitJS1 完整许可文本随包分发于安装目录
+            vendor/licenses/GPL-2.0.txt，第三方组件清单见同目录 NOTICE。
+          </p>
+        </div>
       </div>
     </div>
   </el-dialog>
@@ -156,7 +173,21 @@ const showRePass = ref(false);
 
 let observer: IntersectionObserver | null = null;
 
-const menuOrder = ['username', 'device', 'password', 'logout'];
+const menuOrder = ['username', 'device', 'password', 'logout', 'licenses'];
+
+/** F3.4/F3.5：内置外挂镜像的许可声明（GPL 案A：未修改上游产物 + 源码链接 + 全文随包） */
+const openSourceLicenses = [
+  {
+    name: 'CircuitJS1',
+    license: 'GPL-2.0-or-later',
+    source: 'https://github.com/pfalstad/circuitjs1'
+  },
+  {
+    name: '3Dmol.js',
+    license: 'BSD-3-Clause',
+    source: 'https://github.com/3dmol/3Dmol.js'
+  }
+];
 
 const rules: FormRules = {
   userName: [
