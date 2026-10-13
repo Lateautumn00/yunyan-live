@@ -804,6 +804,19 @@ describe('WhiteBoard.vue', () => {
       }
       wrapper.unmount();
     });
+
+    it('REPRO 真实指针序列：pointerdown+click 后面板保持展开', async () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as { openGroupId: string | null };
+      const cue = wrapper.find('[data-testid="wb-group-cue-shape"]');
+      await cue.trigger('pointerdown');
+      await cue.trigger('click');
+      await nextTick();
+      await nextTick();
+      expect(vm.openGroupId).toBe('shape');
+      expect(wrapper.find('[data-testid="wb-child-circle"]').exists()).toBe(true);
+      wrapper.unmount();
+    });
   });
 
   it('我的课件面板含 PPT 上传入口与图片/PPT 区分说明', () => {

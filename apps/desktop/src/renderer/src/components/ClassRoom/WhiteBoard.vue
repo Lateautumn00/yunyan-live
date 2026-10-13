@@ -148,7 +148,7 @@
             :visible="openGroupId === g.id"
             placement="right-end"
             :width="176"
-            trigger="click"
+            :trigger="[]"
             popper-class="wb-group-popper"
             @update:visible="setOpenGroup(g.id, $event)"
           >
@@ -2609,7 +2609,7 @@ function toolbarRemembered(g: ToolbarGroupDef): ToolbarGroupChild {
   return rememberedChild(g, toolbarMem.value);
 }
 
-/** ▸ 展开条：自挂点击为 jsdom/单测可靠路径；EP trigger toggle 经 update:visible 回灌同向双保险 */
+/** ▸ 展开条：自挂点击为 jsdom/单测可靠路径；el-popover trigger=[] 屏蔽 EP 内部 toggle，避免双开关互相打架 */
 function toggleGroup(groupId: string): void {
   openGroupId.value = openGroupId.value === groupId ? null : groupId;
 }
