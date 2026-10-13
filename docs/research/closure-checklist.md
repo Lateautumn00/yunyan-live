@@ -1,6 +1,6 @@
 # 研发收尾清单（Closure Checklist）
 
-> 基线：`feat/stage3-math-chem` @ 本文档提交时 HEAD，领先 `origin/main` 77 提交、0 分叉（ff-only 可合并）
+> 基线：`feat/stage3-math-chem` 与 `origin/main` 0 分叉（ff-only 可合并）
 > 代码侧：42/42 项全部完成（阶段 0–4），四门禁全绿；**本清单只收集人工/流程项**
 > 用法：逐项勾选；每项标注前置条件，前置未满足不得跳步
 
@@ -37,7 +37,13 @@
 - [ ] 字体采购边界（教育字库预算/授权意愿，或仅开源思源/Noto 覆盖）
 - [ ] 二期 C 类工具许可形态（ONLYOFFICE/Aspose 的 AGPL 义务/商业付费可接受度）
 
-## 5. F5.4 保真 runner 收尾（LO 虚拟机 bug，parked）
+## 5. 评审决策点补录（`whiteboard-teaching-features.md` §10 遗留）
+
+- [ ] Q7-a 阶段 1 需求向走查记录补录（2–3 人半天走查结论存档；若当时未做，补做或产品书面豁免）
+- [ ] Q10 F1.1 输入形态追认（以已交付输入浮层形态为准追认，或提出返工）
+- [ ] Q11 ≤50 人/键鼠办公机假设追认（现行性能阈值按该假设验收，或触发 §4.9 阈值上调）
+
+## 6. F5.4 保真 runner 收尾（LO 虚拟机 bug，parked）
 
 - [ ] 修复生成器 OOXML 使 LO 可加载
 - [ ] 虚拟机产出 `baseline.json` 人工复核入库
@@ -46,14 +52,14 @@
 现状：`a5192ba` 已修复 it.each 注册时机，6 个转换用例在虚拟机正常注册执行；全部失败于 `soffice 转换失败：source file could not be loaded`——手写 OOXML 结构被 LibreOffice 拒载（CI zip 级校验通过，属更深层文档结构问题）。
 恢复路径：虚拟机 `pip install python-pptx` 生成已知可打开的参考 pptx，解包后 `diff -r` 对比 `apps/server/test/fixtures/courseware/` 下生成的 fixture，一次性定位缺失/畸形部件（疑点：slideMaster 缺 `p:txStyles`、presentation 缺 `p:defaultTextStyle`、presentation.xml.rels 非标准 theme 直引）→ 修 `generate-courseware-fixtures.mjs` → 虚拟机重跑 `FIDELITY_WRITE_BASELINE=1 COURSEWARE_FIDELITY=1 pnpm --filter @yunyan-live/server test` → 复核入库。
 
-## 6. 合并 main（用户手动执行）
+## 7. 合并 main（用户手动执行）
 
-- [ ] 前置：第 1–5 节全部完成（至少 §1 签批 + §2 验收 + §3 上线相关项若同期上线）
+- [ ] 前置：第 1–6 节全部完成（至少 §1 签批 + §2 验收 + §3 上线相关项若同期上线）
 - [ ] 执行：`git checkout main && git merge --ff-only feat/stage3-math-chem && git push origin main`
 - [ ] 合并后保留远程 `feat/stage3-math-chem`（与 stage0/1/2 惯例一致）
 
 已验证：HEAD 含 origin/main 全部提交、0 分叉，ff-only 快进可行（`stage3-exit-checklist.md` §5）。
 
-## 7. 远期复核
+## 8. 远期复核
 
 - [ ] Q6 报告 12 个月强制复核（2027-10）：tldraw 商业授权「不预留」结论 + 换引擎独立立项前提重估（`whiteboard-teaching-features.md` §10）
