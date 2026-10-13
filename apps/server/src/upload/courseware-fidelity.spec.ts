@@ -20,21 +20,22 @@ const FIXTURES_DIR = join(__dirname, '..', '..', 'test', 'fixtures', 'courseware
 const BASELINE_PATH = join(FIXTURES_DIR, 'baseline.json');
 const GENERATOR = join(__dirname, '..', '..', 'scripts', 'generate-courseware-fixtures.mjs');
 
-const REQUIRED_CATEGORIES = [
-  'font-missing',
-  'font-installed',
-  'master-complex',
-  'smartart',
-  'formula-dense',
-  'chart-embedded'
-];
-
 interface ManifestCase {
   id: string;
   file: string;
   expectedPages: number;
   note: string;
 }
+
+/** 静态契约清单：收集期即注册 it.each（beforeAll 填充的动态数组在收集期为空，注册 0 用例） */
+const CASES: ManifestCase[] = [
+  { id: 'font-missing', file: 'font-missing.pptx', expectedPages: 1, note: '小众字体文本框' },
+  { id: 'font-installed', file: 'font-installed.pptx', expectedPages: 1, note: 'Noto 对照' },
+  { id: 'master-complex', file: 'master-complex.pptx', expectedPages: 2, note: '母版渐变斜切' },
+  { id: 'smartart', file: 'smartart.pptx', expectedPages: 2, note: '层级/循环图' },
+  { id: 'formula-dense', file: 'formula-dense.pptx', expectedPages: 1, note: 'OMML 公式' },
+  { id: 'chart-embedded', file: 'chart-embedded.pptx', expectedPages: 2, note: '嵌入图表' }
+];
 
 function runGenerator(): void {
   execFileSync(process.execPath, [GENERATOR, '--out', FIXTURES_DIR], { stdio: 'pipe' });
@@ -79,11 +80,9 @@ describe.skipIf(!RUN)('courseware-fidelity 转换样例集（COURSEWARE_FIDELITY
   const collected: FidelityBaselineEntry[] = [];
   let loVersion = '';
   let baseline: FidelityBaseline | null = null;
-  let cases: ManifestCase[] = [];
 
   beforeAll(() => {
     if (!existsSync(join(FIXTURES_DIR, 'manifest.json'))) runGenerator();
-    cases = loadManifest();
     if (existsSync(BASELINE_PATH) && !WRITE_BASELINE) {
       baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf-8')) as FidelityBaseline;
     }
@@ -115,13 +114,16 @@ describe.skipIf(!RUN)('courseware-fidelity 转换样例集（COURSEWARE_FIDELITY
   });
 
   it('样例集目录覆盖六类基线分类', () => {
-    const ids = cases.map(c => c.id);
-    for (const cat of REQUIRED_CATEGORIES) {
-      expect(ids, cat).toContain(cat);
+    const manifestCases = loadManifest();
+    const ids = manifestCases.map(c => c.id);
+    for (const c of CASES) {
+      expect(ids, c.id).toContain(c.id);
+      const entry = manifestCases.find(m => m.id === c.id)!;
+      expect(entry.expectedPages, `${c.id} expectedPages`).toBe(c.expectedPages);
     }
   });
 
-  it.each(cases.map(c => [c.id, c] as const))(
+  it.each(CASES.map(c => [c.id, c] as const))(
     '%s：soffice 转换 → 页数硬断言 → 感知哈希基线比对',
     (_id, c) => {
       const outDir = mkdtempSync(join(tmpdir(), 'fid-'));
