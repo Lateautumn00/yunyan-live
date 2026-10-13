@@ -59,11 +59,26 @@
       <!-- 左侧工具面板 -->
       <div v-if="isTeacher && isDisplay" class="tools">
         <el-tooltip
-          content="选择器 · 拖动移动，拉手柄缩放（Shift 等比，Delete 删除）"
+          content="选择器 · 上选择下拖动（Shift 等比缩放，Delete 删除）"
           placement="right"
         >
-          <div :class="['cur', { on: mode === 'cur' }]" @click="tool('cur')">
-            <el-icon><Pointer /></el-icon>
+          <div class="cur-seg" :class="{ on: mode === 'cur' || mode === 'move' }">
+            <div
+              class="seg seg-cur"
+              :class="{ active: mode === 'cur' }"
+              data-testid="wb-tool-cur"
+              @click="tool('cur')"
+            >
+              <el-icon><Pointer /></el-icon>
+            </div>
+            <div
+              class="seg seg-move"
+              :class="{ active: mode === 'move' }"
+              data-testid="wb-tool-move"
+              @click="tool('move')"
+            >
+              <el-icon><Position /></el-icon>
+            </div>
           </div>
         </el-tooltip>
         <el-tooltip content="画笔 · 上钢笔 / 下荧光笔（笔型记忆）" placement="right">
@@ -101,173 +116,76 @@
             <el-icon><Edit /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip content="圆形工具 · 拖拽画椭圆，按住 Shift 画正圆" placement="right">
-          <div :class="['circle', { on: mode === 'circle' }]" @click="tool('circle')" />
+        <el-tooltip content="橡皮擦 · 按整笔擦除（含荧光笔迹）" placement="right">
+          <div :class="['eraser', { on: mode === 'eraser' }]" @click="tool('eraser')" />
         </el-tooltip>
-        <el-tooltip content="矩形工具" placement="right">
-          <div :class="['rectangle', { on: mode === 'rectangle' }]" @click="tool('rectangle')" />
-        </el-tooltip>
-        <el-tooltip content="箭头工具" placement="right">
-          <div :class="['arrows', { on: mode === 'arrows' }]" @click="tool('arrows')">
-            <el-icon><Promotion /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="受力箭头 · 预设标签拖出方向，双击改标签" placement="right">
-          <div :class="['force', { on: mode === 'force' }]">
-            <el-popover placement="right-end" :width="176" trigger="click">
-              <template #reference>
-                <span class="force-icon">F</span>
-              </template>
-              <div class="force-presets">
+        <!-- §4.9.2 分组收纳：主区=记忆子项一键直用（图标回显），▸=右浮全组面板（互斥单开） -->
+        <div v-for="g in TOOLBAR_GROUPS" :key="g.id" class="wb-group" :data-group="g.id">
+          <el-tooltip :content="groupTip(g, toolbarRemembered(g).label)" placement="right">
+            <div
+              class="wb-g-main"
+              :class="{ on: toolbarGroupOn(g) }"
+              :data-testid="`wb-group-${g.id}`"
+              @click="activateRemembered(g)"
+            >
+              <ToolbarGlyph :icon="toolbarRemembered(g).icon" />
+            </div>
+          </el-tooltip>
+          <el-popover
+            :visible="openGroupId === g.id"
+            placement="right-end"
+            :width="176"
+            trigger="click"
+            popper-class="wb-group-popper"
+            @update:visible="setOpenGroup(g.id, $event)"
+          >
+            <template #reference>
+              <div
+                class="wb-g-cue"
+                :class="{ open: openGroupId === g.id }"
+                :title="`展开${g.label}工具`"
+                :data-testid="`wb-group-cue-${g.id}`"
+                @click="toggleGroup(g.id)"
+              >
+                <el-icon><ArrowRight /></el-icon>
+              </div>
+            </template>
+            <div class="wb-group-panel" :class="{ 'cols-2': g.children.length > 4 }">
+              <div
+                v-for="c in g.children"
+                :key="c.id"
+                class="wb-gi"
+                :class="{ on: toolbarChildOn(c) }"
+                :title="c.tooltip"
+                :data-tool="c.id"
+                :data-testid="`wb-child-${c.id}`"
+                @click="activateChild(g, c)"
+              >
+                <ToolbarGlyph :icon="c.icon" />
+                <span class="wb-gi-label">{{ c.label }}</span>
+              </div>
+              <div v-if="g.id === 'annotate'" class="force-presets">
                 <span
                   v-for="p in FORCE_PRESETS"
                   :key="p"
                   class="force-preset"
-                  @click="selectForceLabel(p)"
+                  @click.stop="selectForceLabel(p)"
                 >
                   {{ p }}
                 </span>
               </div>
-            </el-popover>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="引线标注 · 点击被指对象拖出标签，双击改文字" placement="right">
-          <div :class="['leader-tool', { on: mode === 'leader' }]" @click="selectLeader()">
-            <el-icon><Right /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip
-          content="表格 · 点击落点插入 3×3，选中后增删行列，双击编辑单元格"
-          placement="right"
-        >
-          <div :class="['table-tool', { on: mode === 'table' }]" @click="tool('table')">
-            <el-icon><Grid /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="坐标系 · 点击落点插入，选中可锁定/关网格" placement="right">
-          <div :class="['coord-tool', { on: mode === 'coord' }]" @click="tool('coord')">
-            <el-icon><Aim /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip
-          content="思维导图 · 双击空白建根节点，Tab/Enter 增子/同级，Esc 退出"
-          placement="right"
-        >
-          <div :class="['mindmap-tool', { on: mode === 'mindmap' }]" @click="tool('mindmap')">
-            <el-icon><Share /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="素材收藏 · 导入本地图入收藏，点击入画布" placement="right">
-          <div :class="['asset-tool', { on: showAssets }]" @click="openAssets">
-            <el-icon><Picture /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip
-          content="媒体 · 插入页内音视频（链接跨端同步，本地文件仅本机可播）"
-          placement="right"
-        >
-          <div :class="['media-tool', { on: showMediaPicker }]" @click="toggleMediaPicker">
-            <el-icon><Film /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="直线工具 · 按住 Shift 锁定水平/垂直" placement="right">
-          <div :class="['line', { on: mode === 'line' }]" @click="tool('line')">
-            <el-icon><Minus /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="点工具 · 单击落点（吸附附近端点/中点）" placement="right">
-          <div
-            :class="['glyph-tool', 'point-tool', { on: mode === 'point' }]"
-            @click="tool('point')"
-          >
-            <span class="glyph-icon">●</span>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="多边形 · 逐点取顶点，点击首点闭合（Esc 取消）" placement="right">
-          <div
-            :class="['glyph-tool', 'polygon-tool', { on: mode === 'polygon' }]"
-            @click="tool('polygon')"
-          >
-            <span class="glyph-icon">△</span>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="公式 · LaTeX 输入（Enter 提交，Esc 取消）" placement="right">
-          <div class="formula-tool" @click="openFormula">
-            <span class="formula-tool-icon">∑</span>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="函数图像 · 输入 y=f(x) 生成曲线" placement="right">
-          <div class="curve-tool" @click="openCurve">
-            <span class="formula-tool-icon">f(x)</span>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="橡皮擦 · 按整笔擦除（含荧光笔迹）" placement="right">
-          <div :class="['eraser', { on: mode === 'eraser' }]" @click="tool('eraser')" />
-        </el-tooltip>
-        <el-tooltip content="拖动工具" placement="right">
-          <div :class="['move', { on: mode === 'move' }]" @click="tool('move')" />
-        </el-tooltip>
-        <el-tooltip content="蒙层 · 拖拽覆盖内容，单击揭开，拖开后可 Delete" placement="right">
-          <div :class="['mask', { on: mode === 'mask' }]" @click="tool('mask')">
-            <el-icon><Hide /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="激光笔 · 红点跟指，切换工具或 Esc 熄灭" placement="right">
-          <div :class="['laser', { on: mode === 'laser' }]" @click="toggleLaser">
-            <el-icon><Aim /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="聚光灯 · 遮罩高亮窗口，拖动移窗，Esc 关闭" placement="right">
-          <div :class="['spotlight', { on: spotlightOn }]" @click="toggleSpotlight">
-            <el-icon><Sunny /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="电路实验室 · 页内浮层，学生同步可见" placement="right">
-          <div
-            :class="['shared-view', { on: sharedKind === 'circuit' }]"
-            @click="sharedKind === 'circuit' ? closeSharedView() : openSharedView('circuit')"
-          >
-            <el-icon><Cpu /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="分子模型 · 页内浮层，学生同步可见" placement="right">
-          <div
-            :class="['shared-view', { on: sharedKind === 'molecule' }]"
-            @click="sharedKind === 'molecule' ? closeSharedView() : openSharedView('molecule')"
-          >
-            <el-icon><Sugar /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="放大镜 · 滚轮调倍率，Esc 关闭" placement="right">
-          <div :class="['magnifier', { on: magOn }]" @click="toggleMagnifier">
-            <el-icon><ZoomIn /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="上传图片 · 贴到当前页" placement="right">
-          <div class="picture">
-            <el-icon><Picture /></el-icon>
-            <input
-              type="file"
-              accept="image/x-png,image/gif,image/jpeg,image/jpg,image/bmp"
-              @change="takeFile"
-            />
-          </div>
-        </el-tooltip>
-        <el-tooltip content="截图 · Ctrl+Shift+X 框选屏幕区域插入" placement="right">
-          <div class="screenshot-tool" @click="startScreenshot">
-            <el-icon><Crop /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="我的课件" placement="right">
-          <div :class="['file', { on: mode === 'file' }]" @click="toggleFileList">
-            <el-icon><FolderOpened /></el-icon>
-          </div>
-        </el-tooltip>
-        <el-tooltip content="导出板书 · PNG/PDF（仅教师）" placement="right">
-          <div class="export" @click="openExportDialog">
-            <el-icon><Download /></el-icon>
-          </div>
-        </el-tooltip>
+            </div>
+          </el-popover>
+        </div>
+        <!-- 上传图片：常驻隐藏 input（分组「上传图片」项共用） -->
+        <div class="picture wb-upload-host">
+          <input
+            ref="uploadInputRef"
+            type="file"
+            accept="image/x-png,image/gif,image/jpeg,image/jpg,image/bmp"
+            @change="takeFile"
+          />
+        </div>
       </div>
 
       <!-- 底部控制栏（仅教师：撤销/清空/缩放均写入或影响共享白板） -->
@@ -999,6 +917,16 @@ import {
 import BoardReview from './BoardReview.vue';
 import MediaOverlay from './MediaOverlay.vue';
 import SharedViewOverlay from './SharedViewOverlay.vue';
+import ToolbarGlyph from './ToolbarGlyph.vue';
+import {
+  TOOLBAR_GROUPS,
+  groupTip,
+  loadToolbarMem,
+  rememberedChild,
+  saveToolbarMem,
+  type ToolbarGroupChild,
+  type ToolbarGroupDef
+} from './whiteboard/toolbarGroups';
 import { useSharedView } from './whiteboard/useSharedView';
 import {
   PRESET_COLORS,
@@ -2658,6 +2586,123 @@ function selectForceLabel(label: string) {
 function selectLeader() {
   tool('leader');
 }
+
+// --- §4.9.2 工具栏 IA：分组收纳状态与激活收口 ---
+const toolbarMem = ref<Record<string, string>>(loadToolbarMem());
+const openGroupId = ref<string | null>(null);
+const uploadInputRef = ref<HTMLInputElement | null>(null);
+
+function toolbarRemembered(g: ToolbarGroupDef): ToolbarGroupChild {
+  return rememberedChild(g, toolbarMem.value);
+}
+
+/** ▸ 展开条：自挂点击为 jsdom/单测可靠路径；EP trigger toggle 经 update:visible 回灌同向双保险 */
+function toggleGroup(groupId: string): void {
+  openGroupId.value = openGroupId.value === groupId ? null : groupId;
+}
+
+function setOpenGroup(groupId: string, open: boolean): void {
+  openGroupId.value = open ? groupId : null;
+}
+
+function toolbarChildOn(c: ToolbarGroupChild): boolean {
+  switch (c.id) {
+    case 'spotlight':
+      return spotlightOn.value;
+    case 'magnifier':
+      return magOn.value;
+    case 'circuit':
+      return sharedKind.value === 'circuit';
+    case 'molecule':
+      return sharedKind.value === 'molecule';
+    case 'assets':
+      return showAssets.value;
+    case 'media':
+      return showMediaPicker.value;
+    case 'courseware':
+      return showFileList.value;
+    default:
+      return c.mode ? mode.value === c.mode : false;
+  }
+}
+
+function toolbarGroupOn(g: ToolbarGroupDef): boolean {
+  return g.children.some(toolbarChildOn);
+}
+
+/** 子项激活统一收口：原工具 handler 原样复用，不搬业务逻辑 */
+function runToolbarChild(c: ToolbarGroupChild): void {
+  switch (c.id) {
+    case 'force':
+      selectForceLabel(armedForceLabel.value);
+      break;
+    case 'leader':
+      selectLeader();
+      break;
+    case 'laser':
+      toggleLaser();
+      break;
+    case 'spotlight':
+      toggleSpotlight();
+      break;
+    case 'magnifier':
+      toggleMagnifier();
+      break;
+    case 'circuit':
+      if (sharedKind.value === 'circuit') closeSharedView();
+      else openSharedView('circuit');
+      break;
+    case 'molecule':
+      if (sharedKind.value === 'molecule') closeSharedView();
+      else openSharedView('molecule');
+      break;
+    case 'assets':
+      openAssets();
+      break;
+    case 'media':
+      toggleMediaPicker();
+      break;
+    case 'upload':
+      uploadInputRef.value?.click();
+      break;
+    case 'screenshot':
+      startScreenshot();
+      break;
+    case 'courseware':
+      toggleFileList();
+      break;
+    case 'export':
+      openExportDialog();
+      break;
+    case 'formula':
+      openFormula();
+      break;
+    case 'curve':
+      openCurve();
+      break;
+    default:
+      tool(c.id as ToolMode);
+  }
+}
+
+/** 分组主区：一键激活记忆子项（首跑=defaultChildId），不展开面板 */
+function activateRemembered(g: ToolbarGroupDef): void {
+  openGroupId.value = null;
+  runToolbarChild(toolbarRemembered(g));
+}
+
+/** 面板子项：写记忆 → 激活 → 收面板 */
+function activateChild(g: ToolbarGroupDef, c: ToolbarGroupChild): void {
+  toolbarMem.value = { ...toolbarMem.value, [g.id]: c.id };
+  saveToolbarMem(toolbarMem.value);
+  openGroupId.value = null;
+  runToolbarChild(c);
+}
+
+// 切工具/切模式同步收起分组面板（组间互斥已由 openGroupId 单源收口）
+watch(mode, () => {
+  openGroupId.value = null;
+});
 
 function toggleFileList() {
   showFileList.value = !showFileList.value;
@@ -5808,10 +5853,7 @@ defineExpose({
       color: #409eff;
     }
   }
-  .circle,
-  .rectangle,
-  .eraser,
-  .move {
+  .eraser {
     background-image: url('@{wbicon}');
     background-repeat: no-repeat;
   }
@@ -5858,27 +5900,67 @@ defineExpose({
       color: #409eff;
     }
   }
-  .rectangle {
-    background-position: 0 -34px;
-  }
-  .move {
-    background-position: -34px -68px;
-  }
   .eraser {
     background-position: 0 -102px;
   }
-  .circle {
-    background-position: -68px -34px;
+  // 选择/移动分段控件（§4.9.2：移动并入选择器）
+  .cur-seg {
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    .seg {
+      width: 32px;
+      height: 16px;
+      border-radius: 0;
+      &:hover {
+        background-color: rgba(64, 158, 255, 0.1);
+      }
+      &.active {
+        background-color: rgba(64, 158, 255, 0.16);
+      }
+      .el-icon {
+        font-size: 11px;
+      }
+      &.active .el-icon {
+        color: #409eff;
+      }
+    }
+    .seg-move {
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
   }
-  /* F3.1 受力箭头：文字图标 + 预设面板 */
-  .force-icon {
-    font-size: 15px;
-    font-weight: 600;
-    color: #555;
-    font-style: italic;
-  }
-  &.force.on .force-icon {
-    color: #409eff;
+  /* §4.9.2 分组钮：主区（图标回显记忆子项）+ ▸ 展开条 */
+  .wb-group {
+    width: 32px;
+    height: auto;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    background: none;
+    &:hover {
+      background-color: transparent;
+    }
+    .wb-g-main {
+      width: 32px;
+      height: 32px;
+    }
+    .wb-g-cue {
+      width: 32px;
+      height: 12px;
+      border-radius: 0 0 6px 6px;
+      .el-icon {
+        font-size: 10px;
+        color: #888;
+        transition: transform 0.15s ease;
+      }
+      &:hover {
+        background-color: #e2e2e7;
+      }
+      &.open .el-icon {
+        transform: rotate(90deg);
+      }
+    }
   }
   input[type='file'] {
     position: absolute;
@@ -5889,6 +5971,86 @@ defineExpose({
     opacity: 0;
     cursor: pointer;
   }
+}
+
+/* §4.9.2 分组图标（ToolbarGlyph）：字形/雪碧图通用样式（面板与分组主区共用） */
+.tg-glyph {
+  font-size: 15px;
+  font-weight: 700;
+  color: #555;
+  line-height: 1;
+}
+.tg-glyph-wide {
+  font-size: 12px;
+}
+.tg-glyph-f {
+  font-weight: 600;
+  font-style: italic;
+}
+.tg-sprite {
+  width: 32px;
+  height: 32px;
+  background-image: url('@{wbicon}');
+  background-repeat: no-repeat;
+  &.rectangle {
+    background-position: 0 -34px;
+  }
+  &.circle {
+    background-position: -68px -34px;
+  }
+}
+
+/* §4.9.2 分组面板（el-popover teleport 出 .tools，独立成套）：>4 子项双列 */
+.wb-group-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+
+  .wb-gi {
+    width: 70px;
+    height: 52px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+
+    &:hover {
+      background-color: #f2f2f5;
+    }
+    &.on {
+      background-color: #e7f0ff;
+      .wb-gi-label {
+        color: #409eff;
+      }
+      .tg-glyph,
+      .tg-sprite {
+        filter: none;
+      }
+      .el-icon {
+        color: #409eff;
+      }
+    }
+    .wb-gi-label {
+      font-size: 11px;
+      color: #555;
+      line-height: 1;
+      white-space: nowrap;
+    }
+  }
+  .force-presets {
+    width: 100%;
+    margin-top: 2px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+  }
+}
+
+/* 上传图片常驻隐藏 input 宿主（主区/面板项共用同一 input） */
+.wb-upload-host {
+  display: none;
 }
 
 .ctrl-tools {
@@ -6791,35 +6953,6 @@ defineExpose({
   margin-top: 8px;
   color: #409eff;
   font-size: 13px;
-}
-
-/* F1.1 公式工具按钮（∑ 字形，尺寸/悬停沿用 .tools div 通用规则） */
-.formula-tool {
-  .formula-tool-icon {
-    font-size: 17px;
-    font-weight: 600;
-    color: #555;
-    line-height: 1;
-  }
-  &:hover .formula-tool-icon {
-    color: #409eff;
-  }
-}
-
-/* F2.3c 点/多边形：字形工具钮（与 ∑ 的 .formula-tool 分离，避免选择器撞车） */
-.glyph-tool {
-  .glyph-icon {
-    font-size: 15px;
-    font-weight: 700;
-    color: #555;
-    line-height: 1;
-  }
-  &:hover .glyph-icon {
-    color: #409eff;
-  }
-  &.on .glyph-icon {
-    color: #409eff;
-  }
 }
 
 /* F1.1 公式输入浮层（状态机：默认→输入中→红框错误→渲染中→已提交） */

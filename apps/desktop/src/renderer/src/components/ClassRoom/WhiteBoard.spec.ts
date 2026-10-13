@@ -511,6 +511,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import { getPdfPageCount, getPdfPageDims } from './whiteboard/pdfAsset';
 import { addFavorite, createMemoryAssetBackend, setAssetBackend } from './whiteboard/assetStore';
 import { PRESET_COLORS, MODE_TO_ELEMENT, isElementType } from './whiteboard/types';
+import { TOOLBAR_GROUPS } from './whiteboard/toolbarGroups';
 
 // pdf.js 管线在单测中不可用（worker/网络），mock 模块级 API
 vi.mock('./whiteboard/pdfAsset', () => ({
@@ -602,6 +603,16 @@ function mountWB(props: Record<string, unknown> = {}) {
   return wrapper;
 }
 
+// §4.9.2 工具栏 IA：展开分组面板并取子项（teleport 已 stub，面板内联在 wrapper 内）
+async function openToolGroup(wrapper: ReturnType<typeof mountWB>, groupId: string) {
+  await wrapper.find(`[data-testid="wb-group-cue-${groupId}"]`).trigger('click');
+  await nextTick();
+  await nextTick();
+}
+function toolChild(wrapper: ReturnType<typeof mountWB>, childId: string) {
+  return wrapper.find(`[data-testid="wb-child-${childId}"]`);
+}
+
 type WBVM = {
   mode: string;
   tool: (type: string, event?: MouseEvent) => void;
@@ -638,6 +649,143 @@ describe('WhiteBoard.vue', () => {
     expect(wrapper.find('.uploadFile').exists()).toBe(false);
     expect(wrapper.find('.tools .upload').exists()).toBe(false);
     wrapper.unmount();
+  });
+
+  // §4.9.2 工具栏 IA：8 项一级（4 直达 + 4 分组）、30 子项无丢失、互斥、记忆
+  describe('§4.9.2 工具栏 IA 分类收纳', () => {
+    const GROUP_IDS = ['shape', 'annotate', 'subject', 'resource'] as const;
+
+    beforeEach(() => {
+      localStorage.removeItem('wb.toolbarMem.v1');
+    });
+
+    it('一级仅 8 项：4 直达（选择/移动分段、画笔、文本、橡皮）+ 4 分组', () => {
+      const wrapper = mountWB();
+      expect(wrapper.find('.tools .cur-seg').exists()).toBe(true);
+      expect(wrapper.find('.tools .brush-seg').exists()).toBe(true);
+      expect(wrapper.find('.tools .text').exists()).toBe(true);
+      expect(wrapper.find('.tools .eraser').exists()).toBe(true);
+      const groups = wrapper.findAll('.tools .wb-group');
+      expect(groups).toHaveLength(4);
+      for (const id of GROUP_IDS) {
+        expect(wrapper.find(`[data-testid="wb-group-${id}"]`).exists()).toBe(true);
+        expect(wrapper.find(`[data-testid="wb-group-cue-${id}"]`).exists()).toBe(true);
+      }
+      wrapper.unmount();
+    });
+
+    it('25 分组子项无丢失（6+7+6+6），面板双列标记', async () => {
+      const wrapper = mountWB();
+      let total = 0;
+      for (const g of TOOLBAR_GROUPS) {
+        total += g.children.length;
+        await openToolGroup(wrapper, g.id);
+        for (const c of g.children) {
+          expect(wrapper.find(`[data-testid="wb-child-${c.id}"]`).exists()).toBe(true);
+        }
+        expect(wrapper.find('.wb-group-panel').classes()).toContain('cols-2');
+      }
+      // 一级 8 项 = 4 直达 + 4 分组；25 子项全收纳（直达 6：选择/移动/钢笔/荧光/文本/橡皮）
+      expect(total).toBe(25);
+      wrapper.unmount();
+    });
+
+    it('分组面板互斥单开：开新组自动收起旧组', async () => {
+      const wrapper = mountWB();
+      await openToolGroup(wrapper, 'shape');
+      expect(wrapper.find('[data-testid="wb-group-cue-shape"]').classes()).toContain('open');
+      await openToolGroup(wrapper, 'annotate');
+      expect(wrapper.find('[data-testid="wb-group-cue-shape"]').classes()).not.toContain('open');
+      expect(wrapper.find('[data-testid="wb-group-cue-annotate"]').classes()).toContain('open');
+      wrapper.unmount();
+    });
+
+    it('切工具收起分组面板', async () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as WBVM;
+      await openToolGroup(wrapper, 'shape');
+      expect(wrapper.find('[data-testid="wb-group-cue-shape"]').classes()).toContain('open');
+      vm.tool('text');
+      await nextTick();
+      expect(wrapper.find('[data-testid="wb-group-cue-shape"]').classes()).not.toContain('open');
+      wrapper.unmount();
+    });
+
+    it('分组主区一键激活记忆子项（首跑默认：形状=圆、学科=公式）', async () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as WBVM;
+      await wrapper.find('[data-testid="wb-group-shape"]').trigger('click');
+      expect(vm.mode).toBe('circle');
+      await wrapper.find('[data-testid="wb-group-subject"]').trigger('click');
+      await nextTick();
+      const fvm = wrapper.vm as unknown as { formulaVisible: boolean };
+      expect(fvm.formulaVisible).toBe(true);
+      wrapper.unmount();
+    });
+
+    it('面板选择写记忆：再点主区直达新记忆子项且持久化', async () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as WBVM;
+      await openToolGroup(wrapper, 'shape');
+      await toolChild(wrapper, 'rectangle').trigger('click');
+      expect(vm.mode).toBe('rectangle');
+      expect(JSON.parse(localStorage.getItem('wb.toolbarMem.v1') ?? '{}')).toMatchObject({
+        shape: 'rectangle'
+      });
+      vm.tool('cur');
+      await wrapper.find('[data-testid="wb-group-shape"]').trigger('click');
+      expect(vm.mode).toBe('rectangle');
+      wrapper.unmount();
+    });
+
+    it('记忆损坏（非法 JSON）回退默认子项', async () => {
+      localStorage.setItem('wb.toolbarMem.v1', '{{{not-json');
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as WBVM;
+      await wrapper.find('[data-testid="wb-group-shape"]').trigger('click');
+      expect(vm.mode).toBe('circle');
+      wrapper.unmount();
+    });
+
+    it('记忆值指向已不存在的子项时回退默认', async () => {
+      localStorage.setItem('wb.toolbarMem.v1', JSON.stringify({ shape: 'ghost-tool' }));
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as WBVM;
+      await wrapper.find('[data-testid="wb-group-shape"]').trigger('click');
+      expect(vm.mode).toBe('circle');
+      wrapper.unmount();
+    });
+
+    it('选择/移动分段：上选择下拖动', async () => {
+      const wrapper = mountWB();
+      const vm = wrapper.vm as unknown as WBVM;
+      await wrapper.find('[data-testid="wb-tool-move"]').trigger('click');
+      expect(vm.mode).toBe('move');
+      await wrapper.find('[data-testid="wb-tool-cur"]').trigger('click');
+      expect(vm.mode).toBe('cur');
+      wrapper.unmount();
+    });
+
+    it('标注组面板含受力预设芯片（F3.1 收纳不丢）', async () => {
+      const wrapper = mountWB();
+      await openToolGroup(wrapper, 'annotate');
+      expect(wrapper.findAll('.wb-group-panel .force-preset').length).toBeGreaterThan(0);
+      wrapper.unmount();
+    });
+
+    it('资源组「上传图片」项复用常驻隐藏 input 宿主', async () => {
+      const wrapper = mountWB();
+      expect(
+        wrapper
+          .find(
+            '.tools .wb-upload-host input[accept="image/x-png,image/gif,image/jpeg,image/jpg,image/bmp"]'
+          )
+          .exists()
+      ).toBe(true);
+      await openToolGroup(wrapper, 'resource');
+      expect(toolChild(wrapper, 'upload').exists()).toBe(true);
+      wrapper.unmount();
+    });
   });
 
   it('我的课件面板含 PPT 上传入口与图片/PPT 区分说明', () => {
@@ -3344,7 +3492,8 @@ describe('WhiteBoard.vue 激光笔', () => {
   it('教师点选激光进入模式，移动广播 awareness 并渲染红点，切换工具即熄灭', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
-    await wrapper.find('.tools .laser').trigger('click');
+    await openToolGroup(wrapper, 'annotate');
+    await toolChild(wrapper, 'laser').trigger('click');
     expect(vm.mode).toBe('laser');
 
     const stage = konvaMocks.MockStage.last()!;
@@ -3370,7 +3519,8 @@ describe('WhiteBoard.vue 激光笔', () => {
   it('Esc 退出激光模式并熄灭', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
-    await wrapper.find('.tools .laser').trigger('click');
+    await openToolGroup(wrapper, 'annotate');
+    await toolChild(wrapper, 'laser').trigger('click');
     expect(vm.mode).toBe('laser');
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
@@ -3418,17 +3568,21 @@ describe('F7.3 聚光灯/放大镜', () => {
   it('正向：教师开关聚光/放大写 awareness，学生端远端广播跟随并关态零残留', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as F73VM;
-    await wrapper.find('.tools .spotlight').trigger('click');
+    await openToolGroup(wrapper, 'annotate');
+    await toolChild(wrapper, 'spotlight').trigger('click');
     expect(vm.spotlightOn).toBe(true);
     expect(wrapper.find('.spotlight-overlay').exists()).toBe(true);
     expect(awState(vm).spotlight).toMatchObject({ x: 80, y: 60, w: 420, h: 300 });
-    await wrapper.find('.tools .magnifier').trigger('click');
+    await openToolGroup(wrapper, 'annotate');
+    await toolChild(wrapper, 'magnifier').trigger('click');
     expect(vm.magOn).toBe(true);
     expect(wrapper.find('.mag-overlay').exists()).toBe(true);
     expect(awState(vm).magnifier).toMatchObject({ z: 2 });
     // 再点关闭 → 浮层消失、awareness 置 null（关态零残留的本地侧）
-    await wrapper.find('.tools .spotlight').trigger('click');
-    await wrapper.find('.tools .magnifier').trigger('click');
+    await openToolGroup(wrapper, 'annotate');
+    await toolChild(wrapper, 'spotlight').trigger('click');
+    await openToolGroup(wrapper, 'annotate');
+    await toolChild(wrapper, 'magnifier').trigger('click');
     expect(wrapper.find('.spotlight-overlay').exists()).toBe(false);
     expect(wrapper.find('.mag-overlay').exists()).toBe(false);
     expect(awState(vm).spotlight ?? null).toBeNull();
@@ -3457,7 +3611,8 @@ describe('F7.3 聚光灯/放大镜', () => {
   it('负向：浮层拦截点击不穿透；学生端无入口切换无效；拖窗广播 50ms 节流', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as F73VM;
-    await wrapper.find('.tools .spotlight').trigger('click');
+    await openToolGroup(wrapper, 'annotate');
+    await toolChild(wrapper, 'spotlight').trigger('click');
     const overlay = wrapper.find('.spotlight-overlay');
     expect(overlay.exists()).toBe(true);
     // 教师浮层为交互层：inline pointer-events 合同（点击落在浮层，不落到画布）
@@ -3899,9 +4054,10 @@ describe('WhiteBoard.vue 板书导出（F6.1）', () => {
     exportMocks.runExport.mockResolvedValue('saved');
   });
 
-  it('教师工具栏提供导出入口', () => {
+  it('教师工具栏提供导出入口', async () => {
     const wrapper = mountWB();
-    expect(wrapper.find('.tools .export').exists()).toBe(true);
+    await openToolGroup(wrapper, 'resource');
+    expect(toolChild(wrapper, 'export').exists()).toBe(true);
   });
 
   it('学生端无导出入口，手动调用也提示仅教师可导出', async () => {
@@ -3911,7 +4067,7 @@ describe('WhiteBoard.vue 板书导出（F6.1）', () => {
       exportDialogVisible: boolean;
       toastMsg: string;
     };
-    expect(wrapper.find('.tools .export').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="wb-child-export"]').exists()).toBe(false);
     vm.openExportDialog();
     await nextTick();
     expect(vm.exportDialogVisible).toBe(false);
@@ -3921,7 +4077,8 @@ describe('WhiteBoard.vue 板书导出（F6.1）', () => {
 
   it('点击入口打开导出弹窗（默认当前页 PNG）', async () => {
     const wrapper = mountWB();
-    await wrapper.find('.tools .export').trigger('click');
+    await openToolGroup(wrapper, 'resource');
+    await toolChild(wrapper, 'export').trigger('click');
     await nextTick();
     const vm = wrapper.vm as unknown as {
       exportDialogVisible: boolean;
@@ -4080,16 +4237,21 @@ describe('F1.1 公式浮层', () => {
   it('教师工具栏提供 ∑ 按钮，点击呼出源码浮层', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as FormulaVM;
-    const btn = wrapper.find('.formula-tool');
-    expect(btn.exists()).toBe(true);
-    expect(btn.text()).toContain('∑');
-    await btn.trigger('click');
+    // §4.9.2：∑ 收纳进「学科」分组，主区记忆默认=公式（一击直达），面板项含 ∑ 字形
+    await wrapper.find('[data-testid="wb-group-subject"]').trigger('click');
     await nextTick();
     expect(vm.formulaVisible).toBe(true);
     expect(wrapper.find('.formula-overlay').exists()).toBe(true);
     expect(wrapper.find('.formula-textarea').exists()).toBe(true);
     expect(wrapper.find('.formula-hint').text()).toContain('Enter');
     wrapper.unmount();
+    // 面板项：字形 ∑ + 标签「公式」
+    const wrapper2 = mountWB();
+    await openToolGroup(wrapper2, 'subject');
+    const btn = toolChild(wrapper2, 'formula');
+    expect(btn.exists()).toBe(true);
+    expect(btn.text()).toContain('∑');
+    wrapper2.unmount();
   });
 
   it('非法 LaTeX → 行内红框文案，浮层不关闭', async () => {
@@ -4201,7 +4363,8 @@ describe('F1.1 公式浮层', () => {
 
   it('学生端不渲染公式按钮（工具栏仅教师可见的回归延伸）', () => {
     const wrapper = mountWB({ isTeacher: false });
-    expect(wrapper.find('.formula-tool').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="wb-child-formula"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="wb-group-subject"]').exists()).toBe(false);
     wrapper.unmount();
   });
 });
@@ -6830,9 +6993,10 @@ describe('F5.3-A 媒体入口、放置与视口对齐', () => {
     const vm = wrapper.vm as unknown as F53VM;
     if (!vm.provider.getActiveElements()) vm.provider.addPage();
 
-    // 工具栏入口 → 插入浮层
-    expect(wrapper.find('.tools .media-tool').exists()).toBe(true);
-    await wrapper.find('.tools .media-tool').trigger('click');
+    // 工具栏入口（§4.9.2 收纳进「资源」分组）→ 插入浮层
+    await openToolGroup(wrapper, 'resource');
+    expect(toolChild(wrapper, 'media').exists()).toBe(true);
+    await toolChild(wrapper, 'media').trigger('click');
     expect(wrapper.find('.media-picker').exists()).toBe(true);
 
     // URL 放置（.mp3 → audio 尺寸与类型推断）
@@ -6932,6 +7096,7 @@ describe('F5.3-B 播放状态同步（教师写、学生跟）', () => {
     const s = mountWB({ isTeacher: false });
     const svm = s.vm as unknown as F53VM;
     expect(s.find('.tools .media-tool').exists()).toBe(false);
+    expect(s.find('[data-testid="wb-child-media"]').exists()).toBe(false);
     const p = new Y.Map();
     p.set('id', 'page_media_student');
     p.set('name', 'Page 1');
@@ -6987,7 +7152,8 @@ describe('F5.3-B 播放状态同步（教师写、学生跟）', () => {
 describe('F5.3-C 失败占位、取消与翻页暂停', () => {
   it('正向：Esc 关闭媒体插入浮层', async () => {
     const wrapper = mountWB();
-    await wrapper.find('.tools .media-tool').trigger('click');
+    await openToolGroup(wrapper, 'resource');
+    await toolChild(wrapper, 'media').trigger('click');
     expect(wrapper.find('.media-picker').exists()).toBe(true);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await nextTick();
@@ -6999,6 +7165,7 @@ describe('F5.3-C 失败占位、取消与翻页暂停', () => {
     const s = mountWB({ isTeacher: false });
     const svm = s.vm as unknown as F53VM;
     expect(s.find('.tools .media-tool').exists()).toBe(false);
+    expect(s.find('[data-testid="wb-child-media"]').exists()).toBe(false);
     expect(svm.placeMedia!({ srcKind: 'url', src: 'https://cdn.test/v.mp4', mime: 'video' })).toBe(
       false
     );
@@ -7038,7 +7205,8 @@ describe('F5.3-C 失败占位、取消与翻页暂停', () => {
       configurable: true,
       writable: true
     });
-    await wrapper.find('.tools .media-tool').trigger('click');
+    await openToolGroup(wrapper, 'resource');
+    await toolChild(wrapper, 'media').trigger('click');
     const input = wrapper.find('.media-picker input[type="file"]');
     expect(input.exists()).toBe(true);
     const file = new File([new Uint8Array([1, 2, 3])], '听力.mp3', { type: 'audio/mpeg' });
