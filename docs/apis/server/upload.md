@@ -52,7 +52,7 @@
 
 **转换参数（F5.4 保真调优）：** `buildPptToPdfArgs`（`src/upload/ppt-convert.ts`）使用 `pdf:impress_pdf_Export` FilterOptions：无损压缩嵌入图（`UseLosslessCompression=true`）、JPEG 质量 90、不降分辨率（`ReduceImageResolution=false`），并附 `--norestore --nolockcheck --nodefault --nofirststartwizard` 减少并发/残留锁风险。
 
-**服务端依赖（Linux）：** `sudo apt install libreoffice-core fonts-noto-cjk`。中文字体（如 `fonts-noto-cjk`）**必需**——缺失时 PDF 中文会渲染成豆腐块（乱码）。**无需 poppler-utils**。
+**服务端依赖（Linux）：** `sudo apt install libreoffice-core fonts-noto-cjk`。中文字体（如 `fonts-noto-cjk`）**必需**——缺失时 PDF 中文会渲染成豆腐块（乱码）。生产转换链路无需 poppler；**保真样例集回归**（`COURSEWARE_FIDELITY=1`，见 `apps/server/test/fixtures/courseware/README.md`）另需 `poppler-utils`（pdfinfo/pdftoppm）。
 
 **字体部署（F5.4，保真第一损失点）：**
 

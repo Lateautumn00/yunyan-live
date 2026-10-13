@@ -54,3 +54,4 @@ spikes/vendor/
 
 # --- F5.4 courseware fidelity fixtures (binary pptx constructed locally, see README) ---
 apps/server/test/fixtures/courseware/*.pptx
+apps/server/test/fixtures/courseware/manifest.json

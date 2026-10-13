@@ -127,9 +127,9 @@ PPT 上传后在网关（`apps/server`）同步转换为 PDF，作为白板课�
 整体验收（对应评审 DoD）：
 
 - [x] 另立方案文档（本文档）
-- [ ] 转换样例集基线（首期 1-3 落地后补勾）
-- [ ] 红灯 spec 2 条（随首期代码交付）
-- [ ] 部署文档：LO 版本锁定 + 字体最小集 + `SOFFICE_PATH` 说明
+- [ ] 转换样例集基线（代码侧已就绪：生成器 + runner + dhash 已交付；待 LO 虚拟机首跑 `FIDELITY_WRITE_BASELINE=1` 产出 baseline.json 人工复核入库后补勾）
+- [x] 红灯 spec 2 条（失败分支结构化错误 + FilterOptions 参数构造 + 样例集集成测试，均已交付）
+- [x] 部署文档：LO 版本锁定 + 字体最小集 + `SOFFICE_PATH` 说明（`docs/apis/server/upload.md`）
 
 ## 8. 决策请求（需产品拍板）
 
