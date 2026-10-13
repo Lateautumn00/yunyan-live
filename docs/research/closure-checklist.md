@@ -43,7 +43,7 @@
 - [ ] Q10 F1.1 输入形态追认（以已交付输入浮层形态为准追认，或提出返工）
 - [ ] Q11 ≤50 人/键鼠办公机假设追认（现行性能阈值按该假设验收，或触发 §4.9 阈值上调）
 
-## 6. F5.4 保真 runner 收尾（LO 虚拟机 bug，parked）—— 已关闭（2026-10-13）
+## 6. F5.4 保真 runner 收尾（LO 虚拟机 bug，parked）—— 已关闭（2026-10-13，用户验收通过）
 
 - [x] 修复生成器 OOXML 使 LO 可加载 —— 实际根因为虚拟机 PATH 上的 Ubuntu `libreoffice-core` **缺 Impress 过滤器**（`libsdlo.so` 不存在），生成器 OOXML 无罪；经 `/opt/libreoffice26.8` 全功能安装直接转换成功。另修真 bug：`typeface` 未写入 XML（`11bc1e0`）
 - [x] 虚拟机产出 `baseline.json` 人工复核入库 —— LO 26.8.0.3，144/144 全绿，页数与哈希复核通过
