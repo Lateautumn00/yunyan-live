@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' atom:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' atom: file:; img-src 'self' data: blob:"
+    />
+    <title>分子模型</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        font-family: system-ui, sans-serif;
+        background: #f7f8fa;
+      }
+      #toolbar {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        z-index: 10;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      #toolbar button {
+        border: 1px solid #dcdfe6;
+        background: #fff;
+        border-radius: 4px;
+        padding: 3px 10px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      #toolbar button.active {
+        border-color: #409eff;
+        color: #409eff;
+      }
+      #viewer {
+        position: absolute;
+        inset: 0;
+      }
+      #status {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 8px;
+        color: #909399;
+        font-size: 13px;
+      }
+      #status.show {
+        display: flex;
+      }
+      #status.error {
+        color: #f56c6c;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="toolbar">
+      <button data-model="1CRN" class="active">蛋白质 1CRN</button>
+      <button data-model="4N8T">核酸 4N8T</button>
+      <button data-model="7MQ">小分子 7MQ</button>
+    </div>
+    <div id="viewer"></div>
+    <div id="status"></div>
+    <script src="3Dmol-min.js"></script>
+    <script>
+      // F3.5：3 预置模型切换；任一模型缺失/加载失败只占位不崩（fetch 404 → error 态）
+      var MODELS = {
+        '1CRN': { file: '../models/1CRN.pdb', style: 'cartoon' },
+        '4N8T': { file: '../models/4N8T.pdb', style: 'sphere' },
+        '7MQ': { file: '../models/7MQ.cif', style: 'ballAndStick' }
+      };
+      var viewer = null;
+      var statusEl = document.getElementById('status');
+
+      function setStatus(text, isError) {
+        if (!text) {
+          statusEl.className = '';
+          statusEl.textContent = '';
+          return;
+        }
+        statusEl.className = 'show' + (isError ? ' error' : '');
+        statusEl.textContent = text;
+      }
+
+      function ensureViewer() {
+        if (viewer || !window.$3Dmol) return viewer;
+        viewer = $3Dmol.createViewer('viewer', { backgroundColor: '#f7f8fa' });
+        return viewer;
+      }
+
+      function loadModel(id, done) {
+        var meta = MODELS[id];
+        if (!meta) {
+          setStatus('未知模型：' + id, true);
+          if (done) done(false);
+          return;
+        }
+        setStatus('加载 ' + id + ' …');
+        fetch(meta.file)
+          .then(function (res) {
+            if (!res.ok) throw new Error(res.status);
+            return res.text();
+          })
+          .then(function (text) {
+            var v = ensureViewer();
+            if (!v) throw new Error('3Dmol 未加载');
+            v.removeAllModels();
+            v.addModel(text, id === '7MQ' ? 'cif' : 'pdb');
+            if (meta.style === 'cartoon') v.setStyle({}, { cartoon: { color: 'spectrum' } });
+            else if (meta.style === 'sphere') v.setStyle({}, { sphere: {} });
+            else v.setStyle({}, { stick: {}, sphere: { scale: 0.3 } });
+            v.zoomTo();
+            v.render();
+            setStatus('');
+            if (done) done(true);
+          })
+          .catch(function (e) {
+            setStatus(id + ' 加载失败（' + (e && e.message) + '）', true);
+            if (done) done(false);
+          });
+      }
+
+      document.getElementById('toolbar').addEventListener('click', function (ev) {
+        var btn = ev.target.closest('button[data-model]');
+        if (!btn) return;
+        var id = btn.getAttribute('data-model');
+        var buttons = document.querySelectorAll('#toolbar button');
+        for (var i = 0; i < buttons.length; i++) buttons[i].className = '';
+        btn.className = 'active';
+        loadModel(id);
+      });
+
+      if (!window.$3Dmol) {
+        setStatus('3Dmol 运行库缺失', true);
+      } else {
+        var initial = new URLSearchParams(location.search).get('model') || '1CRN';
+        var initBtn = document.querySelector('#toolbar button[data-model="' + initial + '"]');
+        if (initBtn) {
+          var all = document.querySelectorAll('#toolbar button');
+          for (var j = 0; j < all.length; j++) all[j].className = '';
+          initBtn.className = 'active';
+        }
+        loadModel(initial);
+      }
+    </script>
+  </body>
+</html>
