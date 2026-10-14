@@ -306,6 +306,7 @@ const konvaMocks = vi.hoisted(() => {
     _nodes: unknown[] = [];
     _keepRatio = false;
     _rotateEnabled = false;
+    _enabledAnchors: string[] | null = null;
     _layer: MockLayer | null = null;
     nodes(v?: unknown[]) {
       if (v !== undefined) this._nodes = v;
@@ -319,6 +320,11 @@ const konvaMocks = vi.hoisted(() => {
     rotateEnabled(v?: boolean) {
       if (v !== undefined) this._rotateEnabled = v;
       return this._rotateEnabled;
+    }
+    // F2.1：坐标系禁缩放手柄（[]=无手柄），其余元素恢复默认 8 手柄
+    enabledAnchors(v?: string[]) {
+      if (v !== undefined) this._enabledAnchors = v;
+      return this._enabledAnchors;
     }
     getLayer() {
       return this._layer;

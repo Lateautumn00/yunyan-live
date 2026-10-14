@@ -509,7 +509,11 @@ export class KonvaRenderer {
 
   private wireNode(node: Konva.Node, id: string) {
     node.off('click dblclick dragstart dragend transformstart transformend');
-    if (!this.selectEnabled) return;
+    if (!this.selectEnabled) {
+      // 绘制模式：图元一律不可拖（选择模式设过的 draggable 残留会让坐标系等大图元被笔迹误拖走）
+      node.draggable(false);
+      return;
+    }
     // F2.1 锁定态：不接选择/拖拽（锁定背景不参与交互）
     if (node.getAttr('locked')) {
       node.draggable(false);
@@ -623,6 +627,22 @@ export class KonvaRenderer {
     }
     // 自由缩放（圆可拉成椭圆）；Konva 默认 shiftBehavior='default' → 按住 Shift 自动约束比例
     this.transformer.keepRatio(false);
+    // F2.1：坐标系禁缩放手柄——Group 烘焙 width/height=0 会静默弹回，范围改走属性面板 ±N
+    const isCoord = node.getAttr('type') === 'coord';
+    this.transformer.enabledAnchors(
+      isCoord
+        ? []
+        : [
+            'top-left',
+            'top-center',
+            'top-right',
+            'middle-left',
+            'middle-right',
+            'bottom-left',
+            'bottom-center',
+            'bottom-right'
+          ]
+    );
     // F2.5：仅教具开旋转手柄（普通元素维持不可旋转，避免与选择框语义冲突）
     this.transformer.rotateEnabled(node.getAttr('type') === 'simTool');
     this.transformer.nodes([node]);
@@ -997,9 +1017,12 @@ export class KonvaRenderer {
         const ticksOn = data.get('ticksOn') !== false;
         const color = (data.get('color') as string) || '#666666';
         const locked = !!data.get('locked');
-        const group = new Konva.Group({ x, y, opacity, locked });
+        const group = new Konva.Group({ x, y, opacity, locked, type: 'coord' });
         const ox = w / 2;
         const oy = h / 2;
+        // 透明命中底板：Group 自身无填充，只有细轴线/网格线可命中 → 象限空白点不中（时而难选中）。
+        // Konva hit graph 不应用 opacity：opacity:0 + fill 让整块区域可点选/可拖，视觉零干扰
+        group.add(new Konva.Rect({ width: w, height: h, fill: '#000', opacity: 0 }));
         // 双轴（穿过原点）
         group.add(new Konva.Line({ points: [0, oy, w, oy], stroke: color, strokeWidth: 1.5 }));
         group.add(new Konva.Line({ points: [ox, 0, ox, h], stroke: color, strokeWidth: 1.5 }));
@@ -1023,8 +1046,11 @@ export class KonvaRenderer {
           }
         }
         if (ticksOn) {
+          // 全量刻度：-N..N（跳 0），负半轴同样标数字（数学数轴/函数图像刚需）
+          const kxMin = Math.ceil(-ox / unit);
           const kxMax = Math.floor((w - ox) / unit);
-          for (let k = 1; k <= kxMax; k++) {
+          for (let k = kxMin; k <= kxMax; k++) {
+            if (k === 0) continue;
             group.add(
               new Konva.Text({
                 x: ox + k * unit - 4,
@@ -1035,8 +1061,10 @@ export class KonvaRenderer {
               })
             );
           }
-          const kyMax = Math.floor(oy / unit);
-          for (let k = 1; k <= kyMax; k++) {
+          const kyMin = Math.ceil(-oy / unit);
+          const kyMax = Math.floor((h - oy) / unit);
+          for (let k = kyMin; k <= kyMax; k++) {
+            if (k === 0) continue;
             group.add(
               new Konva.Text({
                 x: ox + 4,

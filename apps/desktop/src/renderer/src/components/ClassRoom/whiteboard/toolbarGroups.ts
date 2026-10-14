@@ -146,8 +146,8 @@ export const TOOLBAR_GROUPS: ToolbarGroupDef[] = [
       {
         id: 'coord',
         label: '坐标系',
-        tooltip: '坐标系 · 点击落点插入，选中可锁定/关网格',
-        icon: { kind: 'el', name: 'Aim' },
+        tooltip: '坐标系 · 点击落点插入，选中可调范围/网格',
+        icon: { kind: 'el', name: 'TrendCharts' },
         mode: 'coord'
       },
       {

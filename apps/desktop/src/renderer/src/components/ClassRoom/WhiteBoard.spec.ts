@@ -425,6 +425,7 @@ const konvaMocks = vi.hoisted(() => {
     _nodes: unknown[] = [];
     _keepRatio = false;
     _rotateEnabled = false;
+    _enabledAnchors: string[] | null = null;
     nodes(v?: unknown[]) {
       if (v !== undefined) this._nodes = v;
       return this._nodes;
@@ -437,6 +438,11 @@ const konvaMocks = vi.hoisted(() => {
     rotateEnabled(v?: boolean) {
       if (v !== undefined) this._rotateEnabled = v;
       return this._rotateEnabled;
+    }
+    // F2.1：坐标系禁缩放手柄（[]=无手柄），其余元素恢复默认 8 手柄
+    enabledAnchors(v?: string[]) {
+      if (v !== undefined) this._enabledAnchors = v;
+      return this._enabledAnchors;
     }
   }
 
@@ -4618,12 +4624,75 @@ describe('F1.3 符号快捷面板', () => {
   });
 });
 
-// ── F2.1 直角坐标系/网格（点击落点插入 + 锁定不可选中） ──────────────────────
+// ── F2.1 直角坐标系/网格（点击落点插入 + 锁定不可选中 + 范围/网格调参） ──────
 type CoordVM = PPTVM & {
   tool: (m: string) => void;
   selectShape: (id: string) => void;
+  clearSelection: () => void;
   getCurrentPageShapes: () => Array<Record<string, unknown>>;
+  revocation: (t: string) => void;
+  selIsCoord: boolean;
+  coordRange: number;
+  coordGridOn: boolean;
+  adjustCoordRange: (d: number) => void;
+  toggleCoordGrid: () => void;
+  renderer: {
+    getStage: () => {
+      _pointer?: { x: number; y: number };
+      fire: (evt: string, e?: unknown) => void;
+    };
+    getSelectedId: () => string | null;
+    selectNode: (id: string) => boolean;
+    bindElements: (els: unknown) => void;
+    layer: { getChildren: () => unknown[] };
+    tempLayer: { getChildren: () => unknown[] };
+  };
 };
+
+interface CoordTextNode {
+  getClassName: () => string;
+  text: () => string;
+  getAttr?: (k: string) => unknown;
+  width?: () => number;
+  height?: () => number;
+}
+interface CoordGroupNode {
+  getAttr: (k: string) => unknown;
+  draggable: (v?: boolean) => boolean;
+  getChildren: () => { toArray: () => CoordTextNode[]; length: number };
+}
+function coordNode(vm: CoordVM, _id?: string): CoordGroupNode | undefined {
+  // coord Group 无 id attr，按 type='coord' 找（测试页仅一个坐标系）
+  return vm.renderer.layer
+    .getChildren()
+    .find(n => (n as CoordGroupNode).getAttr?.('type') === 'coord') as CoordGroupNode | undefined;
+}
+function coordTickLabels(vm: CoordVM, id: string): string[] {
+  const node = coordNode(vm, id);
+  if (!node) return [];
+  return node
+    .getChildren()
+    .toArray()
+    .filter(c => typeof (c as { text?: unknown }).text === 'function')
+    .map(c => c.text());
+}
+function transformerOf(vm: CoordVM): { _enabledAnchors: string[] | null } | undefined {
+  return vm.renderer.tempLayer
+    .getChildren()
+    .find(n => typeof (n as { enabledAnchors?: unknown }).enabledAnchors === 'function') as
+    { _enabledAnchors: string[] | null } | undefined;
+}
+async function insertCoord(wrapper: ReturnType<typeof mountWB>): Promise<string> {
+  const vm = wrapper.vm as unknown as CoordVM;
+  if (!vm.provider!.getActiveElements()) vm.provider!.addPage();
+  vm.tool('coord');
+  const stage = vm.renderer.getStage();
+  stage._pointer = { x: 200, y: 200 };
+  stage.fire('mousedown');
+  await nextTick();
+  const shapes = vm.getCurrentPageShapes();
+  return String(shapes[0]!.id);
+}
 
 describe('F2.1 直角坐标系', () => {
   it('正向：coord 工具点击落点插入坐标系（默认 unit/gridOn）', async () => {
@@ -4632,7 +4701,7 @@ describe('F2.1 直角坐标系', () => {
     const provider = vm.provider!;
     if (!provider.getActiveElements()) provider.addPage();
     vm.tool('coord');
-    const stage = vm.renderer!.getStage();
+    const stage = vm.renderer.getStage();
     stage._pointer = { x: 120, y: 90 };
     stage.fire('mousedown');
     await nextTick();
@@ -4652,17 +4721,168 @@ describe('F2.1 直角坐标系', () => {
     provider.addShape({ id: 'c-lock', type: 'coord', x: 0, y: 0, locked: true });
     provider.addShape({ id: 'c-free', type: 'coord', x: 0, y: 0, locked: false });
     vm.tool('cur');
-    (vm.renderer as unknown as { bindElements: (els: unknown) => void }).bindElements(
-      provider.getActiveElements()
-    );
+    vm.renderer.bindElements(provider.getActiveElements());
     vm.selectShape('c-lock');
-    expect(
-      (vm.renderer as unknown as { getSelectedId: () => string | null }).getSelectedId()
-    ).toBeNull();
+    expect(vm.renderer.getSelectedId()).toBeNull();
     vm.selectShape('c-free');
-    expect((vm.renderer as unknown as { getSelectedId: () => string | null }).getSelectedId()).toBe(
-      'c-free'
-    );
+    expect(vm.renderer.getSelectedId()).toBe('c-free');
+    wrapper.unmount();
+  });
+
+  it('正向：选中回填面板（selIsCoord/范围/网格），清除复位', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as CoordVM;
+    const id = await insertCoord(wrapper);
+    vm.tool('cur');
+    vm.selectShape(id);
+    expect(vm.selIsCoord).toBe(true);
+    expect(vm.coordRange).toBe(5); // 300/2/30
+    expect(vm.coordGridOn).toBe(true);
+    vm.clearSelection();
+    expect(vm.selIsCoord).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('正向：范围 +1 写回 width/height 保原点（中心不动），undo 一档还原', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as CoordVM;
+    const id = await insertCoord(wrapper);
+    const before = vm.getCurrentPageShapes()[0]!;
+    const cx = Number(before.x) + Number(before.width) / 2;
+    const cy = Number(before.y) + Number(before.height) / 2;
+    vm.tool('cur');
+    vm.selectShape(id);
+    vm.adjustCoordRange(1);
+    await nextTick();
+    const after = vm.getCurrentPageShapes()[0]!;
+    expect(after.width).toBe(360); // 2*6*30
+    expect(after.height).toBe(360);
+    expect(Number(after.x) + Number(after.width) / 2).toBe(cx);
+    expect(Number(after.y) + Number(after.height) / 2).toBe(cy);
+    expect(vm.coordRange).toBe(6);
+    vm.revocation('pre');
+    await nextTick();
+    const undone = vm.getCurrentPageShapes()[0]!;
+    expect(undone.width).toBe(before.width);
+    expect(undone.height).toBe(before.height);
+    expect(undone.x).toBe(before.x);
+    expect(undone.y).toBe(before.y);
+    wrapper.unmount();
+  });
+
+  it('正向：范围钳制 [1, 50]——反复减到 1 停止、反复加到 50 停止', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as CoordVM;
+    const id = await insertCoord(wrapper);
+    vm.tool('cur');
+    vm.selectShape(id);
+    for (let i = 0; i < 10; i++) vm.adjustCoordRange(-1);
+    await nextTick();
+    expect(vm.coordRange).toBe(1);
+    expect(vm.getCurrentPageShapes()[0]!.width).toBe(60); // 2*1*30
+    for (let i = 0; i < 60; i++) vm.adjustCoordRange(1);
+    await nextTick();
+    expect(vm.coordRange).toBe(50);
+    expect(vm.getCurrentPageShapes()[0]!.width).toBe(3000); // 2*50*30
+    wrapper.unmount();
+  });
+
+  it('正向：网格开关写回 gridOn（关→false，再开→true，入 undo 栈）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as CoordVM;
+    const id = await insertCoord(wrapper);
+    vm.tool('cur');
+    vm.selectShape(id);
+    vm.toggleCoordGrid();
+    await nextTick();
+    expect(vm.getCurrentPageShapes()[0]!.gridOn).toBe(false);
+    expect(vm.coordGridOn).toBe(false);
+    vm.toggleCoordGrid();
+    await nextTick();
+    expect(vm.getCurrentPageShapes()[0]!.gridOn).toBe(true);
+    expect(vm.coordGridOn).toBe(true);
+    vm.revocation('pre'); // 撤销「开」→ 回到关
+    await nextTick();
+    expect(vm.getCurrentPageShapes()[0]!.gridOn).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('负向：绘制模式坐标系不可拖（draggable 关），落笔生成笔迹且坐标系原点不动', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as CoordVM;
+    const id = await insertCoord(wrapper);
+    // 切选择→坐标系可拖；再切笔刷→不可拖（早退补 draggable(false) 防误拖）
+    vm.tool('cur');
+    expect(coordNode(vm, id)!.draggable()).toBe(true);
+    vm.tool('brush');
+    expect(coordNode(vm, id)!.draggable()).toBe(false);
+    // 在坐标系上落笔（Shift 跳过 F4.2 规整，钉死 type=brush）：笔迹生成，坐标系 x/y 不变
+    const before = vm.getCurrentPageShapes()[0]!;
+    const stage = vm.renderer.getStage();
+    stage._pointer = { x: 100, y: 100 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 250, y: 250 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: true } });
+    await nextTick();
+    const shapes = vm.getCurrentPageShapes();
+    expect(shapes).toHaveLength(2);
+    expect(shapes[1]!.type).toBe('brush');
+    expect(shapes[0]!.x).toBe(before.x);
+    expect(shapes[0]!.y).toBe(before.y);
+    wrapper.unmount();
+  });
+
+  it('正向：选中坐标系禁缩放手柄（enabledAnchors 空），选笔迹恢复 8 手柄', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as CoordVM;
+    const id = await insertCoord(wrapper);
+    vm.tool('cur');
+    vm.selectShape(id);
+    expect(transformerOf(vm)?._enabledAnchors).toEqual([]);
+    // 选中一条笔迹（Shift 跳过规整）→ 恢复默认 8 手柄
+    vm.tool('brush');
+    const stage = vm.renderer.getStage();
+    stage._pointer = { x: 50, y: 50 };
+    stage.fire('mousedown', { target: stage, evt: {} });
+    stage._pointer = { x: 80, y: 80 };
+    stage.fire('mousemove', { target: stage, evt: {} });
+    stage.fire('mouseup', { target: stage, evt: { shiftKey: true } });
+    await nextTick();
+    const brushId = String(vm.getCurrentPageShapes()[1]!.id);
+    vm.tool('cur');
+    vm.selectShape(brushId);
+    expect(transformerOf(vm)?._enabledAnchors).toHaveLength(8);
+    wrapper.unmount();
+  });
+
+  it('正向：负半轴刻度标数字 -1..-N（x/y 轴均含负值）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as CoordVM;
+    const id = await insertCoord(wrapper);
+    const labels = coordTickLabels(vm, id);
+    // 300×300/30 → ±5 格：负半轴 -1..-5 各出现 x/y 两轴
+    for (const n of ['-1', '-2', '-3', '-4', '-5']) expect(labels).toContain(n);
+    // 正半轴仍保留
+    expect(labels).toContain('1');
+    expect(labels).toContain('5');
+    wrapper.unmount();
+  });
+
+  it('正向：Group 首子为 w×h 透明命中底板（整块可点选，视觉零干扰）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as CoordVM;
+    await insertCoord(wrapper);
+    const node = coordNode(vm);
+    expect(node).toBeTruthy();
+    const plate = node!
+      .getChildren()
+      .toArray()
+      .find(c => typeof c.getAttr === 'function' && c.getAttr('opacity') === 0) as
+      { width: () => number; height: () => number } | undefined;
+    expect(plate).toBeTruthy();
+    expect(plate!.width()).toBe(300);
+    expect(plate!.height()).toBe(300);
     wrapper.unmount();
   });
 });

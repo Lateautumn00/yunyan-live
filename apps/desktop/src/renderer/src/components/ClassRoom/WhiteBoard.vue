@@ -498,6 +498,15 @@
             @click="setGridColor(gc)"
           />
         </div>
+        <!-- F2.1：坐标系调参——范围 ±N 步进（格距固定扩框保原点）+ 网格开关 -->
+        <div v-if="selIsCoord" class="grid-ops">
+          <span class="mark-label">范围 ±</span>
+          <div class="grid-btn" @click="adjustCoordRange(-1)">−</div>
+          <span class="grid-val">{{ coordRange }}</span>
+          <div class="grid-btn" @click="adjustCoordRange(1)">+</div>
+          <span class="mark-label">网格</span>
+          <el-switch :model-value="coordGridOn" size="small" @change="toggleCoordGrid()" />
+        </div>
         <div class="edit-color">
           <div
             v-for="(c, i) in presetColors"
@@ -1015,6 +1024,13 @@ function gridHeight(kind: GridKind, rowH: number): number {
 const selIsGrid = ref(false);
 const gridRowHeight = ref(40);
 const gridColor = ref('#3b82f6');
+// F2.1：坐标系调参——范围 ±N（格距 30 固定，扩框保原点）+ 网格开关
+const selIsCoord = ref(false);
+const coordRange = ref(5);
+const coordGridOn = ref(true);
+const COORD_UNIT = 30;
+const COORD_RANGE_MIN = 1;
+const COORD_RANGE_MAX = 50;
 // 解锁浮钮：点锁定格线框后显示在框右上（层坐标换算的屏幕坐标）
 const unlockPos = ref<{ x: number; y: number } | null>(null);
 const unlockTargetId = ref<string | null>(null);
@@ -2873,6 +2889,14 @@ function selectShape(id: string) {
     gridRowHeight.value = Number(m.get('rowHeight')) || 40;
     gridColor.value = String(m.get('color') || '#3b82f6');
   }
+  // F2.1：坐标系回填范围（半宽/unit）与网格开关
+  selIsCoord.value = selected && type === 'coord';
+  if (selIsCoord.value) {
+    const cw = Number(m.get('width')) || 300;
+    const u = Number(m.get('unit')) || COORD_UNIT;
+    coordRange.value = Math.round(cw / 2 / u);
+    coordGridOn.value = m.get('gridOn') !== false;
+  }
   if (m.get('color') !== undefined) currentColor.value = String(m.get('color'));
   if (m.get('opacity') !== undefined) currentOpacity.value = Number(m.get('opacity'));
   const isText = type === 'text';
@@ -2904,6 +2928,7 @@ function clearSelection() {
   selIsMeasureable.value = false;
   selMeasure.value = false;
   selIsGrid.value = false;
+  selIsCoord.value = false;
   unlockPos.value = null;
   unlockTargetId.value = null;
   if (mode.value === 'cur') {
@@ -3475,6 +3500,36 @@ function unlockGrid() {
   unlockTargetId.value = null;
   unlockPos.value = null;
   refreshLayer();
+}
+
+// F2.1：坐标系范围 ±N——格距 30 固定，扩框保原点（中心不动）；写 width/height/x/y 入 undo 栈
+function adjustCoordRange(delta: number) {
+  if (!props.isTeacher || mode.value !== 'cur' || !renderer) return;
+  const id = renderer.getSelectedId();
+  if (!id) return;
+  const m = getShape(id);
+  if (!m || m.get('type') !== 'coord') return;
+  const next = Math.max(COORD_RANGE_MIN, Math.min(COORD_RANGE_MAX, coordRange.value + delta));
+  if (next === coordRange.value) return;
+  const unit = Number(m.get('unit')) || COORD_UNIT;
+  const size = 2 * next * unit;
+  const cx = (Number(m.get('x')) || 0) + (Number(m.get('width')) || 300) / 2;
+  const cy = (Number(m.get('y')) || 0) + (Number(m.get('height')) || 300) / 2;
+  coordRange.value = next;
+  commitSelectedStyle({
+    width: size,
+    height: size,
+    x: Math.round(cx - size / 2),
+    y: Math.round(cy - size / 2)
+  });
+}
+
+// F2.1：网格开关——写 gridOn（渲染器已支持该字段，重绘即生效）
+function toggleCoordGrid() {
+  if (!props.isTeacher || mode.value !== 'cur') return;
+  const next = !coordGridOn.value;
+  coordGridOn.value = next;
+  commitSelectedStyle({ gridOn: next });
 }
 
 // F4.4：表格增/删行列——读当前表格数据 → 不可变变换 → 写回 rows/cols/cells（入 undo 栈）
@@ -5586,6 +5641,12 @@ defineExpose({
   setGridColor,
   unlockPos,
   unlockGrid,
+  // F2.1：坐标系调参（范围 ±N 步进 + 网格开关）
+  selIsCoord,
+  coordRange,
+  coordGridOn,
+  adjustCoordRange,
+  toggleCoordGrid,
   // F2.5：仿真教具放置入口（素材面板点击落点；学生端拒写）
   placeSimTool,
   // F5.3：媒体放置入口与插入浮层（学生端拒写）
