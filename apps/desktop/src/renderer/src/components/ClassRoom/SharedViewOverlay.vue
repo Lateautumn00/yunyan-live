@@ -87,6 +87,10 @@ const frameRef = ref<HTMLIFrameElement | null>(null);
 
 function onHeaderPointerDown(e: PointerEvent): void {
   if (fullscreen.value) return;
+  // 标题栏内的按钮（关闭/插入画布/全屏）不进入拖拽：否则 setPointerCapture 会把
+  // pointerup/click 重定向到标题栏，按钮自身 click 永不触发（关不掉/插入无反应）
+  const t = e.target as HTMLElement | null;
+  if (t && typeof t.closest === 'function' && t.closest('button')) return;
   try {
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
   } catch {

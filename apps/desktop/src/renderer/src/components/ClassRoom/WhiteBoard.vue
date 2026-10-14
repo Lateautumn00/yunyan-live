@@ -2030,6 +2030,7 @@ async function submitCurve(): Promise<void> {
     curveError.value = '绘制失败，请调整表达式或定义域';
     return;
   }
+  if (provider && !provider.getActiveElements()) provider.addPage();
   provider.addShape({
     id: uid(),
     type: 'curve',
@@ -3238,6 +3239,7 @@ async function submitFormula() {
       // 无点击落点 → 视口中心放置（元素存自然尺寸，缩放由 layer 与 width/height 承担）
       const stage = renderer.getStage();
       const lp = toLayerCoords({ x: stage.width() / 2, y: stage.height() / 2 });
+      if (provider && !provider.getActiveElements()) provider.addPage();
       provider.addShape({
         id: uid(),
         type: 'formula',
@@ -3789,6 +3791,7 @@ function onPointerDown(e: any) {
     const layerPos = toLayerCoords(pos);
     const cw = 300;
     const ch = 300;
+    if (provider && !provider.getActiveElements()) provider.addPage();
     provider?.addShape({
       id: uid(),
       type: 'coord',
