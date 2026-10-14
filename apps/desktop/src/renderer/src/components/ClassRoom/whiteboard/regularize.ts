@@ -5,9 +5,12 @@ export type Regularized =
   | { kind: 'circle'; x: number; y: number; radius: number }
   | { kind: 'rect'; x: number; y: number; width: number; height: number };
 
-// 阈值（可按手感调）：直线最大垂偏/弦长；圆最大径向残差/半径；矩形点到包围盒边的最大距离与覆盖比例
+// 阈值（可按手感调）：直线最大垂偏/弦长；圆闭合最大角间隙、RMS/最大径向残差/半径；
+// 矩形点到包围盒边的最大距离、覆盖比例与四角邻域容差
 const LINE_TOL = 0.05;
-const CIRCLE_TOL = 0.08;
+const CIRCLE_MAX_GAP = (70 * Math.PI) / 180; // 闭合性：最大相邻角间隙 ≤70°（覆盖 ≥290°）才算闭合圆，弧保留笔迹
+const CIRCLE_RMS_TOL = 0.05; // RMS 径向残差/半径：整体贴合度（容忍单点抖动）
+const CIRCLE_MAX_TOL = 0.3; // 最大径向残差/半径：仅防极端畸形（RMS 已管整体贴合）
 const RECT_EDGE_TOL = 14;
 const RECT_EDGE_FRAC = 0.9;
 const MIN_SPAN = 8;
@@ -79,16 +82,32 @@ function fitCircle(pts: Array<[number, number]>): Regularized | null {
   for (const [x, y] of pts) r += Math.hypot(x - cx, y - cy);
   r /= n;
   if (r < MIN_SPAN / 2) return null;
+  // 闭合性检查：点相对圆心的角度排序后最大相邻角间隙（含首尾环绕）≤ 阈值
+  // 弧（1/4、1/2 圆等）间隙大，保留原笔迹；过冲重叠会缩小间隙，天然鲁棒
+  const angles: number[] = [];
+  for (const [x, y] of pts) angles.push(Math.atan2(y - cy, x - cx));
+  angles.sort((p, q) => p - q);
+  let maxGap = angles[0]! + Math.PI * 2 - angles[angles.length - 1]!; // 首尾环绕
+  for (let i = 1; i < angles.length; i++) {
+    const gap = angles[i]! - angles[i - 1]!;
+    if (gap > maxGap) maxGap = gap;
+  }
+  if (maxGap > CIRCLE_MAX_GAP) return null;
+  // 残差双指标：RMS 容忍单点抖动，max 排除严重畸变
+  let sumSq = 0;
   let maxRes = 0;
   for (const [x, y] of pts) {
     const res = Math.abs(Math.hypot(x - cx, y - cy) - r);
+    sumSq += res * res;
     if (res > maxRes) maxRes = res;
   }
-  if (maxRes > CIRCLE_TOL * r) return null;
+  if (Math.sqrt(sumSq / n) > CIRCLE_RMS_TOL * r) return null;
+  if (maxRes > CIRCLE_MAX_TOL * r) return null;
   return { kind: 'circle', x: cx, y: cy, radius: r };
 }
 
-// 矩形：点须几乎全部贴近包围盒四边（内部点会拉低比例，scribble/交叉线被排除）
+// 矩形：点须几乎全部贴近包围盒四边（内部点会拉低比例，scribble/交叉线被排除）；
+// 且四个角邻域内都须有笔迹点（矩形手绘必过角，圆/椭圆不过角——否则小圆会因贴边比例高被误判为矩形）
 function fitRect(pts: Array<[number, number]>): Regularized | null {
   let minX = Infinity;
   let minY = Infinity;
@@ -109,5 +128,25 @@ function fitRect(pts: Array<[number, number]>): Regularized | null {
     if (d <= RECT_EDGE_TOL) near++;
   }
   if (near / pts.length < RECT_EDGE_FRAC) return null;
+  // 四角验证：容差自适应矩形尺寸，四角邻域内各须出现过笔迹点。
+  // 正圆 45° 点到包围盒角的逐轴偏移恒 0.293r，本容差恒 0.2r < 0.293r → 正圆必被排除；
+  // 矩形描边极值点本就在角上（包围盒由其撑起），10% 短边容差足够覆盖过角抖动
+  const cornerTol = Math.max(3, Math.min(width, height) * 0.1);
+  const corners: Array<[number, number]> = [
+    [minX, minY],
+    [maxX, minY],
+    [maxX, maxY],
+    [minX, maxY]
+  ];
+  for (const [cxx, cyy] of corners) {
+    let hit = false;
+    for (const [x, y] of pts) {
+      if (Math.abs(x - cxx) <= cornerTol && Math.abs(y - cyy) <= cornerTol) {
+        hit = true;
+        break;
+      }
+    }
+    if (!hit) return null;
+  }
   return { kind: 'rect', x: minX, y: minY, width, height };
 }
