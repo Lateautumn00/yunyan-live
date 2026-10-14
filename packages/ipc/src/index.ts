@@ -1,5 +1,8 @@
 export const IpcChannels = {
   checkForUpdate: 'app:check-for-update',
+  downloadUpdate: 'app:download-update',
+  installUpdate: 'app:install-update',
+  getVersion: 'app:get-version',
   message: 'app:message',
   getSources: 'desktop-capturer:get-sources',
   captureScreen: 'desktop-capturer:capture-screen',
@@ -27,6 +30,12 @@ export type UpdateMessage =
   | 'error'
   | 'download-progress'
   | 'update-downloaded';
+
+/** 更新事件载荷：update-available/update-downloaded 的 message 为版本号，download-progress 为 0-100 */
+export interface UpdateEventPayload {
+  type: UpdateMessage;
+  message?: unknown;
+}
 
 type AppMessageLevel = 'info' | 'error' | 'success';
 
@@ -60,8 +69,15 @@ export interface MediaImportFileArgs {
 }
 
 export interface ElectronApi {
+  /** 触发检查更新（结果经 onMessage 推送） */
   checkForUpdate: () => void;
-  onMessage: (callback: (payload: AppMessagePayload) => void) => () => void;
+  /** 确认后开始下载更新包（autoDownload=false，需渲染端显式触发） */
+  downloadUpdate: () => void;
+  /** 下载完成后立即退出并安装 */
+  installUpdate: () => void;
+  /** 应用当前版本号（package.json version 真源） */
+  getVersion: () => Promise<string>;
+  onMessage: (callback: (payload: UpdateEventPayload) => void) => () => void;
   getSources: () => Promise<DesktopSource[]>;
   /** F4.6：主屏全分辨率捕获，返回 PNG dataURL；macOS 屏幕录制权限被拒时 reject */
   captureScreen: () => Promise<string>;

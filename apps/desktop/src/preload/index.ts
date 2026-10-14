@@ -1,20 +1,29 @@
 ﻿import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import {
-  AppMessagePayload,
   DesktopSource,
   ElectronApi,
   IpcChannels,
   type MediaImportFileArgs,
   type RecordingSaveBlobArgs,
-  type RecordingSaveBlobResult
+  type RecordingSaveBlobResult,
+  type UpdateEventPayload
 } from '@yunyan-live/ipc';
 
 const api: ElectronApi = {
   checkForUpdate: () => {
     ipcRenderer.send(IpcChannels.checkForUpdate);
   },
-  onMessage: (callback: (payload: AppMessagePayload) => void) => {
-    const listener = (_event: IpcRendererEvent, payload: AppMessagePayload): void => {
+  downloadUpdate: () => {
+    ipcRenderer.send(IpcChannels.downloadUpdate);
+  },
+  installUpdate: () => {
+    ipcRenderer.send(IpcChannels.installUpdate);
+  },
+  getVersion: () => {
+    return ipcRenderer.invoke(IpcChannels.getVersion) as Promise<string>;
+  },
+  onMessage: (callback: (payload: UpdateEventPayload) => void) => {
+    const listener = (_event: IpcRendererEvent, payload: UpdateEventPayload): void => {
       callback(payload);
     };
     ipcRenderer.on(IpcChannels.message, listener);

@@ -1,12 +1,9 @@
 ﻿import { join } from 'node:path';
 import { app, BrowserWindow, shell, protocol } from 'electron';
 import log from 'electron-log';
-import { loadConfig } from '@yunyan-live/config';
 import { registerIpcHandlers } from './ipc';
 import { initUpdater } from './update';
 import { isHttpUrl, PROTOCOL_SCHEME } from './constants';
-
-const config = loadConfig(import.meta.env as unknown as Record<string, string | undefined>);
 
 // F3.4/F3.5：vendor iframe 子资源（circuits/*.txt、字体、fetch）需要 privileged scheme；
 // 必须在 app.ready 之前注册（与 spike run-spike.mjs 同形态）
@@ -96,9 +93,7 @@ if (!gotLock) {
     // macOS activate 会再次调用 createWindow()，若在此重复注册
     // ipcMain.handle 将抛出 "Attempted to register a second handler"。
     registerIpcHandlers(() => mainWindow);
-    if (app.isPackaged) {
-      initUpdater(() => mainWindow, config.uploadUrl);
-    }
+    initUpdater(() => mainWindow);
     createWindow();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

@@ -5,6 +5,9 @@ describe('IpcChannels', () => {
   it('exposes all required channels', () => {
     expect(IpcChannels).toMatchObject({
       checkForUpdate: 'app:check-for-update',
+      downloadUpdate: 'app:download-update',
+      installUpdate: 'app:install-update',
+      getVersion: 'app:get-version',
       message: 'app:message',
       getSources: 'desktop-capturer:get-sources',
       clipboardWrite: 'clipboard:write-text',

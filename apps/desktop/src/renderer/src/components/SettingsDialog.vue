@@ -16,6 +16,7 @@
           <el-menu-item index="device"> 设备检测 </el-menu-item>
           <el-menu-item index="password"> 修改密码 </el-menu-item>
           <el-menu-item index="logout"> 退出登录 </el-menu-item>
+          <el-menu-item index="update"> 软件更新 </el-menu-item>
           <el-menu-item index="licenses"> 开源许可 </el-menu-item>
         </el-menu>
       </div>
@@ -115,6 +116,64 @@
           </el-button>
         </div>
 
+        <!-- 软件更新 -->
+        <div id="section-update" class="section update-panel">
+          <h4 class="section-title">软件更新</h4>
+          <div class="version-row">
+            <span class="version-label">当前版本</span>
+            <span class="version-value">v{{ currentVersion || '—' }}</span>
+          </div>
+          <div class="update-status-row">
+            <span v-if="updateStatus === 'checking'">正在检查更新…</span>
+            <span v-else-if="updateStatus === 'latest'" class="status-ok">已是最新版本</span>
+            <span v-else-if="updateStatus === 'available'">
+              发现新版本 <strong>v{{ latestVersion }}</strong>
+            </span>
+            <div v-else-if="updateStatus === 'downloading'" class="update-progress">
+              <el-progress
+                :text-inside="true"
+                :stroke-width="16"
+                :percentage="updateProgress"
+                :show-text="true"
+              />
+            </div>
+            <span v-else-if="updateStatus === 'downloaded'" class="status-ok">
+              新版本 v{{ latestVersion }} 已下载完成
+            </span>
+            <span v-else-if="updateStatus === 'error'" class="status-error">
+              {{ updateErrorMessage || '更新失败' }}
+            </span>
+            <span v-else class="status-muted">点击「检查更新」获取最新版本</span>
+          </div>
+          <div class="update-actions">
+            <el-button
+              v-if="updateStatus === 'available'"
+              type="primary"
+              @click="handleUpdateDownload"
+            >
+              立即更新
+            </el-button>
+            <el-button
+              v-else-if="updateStatus === 'downloaded'"
+              type="primary"
+              @click="handleUpdateInstall"
+            >
+              重启安装
+            </el-button>
+            <el-button v-else-if="updateStatus === 'downloading'" disabled>
+              下载中 {{ updateProgress }}%
+            </el-button>
+            <el-button
+              v-else
+              type="primary"
+              :loading="updateStatus === 'checking'"
+              @click="handleUpdateCheck"
+            >
+              检查更新
+            </el-button>
+          </div>
+        </div>
+
         <!-- F3.4/F3.5 开源许可（外挂镜像随包分发的许可声明） -->
         <div id="section-licenses" class="section licenses-panel">
           <h4 class="section-title">开源许可</h4>
@@ -145,6 +204,7 @@ import { useUserStore } from '@/store/user';
 import { isVoid, isCheckedAllRules } from '@yunyan-live/validation';
 import { passwordRules, passwordConfirmRules } from '@/utils/formRules';
 import { useAsyncAction } from '@/composables/useAsyncAction';
+import { useUpdater } from '@/composables/useUpdater';
 import EquipmentTestPanel from '@/components/LandingPage/EquipmentTestPanel.vue';
 
 defineProps<{
@@ -173,7 +233,38 @@ const showRePass = ref(false);
 
 let observer: IntersectionObserver | null = null;
 
-const menuOrder = ['username', 'device', 'password', 'logout', 'licenses'];
+const menuOrder = ['username', 'device', 'password', 'logout', 'update', 'licenses'];
+
+// 软件更新（与 App.vue 共享 useUpdater 单例状态）
+const {
+  status: updateStatus,
+  latestVersion,
+  currentVersion,
+  progress: updateProgress,
+  errorMessage: updateErrorMessage,
+  loadCurrentVersion,
+  check,
+  download,
+  install,
+  takeOver
+} = useUpdater();
+
+void loadCurrentVersion();
+
+function handleUpdateCheck() {
+  check(true);
+}
+
+// 设置页接管更新流程后由本页承载交互，抑制 App 的自动更新弹窗
+function handleUpdateDownload() {
+  takeOver();
+  download();
+}
+
+function handleUpdateInstall() {
+  takeOver();
+  install();
+}
 
 /** F3.4/F3.5：内置外挂镜像的许可声明（GPL 案A：未修改上游产物 + 源码链接 + 全文随包） */
 const openSourceLicenses = [
@@ -449,6 +540,47 @@ onBeforeUnmount(() => {
   p {
     color: #666;
     margin-bottom: 20px;
+  }
+}
+
+.update-panel {
+  .version-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+
+  .version-label {
+    color: #909399;
+  }
+
+  .version-value {
+    color: #303133;
+    font-weight: 600;
+  }
+
+  .update-status-row {
+    min-height: 24px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: #606266;
+  }
+
+  .update-progress {
+    width: 100%;
+  }
+
+  .status-ok {
+    color: #67c23a;
+  }
+
+  .status-error {
+    color: #f56c6c;
+  }
+
+  .status-muted {
+    color: #909399;
   }
 }
 </style>

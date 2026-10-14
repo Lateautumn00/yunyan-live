@@ -1,39 +1,63 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useUserStore } from '@/store/user';
-
-interface UpdatePayload {
-  type: string;
-  message?: unknown;
-}
+import { useUpdater } from '@/composables/useUpdater';
 
 const userStore = useUserStore();
+const {
+  status,
+  manual,
+  latestVersion,
+  currentVersion,
+  progress,
+  errorMessage,
+  bindUpdateEvents,
+  loadCurrentVersion,
+  check,
+  download,
+  install
+} = useUpdater();
 
-const dialogVisible = ref(false);
-const closeOnClickModal = false;
-const closeOnPressEscape = false;
-const showClose = false;
-const percentage = ref(0);
-const strokeWidth = 200;
+const dismissed = ref(false);
 const timeOut = ref<number | null>(null);
 
+// 弹窗只展示「可操作节点」：发现新版本 / 下载中 / 下载完成。
+// manual=true（设置页手动检查触发）时由设置页承载交互，不重复弹窗。
+const dialogVisible = computed({
+  get: () =>
+    !manual.value &&
+    !dismissed.value &&
+    (status.value === 'available' ||
+      status.value === 'downloading' ||
+      status.value === 'downloaded'),
+  set: value => {
+    if (!value) dismissed.value = true;
+  }
+});
+
+watch(status, (next, prev) => {
+  if (next === 'downloaded') {
+    // 下载完成后强制重新提示（即使用户下载途中关闭过弹窗）
+    dismissed.value = false;
+  }
+  // 后台流程（自动检查/确认后的下载）失败时 toast；手动检查的失败由设置页内联展示
+  if (next === 'error' && prev !== 'error' && !manual.value) {
+    ElMessage.error(errorMessage.value || '更新失败');
+  }
+});
+
+const dialogTitle = computed(() => {
+  if (status.value === 'downloaded') return '新版本已就绪';
+  if (status.value === 'downloading') return '正在下载更新，请稍候 ···';
+  return '发现新版本';
+});
+
 onMounted(() => {
-  window.electronAPI?.onMessage(payload => {
-    const { type, message } = payload as unknown as UpdatePayload;
-    if (type === 'update-available') {
-      dialogVisible.value = true;
-    } else if (type === 'download-progress') {
-      percentage.value = Math.round(Number(message ?? 0));
-    } else if (type === 'error') {
-      dialogVisible.value = false;
-      ElMessage.error(typeof message === 'string' ? message : '更新失败');
-    } else if (type === 'update-not-available') {
-      // 无需提示
-    }
-  });
+  bindUpdateEvents();
+  void loadCurrentVersion();
   timeOut.value = window.setTimeout(() => {
-    window.electronAPI?.checkForUpdate();
+    check(false);
   }, 500);
   if (!userStore.token && !userStore.guid) {
     void userStore.user_msg();
@@ -52,23 +76,44 @@ onUnmounted(() => {
     <router-view />
     <el-dialog
       v-model="dialogVisible"
-      title="正在更新版本,请稍后 ···"
+      :title="dialogTitle"
       width="60%"
-      :close-on-click-modal="closeOnClickModal"
-      :close-on-press-escape="closeOnPressEscape"
-      :show-close="showClose"
+      :close-on-click-modal="false"
+      :close-on-press-escape="status !== 'downloading'"
       align-center
+      @close="dismissed = true"
     >
-      <div class="percentages">
+      <template v-if="status === 'available'">
+        <p class="update-hint">
+          发现新版本
+          <strong>v{{ latestVersion }}</strong>
+          （当前版本 v{{ currentVersion || '—' }}），是否立即更新？
+        </p>
+      </template>
+      <div v-else-if="status === 'downloading'" class="percentages">
         <el-progress
           status="success"
           :text-inside="true"
           :stroke-width="20"
-          :percentage="percentage"
-          :width="strokeWidth"
+          :percentage="progress"
+          :width="200"
           :show-text="true"
         />
       </div>
+      <template v-else-if="status === 'downloaded'">
+        <p class="update-hint">
+          新版本 <strong>v{{ latestVersion }}</strong> 已下载完成，重启应用后完成安装。
+        </p>
+      </template>
+      <template #footer>
+        <template v-if="status === 'available'">
+          <el-button @click="dismissed = true">稍后</el-button>
+          <el-button type="primary" @click="download()">立即更新</el-button>
+        </template>
+        <el-button v-else-if="status === 'downloaded'" type="primary" @click="install()">
+          立即重启安装
+        </el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -82,6 +127,10 @@ onUnmounted(() => {
   height: 5vh;
   line-height: 5vh;
   text-align: center;
+}
+.update-hint {
+  margin: 4px 0;
+  line-height: 1.8;
 }
 body {
   margin: 0px;

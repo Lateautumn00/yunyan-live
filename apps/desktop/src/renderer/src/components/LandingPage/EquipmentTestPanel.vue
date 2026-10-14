@@ -350,7 +350,16 @@ import { config } from '@/api';
 import testToneUrl from '@/assets/audio/test-tone.wav';
 
 const audioUrl: string = testToneUrl;
-const version: string = config.version;
+// 版本号真源为 package.json（主进程 app.getVersion()）；非 Electron 环境回退 VITE_VERSION
+const version = ref<string>(config.version || '');
+const versionBridge = window.electronAPI as
+  Partial<{ getVersion: () => Promise<string> }> | undefined;
+void versionBridge?.getVersion?.()?.then(
+  v => {
+    if (v) version.value = v;
+  },
+  () => undefined
+);
 const videoTrack = ref<string>('');
 const audioTrack = ref<string>('');
 const tracks = ref<MediaStreamTrack[]>([]);

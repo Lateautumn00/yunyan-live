@@ -1,14 +1,18 @@
 ﻿import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPromises } from '@vue/test-utils';
+import { flushPromises, type VueWrapper } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import type { ElectronApi } from '@yunyan-live/ipc';
 import { ok, mountPage } from '@/testing/utils';
+import { useUpdater } from '@/composables/useUpdater';
 import App from '@/App.vue';
 
 const mocks = vi.hoisted(() => ({
   userMsg: vi.fn(),
   onMessage: vi.fn(),
-  checkForUpdate: vi.fn()
+  checkForUpdate: vi.fn(),
+  downloadUpdate: vi.fn(),
+  installUpdate: vi.fn(),
+  getVersion: vi.fn()
 }));
 
 vi.mock('@/api', () => ({
@@ -20,6 +24,7 @@ vi.mock('@/api', () => ({
 }));
 
 let messageCb: ((payload: { type: string; message?: unknown }) => void) | undefined;
+let wrapper: VueWrapper | undefined;
 
 async function mountApp() {
   mocks.onMessage.mockImplementation(
@@ -28,29 +33,42 @@ async function mountApp() {
       return () => undefined;
     }
   );
-  const { wrapper } = await mountPage(App, {
+  const mounted = await mountPage(App, {
     routes: [{ path: '/', component: { template: '<div class="root" />' } }],
     initialRoute: '/',
     beforeMount: pinia => {
       setActivePinia(pinia);
     }
   });
-  return wrapper;
+  wrapper = mounted.wrapper;
+  return mounted.wrapper;
+}
+
+function findButton(text: string) {
+  return wrapper?.findAll('button').find(b => b.text().includes(text));
 }
 
 beforeEach(() => {
   messageCb = undefined;
+  useUpdater().resetUpdater();
   Object.assign(window, {
     electronAPI: {
       onMessage: mocks.onMessage,
-      checkForUpdate: mocks.checkForUpdate
+      checkForUpdate: mocks.checkForUpdate,
+      downloadUpdate: mocks.downloadUpdate,
+      installUpdate: mocks.installUpdate,
+      getVersion: mocks.getVersion
     } as unknown as ElectronApi
   });
+  mocks.getVersion.mockResolvedValue('0.5.0');
   mocks.userMsg.mockResolvedValue(ok({ guid: 'G1', token: 'T1', userName: 'u', email: 'a@b.com' }));
 });
 
 afterEach(() => {
+  wrapper?.unmount();
+  wrapper = undefined;
   vi.useRealTimers();
+  vi.clearAllMocks();
 });
 
 describe('App.vue', () => {
@@ -64,31 +82,55 @@ describe('App.vue', () => {
     expect(mocks.checkForUpdate).toHaveBeenCalled();
   });
 
-  it('update-available 显示升级弹窗', async () => {
-    const wrapper = await mountApp();
-    expect(wrapper.find('.el-dialog').exists()).toBe(false);
-    messageCb?.({ type: 'update-available' });
+  it('发现新版本弹出确认框，点击立即更新触发下载并显示进度', async () => {
+    const w = await mountApp();
+    expect(w.find('.el-dialog').exists()).toBe(false);
+    messageCb?.({ type: 'update-available', message: '0.6.0' });
     await flushPromises();
-    expect(wrapper.find('.el-dialog').exists()).toBe(true);
-    expect(wrapper.text()).toContain('正在更新版本');
-  });
+    expect(w.text()).toContain('发现新版本');
+    expect(w.text()).toContain('v0.6.0');
+    expect(w.text()).toContain('当前版本 v0.5.0');
 
-  it('download-progress 更新进度百分比', async () => {
-    const wrapper = await mountApp();
-    messageCb?.({ type: 'update-available' });
-    await flushPromises();
+    await findButton('立即更新')?.trigger('click');
+    expect(mocks.downloadUpdate).toHaveBeenCalled();
+
     messageCb?.({ type: 'download-progress', message: 42.3 });
     await flushPromises();
-    expect(wrapper.find('.el-dialog').text()).toContain('42');
+    expect(w.find('.el-dialog').text()).toContain('42');
   });
 
-  it('error 时关闭弹窗', async () => {
-    const wrapper = await mountApp();
-    messageCb?.({ type: 'update-available' });
+  it('下载完成后点击重启安装触发 installUpdate', async () => {
+    const w = await mountApp();
+    messageCb?.({ type: 'update-available', message: '0.6.0' });
     await flushPromises();
-    expect(wrapper.findComponent({ name: 'ElDialog' }).props('modelValue')).toBe(true);
+    messageCb?.({ type: 'update-downloaded', message: '0.6.0' });
+    await flushPromises();
+    expect(w.text()).toContain('新版本已就绪');
+    expect(w.text()).toContain('已下载完成');
+
+    await findButton('立即重启安装')?.trigger('click');
+    expect(mocks.installUpdate).toHaveBeenCalled();
+  });
+
+  it('稍后按钮关闭提示弹窗', async () => {
+    const w = await mountApp();
+    messageCb?.({ type: 'update-available', message: '0.6.0' });
+    await flushPromises();
+    expect(w.findComponent({ name: 'ElDialog' }).props('modelValue')).toBe(true);
+
+    await findButton('稍后')?.trigger('click');
+    await flushPromises();
+    expect(w.findComponent({ name: 'ElDialog' }).props('modelValue')).toBe(false);
+  });
+
+  it('后台检查失败时关闭弹窗', async () => {
+    const w = await mountApp();
+    messageCb?.({ type: 'update-available', message: '0.6.0' });
+    await flushPromises();
+    expect(w.findComponent({ name: 'ElDialog' }).props('modelValue')).toBe(true);
+
     messageCb?.({ type: 'error', message: 'boom' });
     await flushPromises();
-    expect(wrapper.findComponent({ name: 'ElDialog' }).props('modelValue')).toBe(false);
+    expect(w.findComponent({ name: 'ElDialog' }).props('modelValue')).toBe(false);
   });
 });

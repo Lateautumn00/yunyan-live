@@ -9,9 +9,12 @@ files:
   - '!src/**'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+# 自动更新源（唯一真源）：打包时写入 resources/app-update.yml，运行时不再 setFeedURL。
+# 发版前替换为真实更新目录地址，必须以 / 结尾；目录内放 latest.yml + 安装包 + .blockmap。
+# 详见 docs/release/desktop-update.md
 publish:
   provider: generic
-  url: https://your-update-server.example.com/h5/live/
+  url: https://your-update-server.example.com/update/win/
 win:
   icon: build/icons/icon.ico
   artifactName: ${productName}_setup_${version}.${ext}
