@@ -41,11 +41,22 @@ interface ExecLikeError {
   message?: string;
   killed?: boolean;
   signal?: string;
+  stderr?: string | Buffer;
+  stdout?: string | Buffer;
 }
+
+function toText(v: string | Buffer | undefined): string {
+  if (!v) return '';
+  return typeof v === 'string' ? v : v.toString();
+}
+
+// libreoffice-impress 缺失或文件损坏时 soffice 输出此错误（非瞬时故障，重试无意义）
+const SOURCE_FILE_UNLOADABLE = /source file could not be loaded/i;
 
 export function classifyConvertFailure(err: unknown, originalUrl: string): ConvertErrorInfo {
   const e = (err ?? {}) as ExecLikeError;
   const msg = e.message || String(err);
+  const detail = `${msg}\n${toText(e.stderr)}\n${toText(e.stdout)}`;
   if (msg.includes('ENOENT')) {
     return buildConvertError(
       'soffice-missing',
@@ -56,6 +67,14 @@ export function classifyConvertFailure(err: unknown, originalUrl: string): Conve
   }
   if (e.killed && e.signal === 'SIGTERM') {
     return buildConvertError('convert', true, '转换超时，请重试或拆分课件', originalUrl);
+  }
+  if (SOURCE_FILE_UNLOADABLE.test(detail)) {
+    return buildConvertError(
+      'convert',
+      false,
+      '课件无法解析：文件可能损坏，或服务器缺少 LibreOffice Impress 导入组件',
+      originalUrl
+    );
   }
   return buildConvertError('convert', true, `转换失败: ${msg}`, originalUrl);
 }

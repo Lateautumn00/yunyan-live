@@ -117,6 +117,18 @@ describe('UploadController.uploadPPT', () => {
     expect(h.exec).toHaveLength(0);
   });
 
+  it('上传 0 字节文件抛 400，不落盘不转换', async () => {
+    const controller = new UploadController();
+    const empty = {
+      ...makeFile('deck.pptx', 'application/vnd.ms-powerpoint'),
+      buffer: Buffer.alloc(0),
+      size: 0
+    };
+    await expect(controller.uploadPPT(empty)).rejects.toThrow('文件内容为空');
+    expect(h.written).toHaveLength(0);
+    expect(h.exec).toHaveLength(0);
+  });
+
   it('转换成功返回 PDF 地址，携带默认超时参数', async () => {
     h.producePdf = true;
     const controller = new UploadController();

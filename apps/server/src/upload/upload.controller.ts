@@ -93,6 +93,9 @@ export class UploadController {
     if (!file) {
       throw new BadRequestException('请选择文件');
     }
+    if (file.size === 0 || file.buffer.length === 0) {
+      throw new BadRequestException('文件内容为空，请重新导出后上传');
+    }
 
     const pptDir = join(UPLOAD_DIR, 'ppt');
     ensureDir(pptDir);

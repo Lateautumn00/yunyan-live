@@ -101,7 +101,7 @@ PPT 上传转换管线：LibreOffice 直接转 PDF，前端用 pdf.js 按页渲�
 
 ```bash
 sudo apt update
-sudo apt install libreoffice-core fonts-noto-cjk
+sudo apt install libreoffice-impress fonts-noto-cjk
 ```
 
 - `fonts-noto-cjk` **必需**：服务器缺少中文字体时，转换出的 PDF 中文会全部变成豆腐块（乱码）

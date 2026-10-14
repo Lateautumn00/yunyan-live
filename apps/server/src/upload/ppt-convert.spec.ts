@@ -71,6 +71,25 @@ describe('classifyConvertFailure（F5.4 失败归类）', () => {
     expect(info.message).toContain('spawn failed');
   });
 
+  it('stderr 含 source file could not be loaded → 不可重试并提示 Impress/文件损坏', () => {
+    const err = Object.assign(new Error('Command failed'), {
+      stderr: 'Error: source file could not be loaded\n'
+    });
+    const info = classifyConvertFailure(err, ORIGINAL);
+    expect(info.stage).toBe('convert');
+    expect(info.retryable).toBe(false);
+    expect(info.message).toContain('Impress');
+  });
+
+  it('message 含 source file could not be loaded（stderr 未附带）同样归类为不可重试', () => {
+    const info = classifyConvertFailure(
+      new Error('soffice: source file could not be loaded'),
+      ORIGINAL
+    );
+    expect(info.retryable).toBe(false);
+    expect(info.message).toContain('Impress');
+  });
+
   it('非 Error 输入不抛异常', () => {
     const info = classifyConvertFailure('weird', ORIGINAL);
     expect(info.stage).toBe('convert');
