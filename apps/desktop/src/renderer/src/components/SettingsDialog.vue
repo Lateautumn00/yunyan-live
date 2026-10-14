@@ -16,7 +16,9 @@
           <el-menu-item index="device"> 设备检测 </el-menu-item>
           <el-menu-item index="password"> 修改密码 </el-menu-item>
           <el-menu-item index="logout"> 退出登录 </el-menu-item>
-          <el-menu-item index="update"> 软件更新 </el-menu-item>
+          <el-menu-item index="update">
+            <el-badge :is-dot="showUpdateDot" :offset="[8, 4]">软件更新</el-badge>
+          </el-menu-item>
           <el-menu-item index="licenses"> 开源许可 </el-menu-item>
         </el-menu>
       </div>
@@ -195,7 +197,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onBeforeUnmount, nextTick } from 'vue';
+import { ref, reactive, onBeforeUnmount, nextTick, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '@/api';
 import { ElMessage } from 'element-plus';
@@ -242,14 +244,21 @@ const {
   currentVersion,
   progress: updateProgress,
   errorMessage: updateErrorMessage,
+  showUpdateDot,
   loadCurrentVersion,
   check,
   download,
   install,
-  takeOver
+  takeOver,
+  acknowledgeUpdateDot
 } = useUpdater();
 
 void loadCurrentVersion();
+
+// 进入「软件更新」节即消除红点（菜单点击与滚动跟随共用 activeMenu 写点）
+watch(activeMenu, id => {
+  if (id === 'update') acknowledgeUpdateDot();
+});
 
 function handleUpdateCheck() {
   check(true);

@@ -115,4 +115,36 @@ describe('useUpdater 状态机', () => {
     u.bindUpdateEvents();
     expect(mocks.onMessage).toHaveBeenCalledTimes(1);
   });
+
+  it('showUpdateDot：available/downloaded 点亮，acknowledge 消除，新事件复亮', () => {
+    const u = useUpdater();
+    expect(u.showUpdateDot.value).toBe(false);
+
+    u.handleUpdateEvent({ type: 'update-available', message: '0.6.0' });
+    expect(u.showUpdateDot.value).toBe(true);
+
+    u.acknowledgeUpdateDot();
+    expect(u.showUpdateDot.value).toBe(false);
+
+    // 下载完成后复亮（用户仍需进入设置页确认）
+    u.handleUpdateEvent({ type: 'update-downloaded', message: '0.6.0' });
+    expect(u.showUpdateDot.value).toBe(true);
+
+    u.acknowledgeUpdateDot();
+    u.handleUpdateEvent({ type: 'update-available', message: '0.7.0' });
+    expect(u.showUpdateDot.value).toBe(true);
+  });
+
+  it('showUpdateDot：非 available/downloaded 态与 reset 后均不点亮', () => {
+    const u = useUpdater();
+    u.handleUpdateEvent({ type: 'checking' });
+    expect(u.showUpdateDot.value).toBe(false);
+    u.handleUpdateEvent({ type: 'update-not-available' });
+    expect(u.showUpdateDot.value).toBe(false);
+
+    u.handleUpdateEvent({ type: 'update-downloaded', message: '0.6.0' });
+    expect(u.showUpdateDot.value).toBe(true);
+    u.resetUpdater();
+    expect(u.showUpdateDot.value).toBe(false);
+  });
 });

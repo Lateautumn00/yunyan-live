@@ -10,8 +10,11 @@ import { PROTOCOL_SCHEME } from './constants';
 type GetWindow = () => BrowserWindow | null;
 
 export function registerRecordingHandlers(_getWindow: GetWindow): void {
+  // 绝对路径放 recording 虚拟 host 的 pathname（斜杠归一 + 去前导斜杠 + 编码），
+  // 由 atom:// protocol.handle 解析；直接拼 atom://<abs> 会被 URL 规范化吞掉盘符冒号
   ipcMain.handle(IpcChannels.recordingGetFileUrl, (_event, filePath: string) => {
-    return `${PROTOCOL_SCHEME}://${filePath}`;
+    const normalized = filePath.replaceAll('\\', '/').replace(/^\/+/, '');
+    return `${PROTOCOL_SCHEME}://recording/${encodeURI(normalized)}`;
   });
 
   ipcMain.handle(

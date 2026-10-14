@@ -3,6 +3,7 @@ import { app, BrowserWindow, shell, protocol } from 'electron';
 import log from 'electron-log';
 import { registerIpcHandlers } from './ipc';
 import { initUpdater } from './update';
+import { registerAtomProtocolHandler } from './vendor';
 import { isHttpUrl, PROTOCOL_SCHEME } from './constants';
 
 // F3.4/F3.5：vendor iframe 子资源（circuits/*.txt、字体、fetch）需要 privileged scheme；
@@ -85,10 +86,9 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     log.info('App ready, creating window');
-    protocol.registerFileProtocol(PROTOCOL_SCHEME, (request, callback) => {
-      const filePath = decodeURIComponent(request.url.replace(`${PROTOCOL_SCHEME}://`, ''));
-      callback({ path: filePath });
-    });
+    // atom:// 统一协议入口（vendor 静态资源 + recording 本地录像），
+    // protocol.handle 配合 privileged scheme 支持子资源与 Range 请求
+    registerAtomProtocolHandler();
     // IPC 与更新器注册必须在进程生命周期内只执行一次：
     // macOS activate 会再次调用 createWindow()，若在此重复注册
     // ipcMain.handle 将抛出 "Attempted to register a second handler"。

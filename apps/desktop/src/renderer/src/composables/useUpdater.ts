@@ -1,4 +1,4 @@
-import { readonly, ref } from 'vue';
+import { computed, readonly, ref } from 'vue';
 import type { ElectronApi, UpdateEventPayload } from '@yunyan-live/ipc';
 
 export type UpdaterStatus =
@@ -29,6 +29,11 @@ const latestVersion = ref('');
 const currentVersion = ref('');
 const progress = ref(0);
 const errorMessage = ref('');
+// 红点「已读」语义：用户进入设置页更新节即消除；新版本事件到达时复位重新点亮
+const dotAcknowledged = ref(false);
+const showUpdateDot = computed(
+  () => !dotAcknowledged.value && (status.value === 'available' || status.value === 'downloaded')
+);
 
 let eventsBound = false;
 let versionLoading: Promise<void> | null = null;
@@ -59,6 +64,7 @@ function handleUpdateEvent(payload: UpdateEventPayload): void {
       latestVersion.value = typeof message === 'string' ? message : '';
       progress.value = 0;
       status.value = 'available';
+      dotAcknowledged.value = false;
       break;
     case 'update-not-available':
       status.value = manual.value ? 'latest' : 'idle';
@@ -71,6 +77,7 @@ function handleUpdateEvent(payload: UpdateEventPayload): void {
       if (typeof message === 'string') latestVersion.value = message;
       progress.value = 100;
       status.value = 'downloaded';
+      dotAcknowledged.value = false;
       break;
     case 'error':
       errorMessage.value = typeof message === 'string' ? message : '更新失败';
@@ -114,6 +121,11 @@ function takeOver(): void {
   manual.value = true;
 }
 
+/** 用户进入设置页「软件更新」节：红点消除（新版本事件到达会重新点亮） */
+function acknowledgeUpdateDot(): void {
+  dotAcknowledged.value = true;
+}
+
 /** 测试用：重置模块级单例状态 */
 function resetUpdater(): void {
   eventsBound = false;
@@ -124,6 +136,7 @@ function resetUpdater(): void {
   currentVersion.value = '';
   progress.value = 0;
   errorMessage.value = '';
+  dotAcknowledged.value = false;
 }
 
 export function useUpdater() {
@@ -134,6 +147,7 @@ export function useUpdater() {
     currentVersion: readonly(currentVersion),
     progress: readonly(progress),
     errorMessage: readonly(errorMessage),
+    showUpdateDot,
     bindUpdateEvents,
     loadCurrentVersion,
     handleUpdateEvent,
@@ -141,6 +155,7 @@ export function useUpdater() {
     download,
     install,
     takeOver,
+    acknowledgeUpdateDot,
     resetUpdater
   };
 }

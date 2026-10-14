@@ -12,7 +12,7 @@ export const IpcChannels = {
   recordingSaveBlob: 'recording:save-blob',
   /** F5.3：本地媒体导入（复制入 userData/media，返回绝对路径；失败 null） */
   mediaImportFile: 'media:import-file',
-  /** F3.4/F3.5：外挂 vendor 资源寻址（dev→Vite public，prod→atom:// 绝对路径） */
+  /** F3.4/F3.5：外挂 vendor 资源寻址（dev→Vite public，prod→atom://vendor/<rel> 虚拟 host） */
   vendorGetUrl: 'vendor:get-url'
 } as const;
 

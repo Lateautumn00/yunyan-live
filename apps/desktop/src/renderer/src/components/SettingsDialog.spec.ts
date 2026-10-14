@@ -138,3 +138,43 @@ describe('SettingsDialog 软件更新节', () => {
     expect(w.find('#section-update').text()).toContain('boom');
   });
 });
+
+describe('SettingsDialog 更新红点', () => {
+  it('正向：有更新时菜单「软件更新」出现红点', async () => {
+    const w = await mountDialog();
+    expect(w.find('.el-badge__content.is-dot').exists()).toBe(false);
+
+    useUpdater().handleUpdateEvent({ type: 'update-available', message: '0.6.0' });
+    await flushPromises();
+    expect(w.find('.el-badge__content.is-dot').exists()).toBe(true);
+  });
+
+  it('正向：点击菜单进入更新节后红点消除', async () => {
+    const w = await mountDialog();
+    useUpdater().handleUpdateEvent({ type: 'update-available', message: '0.6.0' });
+    await flushPromises();
+    expect(w.find('.el-badge__content.is-dot').exists()).toBe(true);
+
+    const item = w.findAll('.el-menu-item').find(i => i.text().includes('软件更新'));
+    expect(item).toBeTruthy();
+    await item!.trigger('click');
+    await flushPromises();
+    expect(w.find('.el-badge__content.is-dot').exists()).toBe(false);
+  });
+
+  it('正向：已下载态同样点亮红点；新版本事件复亮', async () => {
+    const w = await mountDialog();
+    useUpdater().handleUpdateEvent({ type: 'update-downloaded', message: '0.6.0' });
+    await flushPromises();
+    expect(w.find('.el-badge__content.is-dot').exists()).toBe(true);
+
+    const item = w.findAll('.el-menu-item').find(i => i.text().includes('软件更新'));
+    await item!.trigger('click');
+    await flushPromises();
+    expect(w.find('.el-badge__content.is-dot').exists()).toBe(false);
+
+    useUpdater().handleUpdateEvent({ type: 'update-available', message: '0.7.0' });
+    await flushPromises();
+    expect(w.find('.el-badge__content.is-dot').exists()).toBe(true);
+  });
+});
