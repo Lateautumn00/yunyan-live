@@ -10,16 +10,19 @@ files:
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 # 自动更新源（唯一真源）：打包时写入 resources/app-update.yml，运行时不再 setFeedURL。
-# 发版前替换为真实更新目录地址，必须以 / 结尾；目录内放 latest.yml + 安装包 + .blockmap。
-# 详见 docs/release/desktop-update.md
+# 地址必须以 / 结尾；目录内放 latest.yml + 安装包 + .blockmap。详见 docs/release/desktop-update.md
+# 顶层 = Windows（NSIS 主发布通道）；mac/linux 各自指向对应目录（mac 需签名公证后方可真正自动更新）
 publish:
   provider: generic
-  url: https://your-update-server.example.com/update/win/
+  url: http://192.168.2.100/win/
 win:
   icon: build/icons/icon.ico
   artifactName: ${productName}_setup_${version}.${ext}
   target:
     - nsis
+  publish:
+    provider: generic
+    url: http://192.168.2.100/win/
 nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
@@ -32,6 +35,9 @@ mac:
   artifactName: ${productName}_setup_${version}.${ext}
   target:
     - dmg
+  publish:
+    provider: generic
+    url: http://192.168.2.100/mac/
 dmg:
   contents:
     - x: 410
@@ -46,3 +52,6 @@ linux:
   artifactName: ${productName}_setup_${version}.${ext}
   target:
     - AppImage
+  publish:
+    provider: generic
+    url: http://192.168.2.100/linux/

@@ -8,15 +8,21 @@
 
 ## 一、发版前检查（仅需一次）
 
-1. `apps/desktop/electron-builder.yml` → `publish.url` 已替换为真实更新目录地址，**必须以 `/` 结尾**，例如：
+1. `apps/desktop/electron-builder.yml` 已配置真实更新目录地址（按平台），**必须以 `/` 结尾**：
+
+   | 平台  | 更新源地址                    |
+   | ----- | ----------------------------- |
+   | win   | `http://192.168.2.100/win/`   |
+   | mac   | `http://192.168.2.100/mac/`   |
+   | linux | `http://192.168.2.100/linux/` |
 
    ```yaml
-   publish:
+   publish: # 顶层默认 = Windows（NSIS 主发布通道）
      provider: generic
-     url: https://cdn.example.com/yunyan-update/win/
+     url: http://192.168.2.100/win/
    ```
 
-2. 更新目录是可通过 HTTPS 直接访问的静态目录（Nginx 静态站点 / OSS Bucket 均可），客户端会请求：
+2. 更新目录是可通过 HTTP(S) 直接访问的静态目录（Nginx 静态站点 / OSS Bucket 均可，当前为局域网 HTTP），客户端会请求：
 
    - `GET {publish.url}latest.yml`
    - `GET {publish.url}{安装包文件名}`（及差分用 `.blockmap`）
@@ -31,7 +37,7 @@
    pnpm build:desktop:win
    ```
 
-3. **上传三件套**到更新目录（`apps/desktop/dist-release/` 下）：
+3. **上传三件套**到 `http://192.168.2.100/win/` 对应的服务器目录（本地产物在 `apps/desktop/dist-release/` 下）：
 
    | 文件                                   | 说明                                       |
    | -------------------------------------- | ------------------------------------------ |
