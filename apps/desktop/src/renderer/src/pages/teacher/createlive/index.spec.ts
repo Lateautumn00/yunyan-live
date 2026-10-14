@@ -32,7 +32,7 @@ vi.mock('@/layouts/sidebar.vue', () => ({
   }
 }));
 
-vi.mock('@/vendor/live/adapter/adapter.min', () => ({}));
+vi.mock('@/vendor/live/adapter', () => ({ default: {} }));
 
 const vendorState = vi.hoisted(() => {
   const plugin = { send: vi.fn(), data: vi.fn(), createAnswer: vi.fn(), hangup: vi.fn() };

@@ -20,7 +20,7 @@ import { onMounted, onUnmounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import type { JanusHandle, JanusSession } from '@/vendor/live/live';
 import Live from '@/vendor/live/live';
-import '@/vendor/live/adapter/adapter.min';
+import '@/vendor/live/adapter';
 import { config } from '@/api';
 import VideoPlayer from '@/components/ClassRoom/VideoPlayer.vue';
 

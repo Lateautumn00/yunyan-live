@@ -229,7 +229,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import type { DesktopSource } from '@yunyan-live/ipc';
 import { frameThrottle, randomString } from '@yunyan-live/utils';
-import '@/vendor/live/adapter/adapter.min';
+import '@/vendor/live/adapter';
 import Live from '@/vendor/live/live';
 import type { JanusHandle, JanusSession } from '@/vendor/live/live';
 import api from '@/api';

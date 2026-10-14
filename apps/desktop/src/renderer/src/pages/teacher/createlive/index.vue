@@ -289,8 +289,7 @@ onMounted(async () => {
 });
 
 async function init() {
-  await import('@/vendor/live/adapter/adapter.min');
-  const adapterObj = window.adapter;
+  const { default: adapterObj } = await import('@/vendor/live/adapter');
 
   const liveModule = await import('@/vendor/live/live');
   const JanusLive = liveModule.default;

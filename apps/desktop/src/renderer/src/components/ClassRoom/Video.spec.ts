@@ -12,7 +12,7 @@ const liveMocks = vi.hoisted(() => ({
   attachHandles: {} as Record<string, Record<string, unknown>>
 }));
 
-vi.mock('@/vendor/live/adapter/adapter.min', () => ({}));
+vi.mock('@/vendor/live/adapter', () => ({ default: {} }));
 
 vi.mock('@/vendor/live/live', () => {
   return {
