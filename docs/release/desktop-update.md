@@ -10,22 +10,73 @@
 
 1. `apps/desktop/electron-builder.yml` 已配置真实更新目录地址（按平台），**必须以 `/` 结尾**：
 
-   | 平台  | 更新源地址                    |
-   | ----- | ----------------------------- |
-   | win   | `http://192.168.2.100/win/`   |
-   | mac   | `http://192.168.2.100/mac/`   |
-   | linux | `http://192.168.2.100/linux/` |
+   | 平台  | 更新源地址                         |
+   | ----- | ---------------------------------- |
+   | win   | `http://192.168.2.100:8080/win/`   |
+   | mac   | `http://192.168.2.100:8080/mac/`   |
+   | linux | `http://192.168.2.100:8080/linux/` |
 
    ```yaml
    publish: # 顶层默认 = Windows（NSIS 主发布通道）
      provider: generic
-     url: http://192.168.2.100/win/
+     url: http://192.168.2.100:8080/win/
    ```
 
 2. 更新目录是可通过 HTTP(S) 直接访问的静态目录（Nginx 静态站点 / OSS Bucket 均可，当前为局域网 HTTP），客户端会请求：
 
    - `GET {publish.url}latest.yml`
    - `GET {publish.url}{安装包文件名}`（及差分用 `.blockmap`）
+
+### 更新源服务器部署（192.168.2.100，Docker Nginx）
+
+在服务器上任意目录放置以下文件后 `docker compose up -d`：
+
+```yaml
+# docker-compose.yml
+services:
+  static-web:
+    image: nginx:alpine
+    ports:
+      - '8080:80'
+    volumes:
+      - ./dist:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    restart: always
+```
+
+目录结构（`./dist` 为站点根）：
+
+```
+dist/
+├── win/
+│   ├── latest.yml
+│   ├── yunyan-live_setup_x.y.z.exe
+│   └── yunyan-live_setup_x.y.z.exe.blockmap
+├── mac/
+└── linux/
+```
+
+nginx 保持默认配置即可（`/win/` 路径直接可访问）；部署后验证：
+
+```bash
+curl http://192.168.2.100:8080/win/latest.yml   # 应返回 YAML 文本
+```
+
+### 服务端 CORS（打包版客户端必需）
+
+打包版 Electron 渲染端为 `file://`，发出的 HTTP 请求 Origin 为 `null`。
+API 网关（`apps/server`）的 `CORS_ORIGINS` 必须包含 `null`，否则登录等所有接口被浏览器拦截：
+
+```bash
+# .env
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000,null
+```
+
+修改后重启 server；验证（响应头应出现 `Access-Control-Allow-Origin`）：
+
+```bash
+curl -i -H "Origin: null" http://192.168.2.100:3001/user/nothing
+```
 
 ## 二、每次发版步骤
 
@@ -37,7 +88,7 @@
    pnpm build:desktop:win
    ```
 
-3. **上传三件套**到 `http://192.168.2.100/win/` 对应的服务器目录（本地产物在 `apps/desktop/dist-release/` 下）：
+3. **上传三件套**到 `http://192.168.2.100:8080/win/` 对应的服务器目录（本地产物在 `apps/desktop/dist-release/` 下）：
 
    | 文件                                   | 说明                                       |
    | -------------------------------------- | ------------------------------------------ |

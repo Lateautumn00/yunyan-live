@@ -14,7 +14,7 @@ files:
 # 顶层 = Windows（NSIS 主发布通道）；mac/linux 各自指向对应目录（mac 需签名公证后方可真正自动更新）
 publish:
   provider: generic
-  url: http://192.168.2.100/win/
+  url: http://192.168.2.100:8080/win/
 win:
   icon: build/icons/icon.ico
   artifactName: ${productName}_setup_${version}.${ext}
@@ -22,7 +22,7 @@ win:
     - nsis
   publish:
     provider: generic
-    url: http://192.168.2.100/win/
+    url: http://192.168.2.100:8080/win/
 nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
@@ -37,7 +37,7 @@ mac:
     - dmg
   publish:
     provider: generic
-    url: http://192.168.2.100/mac/
+    url: http://192.168.2.100:8080/mac/
 dmg:
   contents:
     - x: 410
@@ -54,4 +54,4 @@ linux:
     - AppImage
   publish:
     provider: generic
-    url: http://192.168.2.100/linux/
+    url: http://192.168.2.100:8080/linux/
