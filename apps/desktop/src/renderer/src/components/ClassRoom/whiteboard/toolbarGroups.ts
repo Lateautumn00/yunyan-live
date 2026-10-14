@@ -1,6 +1,6 @@
 /**
- * 工具栏信息架构（§4.9.2 落地）：教师端左侧栏 8 项 = 4 直达 + 4 分组。
- * 配置纯数据、零业务逻辑；激活 handler 收口在 WhiteBoard.vue 的 runToolbarChild。
+ * 工具栏信息架构（§4.9.2 落地）：教师端左侧栏 = 7 直达 + 4 分组。
+ * 激光笔为独立直达键（不在分组内）；配置纯数据、零业务逻辑；激活 handler 收口在 WhiteBoard.vue 的 runToolbarChild。
  */
 
 export type ToolbarIcon =
@@ -111,13 +111,6 @@ export const TOOLBAR_GROUPS: ToolbarGroupDef[] = [
         tooltip: '蒙层 · 拖拽覆盖内容，单击揭开，拖开后可 Delete',
         icon: { kind: 'el', name: 'Hide' },
         mode: 'mask'
-      },
-      {
-        id: 'laser',
-        label: '激光笔',
-        tooltip: '激光笔 · 红点跟指，再点或切工具熄灭',
-        icon: { kind: 'el', name: 'Aim' },
-        mode: 'laser'
       },
       {
         id: 'spotlight',

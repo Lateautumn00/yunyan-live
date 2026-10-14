@@ -651,7 +651,7 @@ describe('WhiteBoard.vue', () => {
     wrapper.unmount();
   });
 
-  // §4.9.2 工具栏 IA：8 项一级（4 直达 + 4 分组）、30 子项无丢失、互斥、记忆
+  // §4.9.2 工具栏 IA：11 项一级（7 直达 + 4 分组）、24 子项无丢失、互斥、记忆
   describe('§4.9.2 工具栏 IA 分类收纳', () => {
     const GROUP_IDS = ['shape', 'annotate', 'subject', 'resource'] as const;
 
@@ -659,11 +659,14 @@ describe('WhiteBoard.vue', () => {
       localStorage.removeItem('wb.toolbarMem.v1');
     });
 
-    it('一级仅 8 项：4 直达（选择/移动分段、画笔、文本、橡皮）+ 4 分组', () => {
+    it('一级 11 项：7 直达（选择/移动/钢笔/荧光/文本/激光/橡皮）+ 4 分组', () => {
       const wrapper = mountWB();
-      expect(wrapper.find('.tools .cur-seg').exists()).toBe(true);
-      expect(wrapper.find('.tools .brush-seg').exists()).toBe(true);
+      expect(wrapper.find('.tools .cur').exists()).toBe(true);
+      expect(wrapper.find('.tools .move').exists()).toBe(true);
+      expect(wrapper.find('.tools .pen').exists()).toBe(true);
+      expect(wrapper.find('.tools .hl').exists()).toBe(true);
       expect(wrapper.find('.tools .text').exists()).toBe(true);
+      expect(wrapper.find('.tools .laser').exists()).toBe(true);
       expect(wrapper.find('.tools .eraser').exists()).toBe(true);
       const groups = wrapper.findAll('.tools .wb-group');
       expect(groups).toHaveLength(4);
@@ -674,7 +677,7 @@ describe('WhiteBoard.vue', () => {
       wrapper.unmount();
     });
 
-    it('25 分组子项无丢失（6+7+6+6），面板双列标记', async () => {
+    it('24 分组子项无丢失（6+6+6+6），面板双列标记', async () => {
       const wrapper = mountWB();
       let total = 0;
       for (const g of TOOLBAR_GROUPS) {
@@ -685,8 +688,8 @@ describe('WhiteBoard.vue', () => {
         }
         expect(wrapper.find('.wb-group-panel').classes()).toContain('cols-2');
       }
-      // 一级 8 项 = 4 直达 + 4 分组；25 子项全收纳（直达 6：选择/移动/钢笔/荧光/文本/橡皮）
-      expect(total).toBe(25);
+      // 一级 11 项 = 7 直达 + 4 分组；24 子项全收纳（直达 7：选择/移动/钢笔/荧光/文本/激光/橡皮）
+      expect(total).toBe(24);
       wrapper.unmount();
     });
 
@@ -756,7 +759,7 @@ describe('WhiteBoard.vue', () => {
       wrapper.unmount();
     });
 
-    it('选择/移动分段：上选择下拖动', async () => {
+    it('选择/移动独立钮：切移动再切回选择', async () => {
       const wrapper = mountWB();
       const vm = wrapper.vm as unknown as WBVM;
       await wrapper.find('[data-testid="wb-tool-move"]').trigger('click');
@@ -791,14 +794,14 @@ describe('WhiteBoard.vue', () => {
       const wrapper = mountWB();
       const toolbarTips = () =>
         wrapper.findAllComponents(ElTooltip).filter(t => t.props('placement') === 'right');
-      // 左侧工具栏恰好 8 个 placement=right 的 tooltip：4 直达 + 4 分组主区
-      expect(toolbarTips()).toHaveLength(8);
+      // 左侧工具栏恰好 11 个 placement=right 的 tooltip：7 直达 + 4 分组主区
+      expect(toolbarTips()).toHaveLength(11);
       // 初始（无面板打开）全部启用
       for (const t of toolbarTips()) expect(t.props('disabled')).toBe(false);
       await openToolGroup(wrapper, 'shape');
       for (const t of toolbarTips()) {
         const content = String(t.props('content'));
-        // 分组主区 tooltip（内容含展开提示）：仅自身组禁用；直达键 4 个：任意面板打开即禁用
+        // 分组主区 tooltip（内容含展开提示）：仅自身组禁用；直达键 7 个：任意面板打开即禁用
         const isGroupMain = content.includes('点击使用，▸ 展开全部');
         expect(t.props('disabled')).toBe(isGroupMain ? content.startsWith('形状 · ') : true);
       }
@@ -2676,7 +2679,7 @@ describe('WhiteBoard.vue 橡皮擦', () => {
   });
 });
 
-// ── F4.1 荧光笔：分段控件、笔型档位存根、multiply 落库 ───────────────────
+// ── F4.1 荧光笔：独立钮、笔型档位存根、multiply 落库 ───────────────────
 describe('WhiteBoard.vue 荧光笔', () => {
   function drawStroke(vm: DrawVM, x1: number, y1: number, x2: number, y2: number) {
     const stage = konvaMocks.MockStage.last()!;
@@ -2688,14 +2691,14 @@ describe('WhiteBoard.vue 荧光笔', () => {
     stage.fire('mouseup', { target: stage, evt: {} });
   }
 
-  it('分段控件切至荧光：进画笔模式 + 亮黄 + 钢笔 1.5× 宽预设', async () => {
+  it('点荧光钮：进画笔模式 + 亮黄 + 钢笔 1.5× 宽预设', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as DrawVM;
-    const segs = wrapper.findAll('.tools .brush-seg .seg');
-    expect(segs.length).toBe(2);
+    expect(wrapper.find('.tools .pen').exists()).toBe(true);
+    expect(wrapper.find('.tools .hl').exists()).toBe(true);
     expect(vm.penType).toBe('pen');
 
-    await segs[1]!.trigger('click');
+    await wrapper.find('[data-testid="wb-tool-hl"]').trigger('click');
     expect(vm.mode).toBe('brush');
     expect(vm.penType).toBe('highlight');
     const state = vm.provider!.getToolState();
@@ -2767,10 +2770,11 @@ describe('WhiteBoard.vue 荧光笔', () => {
     wrapper.unmount();
   });
 
-  it('学生端只读矩阵：无分段控件、selectPen 不可用', () => {
+  it('学生端只读矩阵：无钢笔/荧光直达钮、selectPen 不可用', () => {
     const wrapper = mountWB({ isTeacher: false });
     const vm = wrapper.vm as unknown as DrawVM;
-    expect(wrapper.find('.tools .brush-seg').exists()).toBe(false);
+    expect(wrapper.find('.tools .pen').exists()).toBe(false);
+    expect(wrapper.find('.tools .hl').exists()).toBe(false);
     expect(() => vm.selectPen('highlight')).not.toThrow();
     expect(vm.provider!.getToolState().penType).toBe('pen');
     wrapper.unmount();
@@ -3523,8 +3527,7 @@ describe('WhiteBoard.vue 激光笔', () => {
   it('教师点选激光进入模式，移动广播 awareness 并渲染红点，切换工具即熄灭', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
-    await openToolGroup(wrapper, 'annotate');
-    await toolChild(wrapper, 'laser').trigger('click');
+    await wrapper.find('[data-testid="wb-tool-laser"]').trigger('click');
     expect(vm.mode).toBe('laser');
 
     const stage = konvaMocks.MockStage.last()!;
@@ -3550,8 +3553,7 @@ describe('WhiteBoard.vue 激光笔', () => {
   it('Esc 退出激光模式并熄灭', async () => {
     const wrapper = mountWB();
     const vm = wrapper.vm as unknown as SelVM;
-    await openToolGroup(wrapper, 'annotate');
-    await toolChild(wrapper, 'laser').trigger('click');
+    await wrapper.find('[data-testid="wb-tool-laser"]').trigger('click');
     expect(vm.mode).toBe('laser');
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));

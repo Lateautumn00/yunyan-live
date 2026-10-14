@@ -58,67 +58,70 @@
 
       <!-- 左侧工具面板 -->
       <div v-if="isTeacher && isDisplay" class="tools">
-        <el-tooltip
-          content="选择器 · 上选择下拖动（Shift 等比缩放，Delete 删除）"
-          placement="right"
-          :disabled="openGroupId !== null"
-        >
-          <div class="cur-seg" :class="{ on: mode === 'cur' || mode === 'move' }">
-            <div
-              class="seg seg-cur"
-              :class="{ active: mode === 'cur' }"
-              data-testid="wb-tool-cur"
-              @click="tool('cur')"
-            >
-              <el-icon><Pointer /></el-icon>
-            </div>
-            <div
-              class="seg seg-move"
-              :class="{ active: mode === 'move' }"
-              data-testid="wb-tool-move"
-              @click="tool('move')"
-            >
-              <el-icon><Position /></el-icon>
-            </div>
+        <el-tooltip content="选择工具" placement="right" :disabled="openGroupId !== null">
+          <div
+            :class="['cur', { on: mode === 'cur' }]"
+            data-testid="wb-tool-cur"
+            @click="tool('cur')"
+          >
+            <el-icon><Pointer /></el-icon>
           </div>
         </el-tooltip>
-        <el-tooltip
-          content="画笔 · 上钢笔 / 下荧光笔（笔型记忆）"
-          placement="right"
-          :disabled="openGroupId !== null"
-        >
-          <div class="brush-seg" :class="{ on: mode === 'brush' }">
-            <div
-              class="seg seg-pen"
-              :class="{ active: penType === 'pen' }"
-              @click="selectPen('pen')"
-            >
-              <el-icon><EditPen /></el-icon>
-            </div>
-            <div
-              class="seg seg-hl"
-              :class="{ active: penType === 'highlight' }"
-              @click="selectPen('highlight')"
-            >
-              <el-icon><BrushFilled /></el-icon>
-            </div>
+        <el-tooltip content="拖动画布" placement="right" :disabled="openGroupId !== null">
+          <div
+            :class="['move', { on: mode === 'move' }]"
+            data-testid="wb-tool-move"
+            @click="tool('move')"
+          >
+            <el-icon><Position /></el-icon>
           </div>
-          <!-- F4.2：笔型工具子菜单——手绘图形规整开关 -->
-          <el-popover placement="right-end" :width="168" trigger="click">
-            <template #reference>
-              <div class="seg-menu" :class="{ on: mode === 'brush' }">
-                <el-icon><MoreFilled /></el-icon>
+        </el-tooltip>
+        <el-tooltip content="钢笔（笔型记忆）" placement="right" :disabled="openGroupId !== null">
+          <div
+            :class="['pen', { on: mode === 'brush' && penType === 'pen' }]"
+            data-testid="wb-tool-pen"
+            @click="selectPen('pen')"
+          >
+            <el-icon><EditPen /></el-icon>
+            <!-- F4.2：笔型工具子菜单——手绘图形规整开关（角标覆盖，不占独立行） -->
+            <el-popover placement="right-end" :width="168" trigger="click">
+              <template #reference>
+                <div class="seg-menu" :class="{ on: mode === 'brush' }">
+                  <el-icon><MoreFilled /></el-icon>
+                </div>
+              </template>
+              <div class="seg-menu-item">
+                <span>手绘规整</span>
+                <el-switch :model-value="regularizeEnabled" @change="toggleRegularize()" />
               </div>
-            </template>
-            <div class="seg-menu-item">
-              <span>手绘规整</span>
-              <el-switch :model-value="regularizeEnabled" @change="toggleRegularize()" />
-            </div>
-          </el-popover>
+            </el-popover>
+          </div>
+        </el-tooltip>
+        <el-tooltip content="荧光笔（笔型记忆）" placement="right" :disabled="openGroupId !== null">
+          <div
+            :class="['hl', { on: mode === 'brush' && penType === 'highlight' }]"
+            data-testid="wb-tool-hl"
+            @click="selectPen('highlight')"
+          >
+            <el-icon><BrushFilled /></el-icon>
+          </div>
         </el-tooltip>
         <el-tooltip content="文本工具" placement="right" :disabled="openGroupId !== null">
           <div :class="['text', { on: mode === 'text' }]" @click="tool('text')">
             <el-icon><Edit /></el-icon>
+          </div>
+        </el-tooltip>
+        <el-tooltip
+          content="激光笔 · 红点跟指，再点或切工具熄灭"
+          placement="right"
+          :disabled="openGroupId !== null"
+        >
+          <div
+            :class="['laser', { on: mode === 'laser' }]"
+            data-testid="wb-tool-laser"
+            @click="toggleLaser()"
+          >
+            <el-icon><Aim /></el-icon>
           </div>
         </el-tooltip>
         <el-tooltip
@@ -5873,80 +5876,35 @@ defineExpose({
     background-image: url('@{wbicon}');
     background-repeat: no-repeat;
   }
-  // F4.1 笔型分段控件：32×32 内上下两段（钢笔/荧光笔），覆盖通用 div 规则
-  .brush-seg {
-    flex-direction: column;
-    gap: 0;
-    padding: 0;
-    overflow: hidden;
-    .seg {
-      width: 32px;
-      height: 16px;
-      border-radius: 0;
-      &:hover {
-        background-color: rgba(64, 158, 255, 0.1);
-      }
-      &.active {
-        background-color: rgba(64, 158, 255, 0.16);
-      }
-      .el-icon {
-        font-size: 11px;
-      }
-      &.active .el-icon {
-        color: #409eff;
-      }
-    }
-    .seg-hl {
-      border-top: 1px solid rgba(0, 0, 0, 0.08);
-      &.active .el-icon {
-        color: #c8a400;
-      }
-    }
-  }
-  /* F4.2：笔型工具子菜单触发钮 + 规整开关行 */
+  // F4.2 笔型工具子菜单触发钮——钢笔钮右缘垂直居中角标（覆盖，不占行）
   .seg-menu {
-    width: 32px;
-    height: 16px;
-    border-radius: 0 0 6px 6px;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 6px 0 0 6px;
+    background: transparent;
+    &:hover {
+      background: transparent;
+    }
     .el-icon {
-      font-size: 10px;
+      font-size: 9px;
       color: #888;
+      transition:
+        transform 0.25s ease,
+        color 0.15s ease;
     }
     &:hover .el-icon {
       color: #409eff;
+      transform: scale(1.35);
     }
   }
   .eraser {
     background-position: 0 -102px;
   }
-  // 选择/移动分段控件（§4.9.2：移动并入选择器）
-  .cur-seg {
-    flex-direction: column;
-    gap: 0;
-    padding: 0;
-    overflow: hidden;
-    .seg {
-      width: 32px;
-      height: 16px;
-      border-radius: 0;
-      &:hover {
-        background-color: rgba(64, 158, 255, 0.1);
-      }
-      &.active {
-        background-color: rgba(64, 158, 255, 0.16);
-      }
-      .el-icon {
-        font-size: 11px;
-      }
-      &.active .el-icon {
-        color: #409eff;
-      }
-    }
-    .seg-move {
-      border-top: 1px solid rgba(0, 0, 0, 0.08);
-    }
-  }
-  /* §4.9.2 分组钮：主区（图标回显记忆子项）+ ▸ 展开条 */
+  /* §4.9.2 分组钮：主区（图标回显记忆子项）+ ▸ 右缘垂直居中角标（覆盖，不占行） */
   .wb-group {
     width: 32px;
     height: auto;
@@ -5962,19 +5920,30 @@ defineExpose({
       height: 32px;
     }
     .wb-g-cue {
-      width: 32px;
-      height: 12px;
-      border-radius: 0 0 6px 6px;
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 14px;
+      height: 14px;
+      border-radius: 6px 0 0 6px;
+      background: transparent;
       .el-icon {
-        font-size: 10px;
+        font-size: 9px;
         color: #888;
-        transition: transform 0.15s ease;
+        transition:
+          transform 0.25s ease,
+          color 0.15s ease;
       }
-      &:hover {
-        background-color: #e2e2e7;
+      &:hover .el-icon {
+        color: #409eff;
+        transform: scale(1.35);
       }
       &.open .el-icon {
         transform: rotate(90deg);
+      }
+      &.open:hover .el-icon {
+        transform: rotate(90deg) scale(1.35);
       }
     }
   }
