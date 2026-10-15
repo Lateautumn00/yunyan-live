@@ -25,15 +25,25 @@ const h = vi.hoisted(() => ({
   /** pg 查询实现（测试内替换默认行为） */
   query: undefined as unknown as (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>,
   /** 历史查询延迟（单飞测试用，ms） */
-  historyDelay: 0
+  historyDelay: 0,
+  /** ioredis 实例（含 duplicate 出的订阅连接）：签到订阅测试定位用 */
+  redisInstances: [] as Array<{
+    subscribe: { mock: { calls: unknown[][] } };
+    emit: (event: string, ...args: unknown[]) => boolean;
+  }>
 }));
 
-vi.mock('ioredis', () => {
-  class MockRedis {
+vi.mock('ioredis', async () => {
+  const { EventEmitter } = await import('node:events');
+  class MockRedis extends EventEmitter {
+    constructor() {
+      super();
+      h.redisInstances.push(this as unknown as (typeof h)['redisInstances'][number]);
+    }
     get = vi.fn(async (key: string) => (key.startsWith('session:') ? 'sid-spec-1' : null));
     set = vi.fn(async () => 'OK');
-    on = vi.fn(() => undefined);
     subscribe = vi.fn(async () => 0);
+    publish = vi.fn(async () => 1);
     duplicate() {
       return new MockRedis();
     }
@@ -422,4 +432,56 @@ describe('白板状态消息已移除（legacy paint-log 链路 D4）', () => {
     expect(pong.type).toBe('pong');
     c.close();
   }, 10_000);
+});
+
+describe('签到广播（live:checkin → {type:"checkin"}）', () => {
+  async function checkinSubscriber() {
+    const { CHECKIN_CHANNEL } = await import('@yunyan-live/nest-shared');
+    const sub = h.redisInstances.find(x =>
+      x.subscribe.mock.calls.some(call => call[0] === CHECKIN_CHANNEL)
+    );
+    expect(sub).toBeDefined();
+    return { CHECKIN_CHANNEL, sub: sub! };
+  }
+
+  it('订阅签到频道：emit 状态变更 → 房间内客户端收到 checkin 帧（data 透传）', async () => {
+    const { CHECKIN_CHANNEL, sub } = await checkinSubscriber();
+    const c = await connect();
+    await c.next('history');
+    sub.emit(
+      'message',
+      CHECKIN_CHANNEL,
+      JSON.stringify({ roomId: 'r-main', action: 'update', sessionId: 's-1', signedCount: 3 })
+    );
+    const f = await c.next('checkin');
+    expect(f.data).toEqual({
+      roomId: 'r-main',
+      action: 'update',
+      sessionId: 's-1',
+      signedCount: 3
+    });
+    c.close();
+  });
+
+  it('其它房间的签到事件不广播到本房间', async () => {
+    const { CHECKIN_CHANNEL, sub } = await checkinSubscriber();
+    const c = await connect();
+    await c.next('history');
+    sub.emit(
+      'message',
+      CHECKIN_CHANNEL,
+      JSON.stringify({ roomId: 'r-other', action: 'ended', sessionId: 's-2' })
+    );
+    await c.expectNo('checkin');
+    c.close();
+  });
+
+  it('坏载荷不广播（subscribeCheckin 解析层拦截）', async () => {
+    const { CHECKIN_CHANNEL, sub } = await checkinSubscriber();
+    const c = await connect();
+    await c.next('history');
+    sub.emit('message', CHECKIN_CHANNEL, JSON.stringify({ roomId: 'r-main' }));
+    await c.expectNo('checkin');
+    c.close();
+  });
 });

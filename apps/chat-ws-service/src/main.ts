@@ -9,6 +9,7 @@ import { Pool } from 'pg';
 import { WsClose, CHAT_HISTORY_PAGE_SIZE, type BulletRejectReason } from '@yunyan-live/types';
 import {
   requireJwtSecret,
+  subscribeCheckin,
   subscribeForbid,
   subscribeKick,
   readForbid,
@@ -151,6 +152,17 @@ subscribeForbid(
   },
   (err, stage) => {
     console.error(`[ChatWS] forbid ${stage}:`, err instanceof Error ? err.message : String(err));
+  }
+);
+
+// 签到事件（网关 live/checkin publish）→ 广播 {type:'checkin', data:{roomId,action,sessionId,deadlineAt?,signedCount?}}
+subscribeCheckin(
+  redis,
+  payload => {
+    broadcast(payload.roomId, JSON.stringify({ type: 'checkin', data: payload }));
+  },
+  (err, stage) => {
+    console.error(`[ChatWS] checkin ${stage}:`, err instanceof Error ? err.message : String(err));
   }
 );
 
