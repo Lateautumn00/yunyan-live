@@ -95,6 +95,7 @@ hostname -I | awk '{print $1}'
 | 8188 | WS | Janus WebSocket 信令（前端连接） |
 | 20000-20100 | UDP | RTP/RTCP 媒体流 |
 | 3001 | HTTP/WS | Mock Server（开发环境） |
+| 8080 | HTTP | 安装包下载/自动更新静态站（yunyan-live-download） |
 
 ## 插件说明
 
@@ -236,15 +237,65 @@ docker compose down
 docker compose down -v --rmi all
 ```
 
+## 下载/更新静态站（yunyan-live-download）
+
+客户端安装包分发 + `electron-updater` 自动更新源。更新源地址唯一真源是
+`apps/desktop/electron-builder.yml` 的 `publish.url`（打包时写入安装包 `resources/app-update.yml`）：
+
+| 平台  | 更新源地址                         |
+| ----- | ---------------------------------- |
+| win   | `http://192.168.2.100:8080/win/`   |
+| mac   | `http://192.168.2.100:8080/mac/`   |
+| linux | `http://192.168.2.100:8080/linux/` |
+
+### 启动
+
+```bash
+cd init/yunyan-live-download
+
+# nginx:alpine，8080→80，挂载 ./dist 与 ./nginx.conf
+docker compose up -d
+
+# 验证（应返回 YAML 文本）
+curl http://192.168.2.100:8080/win/latest.yml
+```
+
+### 目录约定
+
+```
+dist/
+├── win/
+│   ├── latest.yml                           # 更新清单（版本、文件名、sha512）
+│   ├── yunyan-live_setup_x.y.z.exe          # NSIS 安装包
+│   └── yunyan-live_setup_x.y.z.exe.blockmap # 差分更新块映射
+├── mac/                                     # dmg + latest-mac.yml
+└── linux/                                   # AppImage + latest-linux.yml
+```
+
+> **二进制不入库**：`.gitignore` 忽略 `exe/dmg/blockmap`，仓库内 `dist/{win,mac,linux}/` 仅 `.gitkeep` 占位；
+> 安装包三件套在服务器上手动放置，本地产物在 `apps/desktop/dist-release/`。
+
+### nginx 规则
+
+- `exe/dmg/AppImage` — 强制 `Content-Disposition: attachment` 弹下载，关闭 gzip
+- `yml/RELEASES` — **不加 attachment**（electron-updater 需直接读取），缓存 10m
+- `js/css/png/.../html` — 静态资源缓存 7d
+
+发版流程与本地联调详见 [`docs/release/desktop-update.md`](../docs/release/desktop-update.md)。
+
 ## 项目结构
 
 ```
 init/
-+-- schema.sql             # 数据库建表 SQL（PostgreSQL 首次启动自动执行）
-+-- Dockerfile             # 多阶段构建：编译 Janus + 运行时镜像
-+-- docker-compose.yml     # 容器编排（PostgreSQL + Redis + Janus）
-+-- entrypoint.sh          # 启动脚本：从环境变量生成配置 + 启动 Janus
-+-- .env                   # 环境变量（GATEWAY_IP, STUN 等）
-+-- .env.example           # 环境变量模板
-+-- README.md              # 本文档
++-- schema.sql                   # 数据库建表 SQL（PostgreSQL 首次启动自动执行）
++-- Dockerfile                   # 多阶段构建：编译 Janus + 运行时镜像
++-- docker-compose.yml           # 容器编排（PostgreSQL + Redis + Janus）
++-- entrypoint.sh                # 启动脚本：从环境变量生成配置 + 启动 Janus
++-- .env                         # 环境变量（GATEWAY_IP, STUN 等）
++-- .env.example                 # 环境变量模板
++-- README.md                    # 本文档
++-- yunyan-live-download/        # 安装包下载/自动更新静态站（nginx）
+|   +-- docker-compose.yml       # 8080→80，挂载 ./dist
+|   +-- nginx.conf               # 下载头/缓存规则
+|   +-- dist/{win,mac,linux}/    # 更新目录（仅 .gitkeep 占位，二进制不入库）
 ```

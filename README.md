@@ -69,7 +69,11 @@ yunyan-live/
 │   ├── docker-compose.yml              # 容器编排
 │   ├── entrypoint.sh                   # 启动脚本（生成 Janus 配置）
 │   ├── schema.sql                      # 数据库初始化脚本
-│   └── .env.example                    # Docker 环境变量模板
+│   ├── .env.example                    # Docker 环境变量模板
+│   └── yunyan-live-download/           # 安装包下载/自动更新静态站（nginx :8080）
+│       ├── docker-compose.yml
+│       ├── nginx.conf
+│       └── dist/{win,mac,linux}/       # 更新目录（.gitkeep 占位，二进制不入库）
 │
 ├── package.json                          # 根 package.json（pnpm workspace）
 ├── pnpm-workspace.yaml                   # pnpm 工作区配置
@@ -101,10 +105,14 @@ PPT 上传转换管线：LibreOffice 直接转 PDF，前端用 pdf.js 按页渲�
 
 ```bash
 sudo apt update
-sudo apt install libreoffice-impress fonts-noto-cjk
+sudo apt install libreoffice-impress fonts-noto-cjk fonts-liberation
+fc-cache -f   # 刷新 fontconfig 缓存
 ```
 
+- **必须是 `libreoffice-impress` 而非 `libreoffice-core`**：core-only 安装缺 Impress 导入过滤器
+  `libsdlo.so`，任何 ppt 都会报 `source file could not be loaded`（转换接口返回 `convertError.stage=convert`）
 - `fonts-noto-cjk` **必需**：服务器缺少中文字体时，转换出的 PDF 中文会全部变成豆腐块（乱码）
+- `fonts-liberation`：西文度量兼容字体（最小字体集）
 
 验证安装：
 
@@ -115,6 +123,11 @@ fc-list :lang=zh | head -3 # 应能看到 Noto Sans CJK 等中文字体
 
 > Linux 下 `soffice` 可能不在 `PATH`（`command -v soffice` 找不到但 `/usr/bin/libreoffice` 存在），
 > 请在 `apps/server/.env` 配置 `SOFFICE_PATH=/usr/bin/libreoffice`。
+
+> **升级 LibreOffice 前须跑保真样例集回归**（`COURSEWARE_FIDELITY=1`，见
+> `apps/server/test/fixtures/courseware/README.md`；该回归另需 `poppler-utils`，
+> 与"生产转换链路无需 poppler"不矛盾——poppler 仅回归比对用）。
+> 课件指定的小众字体未安装时会近似替换，属预期，不承诺保真。
 
 ## 快速开始
 
@@ -353,6 +366,7 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 | 端口        | 协议      | 用途                                 |
 | ----------- | --------- | ------------------------------------ |
 | 3001        | TCP       | Gateway HTTP API                     |
+| 8080        | TCP       | 安装包下载/自动更新静态站（nginx）   |
 | 5432        | TCP       | PostgreSQL 数据库                    |
 | 6379        | TCP       | Redis 缓存                           |
 | 5672        | TCP       | RabbitMQ AMQP（仅 127.0.0.1 绑定）   |
