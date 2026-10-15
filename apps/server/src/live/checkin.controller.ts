@@ -209,7 +209,7 @@ export class CheckinController implements OnModuleInit {
       sessionId: session.sessionId,
       deadlineAt: session.deadlineAt
     });
-    return { code: 1000, msg: 'success', data: session };
+    return session;
   }
 
   @Post('respond')
@@ -228,13 +228,9 @@ export class CheckinController implements OnModuleInit {
       signedCount: result.signed_count
     });
     return {
-      code: 1000,
-      msg: 'success',
-      data: {
-        signedCount: result.signed_count,
-        alreadySigned: result.already_signed,
-        makeup: result.makeup
-      }
+      signedCount: result.signed_count,
+      alreadySigned: result.already_signed,
+      makeup: result.makeup
     };
   }
 
@@ -254,7 +250,7 @@ export class CheckinController implements OnModuleInit {
       sessionId: dto.sessionId,
       signedCount: session.signedCount
     });
-    return { code: 1000, msg: 'success', data: session };
+    return session;
   }
 
   @Post('openMakeup')
@@ -275,7 +271,7 @@ export class CheckinController implements OnModuleInit {
       action: 'makeup',
       sessionId: dto.sessionId
     });
-    return { code: 1000, msg: 'success', data: session };
+    return session;
   }
 
   @Get('state/:roomId')
@@ -285,13 +281,9 @@ export class CheckinController implements OnModuleInit {
       this.liveService.getCheckinState({ room_id: roomId }, userIdMetadata(req.user.userId))
     );
     return {
-      code: 1000,
-      msg: 'success',
-      data: {
-        hasSession: result.data.has_session,
-        isOwner: result.data.is_owner,
-        session: result.data.session ? this.toHttpSession(result.data.session) : null
-      }
+      hasSession: result.data.has_session,
+      isOwner: result.data.is_owner,
+      session: result.data.session ? this.toHttpSession(result.data.session) : null
     };
   }
 
@@ -313,12 +305,8 @@ export class CheckinController implements OnModuleInit {
       )
     );
     return {
-      code: 1000,
-      msg: 'success',
-      data: {
-        items: result.data.items.map(item => this.toHttpSession(item)),
-        total: result.data.total
-      }
+      items: result.data.items.map(item => this.toHttpSession(item)),
+      total: result.data.total
     };
   }
 
@@ -333,22 +321,18 @@ export class CheckinController implements OnModuleInit {
     );
     const usernameMap = await this.resolveUsernames(result.data.items.map(item => item.user_id));
     return {
-      code: 1000,
-      msg: 'success',
-      data: {
-        items: result.data.items.map(item => ({
-          userId: item.user_id,
-          nickName: usernameMap.get(item.user_id) || item.user_id,
-          inDenominator: item.in_denominator,
-          signed: item.signed,
-          method: item.method,
-          respondedAt: item.responded_at
-        })),
-        total: result.data.total,
-        attendeeCount: result.data.attendee_count,
-        signedCount: result.data.signed_count,
-        attendedCount: result.data.attended_count
-      }
+      items: result.data.items.map(item => ({
+        userId: item.user_id,
+        nickName: usernameMap.get(item.user_id) || item.user_id,
+        inDenominator: item.in_denominator,
+        signed: item.signed,
+        method: item.method,
+        respondedAt: item.responded_at
+      })),
+      total: result.data.total,
+      attendeeCount: result.data.attendee_count,
+      signedCount: result.data.signed_count,
+      attendedCount: result.data.attended_count
     };
   }
 }

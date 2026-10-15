@@ -32,29 +32,25 @@ function makeController() {
       .mockReturnValue(
         of({ code: '0', msg: 'success', signed_count: 3, already_signed: false, makeup: false })
       ),
-    endCheckin: vi
-      .fn()
-      .mockReturnValue(
-        of({
-          code: '0',
-          msg: 'success',
-          data: { ...grpcSession, ended_at: '2026-10-15T08:01:00.000Z' }
-        })
-      ),
+    endCheckin: vi.fn().mockReturnValue(
+      of({
+        code: '0',
+        msg: 'success',
+        data: { ...grpcSession, ended_at: '2026-10-15T08:01:00.000Z' }
+      })
+    ),
     openCheckinMakeup: vi
       .fn()
       .mockReturnValue(
         of({ code: '0', msg: 'success', data: { ...grpcSession, makeup_open: true } })
       ),
-    getCheckinState: vi
-      .fn()
-      .mockReturnValue(
-        of({
-          code: '0',
-          msg: 'success',
-          data: { has_session: true, is_owner: true, session: grpcSession }
-        })
-      ),
+    getCheckinState: vi.fn().mockReturnValue(
+      of({
+        code: '0',
+        msg: 'success',
+        data: { has_session: true, is_owner: true, session: grpcSession }
+      })
+    ),
     listCheckinSessions: vi
       .fn()
       .mockReturnValue(of({ code: '0', msg: 'success', data: { items: [grpcSession], total: 7 } })),
@@ -119,7 +115,7 @@ describe('CheckinController', () => {
     vi.restoreAllMocks();
   });
 
-  it('start：gRPC 创建 + 广播 started（含 deadlineAt）+ camelCase envelope', async () => {
+  it('start：gRPC 创建 + 广播 started（含 deadlineAt）+ camelCase payload', async () => {
     const { controller, live, redis } = makeController();
     const dto = Object.assign(new StartCheckinDto(), { roomId: 'r1', duration: 60 });
     const res = await controller.start(dto, req());
@@ -127,8 +123,7 @@ describe('CheckinController', () => {
       { room_id: 'r1', duration: 60 },
       expect.anything()
     );
-    expect(res.code).toBe(1000);
-    expect(res.data).toMatchObject({
+    expect(res).toMatchObject({
       sessionId: 's1',
       roomId: 'r1',
       deadlineAt: '2026-10-15T08:01:00.000Z',
@@ -158,7 +153,7 @@ describe('CheckinController', () => {
       { room_id: 'r1', session_id: 's1', makeup: true },
       expect.anything()
     );
-    expect(res.data).toEqual({ signedCount: 3, alreadySigned: false, makeup: false });
+    expect(res).toEqual({ signedCount: 3, alreadySigned: false, makeup: false });
     const [channel, raw] = redis.publish.mock.calls[0];
     expect(channel).toBe(CHECKIN_CHANNEL);
     expect(JSON.parse(raw)).toEqual({
@@ -174,8 +169,7 @@ describe('CheckinController', () => {
     redis.publish.mockRejectedValue(new Error('redis down'));
     const dto = Object.assign(new RespondCheckinDto(), { roomId: 'r1', sessionId: 's1' });
     const res = await controller.respond(dto, req('u1'));
-    expect(res.code).toBe(1000);
-    expect(res.data).toMatchObject({ signedCount: 3 });
+    expect(res).toMatchObject({ signedCount: 3 });
     expect(Logger.prototype.warn).toHaveBeenCalled();
   });
 
@@ -185,7 +179,7 @@ describe('CheckinController', () => {
       Object.assign(new CheckinSessionActionDto(), { roomId: 'r1', sessionId: 's1' }),
       req()
     );
-    expect(res.data.endedAt).toBe('2026-10-15T08:01:00.000Z');
+    expect(res.endedAt).toBe('2026-10-15T08:01:00.000Z');
     const [channel, raw] = redis.publish.mock.calls[0];
     expect(channel).toBe(CHECKIN_CHANNEL);
     expect(JSON.parse(raw)).toMatchObject({ action: 'ended', sessionId: 's1' });
@@ -195,7 +189,7 @@ describe('CheckinController', () => {
     const { controller, redis } = makeController();
     const dto = Object.assign(new CheckinSessionActionDto(), { roomId: 'r1', sessionId: 's1' });
     const res = await controller.openMakeup(dto, req());
-    expect(res.data.makeupOpen).toBe(true);
+    expect(res.makeupOpen).toBe(true);
     const [, raw] = redis.publish.mock.calls[0];
     expect(JSON.parse(raw)).toMatchObject({ action: 'makeup', sessionId: 's1' });
   });
@@ -203,8 +197,8 @@ describe('CheckinController', () => {
   it('state：水合数据且不广播', async () => {
     const { controller, redis } = makeController();
     const res = await controller.state('r1', req('t1'));
-    expect(res.data).toMatchObject({ hasSession: true, isOwner: true });
-    expect(res.data.session).toMatchObject({ sessionId: 's1' });
+    expect(res).toMatchObject({ hasSession: true, isOwner: true });
+    expect(res.session).toMatchObject({ sessionId: 's1' });
     expect(redis.publish).not.toHaveBeenCalled();
   });
 
@@ -214,7 +208,7 @@ describe('CheckinController', () => {
       of({ code: '0', msg: 'success', data: { has_session: false, is_owner: false } })
     );
     const res = await controller.state('r1', req('u1'));
-    expect(res.data).toEqual({ hasSession: false, isOwner: false, session: null });
+    expect(res).toEqual({ hasSession: false, isOwner: false, session: null });
   });
 
   it('sessions：分页透传 + 会话 camelCase 列表', async () => {
@@ -224,28 +218,28 @@ describe('CheckinController', () => {
       { room_id: 'r1', page: 2, page_size: 10 },
       expect.anything()
     );
-    expect(res.data.total).toBe(7);
-    expect(res.data.items[0]).toMatchObject({ sessionId: 's1', attendeeCount: 5 });
+    expect(res.total).toBe(7);
+    expect(res.items[0]).toMatchObject({ sessionId: 's1', attendeeCount: 5 });
   });
 
   it('records：用户名解析回填 nickName，缺失时回退 user_id', async () => {
     const { controller, auth } = makeController();
     const res = await controller.records('s1', req('t1'));
     expect(auth.batchGetUsers).toHaveBeenCalledWith({ user_ids: ['u1', 'u2'] });
-    expect(res.data.items[0]).toMatchObject({
+    expect(res.items[0]).toMatchObject({
       userId: 'u1',
       nickName: '张三',
       inDenominator: true
     });
-    expect(res.data.items[1]).toMatchObject({ userId: 'u2', nickName: 'u2' });
-    expect(res.data).toMatchObject({ attendeeCount: 5, signedCount: 1, attendedCount: 1 });
+    expect(res.items[1]).toMatchObject({ userId: 'u2', nickName: 'u2' });
+    expect(res).toMatchObject({ attendeeCount: 5, signedCount: 1, attendedCount: 1 });
   });
 
   it('records：auth 失败时降级（不抛错）', async () => {
     const { controller, auth } = makeController();
     auth.batchGetUsers.mockReturnValue(throwError(() => new Error('auth down')));
     const res = await controller.records('s1', req('t1'));
-    expect(res.data.items[0].nickName).toBe('u1');
+    expect(res.items[0].nickName).toBe('u1');
   });
 });
 
