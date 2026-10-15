@@ -97,7 +97,9 @@ describe('components/ClassRoom/CheckinPanel.vue', () => {
   it('选择30秒后发起携带 duration=30', async () => {
     const wrapper = mountPanel();
     await flushPromises();
-    const radioInput = wrapper.findAll('input[type=radio]').find(el => el.element.value === '30');
+    const radioInput = wrapper
+      .findAll<HTMLInputElement>('input[type=radio]')
+      .find(el => el.element.value === '30');
     expect(radioInput, '30秒档位 input 应存在').toBeDefined();
     radioInput!.element.checked = true;
     radioInput!.element.dispatchEvent(new Event('change'));
