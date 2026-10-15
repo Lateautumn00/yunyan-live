@@ -1,6 +1,34 @@
 ﻿# 云砚直播 (Yunyan Live)
 
-> 基于 Electron + Vue 3 + Nest.js + Janus WebRTC 的在线直播教学平台
+[![CI](https://github.com/Lateautumn00/yunyan-live/actions/workflows/ci.yml/badge.svg)](https://github.com/Lateautumn00/yunyan-live/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D24.13.0-brightgreen.svg)](https://nodejs.org/)
+[![pnpm](https://img.shields.io/badge/pnpm-%3E%3D10.28.2-orange.svg)](https://pnpm.io/)
+[![Platform](https://img.shields.io/badge/platform-Win%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
+
+**简体中文** | [English](README.en.md)
+
+> 基于 Electron + Vue 3 + Nest.js + Janus WebRTC 的开源直播教学平台。数据完全自托管，一站式搭建线上教室。
+
+## 核心特性
+
+- 🎥 **大小班直播授课** —— 基于 Janus WebRTC，支持大班一对多直播与小班互动课堂，教师推流、学生实时订阅
+- 📝 **实时协作白板** —— Yjs + y-websocket 多端同步，手绘规整、图形、数学/化学/电路/分子等学科工具
+- 📊 **PPT 课件直播** —— 上传后 LibreOffice 转 PDF、pdf.js 按页渲染，支持素材收藏、截图与板书导出
+- 📼 **录制与回放** —— Janus 录制自动转码 MP4，后台管理回放列表，支持在线观看与下载
+- 🏗️ **全栈自托管** —— Docker Compose 一键启动 PostgreSQL / Redis / RabbitMQ / Janus，数据完全自持
+- 💻 **三平台桌面端** —— Electron 打包 Windows / macOS / Linux，支持 electron-updater 自动更新
+- 🔧 **微服务后端** —— NestJS 网关 + gRPC 微服务（认证/直播/邮件/聊天/白板），TypeScript 全栈
+
+## 界面预览
+
+| 后台管理 | 教室（课件直播） |
+| ------- | ---------------- |
+| ![后台管理](docs/assets/screenshot-admin.png) | ![教室课件直播](docs/assets/screenshot-classroom.png) |
+
+**课件工具**：素材收藏、媒体、上传图片、截图、我的课件、导出板书
+
+![课件工具菜单](docs/assets/screenshot-courseware-menu.png)
 
 ## 技术栈
 
