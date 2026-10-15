@@ -33,3 +33,24 @@ export interface ForbidPayload {
 export function forbidKey(roomId: string): string {
   return `live:forbid:${roomId}`;
 }
+
+/** 教室签到广播频道（网关写入签到状态后 publish CheckinPayload） */
+export const CHECKIN_CHANNEL = 'live:checkin';
+
+/**
+ * 签到广播动作语义：
+ * started=新轮发起，update=计数更新，ended=教师手动结束，makeup=补签开启。
+ * 超时自然关闭无服务端事件——客户端按 deadlineAt 本地倒计时自行收口。
+ */
+export type CheckinAction = 'started' | 'update' | 'ended' | 'makeup';
+
+export interface CheckinPayload {
+  roomId: string;
+  action: CheckinAction;
+  sessionId: string;
+  deadlineAt?: string;
+  signedCount?: number;
+  attendeeCount?: number;
+}
+
+export const CHECKIN_ACTIONS: readonly CheckinAction[] = ['started', 'update', 'ended', 'makeup'];

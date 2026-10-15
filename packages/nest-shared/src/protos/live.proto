@@ -31,6 +31,13 @@ service LiveService {
   rpc GetBoardSnapshot (GetBoardSnapshotRequest) returns (BoardSnapshotDetailResponse) {}
   rpc GetLatestBoardSnapshot (GetLatestBoardSnapshotRequest) returns (BoardSnapshotDetailResponse) {}
   rpc CheckRoomAccess (CheckRoomAccessRequest) returns (CheckRoomAccessResponse) {}
+  rpc CreateCheckin (CreateCheckinRequest) returns (CheckinSessionResponse) {}
+  rpc RespondCheckin (RespondCheckinRequest) returns (RespondCheckinResponse) {}
+  rpc EndCheckin (EndCheckinRequest) returns (CheckinSessionResponse) {}
+  rpc OpenCheckinMakeup (OpenCheckinMakeupRequest) returns (CheckinSessionResponse) {}
+  rpc GetCheckinState (GetCheckinStateRequest) returns (GetCheckinStateResponse) {}
+  rpc ListCheckinSessions (ListCheckinSessionsRequest) returns (ListCheckinSessionsResponse) {}
+  rpc GetCheckinRecords (GetCheckinRecordsRequest) returns (GetCheckinRecordsResponse) {}
 }
 
 message CreateLiveRequest {
@@ -423,4 +430,113 @@ message CheckRoomAccessResponse {
 message CheckRoomAccessData {
   bool allowed = 1;
   bool is_teacher = 2;
+}
+
+message CreateCheckinRequest {
+  string room_id = 1;
+  int32 duration = 2;
+}
+
+message RespondCheckinRequest {
+  string room_id = 1;
+  string session_id = 2;
+  bool makeup = 3;
+}
+
+message EndCheckinRequest {
+  string room_id = 1;
+  string session_id = 2;
+}
+
+message OpenCheckinMakeupRequest {
+  string room_id = 1;
+  string session_id = 2;
+}
+
+message GetCheckinStateRequest {
+  string room_id = 1;
+}
+
+message ListCheckinSessionsRequest {
+  string room_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+message GetCheckinRecordsRequest {
+  string session_id = 1;
+}
+
+message CheckinSessionData {
+  string session_id = 1;
+  string room_id = 2;
+  string teacher_id = 3;
+  string started_at = 4;
+  string deadline_at = 5;
+  string ended_at = 6;
+  int32 attendee_count = 7;
+  int32 signed_count = 8;
+  bool makeup_open = 9;
+  int32 status = 10;
+  bool my_signed = 11;
+  int32 my_method = 12;
+}
+
+message CheckinSessionResponse {
+  string code = 1;
+  string msg = 2;
+  CheckinSessionData data = 3;
+}
+
+message RespondCheckinResponse {
+  string code = 1;
+  string msg = 2;
+  int32 signed_count = 3;
+  bool already_signed = 4;
+  bool makeup = 5;
+}
+
+message GetCheckinStateData {
+  bool has_session = 1;
+  bool is_owner = 2;
+  CheckinSessionData session = 3;
+}
+
+message GetCheckinStateResponse {
+  string code = 1;
+  string msg = 2;
+  GetCheckinStateData data = 3;
+}
+
+message ListCheckinSessionsData {
+  repeated CheckinSessionData items = 1;
+  int32 total = 2;
+}
+
+message ListCheckinSessionsResponse {
+  string code = 1;
+  string msg = 2;
+  ListCheckinSessionsData data = 3;
+}
+
+message CheckinRecordItem {
+  string user_id = 1;
+  bool in_denominator = 2;
+  bool signed = 3;
+  int32 method = 4;
+  string responded_at = 5;
+}
+
+message GetCheckinRecordsData {
+  repeated CheckinRecordItem items = 1;
+  int32 total = 2;
+  int32 attendee_count = 3;
+  int32 signed_count = 4;
+  int32 attended_count = 5;
+}
+
+message GetCheckinRecordsResponse {
+  string code = 1;
+  string msg = 2;
+  GetCheckinRecordsData data = 3;
 }

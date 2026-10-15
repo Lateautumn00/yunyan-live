@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsIn,
+  IsBoolean,
   MinLength,
   MaxLength
 } from 'class-validator';
@@ -115,4 +116,40 @@ export class CreateCoursewareDto {
   @IsString()
   @IsNotEmpty()
   fileUrl: string;
+}
+
+export class StartCheckinDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+
+  /** 签到窗口秒数（30/60/120，默认 60 由前端约定） */
+  @IsNumber()
+  @IsIn([30, 60, 120])
+  duration: number;
+}
+
+export class RespondCheckinDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  sessionId: string;
+
+  /** true=补签（窗口已关闭且教师已开启补签时生效） */
+  @IsBoolean()
+  @IsOptional()
+  makeup?: boolean;
+}
+
+export class CheckinSessionActionDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  sessionId: string;
 }
