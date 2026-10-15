@@ -39,12 +39,15 @@ const isOwner = ref(false);
 const dialogVisible = ref(false);
 const minimized = ref(false);
 const loading = ref(false);
+const error = ref(false);
 const submitting = ref(false);
 const serverOffset = ref(0);
 const tick = ref(Date.now());
 const duration = ref(60);
 
 let timer: ReturnType<typeof setInterval> | null = null;
+/** hydrate 竞态守卫：只采纳最新一次请求的响应，旧响应（含跨房间）直接丢弃 */
+let hydrateSeq = 0;
 
 const deadlineMs = computed(() => {
   const s = session.value;
@@ -110,19 +113,24 @@ async function syncServerTime(): Promise<void> {
 /** 初态水合（打开面板/学生弹窗挂载/未知轮次广播时调用） */
 async function hydrate(roomId: string): Promise<void> {
   if (!roomId) return;
+  const seq = ++hydrateSeq;
   loading.value = true;
+  error.value = false;
   try {
     const res = await api.checkin_state({ roomId });
+    if (seq !== hydrateSeq) return;
     hasSession.value = Boolean(res.data?.hasSession);
     isOwner.value = Boolean(res.data?.isOwner);
     session.value = res.data?.session ?? null;
     tick.value = Date.now();
     await syncServerTime();
+    if (seq !== hydrateSeq) return;
     if (session.value && !closed.value) ensureTimer();
   } catch (err) {
+    if (seq === hydrateSeq) error.value = true;
     console.error('checkin hydrate failed:', err);
   } finally {
-    loading.value = false;
+    if (seq === hydrateSeq) loading.value = false;
   }
 }
 
@@ -194,7 +202,26 @@ function handleWs(payload: CheckinWsPayload | undefined): void {
   const s = session.value;
 
   if (payload.action === 'started') {
-    if (!s || s.sessionId !== payload.sessionId) void hydrate(payload.roomId);
+    if (!s || s.sessionId !== payload.sessionId) {
+      // 乐观建态：先用帧内字段渲染倒计时，hydrate 回填完整数据（应到/我的状态）
+      session.value = {
+        sessionId: payload.sessionId,
+        roomId: payload.roomId,
+        startedAt: '',
+        deadlineAt: payload.deadlineAt ?? new Date(Date.now() + 60_000).toISOString(),
+        endedAt: null,
+        attendeeCount: 0,
+        signedCount: 0,
+        makeupOpen: false,
+        status: 1,
+        mySigned: false,
+        myMethod: 0
+      };
+      hasSession.value = true;
+      tick.value = Date.now();
+      ensureTimer();
+      void hydrate(payload.roomId);
+    }
     dialogVisible.value = true;
     minimized.value = false;
     return;
@@ -219,8 +246,9 @@ function handleWs(payload: CheckinWsPayload | undefined): void {
   }
 }
 
-/** 课堂卸载：清 interval 与全部状态 */
+/** 课堂卸载：清 interval 与全部状态（序号递增使在途 hydrate 失效） */
 function reset(): void {
+  hydrateSeq += 1;
   stopTimer();
   session.value = null;
   hasSession.value = false;
@@ -228,6 +256,7 @@ function reset(): void {
   dialogVisible.value = false;
   minimized.value = false;
   loading.value = false;
+  error.value = false;
   submitting.value = false;
   serverOffset.value = 0;
   duration.value = 60;
@@ -241,6 +270,7 @@ export function useClassroomCheckin() {
     dialogVisible,
     minimized,
     loading,
+    error,
     submitting,
     duration,
     remaining,

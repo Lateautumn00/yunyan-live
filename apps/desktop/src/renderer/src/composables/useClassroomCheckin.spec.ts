@@ -78,6 +78,33 @@ describe('composables/useClassroomCheckin', () => {
     spy.mockRestore();
   });
 
+  it('hydrate 失败置 error，下次成功后清除', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.checkinState.mockRejectedValue(new Error('boom'));
+    await c.hydrate('R1');
+    expect(c.error.value).toBe(true);
+    hydrateState(makeSession());
+    await c.hydrate('R1');
+    expect(c.error.value).toBe(false);
+    expect(c.session.value?.sessionId).toBe('s1');
+    spy.mockRestore();
+  });
+
+  it('hydrate 竞态：旧响应晚到不覆盖新 session', async () => {
+    let resolveStale!: (v: unknown) => void;
+    mocks.checkinState
+      .mockReturnValueOnce(new Promise(resolve => (resolveStale = resolve)))
+      .mockResolvedValueOnce(ok({ hasSession: true, isOwner: false, session: makeSession() }));
+    const stale = c.hydrate('R1');
+    await c.hydrate('R1');
+    expect(c.session.value?.sessionId).toBe('s1');
+    resolveStale(ok({ hasSession: false, isOwner: false, session: null }));
+    await stale;
+    expect(c.session.value?.sessionId).toBe('s1');
+    expect(c.hasSession.value).toBe(true);
+    expect(c.loading.value).toBe(false);
+  });
+
   it('三态派生：过期即关，手动结束即关', async () => {
     hydrateState(makeSession({ deadlineAt: new Date(Date.now() - 1000).toISOString() }));
     await c.hydrate('R1');
@@ -173,6 +200,19 @@ describe('composables/useClassroomCheckin', () => {
     expect(mocks.checkinState).toHaveBeenCalledWith({ roomId: 'R1' });
     expect(c.dialogVisible.value).toBe(true);
     expect(c.minimized.value).toBe(false);
+  });
+
+  it('handleWs started 乐观建态：hydrate 挂起时已有 sessionId 与倒计时', async () => {
+    mocks.checkinState.mockReturnValue(new Promise(() => {}));
+    const deadlineAt = new Date(Date.now() + 30_000).toISOString();
+    c.handleWs({ roomId: 'R1', action: 'started', sessionId: 's9', deadlineAt });
+    expect(c.dialogVisible.value).toBe(true);
+    expect(c.session.value?.sessionId).toBe('s9');
+    expect(c.session.value?.deadlineAt).toBe(deadlineAt);
+    expect(c.hasSession.value).toBe(true);
+    expect(c.closed.value).toBe(false);
+    expect(c.remaining.value).toBeGreaterThan(0);
+    expect(mocks.checkinState).toHaveBeenCalledWith({ roomId: 'R1' });
   });
 
   it('handleWs update 计数只增（修订②）', async () => {

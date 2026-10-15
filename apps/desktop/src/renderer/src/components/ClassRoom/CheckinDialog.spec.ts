@@ -188,4 +188,26 @@ describe('components/ClassRoom/CheckinDialog.vue', () => {
     expect(c.minimized.value).toBe(false);
     expect(wrapper.find('.checkin-pill').exists()).toBe(false);
   });
+
+  it('hydrate 失败显示「加载失败」，点重试重新水合', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.checkinState.mockRejectedValueOnce(new Error('boom'));
+    const wrapper = mountDialog();
+    await flushPromises();
+    expect(c.error.value).toBe(true);
+    expect(c.session.value).toBeNull();
+
+    c.dialogVisible.value = true;
+    await flushPromises();
+    expect(wrapper.text()).toContain('加载失败');
+    expect(wrapper.text()).not.toContain('暂无进行中的签到');
+
+    hydrateState(makeSession());
+    await button(wrapper, '重试').trigger('click');
+    await flushPromises();
+    expect(mocks.checkinState).toHaveBeenCalledTimes(2);
+    expect(c.error.value).toBe(false);
+    expect(wrapper.text()).toContain('老师发起了签到');
+    spy.mockRestore();
+  });
 });

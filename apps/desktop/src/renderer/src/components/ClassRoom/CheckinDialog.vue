@@ -17,6 +17,10 @@
   >
     <div class="checkin-body">
       <div v-if="loading && !session" class="checkin-tip">加载中…</div>
+      <template v-else-if="error && !session">
+        <div class="checkin-tip">加载失败</div>
+        <el-button size="small" @click="onRetry">重试</el-button>
+      </template>
       <template v-else-if="!session">
         <div class="checkin-tip">暂无进行中的签到</div>
       </template>
@@ -64,6 +68,7 @@ const {
   dialogVisible,
   minimized,
   loading,
+  error,
   submitting,
   remaining,
   closed,
@@ -103,6 +108,10 @@ const canMakeup = computed(
 function reopen(): void {
   minimized.value = false;
   dialogVisible.value = true;
+}
+
+async function onRetry(): Promise<void> {
+  await hydrate(props.roomId);
 }
 
 /** 最小化 → 浮层 pill（不丢状态，可重开） */
