@@ -749,7 +749,7 @@ export class LiveService {
       'w.leftAt',
       'w.createdAt',
       'r.title',
-      'CASE WHEN w."leftAt" IS NULL THEN true ELSE false END AS is_online'
+      'CASE WHEN w.leftAt IS NULL THEN true ELSE false END AS is_online'
     ])
       .groupBy('w.id, r.title')
       .orderBy('w.createdAt', 'DESC');
