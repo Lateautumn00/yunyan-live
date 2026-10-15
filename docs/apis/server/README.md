@@ -1,11 +1,12 @@
 # API Gateway（server）接口索引
 
-Gateway（`apps/server`）是唯一对外 HTTP 入口，监听端口 **3001**。按控制器模块拆分为 4 份文档：
+Gateway（`apps/server`）是唯一对外 HTTP 入口，监听端口 **3001**。按控制器模块拆分为 6 份文档：
 
 | 文档 | 路由前缀 | 控制器 | 端点数 |
 | ---- | -------- | ------ | ------ |
 | [auth.md](auth.md) | `/user/user` | AuthController | 8 |
 | [live.md](live.md) | `/live/liveInfo` | LiveController | 24 |
+| [checkin.md](checkin.md) | `/live/checkin` | CheckinController | 7 |
 | [mail.md](mail.md) | `/user/mail` | MailController | 1 |
 | [upload.md](upload.md) | `/upload` | UploadController | 2 |
 | [system.md](system.md) | `/health`、`/user/user` | AppController、UsersController | 3 |

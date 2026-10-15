@@ -7,7 +7,7 @@
 ## 通用说明
 
 - 成功响应 `code === "0"`。
-- 需要 metadata 的 RPC：`CreateLive`、`CmsList`、`GetStudentRooms`、`LeaveRoom`、`BatchLeave`。
+- 需要 metadata 的 RPC：`CreateLive`、`CmsList`、`GetStudentRooms`、`LeaveRoom`、`BatchLeave`，以及全部签到 RPC（`CreateCheckin`、`RespondCheckin`、`EndCheckin`、`OpenCheckinMakeup`、`GetCheckinState`、`ListCheckinSessions`、`GetCheckinRecords`，metadata `user-id` 为当前教师/学生）。
 
 ## 消息结构
 
@@ -117,6 +117,80 @@
 | items              | repeated WatchTimeItem | `user_id, username, watch_time, joined_at, left_at, is_online` |
 | total              | int32                  | 总条数                                                         |
 | total_time_by_room | int32                  | 房间总观看时长                                                 |
+
+### CheckinSessionData
+
+签到会话视图（无 status 落库列，`status` 由 `ended_at` / `deadline_at` 派生）：
+
+| 字段           | 类型   | 说明                                                     |
+| -------------- | ------ | -------------------------------------------------------- |
+| session_id     | string | 轮次 ID（UUID）                                          |
+| room_id        | string | 房间 ID                                                  |
+| teacher_id     | string | 发起教师（房间所有者）                                   |
+| started_at     | string | 发起时间（ISO8601）                                      |
+| deadline_at    | string | 截止时间 = 发起 + duration（ISO8601）                    |
+| ended_at       | string | 手动结束时间，未结束为空串                               |
+| attendee_count | int32  | 应到（发起时快照 `user_watch_times` 在线人数并排除教师） |
+| signed_count   | int32  | 已签人数（含分母外签到）                                 |
+| makeup_open    | bool   | 是否已开启补签                                           |
+| status         | int32  | 1=进行中，2=已关闭（派生）                               |
+| my_signed      | bool   | 调用者是否已签（调用者为学生时有效）                     |
+| my_method      | int32  | 调用者方式（0=未签，1=正常，2=补签）                     |
+
+### CheckinSessionResponse
+
+`CreateCheckin` / `EndCheckin` / `OpenCheckinMakeup` 的响应：`code` / `msg` / `data`（CheckinSessionData）。
+
+### RespondCheckinResponse
+
+| 字段           | 类型   | 说明                                 |
+| -------------- | ------ | ------------------------------------ |
+| code           | string | `"0"` 成功                           |
+| msg            | string | 提示信息                             |
+| signed_count   | int32  | 本轮累计已签人数（全量重算，非增量） |
+| already_signed | bool   | 此前已签（幂等返回，不重复计数）     |
+| makeup         | bool   | 本次是否按补签记账                   |
+
+### GetCheckinStateData
+
+| 字段        | 类型               | 说明                 |
+| ----------- | ------------------ | -------------------- |
+| has_session | bool               | 该房间是否存在轮次   |
+| is_owner    | bool               | 调用者是否房间所有者 |
+| session     | CheckinSessionData | 无轮次时缺省         |
+
+`GetCheckinStateResponse`：`code` / `msg` / `data`（GetCheckinStateData）。
+
+### ListCheckinSessionsData
+
+| 字段  | 类型                        | 说明                         |
+| ----- | --------------------------- | ---------------------------- |
+| items | repeated CheckinSessionData | 轮次列表，按 started_at 倒序 |
+| total | int32                       | 总轮次数                     |
+
+`ListCheckinSessionsResponse`：`code` / `msg` / `data`（ListCheckinSessionsData）。
+
+### CheckinRecordItem
+
+| 字段           | 类型   | 说明                            |
+| -------------- | ------ | ------------------------------- |
+| user_id        | string | 用户 ID                         |
+| in_denominator | bool   | 是否在应到分母内                |
+| signed         | bool   | 是否已签                        |
+| method         | int32  | 1=正常，2=补签（未签为 0）      |
+| responded_at   | string | 签到时间（ISO8601，未签为空串） |
+
+### GetCheckinRecordsData
+
+| 字段           | 类型                       | 说明                                  |
+| -------------- | -------------------------- | ------------------------------------- |
+| items          | repeated CheckinRecordItem | 应到全量行（已签/未签）∪ 分母外已签行 |
+| total          | int32                      | 行数                                  |
+| attendee_count | int32                      | 应到（分母）                          |
+| signed_count   | int32                      | 已签总人数（含分母外）                |
+| attended_count | int32                      | 已签 ∩ 应到（出勤率分子）             |
+
+`GetCheckinRecordsResponse`：`code` / `msg` / `data`（GetCheckinRecordsData）。
 
 ## RPC 列表
 
@@ -338,3 +412,68 @@
 `rpc DeleteCourseware (DeleteCoursewareRequest) returns (CommonResponse)`
 
 **请求：** `id`（课件 ID）。
+
+### 25. CreateCheckin
+
+`rpc CreateCheckin (CreateCheckinRequest) returns (CheckinSessionResponse)`
+
+需要 metadata `user-id`（发起教师）。
+
+**请求：**
+
+| 字段     | 类型   | 说明                       |
+| -------- | ------ | -------------------------- |
+| room_id  | string | 房间 ID                    |
+| duration | int32  | 签到窗口秒数，仅 30/60/120 |
+
+**说明：** 归属校验（非所有者 `PERMISSION_DENIED`）→ 同事务关闭未结束旧轮并快照分母 → 插入新轮次。成功后 Gateway 发布 Redis 频道 `live:checkin`（`action=started`）。
+
+### 26. RespondCheckin
+
+`rpc RespondCheckin (RespondCheckinRequest) returns (RespondCheckinResponse)`
+
+需要 metadata `user-id`（学生）。
+
+**请求：** `room_id, session_id, makeup`（bool，补签标记）。
+
+**说明：** 成员校验（非成员 `PERMISSION_DENIED`）；窗口内 method=1；已关闭时非 makeup → `FAILED_PRECONDITION`「签到已截止」，makeup 但未开补签 → `FAILED_PRECONDITION`「本轮未开启补签」，否则 method=2。唯一约束 + `ON CONFLICT DO NOTHING` 幂等。成功后发布 `action=update`。
+
+### 27. EndCheckin
+
+`rpc EndCheckin (EndCheckinRequest) returns (CheckinSessionResponse)`
+
+需要 metadata `user-id`（发起教师）。
+
+**请求：** `room_id, session_id`。**说明：** 手动结束，幂等（已 `ended_at` 不回写）。成功后发布 `action=ended`。
+
+### 28. OpenCheckinMakeup
+
+`rpc OpenCheckinMakeup (OpenCheckinMakeupRequest) returns (CheckinSessionResponse)`
+
+需要 metadata `user-id`（发起教师）。
+
+**请求：** `room_id, session_id`。**说明：** 仅允许对已关闭轮次开启（进行中 → `FAILED_PRECONDITION`「签到进行中，无需补签」）。成功后发布 `action=makeup`（无 signed_count）。
+
+### 29. GetCheckinState
+
+`rpc GetCheckinState (GetCheckinStateRequest) returns (GetCheckinStateResponse)`
+
+需要 metadata `user-id`。
+
+**请求：** `room_id`。**响应**：`data.has_session / is_owner / session`（含 `my_signed`、`my_method`）。有轮次时仅所有者或教室内成员可查（否则 `PERMISSION_DENIED`）。不触发广播。
+
+### 30. ListCheckinSessions
+
+`rpc ListCheckinSessions (ListCheckinSessionsRequest) returns (ListCheckinSessionsResponse)`
+
+需要 metadata `user-id`（仅房间所有者）。
+
+**请求：** `room_id, page, page_size`。**响应**：`data.items` 按 `started_at` 倒序，`data.total`。
+
+### 31. GetCheckinRecords
+
+`rpc GetCheckinRecords (GetCheckinRecordsRequest) returns (GetCheckinRecordsResponse)`
+
+需要 metadata `user-id`（仅房间所有者，否则 `PERMISSION_DENIED`「无权查看签到明细」）。
+
+**请求：** `session_id`。**响应**：`data.items`（应到全量行 ∪ 分母外已签行）、`attendee_count`、`signed_count`、`attended_count`；用户名由 auth-service 批量解析，失败回退 user_id。

@@ -208,7 +208,31 @@ ws://<host>:50054?token=<JWT>&roomId=<roomId>&liveUserId=<userId>&nickName=<nick
 
 `historyError` 形状：`{ "type": "historyError", "data": { "reason": "<reason>" } }`。
 
-### 10. GET /healthz
+### 10. checkin（签到事件广播）
+
+- 触发：网关签到接口（发起/签到/结束/补签）成功后发布到 Redis 频道 `live:checkin`，本服务订阅并转发给房间全员
+- 客户端不发送此帧（客户端上行指令走 HTTP，见 [server/checkin.md](../server/checkin.md)）
+
+```json
+{
+  "type": "checkin",
+  "data": { "roomId": "R1", "action": "started", "sessionId": "…", "deadlineAt": "…" }
+}
+```
+
+| 字段        | 类型   | 说明                                       |
+| ----------- | ------ | ------------------------------------------ |
+| roomId      | string | 房间 ID                                    |
+| action      | string | `started` / `update` / `ended` / `makeup`  |
+| sessionId   | string | 轮次 ID                                    |
+| deadlineAt  | string | 截止时间（ISO8601，仅 `started` 携带）     |
+| signedCount | number | 累计已签人数（仅 `update` / `ended` 携带） |
+
+- 超时轮次由客户端按 `deadlineAt` 本地关闭（配合服务器时间校准），服务端不发 `ended`，无清理任务
+- 客户端对同一 `sessionId` 的 `signedCount` **只接受更大值**（单调守卫，迟到的旧帧不得回退计数）；缺 `sessionId` 的帧忽略
+- Redis 发布失败仅记录告警，签到结果不受影响
+
+### 11. GET /healthz
 
 `GET /healthz` → 200 JSON：
 
