@@ -72,5 +72,26 @@ export default {
   },
   update_user_name(params: { userName: string }) {
     return http.post(`${config.userApi}/user/updateUserName`, params);
+  },
+  checkin_start(params: { roomId: string; duration: number }) {
+    return http.post(`${config.liveApi}/live/checkin/start`, params);
+  },
+  checkin_respond(params: { roomId: string; sessionId: string; makeup?: boolean }) {
+    return http.post(`${config.liveApi}/live/checkin/respond`, params);
+  },
+  checkin_end(params: { roomId: string; sessionId: string }) {
+    return http.post(`${config.liveApi}/live/checkin/end`, params);
+  },
+  checkin_open_makeup(params: { roomId: string; sessionId: string }) {
+    return http.post(`${config.liveApi}/live/checkin/openMakeup`, params);
+  },
+  checkin_state(params: { roomId: string }) {
+    return http.get(`${config.liveApi}/live/checkin/state/${params.roomId}`);
+  },
+  checkin_sessions(params: { roomId: string; page?: number; pageSize?: number }) {
+    return http.get(`${config.liveApi}/live/checkin/sessions/${params.roomId}`, { params });
+  },
+  checkin_records(sessionId: string) {
+    return http.get(`${config.liveApi}/live/checkin/records/${sessionId}`);
   }
 };

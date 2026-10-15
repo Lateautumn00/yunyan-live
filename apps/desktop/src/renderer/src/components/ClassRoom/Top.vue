@@ -159,6 +159,23 @@
         </div>
       </div>
       <div class="right">
+        <el-popover
+          v-if="isTeacher"
+          placement="bottom"
+          :width="300"
+          trigger="click"
+          :visible-arrow="false"
+          popper-class="checkin-popper"
+          @show="checkinPanelOpen = true"
+          @hide="checkinPanelOpen = false"
+        >
+          <template #reference>
+            <div class="top-right content">
+              <el-icon :size="16"> <Checked /> </el-icon><span>签到</span>
+            </div>
+          </template>
+          <CheckinPanel v-if="checkinPanelOpen && roomId" :room-id="roomId" />
+        </el-popover>
         <div
           v-if="!btn && isTeacher && type !== 'stop'"
           class="top-right content"
@@ -305,6 +322,7 @@ import { Setting } from '@element-plus/icons-vue';
 import { formatStopwatch } from '@yunyan-live/utils';
 import { useCopy } from '@/composables/useCopy';
 import { useServerTime } from '@/composables/useServerTime';
+import CheckinPanel from './CheckinPanel.vue';
 
 interface RoomInfo {
   title?: string;
@@ -354,6 +372,9 @@ const emit = defineEmits<{
 }>();
 
 const router = useRouter();
+
+/** 签到面板（教师点击触发的 popover）：打开时才挂载 CheckinPanel → onMounted 水合 */
+const checkinPanelOpen = ref(false);
 
 const isNavigating = ref(false);
 const visible = ref(false);

@@ -48,7 +48,11 @@ function createWrapper() {
   });
   return mount(Classroom, {
     props: { role: 'student', size: 'small' },
-    global: { plugins: [router, ElementPlus], components: stubs }
+    global: {
+      plugins: [router, ElementPlus],
+      components: stubs,
+      stubs: { CheckinPanel: true, CheckinDialog: true }
+    }
   });
 }
 

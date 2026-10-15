@@ -208,7 +208,8 @@ const menuItems = computed(() => {
   const items = [
     { command: 'gotoroom', label: '进入房间' },
     { command: 'share', label: '分享' },
-    { command: 'watchlist', label: '时长列表' }
+    { command: 'watchlist', label: '时长列表' },
+    { command: 'checkin', label: '签到记录' }
   ];
   // 上传课件仅 dropdown 变体（直播列表）提供；直播概况页用独立按钮入口
   if (isDropdown.value) {
@@ -261,6 +262,8 @@ function onCommand(command: string) {
     }
   } else if (command === 'watchlist') {
     nav.gowatchlist(props.room);
+  } else if (command === 'checkin') {
+    nav.goCheckin(props.room);
   } else if (command === 'upload') {
     coursewareDialogVisible.value = true;
   } else if (command === 'transfer') {

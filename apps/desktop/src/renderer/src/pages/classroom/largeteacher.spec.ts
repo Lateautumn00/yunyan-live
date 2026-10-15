@@ -45,7 +45,11 @@ function createWrapper() {
   });
   return mount(Classroom, {
     props: { role: 'teacher', size: 'large' },
-    global: { plugins: [router, ElementPlus], components: stubs }
+    global: {
+      plugins: [router, ElementPlus],
+      components: stubs,
+      stubs: { CheckinPanel: true, CheckinDialog: true }
+    }
   });
 }
 

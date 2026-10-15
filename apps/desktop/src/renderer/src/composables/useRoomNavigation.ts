@@ -20,6 +20,13 @@ export function useRoomNavigation() {
     });
   }
 
+  function goCheckin(room: LiveRoom) {
+    void router.push({
+      path: '/teacher/mylive/checkin',
+      query: { roomId: room.roomId, name: room.title }
+    });
+  }
+
   function goLiveRoom(room: LiveRoom, identity: number) {
     const type = room.type === 0 ? 'small' : 'large';
     const role = identity === 1 ? 'teacher' : 'student';
@@ -36,5 +43,5 @@ export function useRoomNavigation() {
     }, 500);
   }
 
-  return { goplayback, gowatchlist, goLiveRoom };
+  return { goplayback, gowatchlist, goCheckin, goLiveRoom };
 }

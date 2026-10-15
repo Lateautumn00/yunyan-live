@@ -73,6 +73,7 @@ async function mountActions(
     routes: [
       { path: '/', component: { template: '<div class="route-home" />' } },
       { path: '/teacher/mylive/watchlist', component: { template: '<div />' } },
+      { path: '/teacher/mylive/checkin', component: { template: '<div />' } },
       { path: '/teacher/playback/detail', component: { template: '<div />' } },
       { path: '/classroom/smallstudent', component: { template: '<div />' } },
       { path: '/classroom/largestudent', component: { template: '<div />' } },
@@ -121,6 +122,7 @@ describe('components/teacher/RoomActions.vue', () => {
       'gotoroom',
       'share',
       'watchlist',
+      'checkin',
       'upload',
       'transfer',
       'edit',
@@ -132,6 +134,7 @@ describe('components/teacher/RoomActions.vue', () => {
       'gotoroom',
       'share',
       'watchlist',
+      'checkin',
       'upload',
       'delete'
     ]);
@@ -210,6 +213,15 @@ describe('components/teacher/RoomActions.vue', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('签到记录命令跳转签到列表并携带房间参数', async () => {
+    const { wrapper, router } = await mountActions();
+    expect(vm(wrapper).menuItems.find(i => i.command === 'checkin')?.label).toBe('签到记录');
+    vm(wrapper).onCommand('checkin');
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe('/teacher/mylive/checkin');
+    expect(router.currentRoute.value.query).toEqual({ roomId: 'R1', name: '数学课' });
   });
 
   it('编辑保存调用 update_live 并 emit updated', async () => {

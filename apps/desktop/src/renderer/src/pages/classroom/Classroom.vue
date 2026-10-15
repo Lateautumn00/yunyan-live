@@ -106,6 +106,7 @@
               @update-num="updateNum"
               @send-time="sendTime"
               @live-started="onLiveStarted"
+              @checkin="onCheckin"
             />
             <Pople v-show="activeName === 'people'" ref="pople" :live-user-id="opaqueId" />
           </div>
@@ -168,12 +169,13 @@
       :opaque-id="opaqueId"
       @close="closedPlay"
     />
+    <CheckinDialog v-if="isStudent" :room-id="roomId" />
     <ClassNotification ref="classNotification" />
   </div>
 </template>
 <script lang="ts">
 // @ts-nocheck — TODO: align event-handler types with sub-component emits
-import { computed, defineComponent, ref } from 'vue';
+import { computed, defineComponent, onUnmounted, ref } from 'vue';
 import { uid } from '@yunyan-live/utils';
 import Top from '@/components/ClassRoom/Top.vue';
 import History from '@/components/ClassRoom/History.vue';
@@ -188,6 +190,7 @@ import HistoryVideoDialog from '@/components/ClassRoom/HistoryVideoDialog.vue';
 import VideoPlayer from '@/components/ClassRoom/VideoPlayer.vue';
 import FlexibleLayout from '@/components/ClassRoom/FlexibleLayout.vue';
 import ClassNotification from '@/components/ClassRoom/ClassNotification.vue';
+import CheckinDialog from '@/components/ClassRoom/CheckinDialog.vue';
 import { useClassroomNotifications } from '@/composables/useClassroomNotifications';
 import { useClassroomTabs } from '@/composables/useClassroomTabs';
 import { useClassroomHelpers } from '@/composables/useClassroomHelpers';
@@ -195,6 +198,7 @@ import { useClassroomRoom } from '@/composables/useClassroomRoom';
 import { useClassroomDisplay } from '@/composables/useClassroomDisplay';
 import { useClassroomTeacherHooks } from '@/composables/useClassroomTeacherHooks';
 import { useClassroomStudentHooks } from '@/composables/useClassroomStudentHooks';
+import { useClassroomCheckin, type CheckinWsPayload } from '@/composables/useClassroomCheckin';
 
 export default defineComponent({
   name: 'Classroom',
@@ -211,7 +215,8 @@ export default defineComponent({
     HistoryVideoDialog,
     VideoPlayer,
     FlexibleLayout,
-    ClassNotification
+    ClassNotification,
+    CheckinDialog
   },
   props: {
     role: { type: String, required: true },
@@ -237,6 +242,17 @@ export default defineComponent({
     const history = ref<InstanceType<typeof History> | null>(null);
     const videoListComp = ref<InstanceType<typeof VideoList> | null>(null);
     const classNotification = ref<InstanceType<typeof ClassNotification> | null>(null);
+
+    // 签到：单例状态（教师面板/学生弹窗共享），Chat 'checkin' 帧入口
+    const checkin = useClassroomCheckin();
+
+    function onCheckin(payload: CheckinWsPayload) {
+      checkin.handleWs(payload);
+    }
+
+    onUnmounted(() => {
+      checkin.reset();
+    });
 
     const {
       activeName,
@@ -493,6 +509,7 @@ export default defineComponent({
       onParticipantLeave,
       onBroadcastStart,
       onBroadcastStop,
+      onCheckin,
       updatePopleList
     };
   }

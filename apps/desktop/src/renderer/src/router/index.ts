@@ -25,6 +25,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/teacher/mylive/watchlist/index.vue')
   },
   {
+    path: '/teacher/mylive/checkin',
+    name: 'teacher.mylive.checkin',
+    component: () => import('@/pages/teacher/mylive/checkin/index.vue')
+  },
+  {
     path: '/teacher/playback',
     name: 'teacher.playback',
     component: () => import('@/pages/teacher/playback/index.vue')

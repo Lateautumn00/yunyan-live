@@ -147,6 +147,7 @@ import {
 } from '@/composables/useChatMessages';
 import { useChatHistoryPager } from '@/composables/useChatHistoryPager';
 import EmojiPicker from './EmojiPicker.vue';
+import type { CheckinWsPayload } from '@/composables/useClassroomCheckin';
 import { CHAT_LIMITS, extractMentions, formatChatTime } from '@/utils/chatFormat';
 
 /** Redis 禁言极性：0=禁言 1=可发言（与服务端 FORBID_FORBIDDEN/FORBID_ALLOWED 一致） */
@@ -178,6 +179,7 @@ const emit = defineEmits<{
   (e: 'sendTime', time: number): void;
   (e: 'updateNum', status: boolean, num: number, type: string): void;
   (e: 'liveStarted'): void;
+  (e: 'checkin', payload: CheckinWsPayload): void;
 }>();
 
 const isBottom = ref(true);
@@ -379,6 +381,9 @@ function liveSocketMessage(e: MessageEvent) {
       break;
     case 'live_started':
       emit('liveStarted');
+      break;
+    case 'checkin':
+      if (redata.data) emit('checkin', redata.data as CheckinWsPayload);
       break;
     default:
       break;
