@@ -127,7 +127,7 @@ describe('CheckinService.create', () => {
     expect(h.queryRunner.release).toHaveBeenCalled();
 
     expect(h.snapshotQb.where).toHaveBeenCalledWith(
-      'w."roomId" = :roomId AND w."leftAt" IS NULL AND w."userId" <> :teacherId',
+      'w.roomId = :roomId AND w.leftAt IS NULL AND w.userId <> :teacherId',
       { roomId: 'r1', teacherId: 't1' }
     );
     const created = h.queryRunner.manager.create.mock.calls[0][1] as Record<string, unknown>;

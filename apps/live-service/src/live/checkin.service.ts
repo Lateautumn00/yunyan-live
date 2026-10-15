@@ -142,8 +142,8 @@ export class CheckinService {
       const raw = await queryRunner.manager
         .getRepository(UserWatchTime)
         .createQueryBuilder('w')
-        .select('DISTINCT w."userId"', 'userId')
-        .where('w."roomId" = :roomId AND w."leftAt" IS NULL AND w."userId" <> :teacherId', {
+        .select('DISTINCT w.userId', 'userId')
+        .where('w.roomId = :roomId AND w.leftAt IS NULL AND w.userId <> :teacherId', {
           roomId: room.roomId,
           teacherId: room.liveUserId
         })
