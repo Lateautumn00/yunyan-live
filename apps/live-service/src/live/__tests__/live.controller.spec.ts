@@ -40,10 +40,26 @@ function makeService(): ServiceMock {
   };
 }
 
+function makeCheckinService(): ServiceMock {
+  return {
+    create: vi.fn(),
+    respond: vi.fn(),
+    end: vi.fn(),
+    openMakeup: vi.fn(),
+    state: vi.fn(),
+    listSessions: vi.fn(),
+    records: vi.fn()
+  };
+}
+
 function makeController() {
   const service = makeService();
-  const controller = new LiveController(service as unknown as LiveService);
-  return { controller, service };
+  const checkinService = makeCheckinService();
+  const controller = new LiveController(
+    service as unknown as LiveService,
+    checkinService as unknown as ConstructorParameters<typeof LiveController>[1]
+  );
+  return { controller, service, checkinService };
 }
 
 describe('LiveController gRPC 映射', () => {

@@ -2,6 +2,8 @@
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   BoardSnapshot,
+  CheckinRecord,
+  CheckinSession,
   Courseware,
   LiveParticipant,
   LiveRoom,
@@ -11,6 +13,7 @@ import {
 } from '@yunyan-live/shared';
 import { LiveController } from './live.controller';
 import { LiveService } from './live.service';
+import { CheckinService } from './checkin.service';
 
 @Module({
   imports: [
@@ -21,11 +24,13 @@ import { LiveService } from './live.service';
       VideoRecording,
       UserWatchTime,
       Courseware,
-      BoardSnapshot
+      BoardSnapshot,
+      CheckinSession,
+      CheckinRecord
     ])
   ],
   controllers: [LiveController],
-  providers: [LiveService],
-  exports: [LiveService]
+  providers: [LiveService, CheckinService],
+  exports: [LiveService, CheckinService]
 })
 export class LiveModule {}

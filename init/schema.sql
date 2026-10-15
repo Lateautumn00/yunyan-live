@@ -117,3 +117,33 @@ CREATE TABLE board_snapshots (
 );
 CREATE INDEX IF NOT EXISTS IDX_board_snapshots_room_created
   ON board_snapshots ("roomId", "createdAt");
+
+-- 10. 签到轮次表（live-service，TypeORM CheckinSession 实体）
+-- DDL 对应 apps/live-service/src/migrations/20261015_create_checkin_tables.sql
+-- 状态三态由 endedAt/deadlineAt 派生（active/expired/ended），无 status 列
+BEGIN;
+CREATE TABLE IF NOT EXISTS checkin_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "roomId" VARCHAR(50) NOT NULL,
+  "teacherId" VARCHAR(50) NOT NULL,
+  "startedAt" TIMESTAMPTZ NOT NULL,
+  "deadlineAt" TIMESTAMPTZ NOT NULL,
+  "endedAt" TIMESTAMPTZ,
+  "attendeeIds" JSONB NOT NULL,
+  "attendeeCount" INTEGER NOT NULL DEFAULT 0,
+  "makeupOpen" BOOLEAN NOT NULL DEFAULT FALSE,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS IDX_checkin_sessions_room_started
+  ON checkin_sessions ("roomId", "startedAt" DESC);
+
+-- 11. 签到记录表（(sessionId,userId) 唯一 → 幂等）
+CREATE TABLE IF NOT EXISTS checkin_records (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "sessionId" UUID NOT NULL,
+  "userId" VARCHAR(50) NOT NULL,
+  "respondedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  method SMALLINT NOT NULL DEFAULT 1,
+  CONSTRAINT UQ_checkin_records_session_user UNIQUE ("sessionId", "userId")
+);
+COMMIT;

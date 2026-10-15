@@ -4,12 +4,16 @@ import { Metadata } from '@grpc/grpc-js';
 import { ok, userIdFromMetadata } from '@yunyan-live/nest-shared';
 
 import { LiveService } from './live.service';
+import { CheckinService, type CheckinSessionView } from './checkin.service';
 
 @Controller()
 export class LiveController {
   private readonly logger = new Logger(LiveController.name);
 
-  constructor(private readonly liveService: LiveService) {}
+  constructor(
+    private readonly liveService: LiveService,
+    private readonly checkinService: CheckinService
+  ) {}
 
   @GrpcMethod('LiveService', 'CreateLive')
   async createLive(
@@ -560,5 +564,117 @@ export class LiveController {
         total_time_by_room: result.totalTime
       }
     });
+  }
+
+  @GrpcMethod('LiveService', 'CreateCheckin')
+  async createCheckin(data: { room_id: string; duration: number }, metadata: Metadata) {
+    const userId = userIdFromMetadata(metadata);
+    this.logger.log(`gRPC CreateCheckin: room=${data.room_id} by ${userId}`);
+    const view = await this.checkinService.create(data.room_id, data.duration, userId);
+    return ok({ data: this.grpcCheckinSession(view) });
+  }
+
+  @GrpcMethod('LiveService', 'RespondCheckin')
+  async respondCheckin(
+    data: { room_id: string; session_id: string; makeup?: boolean },
+    metadata: Metadata
+  ) {
+    const userId = userIdFromMetadata(metadata);
+    const result = await this.checkinService.respond(
+      { roomId: data.room_id, sessionId: data.session_id, makeup: data.makeup },
+      userId
+    );
+    return ok({
+      signed_count: result.signedCount,
+      already_signed: result.alreadySigned,
+      makeup: result.makeup
+    });
+  }
+
+  @GrpcMethod('LiveService', 'EndCheckin')
+  async endCheckin(data: { room_id: string; session_id: string }, metadata: Metadata) {
+    const userId = userIdFromMetadata(metadata);
+    this.logger.log(`gRPC EndCheckin: session=${data.session_id} by ${userId}`);
+    const view = await this.checkinService.end(data.room_id, data.session_id, userId);
+    return ok({ data: this.grpcCheckinSession(view) });
+  }
+
+  @GrpcMethod('LiveService', 'OpenCheckinMakeup')
+  async openCheckinMakeup(data: { room_id: string; session_id: string }, metadata: Metadata) {
+    const userId = userIdFromMetadata(metadata);
+    this.logger.log(`gRPC OpenCheckinMakeup: session=${data.session_id} by ${userId}`);
+    const view = await this.checkinService.openMakeup(data.room_id, data.session_id, userId);
+    return ok({ data: this.grpcCheckinSession(view) });
+  }
+
+  @GrpcMethod('LiveService', 'GetCheckinState')
+  async getCheckinState(data: { room_id: string }, metadata: Metadata) {
+    const userId = userIdFromMetadata(metadata);
+    const state = await this.checkinService.state(data.room_id, userId);
+    return ok({
+      data: {
+        has_session: state.hasSession,
+        is_owner: state.isOwner,
+        session: state.session ? this.grpcCheckinSession(state.session) : undefined
+      }
+    });
+  }
+
+  @GrpcMethod('LiveService', 'ListCheckinSessions')
+  async listCheckinSessions(
+    data: { room_id: string; page?: number; page_size?: number },
+    metadata: Metadata
+  ) {
+    const userId = userIdFromMetadata(metadata);
+    const result = await this.checkinService.listSessions(
+      data.room_id,
+      data.page || 1,
+      data.page_size || 10,
+      userId
+    );
+    return ok({
+      data: {
+        items: result.items.map(item => this.grpcCheckinSession(item)),
+        total: result.total
+      }
+    });
+  }
+
+  @GrpcMethod('LiveService', 'GetCheckinRecords')
+  async getCheckinRecords(data: { session_id: string }, metadata: Metadata) {
+    const userId = userIdFromMetadata(metadata);
+    const result = await this.checkinService.records(data.session_id, userId);
+    return ok({
+      data: {
+        items: result.items.map(item => ({
+          user_id: item.userId,
+          in_denominator: item.inDenominator,
+          signed: item.signed,
+          method: item.method,
+          responded_at: item.respondedAt
+        })),
+        total: result.total,
+        attendee_count: result.attendeeCount,
+        signed_count: result.signedCount,
+        attended_count: result.attendedCount
+      }
+    });
+  }
+
+  private grpcCheckinSession(view: CheckinSessionView) {
+    return {
+      session_id: view.sessionId,
+      room_id: view.roomId,
+      teacher_id: view.teacherId,
+      started_at: view.startedAt,
+      deadline_at: view.deadlineAt,
+      ended_at: view.endedAt,
+      attendee_count: view.attendeeCount,
+      signed_count: view.signedCount,
+      makeup_open: view.makeupOpen,
+      status: view.status,
+      my_signed: view.mySigned,
+      my_method: view.myMethod
+    };
   }
 }

@@ -3,6 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   BoardSnapshot,
+  CheckinRecord,
+  CheckinSession,
   Courseware,
   LiveParticipant,
   LiveRoom,
@@ -28,7 +30,9 @@ import { LiveModule } from './live/live.module';
           VideoRecording,
           UserWatchTime,
           Courseware,
-          BoardSnapshot
+          BoardSnapshot,
+          CheckinSession,
+          CheckinRecord
         ],
         synchronize: true,
         timezone: '+08:00'
