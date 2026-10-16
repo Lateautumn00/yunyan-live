@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   checkinEnd: vi.fn(),
   checkinOpenMakeup: vi.fn(),
   checkinRespond: vi.fn(),
+  checkinRecords: vi.fn(),
   getNowTime: vi.fn()
 }));
 
@@ -21,6 +22,7 @@ vi.mock('@/api', () => ({
     checkin_end: (params: unknown) => mocks.checkinEnd(params),
     checkin_open_makeup: (params: unknown) => mocks.checkinOpenMakeup(params),
     checkin_respond: (params: unknown) => mocks.checkinRespond(params),
+    checkin_records: (sessionId: unknown) => mocks.checkinRecords(sessionId),
     getNowTime: () => mocks.getNowTime()
   }
 }));
@@ -65,6 +67,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   c.reset();
   mocks.getNowTime.mockResolvedValue(ok({ nowTime: String(Date.now()) }));
+  mocks.checkinRecords.mockResolvedValue(
+    ok({ items: [], total: 0, attendeeCount: 0, signedCount: 0, attendedCount: 0 })
+  );
   hydrateState(null);
 });
 
@@ -168,5 +173,112 @@ describe('components/ClassRoom/CheckinPanel.vue', () => {
     expect(document.body.textContent).toContain('发起签到失败');
     expect(c.submitting.value).toBe(false);
     spy.mockRestore();
+  });
+
+  it('进行中展示签到名单（已签/未签/补签/名单外）', async () => {
+    hydrateState(makeSession());
+    mocks.checkinRecords.mockResolvedValue(
+      ok({
+        items: [
+          {
+            userId: 'u1',
+            nickName: '甲',
+            inDenominator: true,
+            signed: true,
+            method: 1,
+            respondedAt: '2026-10-15T08:00:30.000Z'
+          },
+          {
+            userId: 'u2',
+            nickName: '乙',
+            inDenominator: true,
+            signed: false,
+            method: 0,
+            respondedAt: ''
+          },
+          {
+            userId: 'u3',
+            nickName: '丙',
+            inDenominator: true,
+            signed: true,
+            method: 2,
+            respondedAt: '2026-10-15T08:01:00.000Z'
+          },
+          {
+            userId: 'u4',
+            nickName: '丁',
+            inDenominator: false,
+            signed: true,
+            method: 1,
+            respondedAt: '2026-10-15T08:01:10.000Z'
+          }
+        ],
+        total: 4,
+        attendeeCount: 3,
+        signedCount: 3,
+        attendedCount: 2
+      })
+    );
+    const wrapper = mountPanel();
+    await flushPromises();
+    expect(mocks.checkinRecords).toHaveBeenCalledWith('s1');
+    const roster = wrapper.find('.checkin-roster');
+    expect(roster.exists()).toBe(true);
+    expect(roster.text()).toContain('签到名单');
+    const rows = roster.findAll('.roster-row');
+    expect(rows).toHaveLength(4);
+    expect(rows[0]?.text()).toContain('已签');
+    expect(rows[0]?.text()).toContain('甲');
+    expect(rows[1]?.text()).toContain('未签');
+    expect(rows[1]?.text()).toContain('乙');
+    expect(rows[2]?.text()).toContain('补签');
+    expect(rows[2]?.text()).toContain('丙');
+    expect(rows[3]?.text()).toContain('名单外');
+    expect(rows[3]?.text()).toContain('丁');
+    expect(rows[1]?.find('.roster-status').classes()).toContain('is-pending');
+    expect(rows[2]?.find('.roster-status').classes()).toContain('is-makeup');
+  });
+
+  it('名单为空时显示占位', async () => {
+    hydrateState(makeSession());
+    const wrapper = mountPanel();
+    await flushPromises();
+    const roster = wrapper.find('.checkin-roster');
+    expect(roster.exists()).toBe(true);
+    expect(roster.text()).toContain('暂无签到记录');
+    expect(roster.find('.roster-row').exists()).toBe(false);
+  });
+
+  it('收到 update 帧后自动刷新名单', async () => {
+    hydrateState(makeSession());
+    const wrapper = mountPanel();
+    await flushPromises();
+    expect(mocks.checkinRecords).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('.checkin-roster').text()).toContain('暂无签到记录');
+
+    mocks.checkinRecords.mockResolvedValue(
+      ok({
+        items: [
+          {
+            userId: 'u1',
+            nickName: '甲',
+            inDenominator: true,
+            signed: true,
+            method: 1,
+            respondedAt: '2026-10-15T08:00:30.000Z'
+          }
+        ],
+        total: 1,
+        attendeeCount: 8,
+        signedCount: 1,
+        attendedCount: 1
+      })
+    );
+    c.handleWs({ roomId: 'R1', action: 'update', sessionId: 's1', signedCount: 4 });
+    await flushPromises();
+    expect(mocks.checkinRecords).toHaveBeenCalledTimes(2);
+    const roster = wrapper.find('.checkin-roster');
+    expect(roster.text()).toContain('甲');
+    expect(roster.find('.roster-row').exists()).toBe(true);
   });
 });

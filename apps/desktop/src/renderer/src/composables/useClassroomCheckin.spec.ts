@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 import { ok } from '@/testing/utils';
-import { useClassroomCheckin, type CheckinSessionInfo } from './useClassroomCheckin';
+import {
+  useClassroomCheckin,
+  type CheckinRecordItem,
+  type CheckinRecordsData,
+  type CheckinSessionInfo
+} from './useClassroomCheckin';
 
 const mocks = vi.hoisted(() => ({
   checkinState: vi.fn(),
@@ -9,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   checkinEnd: vi.fn(),
   checkinOpenMakeup: vi.fn(),
   checkinRespond: vi.fn(),
+  checkinRecords: vi.fn(),
   getNowTime: vi.fn()
 }));
 
@@ -19,6 +25,7 @@ vi.mock('@/api', () => ({
     checkin_end: (params: unknown) => mocks.checkinEnd(params),
     checkin_open_makeup: (params: unknown) => mocks.checkinOpenMakeup(params),
     checkin_respond: (params: unknown) => mocks.checkinRespond(params),
+    checkin_records: (sessionId: unknown) => mocks.checkinRecords(sessionId),
     getNowTime: () => mocks.getNowTime()
   }
 }));
@@ -44,12 +51,29 @@ function hydrateState(session: CheckinSessionInfo | null, isOwner = false) {
   mocks.checkinState.mockResolvedValue(ok({ hasSession: session !== null, isOwner, session }));
 }
 
+function recordsData(items: CheckinRecordItem[] = []): CheckinRecordsData {
+  return { items, total: items.length, attendeeCount: 0, signedCount: 0, attendedCount: 0 };
+}
+
+function makeRecord(overrides: Partial<CheckinRecordItem> = {}): CheckinRecordItem {
+  return {
+    userId: 'u1',
+    nickName: '甲',
+    inDenominator: true,
+    signed: true,
+    method: 1,
+    respondedAt: '2026-10-15T08:00:30.000Z',
+    ...overrides
+  };
+}
+
 const c = useClassroomCheckin();
 
 beforeEach(() => {
   vi.clearAllMocks();
   c.reset();
   mocks.getNowTime.mockResolvedValue(ok({ nowTime: String(Date.now()) }));
+  mocks.checkinRecords.mockResolvedValue(ok(recordsData()));
 });
 
 afterEach(() => {
@@ -255,9 +279,102 @@ describe('composables/useClassroomCheckin', () => {
     expect(c.dialogVisible.value).toBe(false);
   });
 
-  it('reset 清空全部状态', async () => {
+  it('owner hydrate 拉取名单并填充，学生端不拉取', async () => {
+    hydrateState(makeSession(), true);
+    mocks.checkinRecords.mockResolvedValue(ok(recordsData([makeRecord()])));
+    await c.hydrate('R1');
+    expect(mocks.checkinRecords).toHaveBeenCalledWith('s1');
+    expect(c.records.value).toHaveLength(1);
+    expect(c.records.value[0]?.nickName).toBe('甲');
+    expect(c.recordsLoading.value).toBe(false);
+
+    c.reset();
+    hydrateState(makeSession(), false);
+    await c.hydrate('R1');
+    expect(mocks.checkinRecords).toHaveBeenCalledTimes(1);
+    expect(c.records.value).toHaveLength(0);
+  });
+
+  it('水合无 session 时清空名单', async () => {
+    hydrateState(makeSession(), true);
+    mocks.checkinRecords.mockResolvedValue(ok(recordsData([makeRecord()])));
+    await c.hydrate('R1');
+    expect(c.records.value).toHaveLength(1);
+
+    hydrateState(null, true);
+    await c.hydrate('R1');
+    expect(c.records.value).toHaveLength(0);
+    expect(c.recordsLoading.value).toBe(false);
+  });
+
+  it('名单拉取失败仅告警，不影响水合结果', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    hydrateState(makeSession(), true);
+    mocks.checkinRecords.mockRejectedValue(new Error('net'));
+    await c.hydrate('R1');
+    expect(c.session.value?.sessionId).toBe('s1');
+    expect(c.records.value).toHaveLength(0);
+    expect(c.recordsLoading.value).toBe(false);
+    expect(spy).toHaveBeenCalledWith('checkin records failed:', expect.any(Error));
+    spy.mockRestore();
+  });
+
+  it('名单竞态：旧响应晚到被丢弃', async () => {
+    hydrateState(makeSession(), true);
+    let resolveStale!: (v: unknown) => void;
+    mocks.checkinRecords
+      .mockReturnValueOnce(new Promise(resolve => (resolveStale = resolve)))
+      .mockResolvedValueOnce(ok(recordsData([makeRecord({ nickName: '新' })])));
+    const stale = c.hydrate('R1');
+    await flushPromises();
+    await c.hydrate('R1');
+    expect(c.records.value[0]?.nickName).toBe('新');
+    resolveStale(ok(recordsData([makeRecord({ nickName: '旧' })])));
+    await stale;
+    expect(c.records.value[0]?.nickName).toBe('新');
+  });
+
+  it('update/ended 帧在同轮次触发名单刷新（owner），学生端不触发', async () => {
     hydrateState(makeSession(), true);
     await c.hydrate('R1');
+    expect(mocks.checkinRecords).toHaveBeenCalledTimes(1);
+
+    c.handleWs({ roomId: 'R1', action: 'update', sessionId: 's1', signedCount: 4 });
+    await flushPromises();
+    expect(mocks.checkinRecords).toHaveBeenCalledTimes(2);
+    expect(mocks.checkinRecords).toHaveBeenLastCalledWith('s1');
+
+    c.handleWs({ roomId: 'R1', action: 'ended', sessionId: 's1', signedCount: 4 });
+    await flushPromises();
+    expect(mocks.checkinRecords).toHaveBeenCalledTimes(3);
+
+    c.reset();
+    hydrateState(makeSession(), false);
+    await c.hydrate('R1');
+    const studentCalls = mocks.checkinRecords.mock.calls.length;
+    c.handleWs({ roomId: 'R1', action: 'update', sessionId: 's1', signedCount: 5 });
+    await flushPromises();
+    expect(mocks.checkinRecords.mock.calls.length).toBe(studentCalls);
+  });
+
+  it('start 清空旧名单并为新轮次拉取', async () => {
+    hydrateState(makeSession(), true);
+    mocks.checkinRecords.mockResolvedValue(ok(recordsData([makeRecord()])));
+    await c.hydrate('R1');
+    expect(c.records.value).toHaveLength(1);
+
+    mocks.checkinRecords.mockResolvedValue(ok(recordsData()));
+    mocks.checkinStart.mockResolvedValue(ok(makeSession({ sessionId: 's2' })));
+    await c.start('R1', 30);
+    expect(c.records.value).toHaveLength(0);
+    expect(mocks.checkinRecords).toHaveBeenLastCalledWith('s2');
+  });
+
+  it('reset 清空全部状态', async () => {
+    hydrateState(makeSession(), true);
+    mocks.checkinRecords.mockResolvedValue(ok(recordsData([makeRecord()])));
+    await c.hydrate('R1');
+    expect(c.records.value).toHaveLength(1);
     c.reset();
     expect(c.session.value).toBeNull();
     expect(c.hasSession.value).toBe(false);
@@ -267,5 +384,7 @@ describe('composables/useClassroomCheckin', () => {
     expect(c.loading.value).toBe(false);
     expect(c.submitting.value).toBe(false);
     expect(c.duration.value).toBe(60);
+    expect(c.records.value).toHaveLength(0);
+    expect(c.recordsLoading.value).toBe(false);
   });
 });

@@ -32,6 +32,23 @@ export interface CheckinStateData {
   session: CheckinSessionInfo | null;
 }
 
+export interface CheckinRecordItem {
+  userId: string;
+  nickName: string;
+  inDenominator: boolean;
+  signed: boolean;
+  method: number;
+  respondedAt: string;
+}
+
+export interface CheckinRecordsData {
+  items: CheckinRecordItem[];
+  total: number;
+  attendeeCount: number;
+  signedCount: number;
+  attendedCount: number;
+}
+
 /** 单例状态：Top 面板（教师）、CheckinDialog（学生）、WS 事件共享同一份数据 */
 const session = ref<CheckinSessionInfo | null>(null);
 const hasSession = ref(false);
@@ -44,10 +61,15 @@ const submitting = ref(false);
 const serverOffset = ref(0);
 const tick = ref(Date.now());
 const duration = ref(60);
+/** 教师侧当前轮名单（仅 owner 拉取，学生端恒空） */
+const records = ref<CheckinRecordItem[]>([]);
+const recordsLoading = ref(false);
 
 let timer: ReturnType<typeof setInterval> | null = null;
 /** hydrate 竞态守卫：只采纳最新一次请求的响应，旧响应（含跨房间）直接丢弃 */
 let hydrateSeq = 0;
+/** records 竞态守卫：同上口径 */
+let recordsSeq = 0;
 
 const deadlineMs = computed(() => {
   const s = session.value;
@@ -110,6 +132,22 @@ async function syncServerTime(): Promise<void> {
   if (Number.isFinite(ms) && ms > 0) serverOffset.value = ms - Date.now();
 }
 
+/** 拉取当前轮签到名单（仅教师；失败保留旧列表，序号守卫丢弃过期响应） */
+async function loadRecords(sessionId: string): Promise<void> {
+  if (!isOwner.value || !sessionId) return;
+  const seq = ++recordsSeq;
+  recordsLoading.value = true;
+  try {
+    const res = await api.checkin_records(sessionId);
+    if (seq !== recordsSeq) return;
+    records.value = res?.data?.items ?? [];
+  } catch (err) {
+    if (seq === recordsSeq) console.error('checkin records failed:', err);
+  } finally {
+    if (seq === recordsSeq) recordsLoading.value = false;
+  }
+}
+
 /** 初态水合（打开面板/学生弹窗挂载/未知轮次广播时调用） */
 async function hydrate(roomId: string): Promise<void> {
   if (!roomId) return;
@@ -126,6 +164,13 @@ async function hydrate(roomId: string): Promise<void> {
     await syncServerTime();
     if (seq !== hydrateSeq) return;
     if (session.value && !closed.value) ensureTimer();
+    if (session.value && isOwner.value) {
+      await loadRecords(session.value.sessionId);
+    } else if (!session.value) {
+      records.value = [];
+      recordsLoading.value = false;
+      recordsSeq += 1;
+    }
   } catch (err) {
     if (seq === hydrateSeq) error.value = true;
     console.error('checkin hydrate failed:', err);
@@ -143,9 +188,12 @@ async function start(roomId: string, dur: number): Promise<void> {
     hasSession.value = true;
     isOwner.value = true;
     minimized.value = false;
+    records.value = [];
     tick.value = Date.now();
     await syncServerTime();
     ensureTimer();
+    const s = session.value;
+    if (s) await loadRecords(s.sessionId);
   } finally {
     submitting.value = false;
   }
@@ -233,12 +281,14 @@ function handleWs(payload: CheckinWsPayload | undefined): void {
   if (payload.action === 'update') {
     applySignedCount(payload.sessionId, payload.signedCount);
     ensureTimer();
+    void loadRecords(payload.sessionId);
     return;
   }
   if (payload.action === 'ended') {
     if (!s.endedAt) s.endedAt = new Date().toISOString();
     applySignedCount(payload.sessionId, payload.signedCount);
     stopTimer();
+    void loadRecords(payload.sessionId);
     return;
   }
   if (payload.action === 'makeup') {
@@ -249,6 +299,7 @@ function handleWs(payload: CheckinWsPayload | undefined): void {
 /** 课堂卸载：清 interval 与全部状态（序号递增使在途 hydrate 失效） */
 function reset(): void {
   hydrateSeq += 1;
+  recordsSeq += 1;
   stopTimer();
   session.value = null;
   hasSession.value = false;
@@ -260,6 +311,8 @@ function reset(): void {
   submitting.value = false;
   serverOffset.value = 0;
   duration.value = 60;
+  records.value = [];
+  recordsLoading.value = false;
 }
 
 export function useClassroomCheckin() {
@@ -276,6 +329,8 @@ export function useClassroomCheckin() {
     remaining,
     closed,
     attendeeLabel,
+    records,
+    recordsLoading,
     hydrate,
     start,
     respond,
