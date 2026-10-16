@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
+import { useRoute } from 'vue-router';
 import { useUserStore } from '@/store/user';
 import { useUpdater } from '@/composables/useUpdater';
+import { useStickyNotes } from '@/composables/useStickyNotes';
+import StickyNoteFab from '@/components/Notes/StickyNoteFab.vue';
+import StickyNoteDialog from '@/components/Notes/StickyNoteDialog.vue';
 
 const userStore = useUserStore();
+const route = useRoute();
+const { flushAll: flushStickyNotes } = useStickyNotes();
 const {
   status,
   manual,
@@ -53,6 +59,13 @@ const dialogTitle = computed(() => {
   return '发现新版本';
 });
 
+// 便签全局挂载门控：登录态 + 非登录页（必须在脚本侧；模板内读 localStorage 不是响应式依赖）
+const showStickyNotes = computed(() => route.path !== '/login' && !!localStorage.getItem('token'));
+
+function onPagehide(): void {
+  void flushStickyNotes();
+}
+
 onMounted(() => {
   bindUpdateEvents();
   void loadCurrentVersion();
@@ -62,18 +75,32 @@ onMounted(() => {
   if (!userStore.token && !userStore.guid) {
     void userStore.user_msg();
   }
+  window.addEventListener('pagehide', onPagehide);
 });
 
 onUnmounted(() => {
   if (timeOut.value !== null) {
     clearTimeout(timeOut.value);
   }
+  window.removeEventListener('pagehide', onPagehide);
 });
+
+// 路由切换时全量落盘未保存的便签
+watch(
+  () => route.fullPath,
+  () => {
+    void flushStickyNotes();
+  }
+);
 </script>
 
 <template>
   <div id="app">
     <router-view />
+    <template v-if="showStickyNotes">
+      <StickyNoteFab />
+      <StickyNoteDialog />
+    </template>
     <el-dialog
       v-model="dialogVisible"
       :title="dialogTitle"

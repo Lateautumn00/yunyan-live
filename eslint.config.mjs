@@ -78,5 +78,11 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/ban-ts-comment': 'off'
     }
+  },
+  {
+    files: ['**/components/Notes/**/*.vue'],
+    rules: {
+      'vue/no-v-html': 'off'
+    }
   }
 );

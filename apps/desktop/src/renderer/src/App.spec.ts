@@ -133,4 +133,31 @@ describe('App.vue', () => {
     await flushPromises();
     expect(w.findComponent({ name: 'ElDialog' }).props('modelValue')).toBe(false);
   });
+
+  it('便签入口按登录态渲染', async () => {
+    const w1 = await mountApp();
+    expect(w1.find('.sticky-note-fab').exists()).toBe(false);
+    w1.unmount();
+    wrapper = undefined;
+
+    localStorage.setItem('token', 'T1');
+    const w2 = await mountApp();
+    expect(w2.find('.sticky-note-fab').exists()).toBe(true);
+  });
+
+  it('/login 路由不渲染便签入口', async () => {
+    localStorage.setItem('token', 'T1');
+    const mounted = await mountPage(App, {
+      routes: [
+        { path: '/login', component: { template: '<div class="login" />' } },
+        { path: '/', component: { template: '<div class="root" />' } }
+      ],
+      initialRoute: '/login',
+      beforeMount: pinia => {
+        setActivePinia(pinia);
+      }
+    });
+    wrapper = mounted.wrapper;
+    expect(wrapper.find('.sticky-note-fab').exists()).toBe(false);
+  });
 });
