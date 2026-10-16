@@ -59,16 +59,16 @@
       width="min(480px, 90vw)"
     >
       <div class="room-entrance">
-        <div class="go-live-room" @click="goLiveRoom(0)">
-          <div :class="isHostRoom ? 'guest' : 'guest-chosen'">
-            <p>以听众身份进入</p>
-            <p>我爱知识与自由</p>
-          </div>
-        </div>
         <div class="go-live-room" @click="goLiveRoom(1)">
           <div :class="!isHostRoom ? 'host' : 'host-chosen'">
             <p>以老师身份进入</p>
             <p>争做新时代的好讲师</p>
+          </div>
+        </div>
+        <div class="go-live-room" @click="goLiveRoom(0)">
+          <div :class="isHostRoom ? 'guest' : 'guest-chosen'">
+            <p>以听众身份进入</p>
+            <p>我爱知识与自由</p>
           </div>
         </div>
       </div>
