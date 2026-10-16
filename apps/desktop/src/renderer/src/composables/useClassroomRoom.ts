@@ -76,8 +76,18 @@ export function useClassroomRoom(options: ClassroomRoomOptions) {
     });
   }
 
-  onMounted(() => {
-    getRoomInfo();
+  onMounted(async () => {
+    await getRoomInfo();
+    // 学生进教室即重开观看时长行（与 leave_room 对称）：刷新/直达路由等非 rooms 页
+    // 入口不经 joinLive，否则签到分母快照取不到在线学生。服务端幂等，失败不阻塞课堂。
+    if (role === 'student' && roomId) {
+      const code = roomInfo.value.joinCode;
+      if (typeof code === 'string' && code) {
+        void api
+          .join_live({ joinCode: code, nickName })
+          .catch((err: unknown) => console.warn('join_live on entry failed:', err));
+      }
+    }
   });
 
   return { router, route, roomId, nickName, roomInfo, getRoomInfo, videoList };
