@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CURVE_MAX_EXPR, layoutCurve, sampleCurve, validateExpr } from './curve';
 
-describe('curve — F2.2 函数表达式（Q3 白名单/边界）', () => {
+// mathjs 为动态 import 的独立懒 chunk（~1.39MB），全量并行下首载可能超过默认 5s 超时，
+// 套件级放宽到 20s；表达式正确性由用例内部逐条断言锁定，不依赖墙钟
+describe('curve — F2.2 函数表达式（Q3 白名单/边界）', { timeout: 20000 }, () => {
   it('正向：白名单内表达式通过校验', async () => {
     expect((await validateExpr('sin(x)+x^2')).ok).toBe(true);
     expect((await validateExpr('2*x+1')).ok).toBe(true);
