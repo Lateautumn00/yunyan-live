@@ -9,7 +9,7 @@ import {
   JoinLiveDto,
   UpdateLiveDto
 } from '@yunyan-live/nest-shared';
-import { LiveController } from './live.controller';
+import { LiveController, isSafeRecordingId } from './live.controller';
 
 /** 允许缺省 query 参数（模拟 express 未传入该 query） */
 const q = (s?: string) => s as string;
@@ -919,5 +919,39 @@ describe('LiveController board snapshot（房间级 403，Q4 MVP 仅教师）', 
     await expect(controller.getBoardSnapshot('s1', reqRole('t2', 1))).rejects.toMatchObject({
       status: 403
     });
+  });
+});
+
+describe('LiveController downloadRecording 安全净化（S8）', () => {
+  const fakeRes = () => {
+    const res = {
+      status: vi.fn(() => res),
+      json: vi.fn(() => res),
+      set: vi.fn(() => res)
+    };
+    return res;
+  };
+
+  it('isSafeRecordingId 白名单：仅 [A-Za-z0-9_-]，拒绝穿越与 shell 元字符', () => {
+    expect(isSafeRecordingId('abc123')).toBe(true);
+    expect(isSafeRecordingId('Ab_c-9')).toBe(true);
+    expect(isSafeRecordingId('')).toBe(false);
+    expect(isSafeRecordingId('../etc/passwd')).toBe(false);
+    expect(isSafeRecordingId('..')).toBe(false);
+    expect(isSafeRecordingId('a b')).toBe(false);
+    expect(isSafeRecordingId('a;rm -rf /')).toBe(false);
+    expect(isSafeRecordingId('$(whoami)')).toBe(false);
+    expect(isSafeRecordingId('a"b')).toBe(false);
+    expect(isSafeRecordingId('a`b')).toBe(false);
+    expect(isSafeRecordingId('a\nb')).toBe(false);
+  });
+
+  it('非法 id 直接 400，不再触碰文件系统/转码链路', async () => {
+    const { controller } = createController();
+    const res = fakeRes();
+    await controller.downloadRecording('$(reboot)', q(), res as never);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ code: 400, msg: '非法录制 id' });
+    expect(res.set).not.toHaveBeenCalled();
   });
 });

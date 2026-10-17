@@ -870,6 +870,12 @@ export class LiveController implements OnModuleInit {
     @Query('download') download: string,
     @Res() res: Response
   ) {
+    // S8 安全白名单：录制 id 由 Math.random().toString(36) 生成（[a-z0-9]），
+    // 拒绝路径穿越（. / \）与命令注入元字符；后续全部路径拼接与 docker exec 均以此为前提
+    if (!isSafeRecordingId(id)) {
+      return res.status(400).json({ code: 400, msg: '非法录制 id' });
+    }
+
     const hostRecordingsDir = process.env.RECORDINGS_DIR || '/home/janus/recordings';
     const hostVideoMjr = path.join(hostRecordingsDir, `rec-${id}-video.mjr`);
 
@@ -906,33 +912,104 @@ export class LiveController implements OnModuleInit {
     const container = process.env.JANUS_CONTAINER || 'janus-gateway';
     const ppRecBin = process.env.JANUS_PP_REC || '/opt/janus/bin/janus-pp-rec';
     const containerRecordings = '/tmp/janus/recordings';
-    const containerVideoWebm = `${containerRecordings}/${id}-video.webm`;
 
     fs.writeFileSync(markerFile, '');
 
-    const hasAudio = fs.existsSync(hostAudioMjr);
-    const containerVideoMjr = `${containerRecordings}/rec-${id}-video.mjr`;
-    const containerAudioMjr = `${containerRecordings}/rec-${id}-audio.mjr`;
-    const containerMp4 = `${containerRecordings}/${id}.mp4`;
-    const containerAudioOpus = `${containerRecordings}/${id}-audio.opus`;
-
-    const step1 = `docker exec ${container} ${ppRecBin} "${containerVideoMjr}" "${containerVideoWebm}"`;
-    const step2a = hasAudio
-      ? `docker exec ${container} ${ppRecBin} "${containerAudioMjr}" "${containerAudioOpus}"`
-      : '';
-    const step2b = hasAudio
-      ? `docker exec ${container} ffmpeg -y -i "${containerVideoWebm}" -i "${containerAudioOpus}" -c:v libx264 -preset ultrafast -c:a aac "${containerMp4}"`
-      : `docker exec ${container} ffmpeg -y -i "${containerVideoWebm}" -c:v libx264 -preset ultrafast "${containerMp4}"`;
-    const step4 = hasAudio
-      ? `docker exec ${container} rm -f "${containerVideoWebm}" "${containerAudioOpus}"`
-      : `docker exec ${container} rm -f "${containerVideoWebm}"`;
-
-    const script = [step1, step2a, step2b, step4, `rm -f "${markerFile}"`]
-      .filter(Boolean)
-      .join(' && ');
-    const child = spawn('sh', ['-c', script], { detached: true, stdio: 'ignore' });
-    child.unref();
+    // 异步转码：数组传参 docker exec（不经 shell），finally 必删 marker 保证失败可重试
+    void this.transcodeRecording({
+      container,
+      ppRecBin,
+      hasAudio: fs.existsSync(hostAudioMjr),
+      containerVideoMjr: `${containerRecordings}/rec-${id}-video.mjr`,
+      containerAudioMjr: `${containerRecordings}/rec-${id}-audio.mjr`,
+      containerVideoWebm: `${containerRecordings}/${id}-video.webm`,
+      containerAudioOpus: `${containerRecordings}/${id}-audio.opus`,
+      containerMp4: `${containerRecordings}/${id}.mp4`,
+      markerFile
+    });
 
     return res.json({ code: 2002, msg: '转码中，请稍后' });
   }
+
+  /** .mjr → .webm/.opus → .mp4 串行转码；失败删除半成品 mp4 并清理 marker（可重试） */
+  private async transcodeRecording(args: {
+    container: string;
+    ppRecBin: string;
+    hasAudio: boolean;
+    containerVideoMjr: string;
+    containerAudioMjr: string;
+    containerVideoWebm: string;
+    containerAudioOpus: string;
+    containerMp4: string;
+    markerFile: string;
+  }): Promise<void> {
+    const exec = (inner: string[]): Promise<void> =>
+      new Promise((resolve, reject) => {
+        const child = spawn('docker', ['exec', args.container, ...inner], { stdio: 'ignore' });
+        child.on('error', reject);
+        child.on('close', code =>
+          code === 0 ? resolve() : reject(new Error(`docker exec exit ${code}`))
+        );
+      });
+
+    try {
+      await exec([args.ppRecBin, args.containerVideoMjr, args.containerVideoWebm]);
+      if (args.hasAudio) {
+        await exec([args.ppRecBin, args.containerAudioMjr, args.containerAudioOpus]);
+      }
+      await exec(
+        args.hasAudio
+          ? [
+              'ffmpeg',
+              '-y',
+              '-i',
+              args.containerVideoWebm,
+              '-i',
+              args.containerAudioOpus,
+              '-c:v',
+              'libx264',
+              '-preset',
+              'ultrafast',
+              '-c:a',
+              'aac',
+              args.containerMp4
+            ]
+          : [
+              'ffmpeg',
+              '-y',
+              '-i',
+              args.containerVideoWebm,
+              '-c:v',
+              'libx264',
+              '-preset',
+              'ultrafast',
+              args.containerMp4
+            ]
+      );
+      await exec(
+        args.hasAudio
+          ? ['rm', '-f', args.containerVideoWebm, args.containerAudioOpus]
+          : ['rm', '-f', args.containerVideoWebm]
+      );
+    } catch (err) {
+      // 失败时删除半成品 mp4，避免损坏文件被当作"转码完成"下发
+      try {
+        fs.rmSync(args.containerMp4, { force: true });
+      } catch {
+        /* best effort */
+      }
+      console.error('[live] recording transcode failed:', err);
+    } finally {
+      try {
+        fs.rmSync(args.markerFile, { force: true });
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+}
+
+/** 录制 id 安全白名单：仅字母数字与 -_（防路径穿越与 shell 元字符） */
+export function isSafeRecordingId(id: string): boolean {
+  return /^[A-Za-z0-9_-]+$/.test(id);
 }
