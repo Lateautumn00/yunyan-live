@@ -35,11 +35,9 @@ jobs:
         run: pnpm typecheck
 
   tests:
-    name: Test (non-blocking)
+    name: Test
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # 桌面端仍有历史遗留的失败用例，修复后移除 continue-on-error
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
