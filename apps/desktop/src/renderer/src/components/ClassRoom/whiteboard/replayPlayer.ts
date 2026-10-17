@@ -36,7 +36,11 @@ export async function fetchReplay(
   fromSeq = 0
 ): Promise<ReplayDataDto> {
   const base = replayHttpBase(wsUrl);
-  const res = await fetch(`${base}/replay/${encodeURIComponent(roomId)}?fromSeq=${fromSeq}`);
+  // S7：回放端点已鉴权（Bearer JWT + 会话 + 房间成员），与网关/YjsProvider 同口径取 token
+  const token = localStorage.getItem('token') || '';
+  const res = await fetch(`${base}/replay/${encodeURIComponent(roomId)}?fromSeq=${fromSeq}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
   if (!res.ok) throw new Error(`replay fetch failed: HTTP ${res.status}`);
   const body = (await res.json()) as { code: number; msg: string; data: ReplayDataDto | null };
   if (body.code !== 1000 || !body.data) throw new Error(`replay fetch rejected: ${body.msg}`);

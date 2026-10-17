@@ -388,7 +388,9 @@ describe('yjs-ws realtime sync', () => {
     });
     await sleep(400);
 
-    const res = await fetch(`http://127.0.0.1:${port}/replay/${room}`);
+    const res = await fetch(`http://127.0.0.1:${port}/replay/${room}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       code: number;
@@ -426,7 +428,9 @@ describe('yjs-ws realtime sync', () => {
     await untilSynced(pA);
     await sleep(200);
 
-    const emptyRes = await fetch(`http://127.0.0.1:${port}/replay/${room}`);
+    const emptyRes = await fetch(`http://127.0.0.1:${port}/replay/${room}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
     const emptyBody = (await emptyRes.json()) as {
       code: number;
       data: { events: unknown[]; lastSeq: number };
@@ -439,7 +443,9 @@ describe('yjs-ws realtime sync', () => {
     docA.getArray('elements').push(['e2']);
     await sleep(400);
 
-    const tailRes = await fetch(`http://127.0.0.1:${port}/replay/${room}?fromSeq=2`);
+    const tailRes = await fetch(`http://127.0.0.1:${port}/replay/${room}?fromSeq=2`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
     const tailBody = (await tailRes.json()) as {
       data: { events: Array<{ seq: number }>; lastSeq: number };
     };
@@ -447,5 +453,34 @@ describe('yjs-ws realtime sync', () => {
     expect(tailBody.data.lastSeq).toBe(2);
 
     pA.disconnect();
+  }, 20000);
+
+  it('T13: replay endpoint enforces auth (S7) — 401 missing/bad token, 403 non-member', async () => {
+    const room = `t13-${runId}`;
+
+    const noToken = await fetch(`http://127.0.0.1:${port}/replay/${room}`);
+    expect(noToken.status).toBe(401);
+
+    const badToken = await fetch(`http://127.0.0.1:${port}/replay/${room}`, {
+      headers: { Authorization: 'Bearer not-a-jwt' }
+    });
+    expect(badToken.status).toBe(401);
+
+    // sid 与 Redis 会话不一致 → expired
+    const wrongSid = jwt.sign({ sub: 'user-test', sid: 'sid-other', role: 1 }, 'test-secret');
+    const badSession = await fetch(`http://127.0.0.1:${port}/replay/${room}`, {
+      headers: { Authorization: `Bearer ${wrongSid}` }
+    });
+    expect(badSession.status).toBe(401);
+
+    mockAccess.denyRooms.add(room);
+    try {
+      const denied = await fetch(`http://127.0.0.1:${port}/replay/${room}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      expect(denied.status).toBe(403);
+    } finally {
+      mockAccess.denyRooms.delete(room);
+    }
   }, 20000);
 });

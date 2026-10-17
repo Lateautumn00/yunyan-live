@@ -207,10 +207,36 @@ describe('fetchReplay / replayHttpBase（F6.4）', () => {
         )
     );
     vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem('token', 'T-REPLAY');
     const data = await fetchReplay('room-x', 'ws://127.0.0.1:50055/yjs');
-    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:50055/replay/room-x?fromSeq=0');
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:50055/replay/room-x?fromSeq=0', {
+      headers: { Authorization: 'Bearer T-REPLAY' }
+    });
     expect(data.events).toHaveLength(0);
     expect(data.lastSeq).toBe(0);
+  });
+
+  it('无 token 时以空 headers 请求（由服务端 401 拒绝）', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            code: 1000,
+            msg: 'ok',
+            data: { baseline: null, events: [], lastSeq: 0 }
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.removeItem('token');
+    await fetchReplay('room-x', 'ws://127.0.0.1:50055/yjs');
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:50055/replay/room-x?fromSeq=0', {
+      headers: {}
+    });
   });
 
   it('负向：非 1000 响应抛错', async () => {

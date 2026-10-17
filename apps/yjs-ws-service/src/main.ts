@@ -539,7 +539,33 @@ const wss = new WebSocketServer({ server });
 app.use(async (ctx, next) => {
   // F6.4 回放读取端点：GET /replay/:roomId?fromSeq=N（课后低频，直读本地事件流文件）
   if (ctx.method === 'GET' && ctx.path.startsWith('/replay/')) {
+    // S7 鉴权：Bearer JWT + 会话校验 + 房间成员校验（gRPC fail-open 与 WS 握手同口径）
+    const auth = ctx.get('authorization');
+    const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    const payload = bearer ? verifyToken(bearer, JWT_SECRET) : null;
+    if (!payload) {
+      ctx.status = 401;
+      ctx.body = { code: 401, msg: 'Unauthorized', data: null };
+      return;
+    }
+    const sessionState = await validateSession(redis, payload.sub, payload.sid, err =>
+      console.error(
+        '[YjsWS] replay session check fail-open:',
+        err instanceof Error ? err.message : String(err)
+      )
+    );
+    if (sessionState === 'kicked' || sessionState === 'expired') {
+      ctx.status = 401;
+      ctx.body = { code: 401, msg: 'Session invalid', data: null };
+      return;
+    }
     const roomId = decodeURIComponent(ctx.path.slice('/replay/'.length));
+    const access = await checkRoomAccess(roomId, payload.sub);
+    if (access && !access.allowed) {
+      ctx.status = 403;
+      ctx.body = { code: 403, msg: 'Not a room member', data: null };
+      return;
+    }
     const fromSeq = Number(ctx.query.fromSeq) || 0;
     try {
       const data = readReplay(roomId, fromSeq);
