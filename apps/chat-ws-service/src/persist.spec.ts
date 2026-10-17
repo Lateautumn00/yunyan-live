@@ -444,7 +444,8 @@ describe('assertTopology 独立导出可复用', () => {
 describe('insert SQL 构造（单行/批插共用占位符序列）', () => {
   it('批插占位符连续编号且时间列走 to_timestamp 毫秒写', () => {
     const sql = buildInsertSql(3);
-    expect(sql).toContain('ON CONFLICT (msg_id) DO NOTHING');
+    expect(sql).toContain('ON CONFLICT DO NOTHING');
+    expect(sql).not.toContain('ON CONFLICT (msg_id)');
     expect(sql).toContain('$10::double precision / 1000');
     expect(sql).toContain('$30::double precision / 1000');
     expect(sql.match(/\$\d+/g)).toHaveLength(30);

@@ -31,9 +31,11 @@ export function buildInsertSql(rowCount: number): string {
       `(${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ${p(6)}, ${p(7)}, ${p(8)}, ${p(9)}, to_timestamp(${p(10)}::double precision / 1000))`
     );
   }
+  // 无目标 ON CONFLICT：普通表命中唯一约束 (msg_id)，分区表命中 (msg_id, created_at)——
+  // 两态通吃，使分区迁移切换无须与代码发布原子绑定（GAP-O8 runbook 前置）。
   return (
     `INSERT INTO chat_messages (${INSERT_COLUMNS}) VALUES ${values.join(', ')} ` +
-    'ON CONFLICT (msg_id) DO NOTHING'
+    'ON CONFLICT DO NOTHING'
   );
 }
 
