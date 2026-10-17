@@ -54,6 +54,24 @@ export class SessionService {
     }
   }
 
+  /**
+   * S6 改密/重置密码后吊销该用户全部会话：广播顶下线（踢掉 WS 在线连接）并删除记录。
+   * HTTP 侧后续请求 validateSid 变 expired；不带 sid 也能吊销（重置密码入口无登录态）。
+   */
+  async revokeAllSessions(guid: string): Promise<void> {
+    try {
+      const current = await this.redis.get(sessionKey(guid));
+      if (current) {
+        const payload: KickPayload = { guid, oldSid: current };
+        await this.redis.publish(SESSION_KICK_CHANNEL, JSON.stringify(payload));
+        this.logger.log(`Sessions revoked for guid=${guid}, kicked sid=${current}`);
+      }
+      await this.redis.del(sessionKey(guid));
+    } catch (err) {
+      this.logger.error(`revokeAllSessions failed for guid=${guid}: ${String(err)}`);
+    }
+  }
+
   async touchSession(guid: string): Promise<void> {
     try {
       await this.redis.expire(sessionKey(guid), SESSION_TTL_SECONDS);

@@ -4,7 +4,7 @@ package auth;
 service AuthService {
   rpc Login (LoginRequest) returns (AuthResponse) {}
   rpc Register (RegisterRequest) returns (RegisterResponse) {}
-  rpc ResetPassword (ResetPasswordRequest) returns (CommonResponse) {}
+  rpc ResetPassword (ResetPasswordRequest) returns (RegisterResponse) {}
   rpc ChangePassword (ChangePasswordRequest) returns (CommonResponse) {}
   rpc GetUser (GetUserRequest) returns (UserResponse) {}
   rpc UpdateUserName (UpdateUserNameRequest) returns (CommonResponse) {}

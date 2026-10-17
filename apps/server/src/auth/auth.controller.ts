@@ -64,7 +64,7 @@ interface AuthServiceClient {
     email: string;
     code: string;
     password: string;
-  }): Observable<CommonResponse>;
+  }): Observable<RegisterResponse>;
   changePassword(
     data: { user_id: string; old_password: string; new_password: string },
     metadata?: Metadata
@@ -130,20 +130,31 @@ export class AuthController implements OnModuleInit {
   }
 
   @Post('resetPassword')
-  resetPassword(@Body() dto: ResetPasswordDto) {
-    return grpcCall(this.authService.resetPassword(dto));
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    const result = await grpcCall(this.authService.resetPassword(dto));
+    // S6: 重置密码后吊销该用户全部会话（含其它设备），强制重新登录
+    if (result.guid) {
+      await this.sessionService.revokeAllSessions(result.guid);
+    }
+    return result;
   }
 
   @Post('changePassword')
   @UseGuards(JwtAuthGuard)
-  changePassword(@Body() dto: ChangePasswordDto, @Request() req: { user: { userId: string } }) {
+  async changePassword(
+    @Body() dto: ChangePasswordDto,
+    @Request() req: { user: { userId: string } }
+  ) {
     const metadata = userIdMetadata(req.user.userId);
-    return grpcCall(
+    const result = await grpcCall(
       this.authService.changePassword(
         { user_id: req.user.userId, old_password: dto.oldPassword, new_password: dto.password },
         metadata
       )
     );
+    // S6: 改密成功后吊销该用户全部会话，当前设备也需重新登录
+    await this.sessionService.revokeAllSessions(req.user.userId);
+    return result;
   }
 
   @Get('getUserMsg')

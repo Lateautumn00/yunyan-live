@@ -39,6 +39,7 @@ function createController() {
   const session = {
     createSession: vi.fn(async () => ({ sid: 'SID1', oldSid: null })),
     removeSession: vi.fn(async () => undefined),
+    revokeAllSessions: vi.fn(async () => undefined),
     touchSession: vi.fn(async () => undefined)
   };
   const controller = new AuthController(authClient as never, jwt as never, session as never);
@@ -166,6 +167,29 @@ describe('AuthController.register / resetPassword / updateUserName', () => {
     expect(authService.resetPassword).toHaveBeenCalledWith(dto);
   });
 
+  it('resetPassword 成功且上游返回 guid 时吊销该用户全部会话', async () => {
+    const { controller, authService, session } = createController();
+    authService.resetPassword.mockReturnValueOnce(of({ code: '0', msg: 'ok', guid: 'g9' }));
+    const dto = Object.assign(new ResetPasswordDto(), {
+      email: 'a@b.com',
+      code: '123456',
+      password: 'np'
+    });
+    await controller.resetPassword(dto);
+    expect(session.revokeAllSessions).toHaveBeenCalledWith('g9');
+  });
+
+  it('resetPassword 缺 guid（旧 auth-service）时跳过吊销', async () => {
+    const { controller, session } = createController();
+    const dto = Object.assign(new ResetPasswordDto(), {
+      email: 'a@b.com',
+      code: '123456',
+      password: 'np'
+    });
+    await controller.resetPassword(dto);
+    expect(session.revokeAllSessions).not.toHaveBeenCalled();
+  });
+
   it('updateUserName 映射为 user_id/username', async () => {
     const { controller, authService } = createController();
     const dto = Object.assign(new UpdateUserNameDto(), { userName: '新名字' });
@@ -194,7 +218,7 @@ describe('AuthController.logout', () => {
 
 describe('AuthController.changePassword', () => {
   it('映射 snake_case 并附带 user-id 元数据', async () => {
-    const { controller, authService } = createController();
+    const { controller, authService, session } = createController();
     let capturedMetadata: Metadata | undefined;
     authService.changePassword.mockImplementation((...args: unknown[]) => {
       capturedMetadata = args[1] as Metadata;
@@ -211,6 +235,19 @@ describe('AuthController.changePassword', () => {
     );
     expect(capturedMetadata).toBeInstanceOf(Metadata);
     expect(capturedMetadata?.get('user-id')[0]?.toString()).toBe('u1');
+    expect(session.revokeAllSessions).toHaveBeenCalledWith('u1');
+  });
+
+  it('changePassword gRPC 失败时不吊销会话', async () => {
+    const { controller, authService, session } = createController();
+    authService.changePassword.mockReturnValueOnce(
+      throwError(() => ({ code: 16, details: '旧密码错误' }))
+    );
+    const dto = Object.assign(new ChangePasswordDto(), { oldPassword: 'old', password: 'new' });
+    await expect(controller.changePassword(dto, { user: { userId: 'u1' } })).rejects.toThrow(
+      '旧密码错误'
+    );
+    expect(session.revokeAllSessions).not.toHaveBeenCalled();
   });
 });
 

@@ -121,7 +121,7 @@ describe('AuthService password flows (RSA-OAEP encrypted)', () => {
 
   it('resetPassword stores hash of decrypted password', async () => {
     const { service, usersService } = buildService();
-    await service.resetPassword({
+    const res = await service.resetPassword({
       email: 'teacher@example.com',
       code: '123456',
       password: await encryptForClient(PLAIN_NEW_PASSWORD)
@@ -130,6 +130,8 @@ describe('AuthService password flows (RSA-OAEP encrypted)', () => {
     const updated = usersService.updatePassword.mock.calls[0];
     expect(updated?.[0]).toBe(USER_ID);
     expect(await bcrypt.compare(PLAIN_NEW_PASSWORD, updated?.[1] as string)).toBe(true);
+    // S6: 返回 guid 供网关吊销该用户全部会话
+    expect(res.guid).toBe(USER_ID);
   });
 
   it('changePassword verifies old and stores new decrypted password', async () => {

@@ -160,3 +160,32 @@ describe('SessionService.touchSession', () => {
     expect(errSpy).toHaveBeenCalledWith('touchSession failed for guid=g1: Error: down');
   });
 });
+
+describe('SessionService.revokeAllSessions', () => {
+  it('有当前会话时广播 KickPayload 并删除记录', async () => {
+    const { service, redis } = setup();
+    redis.get.mockResolvedValueOnce('s-active');
+    await service.revokeAllSessions('g1');
+    expect(redis.publish).toHaveBeenCalledWith(
+      SESSION_KICK_CHANNEL,
+      JSON.stringify({ guid: 'g1', oldSid: 's-active' })
+    );
+    expect(redis.del).toHaveBeenCalledWith(sessionKey('g1'));
+    expect(logSpy).toHaveBeenCalledWith('Sessions revoked for guid=g1, kicked sid=s-active');
+  });
+
+  it('无当前会话时仍删除 key（幂等），不广播', async () => {
+    const { service, redis } = setup();
+    redis.get.mockResolvedValueOnce(null);
+    await service.revokeAllSessions('g1');
+    expect(redis.publish).not.toHaveBeenCalled();
+    expect(redis.del).toHaveBeenCalledWith(sessionKey('g1'));
+  });
+
+  it('Redis 故障时吞掉错误仅记录', async () => {
+    const { service, redis } = setup();
+    redis.get.mockRejectedValueOnce(new Error('down'));
+    await expect(service.revokeAllSessions('g1')).resolves.toBeUndefined();
+    expect(errSpy).toHaveBeenCalledWith('revokeAllSessions failed for guid=g1: Error: down');
+  });
+});

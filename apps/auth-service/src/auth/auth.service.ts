@@ -90,7 +90,8 @@ export class AuthService implements OnModuleInit {
     const passwordHash = await bcrypt.hash(password, 10);
     await this.usersService.updatePassword(user.id, passwordHash);
 
-    return ok();
+    // S6: 返回 guid 供网关吊销该用户全部会话
+    return ok({ guid: user.id });
   }
 
   async changePassword(dto: ChangePasswordDto, userId: string) {
