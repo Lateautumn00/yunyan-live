@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { Metadata } from '@grpc/grpc-js';
@@ -7,6 +8,8 @@ import {
   CreateCoursewareDto,
   CreateLiveDto,
   JoinLiveDto,
+  JwtAuthGuard,
+  RolesGuard,
   UpdateLiveDto
 } from '@yunyan-live/nest-shared';
 import { LiveController, isSafeRecordingId } from './live.controller';
@@ -211,7 +214,15 @@ function createController() {
           }
         })
     ),
-    deleteCourseware: vi.fn(() => of({ code: '0', msg: 'ok' }))
+    deleteCourseware: vi.fn(() => of({ code: '0', msg: 'ok' })),
+    getVideoRoomMap: vi.fn(() =>
+      of({
+        code: '0',
+        msg: 'ok',
+        data: { items: [{ video_id: 'v1', room_id: 'r1' }] }
+      })
+    ),
+    getCoursewareRoom: vi.fn(() => of({ code: '0', msg: 'ok', data: { room_id: 'r1' } }))
   };
   const authService = {
     getUser: vi.fn((): Observable<{ code: string; msg: string; data?: UserRow }> =>
@@ -306,7 +317,7 @@ function studentRoomsPayload() {
   };
 }
 
-const req = (userId: string) => ({ user: { userId } });
+const req = (userId: string, role?: number) => ({ user: { userId, role } });
 
 beforeAll(() => {
   vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
@@ -362,14 +373,17 @@ describe('LiveController create / updateLive / join', () => {
   it('updateLive 缺省字段回落空串/0', async () => {
     const { controller, liveService } = createController();
     const dto = Object.assign(new UpdateLiveDto(), { roomId: 'r1' });
-    await controller.updateLive(dto);
-    expect(liveService.updateLive).toHaveBeenCalledWith({
-      room_id: 'r1',
-      title: '',
-      type: 0,
-      start_time: '',
-      duration: 0
-    });
+    await controller.updateLive(dto, req('t1', 1));
+    expect(liveService.updateLive).toHaveBeenCalledWith(
+      {
+        room_id: 'r1',
+        title: '',
+        type: 0,
+        start_time: '',
+        duration: 0
+      },
+      expect.any(Metadata)
+    );
   });
 
   it('join 映射 join_code 并注入当前用户，忽略 nickName', async () => {
@@ -450,8 +464,11 @@ describe('LiveController showRoom / cmsDetail / changeStatus', () => {
   it('changeStatus 透传 room_id/status', async () => {
     const { controller, liveService } = createController();
     const dto = Object.assign(new ChangeStatusDto(), { roomId: 'r1', status: 3 });
-    await controller.changeStatus(dto);
-    expect(liveService.changeStatus).toHaveBeenCalledWith({ room_id: 'r1', status: 3 });
+    await controller.changeStatus(dto, req('t1', 1));
+    expect(liveService.changeStatus).toHaveBeenCalledWith(
+      { room_id: 'r1', status: 3 },
+      expect.any(Metadata)
+    );
   });
 });
 
@@ -566,15 +583,15 @@ describe('LiveController cmsList / getStudentRooms', () => {
 describe('LiveController delete / updateCode / leave', () => {
   it('delete 返回文档约定的中文 msg', async () => {
     const { controller, liveService } = createController();
-    const res = await controller.delete('r1');
-    expect(liveService.deleteLive).toHaveBeenCalledWith({ room_id: 'r1' });
+    const res = await controller.delete('r1', req('t1', 1));
+    expect(liveService.deleteLive).toHaveBeenCalledWith({ room_id: 'r1' }, expect.any(Metadata));
     expect(res).toEqual({ msg: '删除成功' });
   });
 
   it('updateCode 返回裸 join_code 字符串且忽略 operateType', async () => {
     const { controller, liveService } = createController();
-    const res = await controller.updateCode({ roomId: 'r1', operateType: 'refresh' });
-    expect(liveService.updateCode).toHaveBeenCalledWith({ room_id: 'r1' });
+    const res = await controller.updateCode({ roomId: 'r1', operateType: 'refresh' }, req('t1', 1));
+    expect(liveService.updateCode).toHaveBeenCalledWith({ room_id: 'r1' }, expect.any(Metadata));
     expect(res).toBe('SNEW1234');
   });
 
@@ -690,10 +707,17 @@ describe('LiveController video list / detail / delete', () => {
 
   it('deleteVideo 两个入口透传 id 数组', async () => {
     const { controller, liveService } = createController();
-    await controller.deleteVideoByRoomIds(['r1', 'r2']);
-    expect(liveService.deleteVideoByRoomIds).toHaveBeenCalledWith({ room_ids: ['r1', 'r2'] });
-    await controller.deleteVideoByVideoIds(['v1']);
-    expect(liveService.deleteVideoByVideoIds).toHaveBeenCalledWith({ video_ids: ['v1'] });
+    await controller.deleteVideoByRoomIds(['r1', 'r2'], req('t1', 1));
+    expect(liveService.deleteVideoByRoomIds).toHaveBeenCalledWith(
+      { room_ids: ['r1', 'r2'] },
+      expect.any(Metadata)
+    );
+    await controller.deleteVideoByVideoIds(['v1'], req('t1', 1));
+    expect(liveService.getVideoRoomMap).toHaveBeenCalledWith({ video_ids: ['v1'] });
+    expect(liveService.deleteVideoByVideoIds).toHaveBeenCalledWith(
+      { video_ids: ['v1'] },
+      expect.any(Metadata)
+    );
   });
 });
 
@@ -705,7 +729,7 @@ describe('LiveController courseware', () => {
       filename: 'a.pptx',
       fileUrl: '/u/a.pptx'
     });
-    await controller.saveCourseware(dto, req('u1'));
+    await controller.saveCourseware(dto, req('t1', 1));
     expect(liveService.saveCourseware).toHaveBeenCalledWith(
       {
         room_id: 'r1',
@@ -713,7 +737,7 @@ describe('LiveController courseware', () => {
         filext: '',
         filesize: 0,
         fileurl: '/u/a.pptx',
-        create_user_id: 'u1'
+        create_user_id: 't1'
       },
       expect.any(Metadata)
     );
@@ -728,7 +752,7 @@ describe('LiveController courseware', () => {
       filesize: 123,
       fileUrl: '/u/a.pptx'
     });
-    await controller.saveCourseware(dto, req('u1'));
+    await controller.saveCourseware(dto, req('t1', 1));
     expect(liveService.saveCourseware).toHaveBeenCalledWith(
       expect.objectContaining({ filext: 'pptx', filesize: 123 }),
       expect.any(Metadata)
@@ -755,36 +779,47 @@ describe('LiveController courseware', () => {
 
   it('deleteCourseware 透传 id', async () => {
     const { controller, liveService } = createController();
-    await controller.deleteCourseware('c1');
-    expect(liveService.deleteCourseware).toHaveBeenCalledWith({ id: 'c1' });
+    await controller.deleteCourseware('c1', req('t1', 1));
+    expect(liveService.getCoursewareRoom).toHaveBeenCalledWith({ id: 'c1' });
+    expect(liveService.deleteCourseware).toHaveBeenCalledWith({ id: 'c1' }, expect.any(Metadata));
   });
 });
 
 describe('LiveController savePlayBackUrl / getUserWatchTimeList', () => {
   it('savePlayBackUrl 复用录像保存（record_type=2）并返回扁平对象', async () => {
     const { controller, liveService } = createController();
-    const res = await controller.savePlayBackUrl({
-      roomId: 'r1',
-      playBackUrl: 'rec-1',
-      duration: 120
-    });
-    expect(liveService.saveVideoRecording).toHaveBeenCalledWith({
-      room_id: 'r1',
-      file_path: 'rec-1',
-      file_name: 'rec-1',
-      file_size: 0,
-      duration: 120,
-      record_type: 2,
-      teacher_name: ''
-    });
+    const res = await controller.savePlayBackUrl(
+      {
+        roomId: 'r1',
+        playBackUrl: 'rec-1',
+        duration: 120
+      },
+      req('t1', 1)
+    );
+    expect(liveService.saveVideoRecording).toHaveBeenCalledWith(
+      {
+        room_id: 'r1',
+        file_path: 'rec-1',
+        file_name: 'rec-1',
+        file_size: 0,
+        duration: 120,
+        record_type: 2,
+        teacher_name: ''
+      },
+      expect.any(Metadata)
+    );
     expect(res).toEqual({ roomId: 'r1', playBackUrl: 'rec-1' });
   });
 
   it('savePlayBackUrl duration 缺省 0', async () => {
     const { controller, liveService } = createController();
-    await controller.savePlayBackUrl({ roomId: 'r1', playBackUrl: 'rec-1', duration: 0 });
+    await controller.savePlayBackUrl(
+      { roomId: 'r1', playBackUrl: 'rec-1', duration: 0 },
+      req('t1', 1)
+    );
     expect(liveService.saveVideoRecording).toHaveBeenCalledWith(
-      expect.objectContaining({ duration: 0 })
+      expect.objectContaining({ duration: 0 }),
+      expect.any(Metadata)
     );
   });
 
@@ -949,9 +984,183 @@ describe('LiveController downloadRecording 安全净化（S8）', () => {
   it('非法 id 直接 400，不再触碰文件系统/转码链路', async () => {
     const { controller } = createController();
     const res = fakeRes();
-    await controller.downloadRecording('$(reboot)', q(), res as never);
+    await controller.downloadRecording('$(reboot)', q(), res as never, req('t1', 1));
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ code: 400, msg: '非法录制 id' });
     expect(res.set).not.toHaveBeenCalled();
+  });
+});
+
+describe('S4 房间归属 + RBAC 权限矩阵（补偿控制，域层下沉待 S10b）', () => {
+  const mkRes = () => {
+    const res = {
+      status: vi.fn(() => res),
+      json: vi.fn(() => res),
+      set: vi.fn(() => res)
+    };
+    return res;
+  };
+  // roomPayload 的 live_user_id = 't1'：t1 = 房主教师；t2 = 他人房间教师；u1 = 学生
+  const owner = () => req('t1', 1);
+  const stranger = () => req('t2', 1);
+  const student = () => req('u1', 2);
+  const TEACHER = 1;
+
+  it('非房主教师对 10 个写接口全部 403，且写方法未被调用（真守卫生效）', async () => {
+    const { controller, liveService } = createController();
+    const dtoUpdate = Object.assign(new UpdateLiveDto(), { roomId: 'r1', title: 'x' });
+    const dtoStatus = Object.assign(new ChangeStatusDto(), { roomId: 'r1', status: 1 });
+    const dtoCourse = Object.assign(new CreateCoursewareDto(), {
+      roomId: 'r1',
+      filename: 'a.pptx',
+      fileUrl: '/u/a.pptx'
+    });
+
+    const cases: Array<[string, (u: ReturnType<typeof stranger>) => Promise<unknown>, unknown]> = [
+      ['updateLive', u => controller.updateLive(dtoUpdate, u), liveService.updateLive],
+      ['changeLiveStatus', u => controller.changeStatus(dtoStatus, u), liveService.changeStatus],
+      ['deleteLive', u => controller.delete('r1', u), liveService.deleteLive],
+      [
+        'updateLiveCode',
+        u => controller.updateCode({ roomId: 'r1', operateType: 'r' }, u),
+        liveService.updateCode
+      ],
+      [
+        'deleteVideo',
+        u => controller.deleteVideoByRoomIds(['r1'], u),
+        liveService.deleteVideoByRoomIds
+      ],
+      [
+        'deleteVideoByIds',
+        u => controller.deleteVideoByVideoIds(['v1'], u),
+        liveService.deleteVideoByVideoIds
+      ],
+      ['saveCourseware', u => controller.saveCourseware(dtoCourse, u), liveService.saveCourseware],
+      ['deleteCourseware', u => controller.deleteCourseware('c1', u), liveService.deleteCourseware],
+      [
+        'savePlayBackUrl',
+        u => controller.savePlayBackUrl({ roomId: 'r1', playBackUrl: 'r', duration: 1 }, u),
+        liveService.saveVideoRecording
+      ],
+      [
+        'downloadRecording',
+        u => controller.downloadRecording('1', q(), mkRes() as never, u),
+        liveService.getVideoRoomMap
+      ]
+    ];
+
+    for (const [name, run, writeMock] of cases) {
+      vi.clearAllMocks();
+      await expect(run(stranger()), `${name} 应 403`).rejects.toMatchObject({ status: 403 });
+      // 归属断言先行的接口：映射/房间查询可发生，但**写方法**必须零调用
+      if (
+        name !== 'downloadRecording' &&
+        name !== 'deleteVideoByIds' &&
+        name !== 'deleteCourseware'
+      ) {
+        expect(writeMock, `${name} 写方法应零调用`).not.toHaveBeenCalled();
+      }
+      if (name === 'deleteVideoByIds') {
+        expect(liveService.deleteVideoByVideoIds).not.toHaveBeenCalled();
+      }
+      if (name === 'deleteCourseware') {
+        expect(liveService.deleteCourseware).not.toHaveBeenCalled();
+      }
+      if (name === 'downloadRecording') {
+        // 403 先于文件系统触碰：video mjr 存在也应被归属挡住 → 不写 marker、不 spawn
+        // （这里用例环境未设文件，仅断言映射断言已执行且未进入转码）
+        expect(liveService.getVideoRoomMap).toHaveBeenCalled();
+      }
+    }
+  });
+
+  it('学生（role=2）越权 403，写方法零调用（抽样 updateLive/deleteLive/saveCourseware）', async () => {
+    const { controller, liveService } = createController();
+    const dtoUpdate = Object.assign(new UpdateLiveDto(), { roomId: 'r1' });
+    const dtoStatus = Object.assign(new ChangeStatusDto(), { roomId: 'r1', status: 1 });
+    const dtoCourse = Object.assign(new CreateCoursewareDto(), {
+      roomId: 'r1',
+      filename: 'a.pptx'
+    });
+
+    await expect(controller.updateLive(dtoUpdate, student())).rejects.toMatchObject({
+      status: 403
+    });
+    await expect(controller.changeStatus(dtoStatus, student())).rejects.toMatchObject({
+      status: 403
+    });
+    await expect(controller.delete('r1', student())).rejects.toMatchObject({ status: 403 });
+    await expect(controller.saveCourseware(dtoCourse, student())).rejects.toMatchObject({
+      status: 403
+    });
+    expect(liveService.updateLive).not.toHaveBeenCalled();
+    expect(liveService.changeStatus).not.toHaveBeenCalled();
+    expect(liveService.deleteLive).not.toHaveBeenCalled();
+    expect(liveService.saveCourseware).not.toHaveBeenCalled();
+    expect(liveService.showRoom).not.toHaveBeenCalled(); // role 检查先于房间查询
+  });
+
+  it('房主教师（t1/role=1）全部放行（对照组：矩阵非单边封锁）', async () => {
+    const { controller, liveService } = createController();
+    const dtoUpdate = Object.assign(new UpdateLiveDto(), { roomId: 'r1', title: 'x' });
+    const dtoStatus = Object.assign(new ChangeStatusDto(), { roomId: 'r1', status: 1 });
+    const dtoCourse = Object.assign(new CreateCoursewareDto(), {
+      roomId: 'r1',
+      filename: 'a.pptx',
+      fileUrl: '/u/a.pptx'
+    });
+
+    await controller.updateLive(dtoUpdate, owner());
+    await controller.changeStatus(dtoStatus, owner());
+    await controller.delete('r1', owner());
+    await controller.updateCode({ roomId: 'r1', operateType: 'r' }, owner());
+    await controller.deleteVideoByRoomIds(['r1'], owner());
+    await controller.deleteVideoByVideoIds(['v1'], owner());
+    await controller.saveCourseware(dtoCourse, owner());
+    await controller.deleteCourseware('c1', owner());
+    await controller.savePlayBackUrl({ roomId: 'r1', playBackUrl: 'r', duration: 1 }, owner());
+    const res = mkRes();
+    await controller.downloadRecording('1', q(), res as never, owner());
+
+    expect(liveService.updateLive).toHaveBeenCalled();
+    expect(liveService.changeStatus).toHaveBeenCalled();
+    expect(liveService.deleteLive).toHaveBeenCalled();
+    expect(liveService.updateCode).toHaveBeenCalled();
+    expect(liveService.deleteVideoByRoomIds).toHaveBeenCalled();
+    expect(liveService.deleteVideoByVideoIds).toHaveBeenCalled();
+    expect(liveService.saveCourseware).toHaveBeenCalled();
+    expect(liveService.deleteCourseware).toHaveBeenCalled();
+    expect(liveService.saveVideoRecording).toHaveBeenCalled();
+    expect(liveService.getVideoRoomMap).toHaveBeenCalled();
+  });
+
+  it('10 个写接口挂载 JwtAuthGuard+RolesGuard 且 @Roles(教师)（装饰器元数据回归）', () => {
+    const methods = [
+      'updateLive',
+      'changeStatus',
+      'delete',
+      'updateCode',
+      'deleteVideoByRoomIds',
+      'deleteVideoByVideoIds',
+      'saveCourseware',
+      'deleteCourseware',
+      'savePlayBackUrl',
+      'downloadRecording'
+    ] as const;
+    for (const m of methods) {
+      const fn = (LiveController.prototype as never as Record<string, unknown>)[m] as () => void;
+      const guards = Reflect.getMetadata('__guards__', fn);
+      expect(guards, `${m} guards`).toEqual(expect.arrayContaining([JwtAuthGuard, RolesGuard]));
+      expect(Reflect.getMetadata('roles', fn), `${m} @Roles`).toEqual([TEACHER]);
+      expect(Reflect.getMetadata('roles', fn)).not.toContain(2); // 学生不入
+    }
+  });
+
+  it('Roles 装饰器写入的元数据键与 RolesGuard 读取键一致（ROLES_KEY 口径）', async () => {
+    const { RolesGuard: RG } = await import('@yunyan-live/nest-shared');
+    expect(new RG()).toBeInstanceOf(RG);
+    const fn = LiveController.prototype.updateLive as unknown as () => void;
+    // Roles() 与 RolesGuard 共用 'roles' 键（spec 直接断言键值防口径漂移）
+    expect(Reflect.getMetadata('roles', fn)).toEqual([1]);
   });
 });

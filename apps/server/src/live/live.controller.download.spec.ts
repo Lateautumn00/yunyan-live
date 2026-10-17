@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'path';
 import type { Response } from 'express';
+import { of } from 'rxjs';
 import { LiveController } from './live.controller';
 
 /** 允许缺省 download query 参数 */
@@ -56,11 +57,32 @@ vi.mock('child_process', async importOriginal => {
 });
 
 function createController() {
-  return new LiveController(
-    { getService: vi.fn(() => ({})) } as never,
+  const liveService = {
+    // S4 归属断言：recording id → room；默认 room=r1（房主 t1）
+    getVideoRoomMap: vi.fn(() =>
+      of({
+        code: '0',
+        msg: 'ok',
+        data: { items: [{ video_id: '1', room_id: 'r1' }] }
+      })
+    ),
+    showRoom: vi.fn(() =>
+      of({
+        code: '0',
+        msg: 'ok',
+        data: { room_id: 'r1', live_user_id: 't1' }
+      })
+    )
+  };
+  const controller = new LiveController(
+    { getService: vi.fn(() => liveService) } as never,
     { getService: vi.fn(() => ({})) } as never
   );
+  controller.onModuleInit();
+  return { controller, liveService };
 }
+
+const reqRole = (userId: string, role: number) => ({ user: { userId, role } });
 
 function createRes() {
   const res = {
@@ -96,31 +118,31 @@ afterEach(() => {
 });
 
 describe('downloadRecording 状态探测', () => {
-  it('video mjr 缺失返回 404 且不触发转码', () => {
-    const controller = createController();
+  it('video mjr 缺失返回 404 且不触发转码', async () => {
+    const { controller } = createController();
     const res = createRes();
-    void controller.downloadRecording('1', q(), res as unknown as Response);
+    await controller.downloadRecording('1', q(), res as unknown as Response, reqRole('t1', 1));
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ code: 404, msg: '录制文件不存在' });
     expect(h.spawns).toHaveLength(0);
     expect(h.written).toHaveLength(0);
   });
 
-  it('download=true 且 mp4 未生成返回转码中', () => {
+  it('download=true 且 mp4 未生成返回转码中', async () => {
     h.present.add(videoMjr('1'));
-    const controller = createController();
+    const { controller } = createController();
     const res = createRes();
-    void controller.downloadRecording('1', 'true', res as unknown as Response);
+    await controller.downloadRecording('1', 'true', res as unknown as Response, reqRole('t1', 1));
     expect(res.json).toHaveBeenCalledWith({ code: 2002, msg: '转码中，请稍后' });
     expect(res.set).not.toHaveBeenCalled();
   });
 
-  it('download=true 且 mp4 就绪时设置响应头并流式输出', () => {
+  it('download=true 且 mp4 就绪时设置响应头并流式输出', async () => {
     h.present.add(videoMjr('1'));
     h.present.add(mp4('1'));
-    const controller = createController();
+    const { controller } = createController();
     const res = createRes();
-    void controller.downloadRecording('1', 'true', res as unknown as Response);
+    await controller.downloadRecording('1', 'true', res as unknown as Response, reqRole('t1', 1));
     expect(res.set).toHaveBeenCalledWith({
       'Content-Type': 'video/mp4',
       'Content-Length': '4096',
@@ -132,33 +154,33 @@ describe('downloadRecording 状态探测', () => {
     expect(h.spawns).toHaveLength(0);
   });
 
-  it('非 download 且 mp4 已就绪返回转码完成', () => {
+  it('非 download 且 mp4 已就绪返回转码完成', async () => {
     h.present.add(videoMjr('1'));
     h.present.add(mp4('1'));
-    const controller = createController();
+    const { controller } = createController();
     const res = createRes();
-    void controller.downloadRecording('1', q(), res as unknown as Response);
+    await controller.downloadRecording('1', q(), res as unknown as Response, reqRole('t1', 1));
     expect(res.json).toHaveBeenCalledWith({ code: 1000, msg: '转码完成' });
     expect(h.spawns).toHaveLength(0);
   });
 
-  it('存在 converting 标记返回转码中且不重复触发', () => {
+  it('存在 converting 标记返回转码中且不重复触发', async () => {
     h.present.add(videoMjr('1'));
     h.present.add(marker('1'));
-    const controller = createController();
+    const { controller } = createController();
     const res = createRes();
-    void controller.downloadRecording('1', q(), res as unknown as Response);
+    await controller.downloadRecording('1', q(), res as unknown as Response, reqRole('t1', 1));
     expect(res.json).toHaveBeenCalledWith({ code: 2002, msg: '转码中，请稍后' });
     expect(h.written).toHaveLength(0);
     expect(h.spawns).toHaveLength(0);
   });
 
-  it('download 非 true 的其它取值按状态探测处理', () => {
+  it('download 非 true 的其它取值按状态探测处理', async () => {
     h.present.add(videoMjr('1'));
     h.present.add(mp4('1'));
-    const controller = createController();
+    const { controller } = createController();
     const res = createRes();
-    void controller.downloadRecording('1', 'false', res as unknown as Response);
+    await controller.downloadRecording('1', 'false', res as unknown as Response, reqRole('t1', 1));
     expect(res.json).toHaveBeenCalledWith({ code: 1000, msg: '转码完成' });
   });
 });
@@ -169,9 +191,9 @@ describe('downloadRecording 转码触发', () => {
 
   it('无音轨时写标记并 spawn 3 次 docker exec（数组传参，不经 shell）', async () => {
     h.present.add(videoMjr('1'));
-    const controller = createController();
+    const { controller } = createController();
     const res = createRes();
-    await controller.downloadRecording('1', q(), res as unknown as Response);
+    await controller.downloadRecording('1', q(), res as unknown as Response, reqRole('t1', 1));
     // 等待 fire-and-forget 的 transcodeRecording 走完 exec 链
     await new Promise(r => setTimeout(r, 0));
 
@@ -218,9 +240,9 @@ describe('downloadRecording 转码触发', () => {
   it('有音轨时追加 opus 提取、混流与清理步骤（共 4 次 docker exec）', async () => {
     h.present.add(videoMjr('1'));
     h.present.add(audioMjr('1'));
-    const controller = createController();
+    const { controller } = createController();
     const res = createRes();
-    await controller.downloadRecording('1', q(), res as unknown as Response);
+    await controller.downloadRecording('1', q(), res as unknown as Response, reqRole('t1', 1));
     await vi.waitFor(() => expect(h.spawns).toHaveLength(4));
     expect(h.spawns[0]?.args).toEqual([
       'exec',
@@ -269,9 +291,9 @@ describe('downloadRecording 转码触发', () => {
     process.env.JANUS_CONTAINER = 'janus-prod';
     process.env.JANUS_PP_REC = '/opt/custom/janus-pp-rec';
     h.present.add(path.join('D:\\rec', 'rec-9-video.mjr'));
-    const controller = createController();
+    const { controller } = createController();
     const res = createRes();
-    await controller.downloadRecording('9', q(), res as unknown as Response);
+    await controller.downloadRecording('9', q(), res as unknown as Response, reqRole('t1', 1));
     await new Promise(r => setTimeout(r, 0));
 
     expect(h.written).toEqual([path.join('D:\\rec', '9.converting')]);
@@ -286,10 +308,10 @@ describe('downloadRecording 转码触发', () => {
   });
 
   it('拒绝路径穿越与命令注入元字符的录制 id（不触碰 fs/spawn）', async () => {
-    const controller = createController();
+    const { controller } = createController();
     const res = createRes();
     for (const bad of ['../etc/passwd', 'a b', '$(whoami)', 'a"b', 'a;rm -rf /']) {
-      await controller.downloadRecording(bad, q(), res as unknown as Response);
+      await controller.downloadRecording(bad, q(), res as unknown as Response, reqRole('t1', 1));
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({ code: 400, msg: '非法录制 id' });
     }

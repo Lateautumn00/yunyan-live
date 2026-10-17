@@ -575,6 +575,26 @@ export class LiveService {
     return { success: true };
   }
 
+  /** S4 归属映射：video_ids → {video_id, room_id}（网关侧删除/下载前房间归属断言） */
+  async getVideoRoomMap(videoIds: string[]) {
+    if (videoIds.length === 0) return [] as Array<{ videoId: string; roomId: string }>;
+    const rows = await this.videoRepo.find({
+      where: { id: In(videoIds) },
+      select: { id: true, roomId: true }
+    });
+    return rows.map(r => ({ videoId: r.id, roomId: r.roomId }));
+  }
+
+  /** S4 归属映射：courseware id → room_id；不存在 NOT_FOUND（网关映射 404） */
+  async getCoursewareRoom(id: string) {
+    const cw = await this.coursewareRepo.findOne({
+      where: { id },
+      select: { id: true, roomId: true }
+    });
+    if (!cw) throw grpcError(GrpcStatus.NOT_FOUND, '课件不存在');
+    return cw.roomId;
+  }
+
   async saveCourseware(dto: {
     roomId: string;
     filename: string;

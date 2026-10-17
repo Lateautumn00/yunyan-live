@@ -87,7 +87,7 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'ChangeStatus')
-  async changeStatus(data: { room_id: string; status: number }) {
+  async changeStatus(data: { room_id: string; status: number }, _metadata?: Metadata) {
     this.logger.log(`gRPC ChangeStatus: ${data.room_id} -> ${data.status}`);
     const room = await this.liveService.changeStatus({ roomId: data.room_id, status: data.status });
     return ok({
@@ -102,13 +102,16 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'UpdateLive')
-  async updateLive(data: {
-    room_id: string;
-    title?: string;
-    type?: number;
-    start_time?: string;
-    duration?: number;
-  }) {
+  async updateLive(
+    data: {
+      room_id: string;
+      title?: string;
+      type?: number;
+      start_time?: string;
+      duration?: number;
+    },
+    _metadata?: Metadata
+  ) {
     this.logger.log(`gRPC UpdateLive: ${data.room_id}`);
     const room = await this.liveService.update({
       roomId: data.room_id,
@@ -207,14 +210,14 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'DeleteLive')
-  async deleteLive(data: { room_id: string }) {
+  async deleteLive(data: { room_id: string }, _metadata?: Metadata) {
     this.logger.log(`gRPC DeleteLive: ${data.room_id}`);
     await this.liveService.delete(data.room_id);
     return ok();
   }
 
   @GrpcMethod('LiveService', 'UpdateCode')
-  async updateCode(data: { room_id: string }) {
+  async updateCode(data: { room_id: string }, _metadata?: Metadata) {
     this.logger.log(`gRPC UpdateCode: ${data.room_id}`);
     const joinCode = await this.liveService.updateCode(data.room_id);
     return ok({ join_code: joinCode });
@@ -304,15 +307,18 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'SaveVideoRecording')
-  async saveVideoRecording(data: {
-    room_id: string;
-    file_path: string;
-    file_name: string;
-    file_size: number;
-    duration: number;
-    record_type: number;
-    teacher_name: string;
-  }) {
+  async saveVideoRecording(
+    data: {
+      room_id: string;
+      file_path: string;
+      file_name: string;
+      file_size: number;
+      duration: number;
+      record_type: number;
+      teacher_name: string;
+    },
+    _metadata?: Metadata
+  ) {
     this.logger.log(`gRPC SaveVideoRecording: room=${data.room_id} type=${data.record_type}`);
     await this.liveService.saveVideoRecording({
       roomId: data.room_id,
@@ -388,14 +394,14 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'DeleteVideoByRoomIds')
-  async deleteVideoByRoomIds(data: { room_ids: string[] }) {
+  async deleteVideoByRoomIds(data: { room_ids: string[] }, _metadata?: Metadata) {
     this.logger.log(`gRPC DeleteVideoByRoomIds: ${data.room_ids}`);
     await this.liveService.deleteVideoByRoomIds(data.room_ids);
     return ok();
   }
 
   @GrpcMethod('LiveService', 'DeleteVideoByVideoIds')
-  async deleteVideoByVideoIds(data: { video_ids: string[] }) {
+  async deleteVideoByVideoIds(data: { video_ids: string[] }, _metadata?: Metadata) {
     this.logger.log(`gRPC DeleteVideoByVideoIds: ${data.video_ids}`);
     await this.liveService.deleteVideoByVideoIds(data.video_ids);
     return ok();
@@ -443,10 +449,26 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'DeleteCourseware')
-  async deleteCourseware(data: { id: string }) {
+  async deleteCourseware(data: { id: string }, _metadata?: Metadata) {
     this.logger.log(`gRPC DeleteCourseware: ${data.id}`);
     await this.liveService.deleteCourseware(data.id);
     return ok();
+  }
+
+  @GrpcMethod('LiveService', 'GetVideoRoomMap')
+  async getVideoRoomMap(data: { video_ids: string[] }) {
+    this.logger.log(`gRPC GetVideoRoomMap: n=${data.video_ids?.length}`);
+    const items = await this.liveService.getVideoRoomMap(data.video_ids);
+    return ok({
+      data: { items: items.map(i => ({ video_id: i.videoId, room_id: i.roomId })) }
+    });
+  }
+
+  @GrpcMethod('LiveService', 'GetCoursewareRoom')
+  async getCoursewareRoom(data: { id: string }) {
+    this.logger.log(`gRPC GetCoursewareRoom: ${data.id}`);
+    const roomId = await this.liveService.getCoursewareRoom(data.id);
+    return ok({ data: { room_id: roomId } });
   }
 
   @GrpcMethod('LiveService', 'SaveBoardSnapshot')

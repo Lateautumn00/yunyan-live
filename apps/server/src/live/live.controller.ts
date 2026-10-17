@@ -31,6 +31,8 @@ import {
   JoinLiveDto,
   JwtAuthGuard,
   normalizePageQuery,
+  Roles,
+  RolesGuard,
   toGrpcPage,
   UpdateLiveDto,
   userIdMetadata
@@ -123,14 +125,20 @@ interface LiveServiceClient {
   ): Observable<LiveResponse>;
   joinLive(data: { join_code: string; live_user_id?: string }): Observable<JoinLiveResponse>;
   showRoom(data: { room_id: string }): Observable<ShowRoomResponse>;
-  changeStatus(data: { room_id: string; status: number }): Observable<LiveResponse>;
-  updateLive(data: {
-    room_id: string;
-    title: string;
-    type: number;
-    start_time: string;
-    duration: number;
-  }): Observable<LiveResponse>;
+  changeStatus(
+    data: { room_id: string; status: number },
+    metadata?: Metadata
+  ): Observable<LiveResponse>;
+  updateLive(
+    data: {
+      room_id: string;
+      title: string;
+      type: number;
+      start_time: string;
+      duration: number;
+    },
+    metadata?: Metadata
+  ): Observable<LiveResponse>;
   cmsList(
     data: {
       page?: number;
@@ -145,8 +153,8 @@ interface LiveServiceClient {
     metadata?: Metadata
   ): Observable<CmsListResponse>;
   cmsDetail(data: { room_id: string }): Observable<ShowRoomResponse>;
-  deleteLive(data: { room_id: string }): Observable<LiveResponse>;
-  updateCode(data: { room_id: string }): Observable<UpdateCodeResponse>;
+  deleteLive(data: { room_id: string }, metadata?: Metadata): Observable<LiveResponse>;
+  updateCode(data: { room_id: string }, metadata?: Metadata): Observable<UpdateCodeResponse>;
   getStudentRooms(
     data: { page?: number; page_size?: number },
     metadata?: Metadata
@@ -162,15 +170,18 @@ interface LiveServiceClient {
     transfer_code: string;
     from_user_id: string;
   }): Observable<{ code: string; msg: string }>;
-  saveVideoRecording(data: {
-    room_id: string;
-    file_path: string;
-    file_name: string;
-    file_size: number;
-    duration: number;
-    record_type: number;
-    teacher_name: string;
-  }): Observable<{ code: string; msg: string }>;
+  saveVideoRecording(
+    data: {
+      room_id: string;
+      file_path: string;
+      file_name: string;
+      file_size: number;
+      duration: number;
+      record_type: number;
+      teacher_name: string;
+    },
+    metadata?: Metadata
+  ): Observable<{ code: string; msg: string }>;
   getVideoList(data: {
     page?: number;
     page_size?: number;
@@ -212,8 +223,24 @@ interface LiveServiceClient {
       total: number;
     };
   }>;
-  deleteVideoByRoomIds(data: { room_ids: string[] }): Observable<{ code: string; msg: string }>;
-  deleteVideoByVideoIds(data: { video_ids: string[] }): Observable<{ code: string; msg: string }>;
+  deleteVideoByRoomIds(
+    data: { room_ids: string[] },
+    metadata?: Metadata
+  ): Observable<{ code: string; msg: string }>;
+  deleteVideoByVideoIds(
+    data: { video_ids: string[] },
+    metadata?: Metadata
+  ): Observable<{ code: string; msg: string }>;
+  getVideoRoomMap(data: { video_ids: string[] }): Observable<{
+    code: string;
+    msg: string;
+    data: { items: Array<{ video_id: string; room_id: string }> };
+  }>;
+  getCoursewareRoom(data: { id: string }): Observable<{
+    code: string;
+    msg: string;
+    data: { room_id: string };
+  }>;
   getUserWatchTimeList(data: {
     page?: number;
     page_size?: number;
@@ -262,7 +289,10 @@ interface LiveServiceClient {
       total: number;
     };
   }>;
-  deleteCourseware(data: { id: string }): Observable<{ code: string; msg: string }>;
+  deleteCourseware(
+    data: { id: string },
+    metadata?: Metadata
+  ): Observable<{ code: string; msg: string }>;
   saveBoardSnapshot(data: {
     room_id: string;
     lesson_id?: string;
@@ -382,16 +412,25 @@ export class LiveController implements OnModuleInit {
   }
 
   @Put('updateLive')
-  @UseGuards(JwtAuthGuard)
-  updateLive(@Body() dto: UpdateLiveDto) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
+  async updateLive(
+    @Body() dto: UpdateLiveDto,
+    @Request() req: { user: { userId: string; role?: number } }
+  ) {
+    // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
+    await this.assertRoomTeacher(req.user, dto.roomId);
     return grpcCall(
-      this.liveService.updateLive({
-        room_id: dto.roomId,
-        title: dto.title ?? '',
-        type: dto.type ?? 0,
-        start_time: dto.startTime ?? '',
-        duration: dto.duration ?? 0
-      })
+      this.liveService.updateLive(
+        {
+          room_id: dto.roomId,
+          title: dto.title ?? '',
+          type: dto.type ?? 0,
+          start_time: dto.startTime ?? '',
+          duration: dto.duration ?? 0
+        },
+        userIdMetadata(req.user.userId)
+      )
     );
   }
 
@@ -435,13 +474,22 @@ export class LiveController implements OnModuleInit {
   }
 
   @Put('changeLiveStatus')
-  @UseGuards(JwtAuthGuard)
-  changeStatus(@Body() dto: ChangeStatusDto) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
+  async changeStatus(
+    @Body() dto: ChangeStatusDto,
+    @Request() req: { user: { userId: string; role?: number } }
+  ) {
+    // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
+    await this.assertRoomTeacher(req.user, dto.roomId);
     return grpcCall(
-      this.liveService.changeStatus({
-        room_id: dto.roomId,
-        status: dto.status
-      })
+      this.liveService.changeStatus(
+        {
+          room_id: dto.roomId,
+          status: dto.status
+        },
+        userIdMetadata(req.user.userId)
+      )
     );
   }
 
@@ -526,16 +574,32 @@ export class LiveController implements OnModuleInit {
   }
 
   @Delete('deleteLive')
-  @UseGuards(JwtAuthGuard)
-  async delete(@Body('roomId') roomId: string) {
-    await grpcCall(this.liveService.deleteLive({ room_id: roomId }));
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
+  async delete(
+    @Body('roomId') roomId: string,
+    @Request() req: { user: { userId: string; role?: number } }
+  ) {
+    // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
+    await this.assertRoomTeacher(req.user, roomId);
+    await grpcCall(
+      this.liveService.deleteLive({ room_id: roomId }, userIdMetadata(req.user.userId))
+    );
     return { msg: '删除成功' };
   }
 
   @Put('updateLiveCode')
-  @UseGuards(JwtAuthGuard)
-  async updateCode(@Body() body: { roomId: string; operateType: string }) {
-    const result = await grpcCall(this.liveService.updateCode({ room_id: body.roomId }));
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
+  async updateCode(
+    @Body() body: { roomId: string; operateType: string },
+    @Request() req: { user: { userId: string; role?: number } }
+  ) {
+    // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
+    await this.assertRoomTeacher(req.user, body.roomId);
+    const result = await grpcCall(
+      this.liveService.updateCode({ room_id: body.roomId }, userIdMetadata(req.user.userId))
+    );
     return result.join_code;
   }
 
@@ -689,20 +753,51 @@ export class LiveController implements OnModuleInit {
   }
 
   @Delete('deleteVideo')
-  @UseGuards(JwtAuthGuard)
-  deleteVideoByRoomIds(@Body('roomIds') roomIds: string[]) {
-    return grpcCall(this.liveService.deleteVideoByRoomIds({ room_ids: roomIds }));
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
+  async deleteVideoByRoomIds(
+    @Body('roomIds') roomIds: string[],
+    @Request() req: { user: { userId: string; role?: number } }
+  ) {
+    // S4 补偿控制：逐房间归属断言（域层下沉待 S10b）
+    for (const roomId of roomIds) {
+      await this.assertRoomTeacher(req.user, roomId);
+    }
+    return grpcCall(
+      this.liveService.deleteVideoByRoomIds({ room_ids: roomIds }, userIdMetadata(req.user.userId))
+    );
   }
 
   @Delete('deleteVideoByIds')
-  @UseGuards(JwtAuthGuard)
-  deleteVideoByVideoIds(@Body('videoIds') videoIds: string[]) {
-    return grpcCall(this.liveService.deleteVideoByVideoIds({ video_ids: videoIds }));
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
+  async deleteVideoByVideoIds(
+    @Body('videoIds') videoIds: string[],
+    @Request() req: { user: { userId: string; role?: number } }
+  ) {
+    // S4 补偿控制：video→room 映射后逐房归属断言（映射不存在的 id 跳过＝删除幂等）
+    const map = await grpcCall(this.liveService.getVideoRoomMap({ video_ids: videoIds }));
+    const roomIds = [...new Set((map.data?.items || []).map(i => i.room_id))];
+    for (const roomId of roomIds) {
+      await this.assertRoomTeacher(req.user, roomId);
+    }
+    return grpcCall(
+      this.liveService.deleteVideoByVideoIds(
+        { video_ids: videoIds },
+        userIdMetadata(req.user.userId)
+      )
+    );
   }
 
   @Post('saveCourseware')
-  @UseGuards(JwtAuthGuard)
-  saveCourseware(@Body() dto: CreateCoursewareDto, @Request() req: { user: { userId: string } }) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
+  async saveCourseware(
+    @Body() dto: CreateCoursewareDto,
+    @Request() req: { user: { userId: string; role?: number } }
+  ) {
+    // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
+    await this.assertRoomTeacher(req.user, dto.roomId);
     const metadata = userIdMetadata(req.user.userId);
     return grpcCall(
       this.liveService.saveCourseware(
@@ -739,13 +834,21 @@ export class LiveController implements OnModuleInit {
   }
 
   @Delete('deleteCourseware')
-  @UseGuards(JwtAuthGuard)
-  deleteCourseware(@Body('id') id: string) {
-    return grpcCall(this.liveService.deleteCourseware({ id }));
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
+  async deleteCourseware(
+    @Body('id') id: string,
+    @Request() req: { user: { userId: string; role?: number } }
+  ) {
+    // S4 补偿控制：courseware→room 映射后归属断言（域层下沉待 S10b）
+    const room = await grpcCall(this.liveService.getCoursewareRoom({ id }));
+    await this.assertRoomTeacher(req.user, room.data.room_id);
+    return grpcCall(this.liveService.deleteCourseware({ id }, userIdMetadata(req.user.userId)));
   }
 
   @Post('boardSnapshot')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
   async saveBoardSnapshot(
     @Body() body: { roomId: string; lessonId?: string; data: string },
     @Request() req: { user: { userId: string; role?: number } }
@@ -763,7 +866,8 @@ export class LiveController implements OnModuleInit {
   }
 
   @Get('boardHistory')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
   async boardHistory(
     @Query('roomId') roomId: string,
     @Query('cursor') cursor: string | undefined,
@@ -792,7 +896,8 @@ export class LiveController implements OnModuleInit {
   }
 
   @Get('boardSnapshot/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
   async getBoardSnapshot(
     @Param('id') id: string,
     @Request() req: { user: { userId: string; role?: number } }
@@ -810,18 +915,27 @@ export class LiveController implements OnModuleInit {
   }
 
   @Post('savePlayBackUrl')
-  @UseGuards(JwtAuthGuard)
-  async savePlayBackUrl(@Body() body: { roomId: string; playBackUrl: string; duration: number }) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
+  async savePlayBackUrl(
+    @Body() body: { roomId: string; playBackUrl: string; duration: number },
+    @Request() req: { user: { userId: string; role?: number } }
+  ) {
+    // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
+    await this.assertRoomTeacher(req.user, body.roomId);
     await grpcCall(
-      this.liveService.saveVideoRecording({
-        room_id: body.roomId,
-        file_path: body.playBackUrl,
-        file_name: body.playBackUrl,
-        file_size: 0,
-        duration: body.duration || 0,
-        record_type: 2,
-        teacher_name: ''
-      })
+      this.liveService.saveVideoRecording(
+        {
+          room_id: body.roomId,
+          file_path: body.playBackUrl,
+          file_name: body.playBackUrl,
+          file_size: 0,
+          duration: body.duration || 0,
+          record_type: 2,
+          teacher_name: ''
+        },
+        userIdMetadata(req.user.userId)
+      )
     );
     return { roomId: body.roomId, playBackUrl: body.playBackUrl };
   }
@@ -864,16 +978,25 @@ export class LiveController implements OnModuleInit {
   }
 
   @Get('downloadRecording/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
   async downloadRecording(
     @Param('id') id: string,
     @Query('download') download: string,
-    @Res() res: Response
+    @Res() res: Response,
+    @Request() req: { user: { userId: string; role?: number } }
   ) {
     // S8 安全白名单：录制 id 由 Math.random().toString(36) 生成（[a-z0-9]），
     // 拒绝路径穿越（. / \）与命令注入元字符；后续全部路径拼接与 docker exec 均以此为前提
     if (!isSafeRecordingId(id)) {
       return res.status(400).json({ code: 400, msg: '非法录制 id' });
+    }
+
+    // S4 补偿控制：recording→room 映射后归属断言（映射不存在→交文件层 404）
+    const recMap = await grpcCall(this.liveService.getVideoRoomMap({ video_ids: [id] }));
+    const recRoomId = recMap.data?.items?.[0]?.room_id;
+    if (recRoomId) {
+      await this.assertRoomTeacher(req.user, recRoomId);
     }
 
     const hostRecordingsDir = process.env.RECORDINGS_DIR || '/home/janus/recordings';
