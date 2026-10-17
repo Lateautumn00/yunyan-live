@@ -1,6 +1,8 @@
+import 'reflect-metadata';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { join } from 'path';
+import { JwtAuthGuard } from '@yunyan-live/nest-shared';
 import { UploadController } from './upload.controller';
 import { buildPptToPdfArgs, PPT_TO_PDF_TIMEOUT_MS } from './ppt-convert';
 
@@ -63,6 +65,8 @@ function makeFile(originalname: string, mimetype: string) {
 }
 
 beforeAll(() => {
+  // S3：固定签名密钥，避免随机密钥 warn 与跨用例 URL 漂移
+  process.env.UPLOAD_SIGNING_SECRET = 'upload-sign-spec-secret-fixed';
   vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
   vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 });
@@ -81,6 +85,7 @@ beforeEach(() => {
 
 afterEach(() => {
   process.env = { ...originalEnv };
+  process.env.UPLOAD_SIGNING_SECRET = 'upload-sign-spec-secret-fixed';
   vi.clearAllMocks();
 });
 
@@ -96,8 +101,10 @@ describe('UploadController.uploadImage', () => {
     const res = controller.uploadImage(makeFile('a.png', 'image/png'));
     expect(h.mkdir).toEqual([{ dir: IMAGES, opts: { recursive: true } }]);
     expect(h.written).toHaveLength(1);
-    expect(h.written[0]).toMatch(new RegExp(`[\\\\/]images[\\\\/]\\d+-\\d+\\.png$`));
-    expect(res.fileUrl).toMatch(/^http:\/\/localhost:3001\/uploads\/images\/\d+-\d+\.png$/);
+    expect(h.written[0]).toMatch(new RegExp(`[\\\\/]images[\\\\/]\\d+-[0-9a-f]{16}\\.png$`));
+    expect(res.fileUrl).toMatch(
+      /^http:\/\/localhost:3001\/uploads\/[A-Za-z0-9_-]{22}\/images\/\d+-[0-9a-f]{16}\.png$/
+    );
   });
 
   it('目录已存在不重复创建，BASE_URL 可覆盖', () => {
@@ -106,7 +113,9 @@ describe('UploadController.uploadImage', () => {
     const controller = new UploadController();
     const res = controller.uploadImage(makeFile('b.jpeg', 'image/jpeg'));
     expect(h.mkdir).toHaveLength(0);
-    expect(res.fileUrl).toMatch(/^https:\/\/cdn\.example\.com\/uploads\/images\/\d+-\d+\.jpeg$/);
+    expect(res.fileUrl).toMatch(
+      /^https:\/\/cdn\.example\.com\/uploads\/[A-Za-z0-9_-]{22}\/images\/\d+-[0-9a-f]{16}\.jpeg$/
+    );
   });
 });
 
@@ -135,7 +144,7 @@ describe('UploadController.uploadPPT', () => {
     const res = await controller.uploadPPT(makeFile('deck.pptx', 'application/vnd.ms-powerpoint'));
     expect(h.mkdir).toEqual([{ dir: PPT_DIR, opts: { recursive: true } }]);
     expect(h.written).toHaveLength(1);
-    expect(h.written[0]).toMatch(new RegExp(`[\\\\/]ppt[\\\\/]\\d+-\\d+\\.pptx$`));
+    expect(h.written[0]).toMatch(new RegExp(`[\\\\/]ppt[\\\\/]\\d+-[0-9a-f]{16}\\.pptx$`));
     expect(h.exec).toHaveLength(1);
     const call = h.exec[0];
     expect(call?.file).toBe(
@@ -146,7 +155,9 @@ describe('UploadController.uploadPPT', () => {
     );
     expect(call?.opts).toEqual({ timeout: PPT_TO_PDF_TIMEOUT_MS });
     expect(call?.args).toEqual(buildPptToPdfArgs(PPT_DIR, h.written[0] as string));
-    expect(res.fileUrl).toMatch(/^http:\/\/localhost:3001\/uploads\/ppt\/\d+-\d+\.pdf$/);
+    expect(res.fileUrl).toMatch(
+      /^http:\/\/localhost:3001\/uploads\/[A-Za-z0-9_-]{22}\/ppt\/\d+-[0-9a-f]{16}\.pdf$/
+    );
   });
 
   it('SOFFICE_PATH 环境变量覆盖转换器路径', async () => {
@@ -166,7 +177,7 @@ describe('UploadController.uploadPPT', () => {
     expect(res.convertError?.retryable).toBe(true);
     expect(res.convertError?.message).toContain('spawn failed');
     expect(res.convertError?.originalUrl).toMatch(
-      /^http:\/\/localhost:3001\/uploads\/ppt\/\d+-\d+\.pptx$/
+      /^http:\/\/localhost:3001\/uploads\/[A-Za-z0-9_-]{22}\/ppt\/\d+-[0-9a-f]{16}\.pptx$/
     );
     expect(Logger.prototype.error).toHaveBeenCalledWith(
       'PPT转PDF失败: spawn failed',
@@ -207,5 +218,17 @@ describe('UploadController.uploadPPT', () => {
     expect(Logger.prototype.error).toHaveBeenCalledWith(
       '未找到 LibreOffice，请安装或配置 SOFFICE_PATH'
     );
+  });
+});
+
+describe('S3 写入侧鉴权（回归守卫：端点不可回退为匿名）', () => {
+  it('uploadImage 挂 JwtAuthGuard', () => {
+    const guards = Reflect.getMetadata('__guards__', UploadController.prototype.uploadImage);
+    expect(guards).toEqual(expect.arrayContaining([JwtAuthGuard]));
+  });
+
+  it('uploadPPT 挂 JwtAuthGuard', () => {
+    const guards = Reflect.getMetadata('__guards__', UploadController.prototype.uploadPPT);
+    expect(guards).toEqual(expect.arrayContaining([JwtAuthGuard]));
   });
 });

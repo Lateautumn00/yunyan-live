@@ -18,7 +18,13 @@ export async function uploadPptFile(api: string, file: File): Promise<string> {
   try {
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch(api, { method: 'POST', body: fd });
+    // S3：/upload/ppt 已上 JwtAuthGuard（写入侧鉴权）
+    const token = localStorage.getItem('token') || '';
+    const res = await fetch(api, {
+      method: 'POST',
+      body: fd,
+      headers: { Authorization: `Bearer ${token}` }
+    });
     if (!res.ok) throw new Error(`PPT上传失败: ${res.status} ${res.statusText}`);
     const data = await res.json();
     if (data.code !== 1000 || !data.data?.fileUrl) {

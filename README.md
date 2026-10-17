@@ -424,6 +424,7 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 | `STUN_PORT`      | `19302`             | STUN 端口                          |
 | `RTP_PORT_RANGE` | `20000-20100`       | RTP 媒体流端口范围                 |
 | `POSTGRES_PASSWORD` | 回退 `postgres`  | PostgreSQL 口令；生产部署务必覆盖（仅 pgdata 卷首次初始化生效） |
+| `UPLOAD_SIGNING_SECRET` | 进程随机（失效） | server `/uploads` 读取签名密钥（≥16 字符）；部署机用 `openssl rand -hex 32` 生成持久值，缺失则重启后历史上传 URL 全部 404 |
 
 ## 端口说明
 

@@ -9,6 +9,7 @@ import {
   validationPipeOptions
 } from '@yunyan-live/nest-shared';
 import { AppModule } from './app.module';
+import { uploadVerifyMiddleware } from './upload/upload-sign';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -28,11 +29,15 @@ async function bootstrap() {
   });
 
   // F6.1 板书导出/pdf.js 需以 file://（Origin: null）读取上传文件像素，CORS 白名单不含 null Origin。
-  // 上传目录本就无鉴权，对 /uploads 放开读取不扩大暴露面；须在 cors 中间件之后覆盖同名响应头。
+  // /uploads 读取侧凭证是路径签名（S3，非 Authorization 头），故保留 ACAO: *。
   app.use('/uploads', (_req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     next();
   });
+
+  // S3：/uploads 读取验签——无签名/签名不匹配/老格式（无 sig 段）一律 404，
+  // 合法签名剥段重写后交静态托管（放行顺序：CORS 头 → 验签 → 静态资源）
+  app.use('/uploads', uploadVerifyMiddleware);
 
   app.useStaticAssets(join(__dirname, '..', 'uploads'), { prefix: '/uploads' });
 

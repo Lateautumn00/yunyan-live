@@ -3,12 +3,15 @@ import {
   Post,
   UseInterceptors,
   UploadedFile,
+  UseGuards,
   BadRequestException,
   Logger
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { JwtAuthGuard } from '@yunyan-live/nest-shared';
 import { extname, join } from 'path';
 import { existsSync, mkdirSync, statSync, writeFileSync } from 'fs';
+import { randomBytes } from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import {
@@ -18,6 +21,7 @@ import {
   PPT_TO_PDF_TIMEOUT_MS,
   type ConvertErrorInfo
 } from './ppt-convert';
+import { buildSignedUploadUrl } from './upload-sign';
 
 const execFileAsync = promisify(execFile);
 const UPLOAD_DIR = join(process.cwd(), 'uploads');
@@ -42,6 +46,7 @@ export class UploadController {
   private readonly logger = new Logger(UploadController.name);
 
   @Post('image')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: 10 * 1024 * 1024 },
@@ -63,16 +68,16 @@ export class UploadController {
     }
     const dir = join(UPLOAD_DIR, 'images');
     ensureDir(dir);
-    const filename =
-      Date.now() + '-' + Math.round(Math.random() * 1e9) + extname(file.originalname);
+    const filename = Date.now() + '-' + randomBytes(8).toString('hex') + extname(file.originalname);
     writeFileSync(join(dir, filename), file.buffer);
     this.logger.log(`图片上传成功: ${filename}`);
     const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-    const fileUrl = `${baseUrl}/uploads/images/${filename}`;
+    const fileUrl = buildSignedUploadUrl(baseUrl, `images/${filename}`);
     return { fileUrl };
   }
 
   @Post('ppt')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: 50 * 1024 * 1024 },
@@ -100,7 +105,7 @@ export class UploadController {
     const pptDir = join(UPLOAD_DIR, 'ppt');
     ensureDir(pptDir);
 
-    const baseName = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const baseName = Date.now() + '-' + randomBytes(8).toString('hex');
     const pptFilename = baseName + extname(file.originalname);
     const pptPath = join(pptDir, pptFilename);
     writeFileSync(pptPath, file.buffer);
@@ -108,9 +113,9 @@ export class UploadController {
 
     const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
     // LO 以输入文件名（baseName.pptx）命名输出，直出 pptDir/baseName.pdf
-    const pdfUrl = `${baseUrl}/uploads/ppt/${baseName}.pdf`;
+    const pdfUrl = buildSignedUploadUrl(baseUrl, `ppt/${baseName}.pdf`);
     const pdfPath = join(pptDir, `${baseName}.pdf`);
-    const originalUrl = `${baseUrl}/uploads/ppt/${pptFilename}`;
+    const originalUrl = buildSignedUploadUrl(baseUrl, `ppt/${pptFilename}`);
 
     try {
       const sofficePath =

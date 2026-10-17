@@ -5023,7 +5023,13 @@ async function uploadImage(file: File, pos?: { x: number; y: number }) {
   try {
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch(uploadImageApi, { method: 'POST', body: fd });
+    // S3：/upload/image 已上 JwtAuthGuard（写入侧鉴权）
+    const token = localStorage.getItem('token') || '';
+    const res = await fetch(uploadImageApi, {
+      method: 'POST',
+      body: fd,
+      headers: { Authorization: `Bearer ${token}` }
+    });
     if (!res.ok) {
       toast(`上传失败: ${res.status} ${res.statusText}`);
       loading.value = false;
