@@ -1,5 +1,6 @@
 import { CHAT_LIMITS, type BulletRejectReason, type MentionTarget } from '@yunyan-live/types';
 import { FORBID_FORBIDDEN } from '@yunyan-live/nest-shared';
+import { isBlocked } from './wordfilter';
 
 /** 连接期身份上下文（JWT 角色权威；其余为连接 URL 客户端声明） */
 export interface BulletContext {
@@ -12,6 +13,8 @@ export interface BulletContext {
   isTeacher: boolean;
   /** 房间禁言态：0=禁言 1=可发言；undefined=未知（fail-open 放行，与 readForbid 一致） */
   forbid?: number;
+  /** 内置违禁词库（main 注入 DEFAULT_BANNED_WORDS）；缺省/空=服务异常或空库 → fail-open 放行 */
+  bannedWords?: readonly string[];
   /** 服务端注入的消息 UUID（main 传 randomUUID；客户端伪造被覆盖） */
   msgId: string;
   /** JWT sub（users.id UUID），落库 sender_id */
@@ -121,6 +124,13 @@ export function buildBullet(raw: string, ctx: BulletContext): BuildBulletResult 
     return { ok: false, reason: 'forbidden' };
   }
 
+  // 关键词过滤（F5）：教师豁免；命中=拒发（仅发送者收 bullet_rejected，不广播不落库，不回溯历史）；
+  // 词库缺省/为空（服务异常或空库）fail-open 放行，与 forbid 未知口径一致。
+  const content = text.slice(0, CHAT_LIMITS.MAX_MESSAGE_LENGTH);
+  if (!ctx.isTeacher && isBlocked(content, ctx.bannedWords)) {
+    return { ok: false, reason: 'blocked_word' };
+  }
+
   const mentions = sanitizeMentions(liveMsg?.mentions, ctx.isTeacher);
   if (mentions === null) return { ok: false, reason: 'invalid' };
 
@@ -153,7 +163,6 @@ export function buildBullet(raw: string, ctx: BulletContext): BuildBulletResult 
       }
     }
   };
-  const content = text.slice(0, CHAT_LIMITS.MAX_MESSAGE_LENGTH);
   const hasHostMarker = liveMsg?.info !== undefined && liveMsg?.info?.host !== undefined;
   const entry: PersistRowInput | undefined = hasHostMarker
     ? undefined

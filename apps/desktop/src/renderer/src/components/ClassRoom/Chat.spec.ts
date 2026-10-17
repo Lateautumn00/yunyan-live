@@ -669,5 +669,13 @@ describe('ClassRoom Chat.vue', () => {
       await flushPromises();
       expect(document.body.textContent).toContain('发送过于频繁');
     });
+
+    it('bullet_rejected blocked_word 显示禁用词提示（仅发送者）', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      ws.onmessage?.({ data: JSON.stringify({ type: 'bullet_rejected', reason: 'blocked_word' }) });
+      await flushPromises();
+      expect(document.body.textContent).toContain('消息包含禁用词');
+    });
   });
 });

@@ -50,7 +50,7 @@ export interface BulletEnvelope {
 
 /** 拒发回执（仅回发送者；旧客户端 default 分支安全忽略） */
 export type BulletRejectReason =
-  'forbidden' | 'too_long' | 'invalid' | 'not_joined' | 'rate_limited';
+  'forbidden' | 'too_long' | 'invalid' | 'not_joined' | 'rate_limited' | 'blocked_word';
 
 export interface BulletRejectedMessage {
   type: 'bullet_rejected';

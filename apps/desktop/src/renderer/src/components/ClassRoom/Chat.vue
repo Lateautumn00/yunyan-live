@@ -359,6 +359,7 @@ function liveSocketMessage(e: MessageEvent) {
       else if (redata.reason === 'too_long')
         ElMessage.warning(`消息超过${CHAT_LIMITS.MAX_MESSAGE_LENGTH}字`);
       else if (redata.reason === 'rate_limited') ElMessage.warning('发送过于频繁，请稍后再试');
+      else if (redata.reason === 'blocked_word') ElMessage.warning('消息包含禁用词，无法发送');
       else ElMessage.error('消息发送失败');
       break;
     case 'history':

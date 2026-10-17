@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHAT_LIMITS } from '@yunyan-live/types';
 import { buildBullet, sanitizeName, type BulletContext } from './bullet';
+import { DEFAULT_BANNED_WORDS } from './wordfilter';
 
 function rawBullet(data: Record<string, unknown>): string {
   return JSON.stringify({ type: 'bullet', data });
@@ -303,6 +304,56 @@ describe('buildBullet 持久化行（方案 §4.1）', () => {
 
   it('拒发时无 payload 也无 entry（result.ok=false 即终点）', () => {
     const result = buildBullet(liveMsg({ msg: 'hi' }), ctx({ forbid: 0 }));
+    expect(result).toEqual({ ok: false, reason: 'forbidden' });
+  });
+});
+
+describe('F5 关键词过滤（命中拒发 / 教师豁免 / fail-open / 默认词库非空）', () => {
+  it('命中词库 → 拒发 blocked_word（仅发送者收 bullet_rejected，无 payload 无 entry）', () => {
+    const result = buildBullet(
+      liveMsg({ msg: '这里有敏感词测试' }),
+      ctx({ bannedWords: ['敏感词'] })
+    );
+    expect(result).toEqual({ ok: false, reason: 'blocked_word' });
+  });
+
+  it('大小写不敏感命中', () => {
+    const result = buildBullet(liveMsg({ msg: 'join ABC now' }), ctx({ bannedWords: ['abc'] }));
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('blocked_word');
+  });
+
+  it('词库为空 → fail-open 放行（词库空口径）', () => {
+    const result = buildBullet(liveMsg({ msg: '敏感词' }), ctx({ bannedWords: [] }));
+    expect(result.ok).toBe(true);
+  });
+
+  it('词库缺省（服务异常未注入）→ fail-open 放行', () => {
+    expect(buildBullet(liveMsg({ msg: '敏感词' }), ctx()).ok).toBe(true);
+  });
+
+  it('教师豁免：同样命中也放行', () => {
+    const result = buildBullet(
+      liveMsg({ msg: '敏感词' }),
+      ctx({ bannedWords: ['敏感词'], isTeacher: true })
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('默认词库非空且经默认词库实拦（F5 DoD）', () => {
+    expect(DEFAULT_BANNED_WORDS.length).toBeGreaterThan(0);
+    const hit = buildBullet(
+      liveMsg({ msg: `广告：${DEFAULT_BANNED_WORDS[0] ?? ''}详聊` }),
+      ctx({ bannedWords: DEFAULT_BANNED_WORDS })
+    );
+    expect(hit.reason).toBe('blocked_word');
+  });
+
+  it('禁言仍优先于词库（学生禁言命中词库返回 forbidden）', () => {
+    const result = buildBullet(
+      liveMsg({ msg: '敏感词' }),
+      ctx({ forbid: 0, bannedWords: ['敏感词'] })
+    );
     expect(result).toEqual({ ok: false, reason: 'forbidden' });
   });
 });

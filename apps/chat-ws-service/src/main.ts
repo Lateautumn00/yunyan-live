@@ -17,6 +17,7 @@ import {
   verifyToken
 } from '@yunyan-live/nest-shared';
 import { buildBullet, sanitizeName } from './bullet';
+import { DEFAULT_BANNED_WORDS } from './wordfilter';
 import { loadPersistenceConfig, requireDatabaseUrl, requireRabbitUrl } from './config';
 import { createPublisher, type Publisher } from './queue';
 import { createConsumer, type ConsumerHandle } from './persist';
@@ -254,6 +255,7 @@ function handleMessage(client: WebSocket, raw: string) {
           liveUserId: sender.userId,
           isTeacher: sender.isTeacher,
           forbid: roomForbid.get(roomId),
+          bannedWords: DEFAULT_BANNED_WORDS,
           msgId: randomUUID(),
           senderId: sender.authUserId ?? ''
         });
