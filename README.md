@@ -342,14 +342,18 @@ docker compose down -v    # 删除数据卷
 docker compose up -d      # 重新启动，自动执行 schema.sql
 ```
 
-**存量数据库升级（DDL 先行）**：全新库由 `schema.sql` 自动建表（含 `chat_messages`）；**已有库**需先手工执行幂等迁移，再部署依赖该表的服务：
+**存量数据库升级（唯一入口 = 迁移 runner，GAP-S9a）**：全新库由 `schema.sql` 一次性建表后登记；
+已有 schema 且无迁移记录的库（如现网首次纳入）先登记再升级：
 
 ```bash
-docker compose exec -T yunyan-live-postgres psql -U postgres -d yunyan_live < \
-  apps/chat-ws-service/src/migrations/20261007_create_chat_messages.sql
+pnpm db:migrate:status                                       # 查看待办/登记状态
+node scripts/db-migrate.mjs --baseline                       # 既有 schema：只登记，不执行 DDL
+pnpm db:migrate                                              # 应用 db/migrations/ 下全部待办
 ```
 
-（迁移为 `IF NOT EXISTS` + 事务，可重复执行。）
+机制、规则与新增迁移 SOP 见 [`db/README.md`](db/README.md)。
+`apps/*/src/migrations/` 与 `init/schema.sql` 已封存——**禁止**再手工执行 SQL，新表/新列一律走
+`db/migrations/` 并同步更新 `db/schema-baseline.sql`（CI schema diff 门禁强制）。
 
 > **备份基线**：PostgreSQL 日备、文件级备份与恢复演练脚本已入库
 > （`scripts/backup-postgres.sh` / `scripts/backup-files.sh` / `scripts/restore-drill.sh`），

@@ -12,6 +12,7 @@ import {
   UserWatchTime,
   VideoRecording
 } from '@yunyan-live/shared';
+import { resolveSynchronize, SYNC_ENV_KEY } from './db/sync-policy';
 import { JanusModule } from './janus/janus.module';
 import { LiveModule } from './live/live.module';
 
@@ -23,6 +24,8 @@ import { LiveModule } from './live/live.module';
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
         url: config.get('DATABASE_URL'),
+        // GAP-S9a：默认 false；生产环境请求 true 直接抛错（见 sync-policy）
+        synchronize: resolveSynchronize(config.get(SYNC_ENV_KEY) === 'true'),
         entities: [
           LiveRoom,
           LiveParticipant,
@@ -34,7 +37,6 @@ import { LiveModule } from './live/live.module';
           CheckinSession,
           CheckinRecord
         ],
-        synchronize: true,
         timezone: '+08:00'
       }),
       inject: [ConfigService]

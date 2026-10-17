@@ -1,3 +1,10 @@
+-- GAP-S9a:本文件仅用于 docker compose 全新起库的一次性初始化（开发/演示环境）。
+-- 表集合与 db/schema-baseline.sql 一致；起库后必须登记迁移基线：
+--     pnpm db:migrate:status          # 预期: has tables, no records
+--     pnpm db:migrate -- --baseline   # 登记 baseline+legacy（不执行 DDL）
+-- 生产/schema 权威与新增迁移流程见 db/README.md。禁止在本文件追加新表——
+-- 新表一律走 db/migrations/ + 同步更新 db/schema-baseline.sql。
+--
 -- 云砚直播 (Yunyan Live) 数据库表结构
 -- PostgreSQL
 

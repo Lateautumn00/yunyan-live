@@ -34,6 +34,55 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+  schema:
+    name: Schema baseline gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        # 与 db/schema-baseline.sql 生成环境同 minor 版本（见 db/README.md）
+        image: postgres:16.15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: yunyan_live_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/yunyan_live_ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Replay migration chain on empty database
+        run: node scripts/db-migrate.mjs
+
+      - name: Dump replayed schema
+        run: |
+          sudo apt-get install -y -qq postgresql-client
+          PGPASSWORD=postgres pg_dump -h localhost -U postgres -d yunyan_live_ci \
+            --schema-only --no-owner --no-privileges --exclude-table=schema_migrations \
+            > /tmp/replayed.sql
+
+      - name: Gate - replayed schema must match db/schema-baseline.sql
+        run: |
+          ./scripts/normalize-schema-dump.sh db/schema-baseline.sql > /tmp/base.sql
+          ./scripts/normalize-schema-dump.sh /tmp/replayed.sql > /tmp/got.sql
+          diff -u /tmp/base.sql /tmp/got.sql
+
   tests:
     name: Test
     runs-on: ubuntu-latest
