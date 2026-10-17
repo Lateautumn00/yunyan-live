@@ -351,8 +351,10 @@ docker compose exec -T yunyan-live-postgres psql -U postgres -d yunyan_live < \
 
 （迁移为 `IF NOT EXISTS` + 事务，可重复执行。）
 
-> **备份基线**：PostgreSQL 日备与恢复演练脚本已入库（`scripts/backup-postgres.sh` /
-> `scripts/restore-drill.sh`），部署机需配置 cron，见下方「备份与恢复」。
+> **备份基线**：PostgreSQL 日备、文件级备份与恢复演练脚本已入库
+> （`scripts/backup-postgres.sh` / `scripts/backup-files.sh` / `scripts/restore-drill.sh`），
+> 部署机需配置 cron，见下方「备份与恢复」。恢复演练记录存档于
+> [`docs/research/drills/restore-drill-record.md`](docs/research/drills/restore-drill-record.md)。
 
 ### 验证服务
 
@@ -383,22 +385,33 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 
 基线目标：RPO ≤ 1 天（日备起步，后续可升 WAL 归档 PITR）、RTO ≤ 1h（恢复演练保障）。
 
-| 覆盖面           | 方案                                                            |
-| ---------------- | --------------------------------------------------------------- |
-| PostgreSQL       | `scripts/backup-postgres.sh`（pg_dump -Fc，默认保留 7 天）      |
-| 恢复演练         | `scripts/restore-drill.sh`（一次性容器导入 + 冒烟查询，**每月必跑**） |
-| Redis            | AOF 已开（`appendonly everysec`），卷级归档即可                 |
-| RabbitMQ         | 数据卷 + DLQ 可重放；管理台可导出 definitions                   |
-| Janus 录像/课件  | 宿主机目录（`/home/janus/recordings` 等）需文件级备份，未含在脚本内 |
+| 覆盖面           | 方案                                                                            |
+| ---------------- | ------------------------------------------------------------------------------- |
+| PostgreSQL       | `scripts/backup-postgres.sh`（pg_dump -Fc，默认保留 7 天）                      |
+| RabbitMQ 数据卷  | `scripts/backup-files.sh`（docker 卷 → tar.gz）                                 |
+| Janus 录像       | `scripts/backup-files.sh`（`RECORDINGS_DIR` 默认 `/home/janus/recordings`）     |
+| 课件/图片落盘    | `scripts/backup-files.sh`（`UPLOADS_DIR` 默认 `apps/server/uploads`）           |
+| 恢复演练         | `scripts/restore-drill.sh`（一次性容器导入 + 冒烟查询，**每月必跑**）           |
+| Redis            | AOF 已开（`appendonly everysec`），卷级归档即可                                 |
+| 加密             | 两个备份脚本均支持 `BACKUP_PASSPHRASE` → `openssl aes-256-cbc`（.enc 产物）      |
 
-部署机 cron 示例（每日 03:00 备份、每月 1 日 04:00 演练）：
+部署机 cron 示例（每日 03:00 PG 备份、03:30 文件备份、每月 1 日 04:00 演练）：
 
 ```bash
-0 3 * * * /path/to/yunyan-live/scripts/backup-postgres.sh /var/backups/yunyan-live
-0 4 1 * * /path/to/yunyan-live/scripts/restore-drill.sh "$(ls -t /var/backups/yunyan-live/pg-yunyan_live-*.dump | head -1)"
+0 3 * * *  BACKUP_PASSPHRASE=$(cat /root/yunyan-backup.key) /path/to/yunyan-live/scripts/backup-postgres.sh /var/backups/yunyan-live
+30 3 * * * BACKUP_PASSPHRASE=$(cat /root/yunyan-backup.key) RECORDINGS_DIR=/home/janus/recordings /path/to/yunyan-live/scripts/backup-files.sh /var/backups/yunyan-live
+0 4 1 * *  /path/to/yunyan-live/scripts/restore-drill.sh "$(ls -t /var/backups/yunyan-live/pg-yunyan_live-*.dump* | head -1)"
 ```
 
-> 恢复演练失败 = 备份无效。演练记录（日期/备份文件/表数/结论）需人工留存。
+> 恢复演练失败 = 备份无效。演练记录（日期/备份文件/表数/结论）**追加存档至
+> `docs/research/drills/restore-drill-record.md`**（只增不删）；首条记录：2026-10-17 PASS。
+
+**异地/对象存储推送（待部署机配置，本机无凭据）**：
+
+- [ ] 提供对象存储桶（S3/OSS/COS 均可）+ 凭据，写入部署机 `/root/.yunyan-backup.env`（权限 600，不入库）
+- [ ] 备份脚本尾部追加 `aws s3 cp`（或 rclone）推送 `.dump.enc` / `.tar.gz.enc`
+- [ ] 配置跨区域复制或桶版本化；本机磁盘水位告警（两脚本已输出 `WARN` 行）接入监控
+- [ ] 密钥文件丢失 = 备份不可用；密钥须异地保存（与桶凭据分离）
 
 ### Docker 环境变量
 

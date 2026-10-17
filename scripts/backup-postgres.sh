@@ -15,5 +15,17 @@ FILE="$BACKUP_DIR/pg-$DB-$STAMP.dump"
 
 mkdir -p "$BACKUP_DIR"
 docker exec "$CONTAINER" pg_dump -U "$DB_USER" -Fc "$DB" >"$FILE"
-find "$BACKUP_DIR" -name "pg-$DB-*.dump" -mtime +"$RETENTION_DAYS" -delete
-echo "backup ok: $FILE ($(du -h "$FILE" | cut -f1))"
+
+# 可选加密（与 backup-files.sh 同机制）：设 BACKUP_PASSPHRASE 后产物追加 .enc
+if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
+  openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BACKUP_PASSPHRASE -in "$FILE" -out "$FILE.enc"
+  rm -f "$FILE"
+  FILE="$FILE.enc"
+fi
+
+find "$BACKUP_DIR" -name "pg-$DB-*.dump*" -mtime +"$RETENTION_DAYS" -delete
+avail_pct=$(df -P "$BACKUP_DIR" | awk 'NR==2 {gsub("%","",$5); print 100-$5}')
+if [ "$avail_pct" -lt 10 ]; then
+  echo "WARN: 备份目录所在磁盘剩余 ${avail_pct}%（<10%）"
+fi
+echo "backup ok: $FILE ($(du -h "$FILE" | cut -f1)) avail=${avail_pct}%"
