@@ -71,8 +71,8 @@
               </el-icon>
             </li>
             <li>
-              <span class="name">参加链接：</span><span>http://abc</span>
-              <el-icon class="copy" @click="copy('http://abc')">
+              <span class="name">参加链接：</span><span>{{ shareLink || '未配置分享地址' }}</span>
+              <el-icon class="copy" @click="shareLink && copy(shareLink)">
                 <CopyDocument />
               </el-icon>
             </li>
@@ -316,11 +316,12 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Setting } from '@element-plus/icons-vue';
 import { formatStopwatch } from '@yunyan-live/utils';
 import { useCopy } from '@/composables/useCopy';
+import { buildShareUrl, getShareOrigin } from '@/utils/shareLink';
 import { useServerTime } from '@/composables/useServerTime';
 import CheckinPanel from './CheckinPanel.vue';
 
@@ -431,6 +432,10 @@ function sendTime(time: number) {
 }
 
 const { copy } = useCopy();
+
+const shareLink = computed(() =>
+  buildShareUrl(getShareOrigin(), props.roomId, props.roomInfo.joinCode)
+);
 
 function lookLive(status: boolean) {
   isNavigating.value = true;

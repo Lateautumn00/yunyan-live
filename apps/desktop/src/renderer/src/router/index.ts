@@ -15,6 +15,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/login/index.vue')
   },
   {
+    path: '/join',
+    name: 'join',
+    component: () => import('@/pages/join/index.vue')
+  },
+  {
     path: '/teacher/mylive',
     name: 'teacher.mylive',
     component: () => import('@/pages/teacher/mylive/index.vue')

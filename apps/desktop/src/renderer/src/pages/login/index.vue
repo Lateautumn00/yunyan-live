@@ -394,7 +394,9 @@ onMounted(() => {
   if (reason === 'kicked' || reason === 'expired') {
     sessionNotice.value =
       reason === 'kicked' ? '账号已在其他设备登录，请重新登录' : '登录已过期，请重新登录';
-    void router.replace({ path: '/login' });
+    // 清掉 reason 防止重复提示，但保留分享链接落地的 redirect 目标
+    const keepRedirect = route.query.redirect;
+    void router.replace({ path: '/login', query: keepRedirect ? { redirect: keepRedirect } : {} });
   }
   const savedEmail = localStorage.getItem('savedEmail');
   const savedPass = localStorage.getItem('savedPass');
@@ -440,7 +442,10 @@ const { loading: loginLoading, run: runLogin } = useAsyncAction(async () => {
       localStorage.removeItem('savedPass');
     }
     const role = localStorage.getItem('role');
-    if (role === '1') {
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '';
+    if (redirect) {
+      router.push(redirect);
+    } else if (role === '1') {
       router.push('/teacher/mylive');
     } else {
       router.push('/student/rooms');

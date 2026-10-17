@@ -13,33 +13,38 @@
     <div class="share-row">
       <div class="copy-line">
         <label for="">客户端进入</label>
-        <el-input :model-value="entryLink" readonly />
+        <el-input
+          :model-value="entryLink"
+          readonly
+          :placeholder="entryLink ? '' : '未配置分享地址'"
+        />
       </div>
-      <span class="copy" @click="copyLink(entryLink)">复制</span>
+      <span v-if="entryLink" class="copy" @click="copyLink(entryLink)">复制</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import Live from '@/api/backstage';
 import { useCopy } from '@/composables/useCopy';
 import { useAsyncAction } from '@/composables/useAsyncAction';
+import { buildShareUrl, getShareOrigin } from '@/utils/shareLink';
 
 const props = withDefaults(
   defineProps<{
     roomId: string;
     joinCode?: string;
-    clientLink?: string;
   }>(),
-  { joinCode: '', clientLink: 'https://500px.com' }
+  { joinCode: '' }
 );
 
 const emit = defineEmits<{ updated: [code: string] }>();
 
 const localCode = ref(props.joinCode);
-const entryLink = props.clientLink;
+// 参加链接随 roomId/参加码实时拼接（更新参加码后旧链接按失效文案处理）
+const entryLink = computed(() => buildShareUrl(getShareOrigin(), props.roomId, localCode.value));
 
 watch(
   () => props.joinCode,
