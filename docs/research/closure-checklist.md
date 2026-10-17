@@ -3,6 +3,7 @@
 > 基线：`feat/stage3-math-chem` 与 `origin/main` 0 分叉（ff-only 可合并）
 > 代码侧：42/42 项全部完成（阶段 0–4），四门禁全绿；**本清单只收集人工/流程项**
 > 用法：逐项勾选；每项标注前置条件，前置未满足不得跳步
+> 对账（2026-10-17，GAP-P4）：§7 已失效（分支远端不存在，内容已入 main）；持续缺口台账见 `system-gap-analysis.md`
 
 ## 1. 阶段 3 准出签批（人工签名）
 
@@ -54,11 +55,16 @@
 
 ## 7. 合并 main（用户手动执行）
 
-- [ ] 前置：第 1–6 节全部完成（至少 §1 签批 + §2 验收 + §3 上线相关项若同期上线）
-- [ ] 执行：`git checkout main && git merge --ff-only feat/stage3-math-chem && git push origin main`
-- [ ] 合并后保留远程 `feat/stage3-math-chem`（与 stage0/1/2 惯例一致）
+> **已失效（2026-10-17 对账，GAP-P4）**：本节所引分支 `feat/stage3-math-chem` 在远端已不存在
+> （origin 仅剩 `main @ 0ef8533`），阶段 3 内容（签到等）已在 main 历史中
+> （如 `19f2842 feat(desktop): add classroom checkin panel...`）。原"ff-only 合并"动作无需执行。
+> 对账依据：`docs/research/system-gap-analysis.md` §9。
 
-已验证：HEAD 含 origin/main 全部提交、0 分叉，ff-only 快进可行（`stage3-exit-checklist.md` §5）。
+- [x] 前置：第 1–6 节全部完成（至少 §1 签批 + §2 验收 + §3 上线相关项若同期上线）——随本节失效一并关闭
+- [x] 执行：`git checkout main && git merge --ff-only feat/stage3-math-chem && git push origin main`——分支不存在，动作取消
+- [x] 合并后保留远程 `feat/stage3-math-chem`（与 stage0/1/2 惯例一致）——远程无该分支，无需保留
+
+已验证：HEAD 含 origin/main 全部提交、0 分叉，ff-only 快进可行（`stage3-exit-checklist.md` §5）——历史记录，仅存档。
 
 ## 8. 远期复核
 
