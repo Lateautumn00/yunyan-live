@@ -244,7 +244,7 @@ docker logs yunyan-live-postgres --tail 20
 
 数据库初始化说明：
 
-- PostgreSQL 容器首次启动时，自动执行 `schema.sql` 创建 8 张表
+- PostgreSQL 容器首次启动时，自动执行 `schema.sql` 创建 11 张表（表清单见 `init/schema.sql`）
 - 已有数据的容器不会重复执行（`pgdata` 卷存在时跳过）
 - 重置数据库：`docker compose down -v && docker compose up -d`
 
@@ -326,7 +326,7 @@ docker logs yunyan-live-redis --tail 20
 
 PostgreSQL 容器使用 `/docker-entrypoint-initdb.d/` 机制：
 
-- 首次启动时自动执行挂载的 `schema.sql`，创建 8 张表
+- 首次启动时自动执行挂载的 `schema.sql`，创建 11 张表
 - 通过 `docker-compose.yml` 中的 volume 挂载实现：
   ```yaml
   volumes:
@@ -351,7 +351,8 @@ docker compose exec -T yunyan-live-postgres psql -U postgres -d yunyan_live < \
 
 （迁移为 `IF NOT EXISTS` + 事务，可重复执行。）
 
-> **备份基线（待办）**：当前仓库无定时备份任务，生产部署前需建立 PostgreSQL 备份基线（含 Redis AOF 卷），RPO/RTO 目标待定。
+> **备份基线**：PostgreSQL 日备与恢复演练脚本已入库（`scripts/backup-postgres.sh` /
+> `scripts/restore-drill.sh`），部署机需配置 cron，见下方「备份与恢复」。
 
 ### 验证服务
 
@@ -378,6 +379,27 @@ docker compose down          # 停止容器
 docker compose down -v       # 停止并删除数据卷（含数据库数据）
 ```
 
+### 备份与恢复
+
+基线目标：RPO ≤ 1 天（日备起步，后续可升 WAL 归档 PITR）、RTO ≤ 1h（恢复演练保障）。
+
+| 覆盖面           | 方案                                                            |
+| ---------------- | --------------------------------------------------------------- |
+| PostgreSQL       | `scripts/backup-postgres.sh`（pg_dump -Fc，默认保留 7 天）      |
+| 恢复演练         | `scripts/restore-drill.sh`（一次性容器导入 + 冒烟查询，**每月必跑**） |
+| Redis            | AOF 已开（`appendonly everysec`），卷级归档即可                 |
+| RabbitMQ         | 数据卷 + DLQ 可重放；管理台可导出 definitions                   |
+| Janus 录像/课件  | 宿主机目录（`/home/janus/recordings` 等）需文件级备份，未含在脚本内 |
+
+部署机 cron 示例（每日 03:00 备份、每月 1 日 04:00 演练）：
+
+```bash
+0 3 * * * /path/to/yunyan-live/scripts/backup-postgres.sh /var/backups/yunyan-live
+0 4 1 * * /path/to/yunyan-live/scripts/restore-drill.sh "$(ls -t /var/backups/yunyan-live/pg-yunyan_live-*.dump | head -1)"
+```
+
+> 恢复演练失败 = 备份无效。演练记录（日期/备份文件/表数/结论）需人工留存。
+
 ### Docker 环境变量
 
 在 `init/.env` 中配置：
@@ -388,25 +410,29 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 | `STUN_SERVER`    | `stun.l.google.com` | STUN 服务器（NAT 穿透）            |
 | `STUN_PORT`      | `19302`             | STUN 端口                          |
 | `RTP_PORT_RANGE` | `20000-20100`       | RTP 媒体流端口范围                 |
+| `POSTGRES_PASSWORD` | 回退 `postgres`  | PostgreSQL 口令；生产部署务必覆盖（仅 pgdata 卷首次初始化生效） |
 
 ## 端口说明
 
-| 端口        | 协议      | 用途                                 |
-| ----------- | --------- | ------------------------------------ |
-| 3001        | TCP       | Gateway HTTP API                     |
-| 8080        | TCP       | 安装包下载/自动更新静态站（nginx）   |
-| 5432        | TCP       | PostgreSQL 数据库                    |
-| 6379        | TCP       | Redis 缓存                           |
-| 5672        | TCP       | RabbitMQ AMQP（仅 127.0.0.1 绑定）   |
-| 15672       | TCP       | RabbitMQ 管理台（仅 127.0.0.1 绑定） |
-| 8088        | TCP       | Janus HTTP API（录制控制）           |
-| 8188        | WebSocket | Janus 信令（WebRTC 连接）            |
-| 50051       | gRPC      | Auth Service（认证）                 |
-| 50052       | gRPC      | Live Service（直播）                 |
-| 50053       | gRPC      | Mail Service（邮件）                 |
-| 50054       | WebSocket | Chat WS Service（聊天）              |
-| 50055       | WebSocket | Yjs WS Service（白板）               |
-| 20000-20100 | UDP       | RTP/RTCP 媒体流                      |
+| 端口        | 协议      | 用途                                 | 绑定           |
+| ----------- | --------- | ------------------------------------ | -------------- |
+| 3001        | TCP       | Gateway HTTP API                     | 全接口         |
+| 8080        | TCP       | 安装包下载/自动更新静态站（nginx）   | 全接口         |
+| 5432        | TCP       | PostgreSQL 数据库                    | 仅本机         |
+| 6379        | TCP       | Redis 缓存                           | 仅本机         |
+| 5672        | TCP       | RabbitMQ AMQP（仅 127.0.0.1 绑定）   | 仅本机         |
+| 15672       | TCP       | RabbitMQ 管理台（仅 127.0.0.1 绑定） | 仅本机         |
+| 8088        | TCP       | Janus HTTP API（录制控制）           | 全接口         |
+| 8188        | WebSocket | Janus 信令（WebRTC 连接）            | 全接口         |
+| 50051       | gRPC      | Auth Service（认证）                 | 仅本机（默认） |
+| 50052       | gRPC      | Live Service（直播）                 | 仅本机（默认） |
+| 50053       | gRPC      | Mail Service（邮件）                 | 仅本机（默认） |
+| 50054       | WebSocket | Chat WS Service（聊天）              | 全接口         |
+| 50055       | WebSocket | Yjs WS Service（白板）               | 全接口         |
+| 20000-20100 | UDP       | RTP/RTCP 媒体流                      | 全接口         |
+
+> gRPC 服务默认仅绑 `127.0.0.1`（各服务 `GRPC_HOST` 可覆盖，容器化部署时设 `0.0.0.0`）；
+> PostgreSQL/Redis 端口由 compose 绑定 `127.0.0.1`，勿发布到公网。
 
 ## 环境变量配置
 
@@ -463,32 +489,37 @@ VITE_UPLOAD_PPT_URL=http://192.168.x.x:3001/upload/ppt
 
 ### 用户模块 (`/user`)
 
-| 方法 | 路径                          | 说明           | 鉴权 |
-| ---- | ----------------------------- | -------------- | ---- |
-| POST | `/user/user/login`          | 用户登录       | 否   |
-| POST | `/user/user/register`       | 用户注册       | 否   |
-| POST | `/user/user/logout`         | 用户登出       | 否   |
-| GET  | `/user/user/getUserMsg`     | 获取用户信息   | JWT  |
-| POST | `/user/user/updatePassword` | 修改密码       | JWT  |
-| GET  | `/user/user/getNowTime`     | 获取服务器时间 | 否   |
+| 方法 | 路径                           | 说明                 | 鉴权 |
+| ---- | ------------------------------ | -------------------- | ---- |
+| POST | `/user/user/login`          | 用户登录             | 否   |
+| POST | `/user/user/register`       | 用户注册             | 否   |
+| POST | `/user/user/logout`         | 用户登出             | JWT  |
+| POST | `/user/user/resetPassword`  | 重置密码（邮箱验证码） | 否   |
+| POST | `/user/user/changePassword` | 修改密码             | JWT  |
+| GET  | `/user/user/getUserMsg`     | 获取用户信息         | JWT  |
+| POST | `/user/user/updateUserName` | 修改用户名           | JWT  |
+| GET  | `/user/user/getNowTime`     | 获取服务器时间       | 否   |
 
 ### 直播模块 (`/live`)
 
-| 方法   | 路径                                                   | 说明               | 鉴权 |
-| ------ | ------------------------------------------------------ | ------------------ | ---- |
-| POST   | `/live/liveInfo/createLive`                          | 创建直播           | JWT  |
-| POST   | `/live/liveInfo/joinLive`                            | 加入直播（参加码） | 否   |
-| GET    | `/live/liveInfo/showRoomInfo`                        | 获取房间信息       | 否   |
-| PUT    | `/live/liveInfo/changeLiveStatus`                    | 修改直播状态       | 否   |
-| POST   | `/live/liveInfo/cmsLiveList`                         | 直播列表           | 否   |
-| GET    | `/live/liveInfo/cmsLiveDetail`                       | 直播详情           | 否   |
-| DELETE | `/live/liveInfo/deleteLive`                          | 删除直播           | JWT  |
-| PUT    | `/live/liveInfo/updateLiveCode`                      | 更新参加码         | 否   |
-| GET    | `/live/liveInfo/getCurrentIp`                        | 获取当前 IP        | 否   |
-| GET    | `/live/liveInfo/videoList`                           | 录制列表           | 否   |
-| GET    | `/live/liveInfo/videoDetail`                         | 录制详情           | 否   |
-| DELETE | `/live/liveInfo/deleteVideo`                         | 删除录制           | JWT  |
-| DELETE | `/live/liveInfo/deleteVideoByIds`                    | 批量删除录制       | JWT  |
+> 除 `showRoomInfo` 外均为 JWT 鉴权；完整接口清单（含签到/转让/课件/板书快照/观看时长等）
+> 见 `docs/apis/server/live.md` 与 `docs/apis/server/checkin.md`。
+
+| 方法   | 路径                                   | 说明               | 鉴权 |
+| ------ | -------------------------------------- | ------------------ | ---- |
+| POST   | `/live/liveInfo/createLive`          | 创建直播           | JWT  |
+| POST   | `/live/liveInfo/joinLive`            | 加入直播（参加码） | JWT  |
+| GET    | `/live/liveInfo/showRoomInfo`        | 获取房间信息       | 否   |
+| PUT    | `/live/liveInfo/changeLiveStatus`    | 修改直播状态       | JWT  |
+| POST   | `/live/liveInfo/cmsLiveList`         | 直播列表           | JWT  |
+| GET    | `/live/liveInfo/cmsLiveDetail`       | 直播详情           | JWT  |
+| DELETE | `/live/liveInfo/deleteLive`          | 删除直播           | JWT  |
+| PUT    | `/live/liveInfo/updateLiveCode`      | 更新参加码         | JWT  |
+| GET    | `/live/liveInfo/studentRooms`        | 学生的直播房间列表 | JWT  |
+| GET    | `/live/liveInfo/videoList`           | 录制列表           | JWT  |
+| GET    | `/live/liveInfo/videoDetail`         | 录制详情           | JWT  |
+| DELETE | `/live/liveInfo/deleteVideo`         | 删除录制           | JWT  |
+| DELETE | `/live/liveInfo/deleteVideoByIds`    | 批量删除录制       | JWT  |
 | GET    | `/live/liveInfo/downloadRecording/:id`               | 检查下载状态       | JWT  |
 | GET    | `/live/liveInfo/downloadRecording/:id?download=true` | 下载 MP4 文件      | JWT  |
 
