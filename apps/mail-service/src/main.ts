@@ -9,7 +9,7 @@ async function bootstrap() {
     options: grpcServerOptions({
       package: 'mail',
       protoPath: resolveProto('mail.proto'),
-      url: `0.0.0.0:${process.env.GRPC_PORT || 50053}`
+      url: `${process.env.GRPC_HOST || '127.0.0.1'}:${process.env.GRPC_PORT || 50053}`
     })
   });
 
