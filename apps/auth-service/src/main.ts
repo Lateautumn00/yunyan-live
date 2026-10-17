@@ -11,7 +11,7 @@ async function bootstrap() {
     options: grpcServerOptions({
       package: 'auth',
       protoPath: resolveProto('auth.proto'),
-      url: `0.0.0.0:${process.env.GRPC_PORT || 50051}`
+      url: `${process.env.GRPC_HOST || '127.0.0.1'}:${process.env.GRPC_PORT || 50051}`
     })
   });
 
