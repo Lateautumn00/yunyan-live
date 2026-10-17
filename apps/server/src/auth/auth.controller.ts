@@ -111,13 +111,15 @@ export class AuthController implements OnModuleInit {
 
   @Post('register')
   register(@Body() dto: RegisterDto) {
+    // S5-A: 服务端强制学生角色，忽略客户端传入的 role（前端可能仍传 2，保持 API 契约）
+    // S5-B 邀请码开教师：待 S9a 解冻新增表后补（生成/分发/失效/单次使用），当前冻结
     return grpcCall(
       this.authService.register({
         username: dto.userName,
         email: dto.email,
         password: dto.password,
         code: dto.code,
-        role: dto.role ?? 2
+        role: 2
       })
     );
   }

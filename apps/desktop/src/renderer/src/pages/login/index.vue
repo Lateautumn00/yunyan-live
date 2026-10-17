@@ -152,12 +152,6 @@
                 </template>
               </el-input>
             </el-form-item>
-            <el-form-item prop="role">
-              <el-radio-group v-model="registerForm.role">
-                <el-radio :value="1"> 老师 </el-radio>
-                <el-radio :value="2"> 学生 </el-radio>
-              </el-radio-group>
-            </el-form-item>
             <el-form-item>
               <el-button
                 type="primary"
@@ -331,8 +325,7 @@ const registerRules: FormRules = {
   email: emailRules(),
   code: [{ required: true, message: '请输入验证码', trigger: 'blur' }],
   password: passwordRules(),
-  repassword: passwordConfirmRules(() => registerForm.password),
-  role: [{ required: true, message: '请选择角色', trigger: 'change' }]
+  repassword: passwordConfirmRules(() => registerForm.password)
 };
 
 const forgotRules: FormRules = {

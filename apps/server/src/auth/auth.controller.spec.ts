@@ -143,7 +143,7 @@ describe('AuthController.register / resetPassword / updateUserName', () => {
     expect(res).toEqual({ code: '0', msg: 'ok', guid: 'g1' });
   });
 
-  it('register 显式 role 原样透传', async () => {
+  it('S5-A: register 忽略客户端传入的 role（含非法值 9），强制学生 role=2', async () => {
     const { controller, authService } = createController();
     const dto = Object.assign(new RegisterDto(), {
       userName: 'u2',
@@ -153,7 +153,7 @@ describe('AuthController.register / resetPassword / updateUserName', () => {
       role: 9
     });
     await controller.register(dto);
-    expect(authService.register).toHaveBeenCalledWith(expect.objectContaining({ role: 9 }));
+    expect(authService.register).toHaveBeenCalledWith(expect.objectContaining({ role: 2 }));
   });
 
   it('resetPassword DTO 原样透传', async () => {
