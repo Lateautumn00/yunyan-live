@@ -11,12 +11,8 @@ const h = vi.hoisted(() => ({
   written: [] as string[],
   reads: [] as string[],
   piped: [] as unknown[],
-  spawns: [] as Array<{
-    file: string;
-    args: string[];
-    opts: { detached?: boolean; stdio?: string };
-  }>,
-  unref: 0,
+  removed: [] as string[],
+  spawns: [] as Array<{ file: string; args: string[]; opts: { stdio?: string } }>,
   statSize: 4096
 }));
 
@@ -28,6 +24,10 @@ vi.mock('fs', async importOriginal => {
     statSync: () => ({ size: h.statSize }),
     writeFileSync: (p: string) => {
       h.written.push(p);
+    },
+    rmSync: (p: string) => {
+      h.removed.push(p);
+      h.present.delete(p);
     },
     createReadStream: (p: string) => {
       h.reads.push(p);
@@ -43,15 +43,14 @@ vi.mock('fs', async importOriginal => {
 
 vi.mock('child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('child_process')>();
+  const { EventEmitter } = await import('node:events');
   return {
     ...actual,
-    spawn: (file: string, args: string[], opts: { detached?: boolean; stdio?: string }) => {
+    spawn: (file: string, args: string[], opts: { stdio?: string }) => {
       h.spawns.push({ file, args, opts });
-      return {
-        unref: () => {
-          h.unref += 1;
-        }
-      };
+      const child = new EventEmitter() as ReturnType<typeof actual.spawn>;
+      queueMicrotask(() => child.emit('close', 0));
+      return child;
     }
   };
 });
@@ -88,8 +87,8 @@ beforeEach(() => {
   h.written.length = 0;
   h.reads.length = 0;
   h.piped.length = 0;
+  h.removed.length = 0;
   h.spawns.length = 0;
-  h.unref = 0;
 });
 
 afterEach(() => {
@@ -165,68 +164,136 @@ describe('downloadRecording 状态探测', () => {
 });
 
 describe('downloadRecording 转码触发', () => {
-  it('无音轨时写标记并 spawn 双步转码脚本', () => {
+  const C = 'janus-gateway';
+  const PP = '/opt/janus/bin/janus-pp-rec';
+
+  it('无音轨时写标记并 spawn 3 次 docker exec（数组传参，不经 shell）', async () => {
     h.present.add(videoMjr('1'));
     const controller = createController();
     const res = createRes();
-    void controller.downloadRecording('1', q(), res as unknown as Response);
+    await controller.downloadRecording('1', q(), res as unknown as Response);
+    // 等待 fire-and-forget 的 transcodeRecording 走完 exec 链
+    await new Promise(r => setTimeout(r, 0));
 
     expect(h.written).toEqual([marker('1')]);
-    expect(h.spawns).toHaveLength(1);
-    const spawn = h.spawns[0];
-    expect(spawn?.file).toBe('sh');
-    expect(spawn?.opts).toEqual({ detached: true, stdio: 'ignore' });
-    expect(spawn?.args[0]).toBe('-c');
-    expect(h.unref).toBe(1);
+    expect(h.spawns).toHaveLength(3);
+    for (const s of h.spawns) {
+      expect(s.file).toBe('docker');
+      expect(s.args[0]).toBe('exec');
+      expect(s.args[1]).toBe(C);
+      expect(s.opts).toEqual({ stdio: 'ignore' });
+    }
+    expect(h.spawns[0]?.args).toEqual([
+      'exec',
+      C,
+      PP,
+      '/tmp/janus/recordings/rec-1-video.mjr',
+      '/tmp/janus/recordings/1-video.webm'
+    ]);
+    expect(h.spawns[1]?.args).toEqual([
+      'exec',
+      C,
+      'ffmpeg',
+      '-y',
+      '-i',
+      '/tmp/janus/recordings/1-video.webm',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'ultrafast',
+      '/tmp/janus/recordings/1.mp4'
+    ]);
+    expect(h.spawns[2]?.args).toEqual([
+      'exec',
+      C,
+      'rm',
+      '-f',
+      '/tmp/janus/recordings/1-video.webm'
+    ]);
+    // marker 在 finally 中被清理，保证失败可重试
+    expect(h.removed).toEqual([marker('1')]);
     expect(res.json).toHaveBeenCalledWith({ code: 2002, msg: '转码中，请稍后' });
-
-    const script = spawn?.args[1] ?? '';
-    expect(script).toContain('docker exec janus-gateway /opt/janus/bin/janus-pp-rec');
-    expect(script).toContain(
-      '"/tmp/janus/recordings/rec-1-video.mjr" "/tmp/janus/recordings/1-video.webm"'
-    );
-    expect(script).toContain(
-      'docker exec janus-gateway ffmpeg -y -i "/tmp/janus/recordings/1-video.webm" -c:v libx264 -preset ultrafast "/tmp/janus/recordings/1.mp4"'
-    );
-    expect(script).not.toContain('1-audio.opus');
-    expect(script).toContain(`rm -f "${marker('1')}"`);
-    expect(script.split(' && ')).toHaveLength(4);
   });
 
-  it('有音轨时追加 opus 提取、混流与清理步骤', () => {
+  it('有音轨时追加 opus 提取、混流与清理步骤（共 4 次 docker exec）', async () => {
     h.present.add(videoMjr('1'));
     h.present.add(audioMjr('1'));
     const controller = createController();
     const res = createRes();
-    void controller.downloadRecording('1', q(), res as unknown as Response);
-
-    const script = h.spawns[0]?.args[1] ?? '';
-    expect(script).toContain(
-      'docker exec janus-gateway /opt/janus/bin/janus-pp-rec "/tmp/janus/recordings/rec-1-audio.mjr" "/tmp/janus/recordings/1-audio.opus"'
-    );
-    expect(script).toContain(
-      'ffmpeg -y -i "/tmp/janus/recordings/1-video.webm" -i "/tmp/janus/recordings/1-audio.opus" -c:v libx264 -preset ultrafast -c:a aac "/tmp/janus/recordings/1.mp4"'
-    );
-    expect(script).toContain(
-      'rm -f "/tmp/janus/recordings/1-video.webm" "/tmp/janus/recordings/1-audio.opus"'
-    );
-    expect(script.split(' && ')).toHaveLength(5);
+    await controller.downloadRecording('1', q(), res as unknown as Response);
+    await vi.waitFor(() => expect(h.spawns).toHaveLength(4));
+    expect(h.spawns[0]?.args).toEqual([
+      'exec',
+      C,
+      PP,
+      '/tmp/janus/recordings/rec-1-video.mjr',
+      '/tmp/janus/recordings/1-video.webm'
+    ]);
+    expect(h.spawns[1]?.args).toEqual([
+      'exec',
+      C,
+      PP,
+      '/tmp/janus/recordings/rec-1-audio.mjr',
+      '/tmp/janus/recordings/1-audio.opus'
+    ]);
+    expect(h.spawns[2]?.args).toEqual([
+      'exec',
+      C,
+      'ffmpeg',
+      '-y',
+      '-i',
+      '/tmp/janus/recordings/1-video.webm',
+      '-i',
+      '/tmp/janus/recordings/1-audio.opus',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'ultrafast',
+      '-c:a',
+      'aac',
+      '/tmp/janus/recordings/1.mp4'
+    ]);
+    expect(h.spawns[3]?.args).toEqual([
+      'exec',
+      C,
+      'rm',
+      '-f',
+      '/tmp/janus/recordings/1-video.webm',
+      '/tmp/janus/recordings/1-audio.opus'
+    ]);
+    expect(h.removed).toEqual([marker('1')]);
   });
 
-  it('容器、转换器与录制目录可用环境变量覆盖', () => {
+  it('容器与转换器可用环境变量覆盖', async () => {
     process.env.RECORDINGS_DIR = 'D:\\rec';
     process.env.JANUS_CONTAINER = 'janus-prod';
     process.env.JANUS_PP_REC = '/opt/custom/janus-pp-rec';
     h.present.add(path.join('D:\\rec', 'rec-9-video.mjr'));
     const controller = createController();
     const res = createRes();
-    void controller.downloadRecording('9', q(), res as unknown as Response);
+    await controller.downloadRecording('9', q(), res as unknown as Response);
+    await new Promise(r => setTimeout(r, 0));
 
     expect(h.written).toEqual([path.join('D:\\rec', '9.converting')]);
-    const script = h.spawns[0]?.args[1] ?? '';
-    expect(script).toContain(
-      'docker exec janus-prod /opt/custom/janus-pp-rec "/tmp/janus/recordings/rec-9-video.mjr"'
-    );
-    expect(script).toContain(`rm -f "${path.join('D:\\rec', '9.converting')}"`);
+    expect(h.spawns[0]?.args).toEqual([
+      'exec',
+      'janus-prod',
+      '/opt/custom/janus-pp-rec',
+      '/tmp/janus/recordings/rec-9-video.mjr',
+      '/tmp/janus/recordings/9-video.webm'
+    ]);
+    expect(h.removed).toEqual([path.join('D:\\rec', '9.converting')]);
+  });
+
+  it('拒绝路径穿越与命令注入元字符的录制 id（不触碰 fs/spawn）', async () => {
+    const controller = createController();
+    const res = createRes();
+    for (const bad of ['../etc/passwd', 'a b', '$(whoami)', 'a"b', 'a;rm -rf /']) {
+      await controller.downloadRecording(bad, q(), res as unknown as Response);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ code: 400, msg: '非法录制 id' });
+    }
+    expect(h.spawns).toHaveLength(0);
+    expect(h.written).toHaveLength(0);
   });
 });

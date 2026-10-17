@@ -1,7 +1,9 @@
 import { Controller, Post, Body, Inject, OnModuleInit } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ClientGrpc } from '@nestjs/microservices';
 import { Observable } from 'rxjs';
 import { grpcCall } from '../common/helpers/grpc.helper';
+import { STRICT_THROTTLE } from '../common/guards/rate-limit.guard';
 import { SendCodeDto } from '@yunyan-live/nest-shared';
 
 interface MailServiceClient {
@@ -19,6 +21,7 @@ export class MailController implements OnModuleInit {
   }
 
   @Post('reqEmailCode')
+  @Throttle({ default: STRICT_THROTTLE })
   async sendCode(@Body() dto: SendCodeDto) {
     return grpcCall(this.mailService.sendCode({ email: dto.email }));
   }

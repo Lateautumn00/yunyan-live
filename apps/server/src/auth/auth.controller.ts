@@ -8,11 +8,13 @@ import {
   Inject,
   OnModuleInit
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ClientGrpc } from '@nestjs/microservices';
 import { JwtService } from '@nestjs/jwt';
 import { Metadata } from '@grpc/grpc-js';
 import { Observable } from 'rxjs';
 import { grpcCall } from '../common/helpers/grpc.helper';
+import { STRICT_THROTTLE } from '../common/guards/rate-limit.guard';
 import {
   ChangePasswordDto,
   JwtAuthGuard,
@@ -88,6 +90,7 @@ export class AuthController implements OnModuleInit {
   }
 
   @Post('login')
+  @Throttle({ default: STRICT_THROTTLE })
   async login(@Body() dto: LoginDto) {
     const result = await grpcCall(this.authService.login(dto));
     const { sid } = await this.sessionService.createSession(result.guid!);
@@ -110,6 +113,7 @@ export class AuthController implements OnModuleInit {
   }
 
   @Post('register')
+  @Throttle({ default: STRICT_THROTTLE })
   register(@Body() dto: RegisterDto) {
     // S5-A: 服务端强制学生角色，忽略客户端传入的 role（前端可能仍传 2，保持 API 契约）
     // S5-B 邀请码开教师：待 S9a 解冻新增表后补（生成/分发/失效/单次使用），当前冻结
@@ -132,6 +136,7 @@ export class AuthController implements OnModuleInit {
   }
 
   @Post('resetPassword')
+  @Throttle({ default: STRICT_THROTTLE })
   async resetPassword(@Body() dto: ResetPasswordDto) {
     const result = await grpcCall(this.authService.resetPassword(dto));
     // S6: 重置密码后吊销该用户全部会话（含其它设备），强制重新登录
