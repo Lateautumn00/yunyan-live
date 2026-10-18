@@ -2,37 +2,43 @@ import { describe, expect, it, vi } from 'vitest';
 import { createLiveService } from './test-utils';
 
 describe('LiveService.getStudentRooms', () => {
-  it('无参与记录时短路返回空列表', async () => {
-    const { service, participant, room } = createLiveService();
-    participant.repo.find.mockResolvedValue([]);
+  function roomRow(overrides: Record<string, unknown> = {}) {
+    return {
+      joinedAt: new Date(1704067320000),
+      roomId: 'r3',
+      title: 'C',
+      liveUserId: 't1',
+      joinCode: 'SC1',
+      status: 1,
+      startTime: new Date(1704067320000),
+      type: 0,
+      ...overrides
+    };
+  }
+
+  function stubQueries(manager: Record<string, unknown>, pageRows: unknown[], total: number) {
+    const q = manager.query as ReturnType<typeof vi.fn>;
+    q.mockReset().mockResolvedValueOnce(pageRows).mockResolvedValueOnce([{ total }]);
+    return q;
+  }
+
+  it('无参与记录返回空列表；软删房间由 JOIN 过滤（total 与页一致）', async () => {
+    const { service, manager } = createLiveService();
+    const q = stubQueries(manager, [], 0);
     await expect(service.getStudentRooms('u1')).resolves.toEqual({ items: [], total: 0 });
-    expect(room.repo.findByIds).not.toHaveBeenCalled();
-    expect(participant.repo.find).toHaveBeenCalledWith({
-      where: { userId: 'u1' },
-      order: { joinedAt: 'DESC' }
-    });
+    expect(q).toHaveBeenCalledTimes(2);
+    expect(q.mock.calls[0][0]).toContain('JOIN live_rooms r');
+    expect(q.mock.calls[0][0]).toContain('r."deletedAt" IS NULL');
+    expect(q.mock.calls[0][0]).toContain('ORDER BY p."joinedAt" DESC, p.id DESC');
+    expect(q.mock.calls[0][1]).toEqual(['u1', 10, 0]);
   });
 
-  it('分页取参与记录并按房间补全，total 为全量参与数', async () => {
-    const { service, participant, room } = createLiveService();
-    const p1 = { userId: 'u1', roomId: 'r1', joinedAt: new Date(1704067200000) };
-    const p2 = { userId: 'u1', roomId: 'r2', joinedAt: new Date(1704067260000) };
-    const p3 = { userId: 'u1', roomId: 'r3', joinedAt: new Date(1704067320000) };
-    participant.repo.find.mockResolvedValue([p1, p2, p3]);
-    room.repo.findByIds.mockResolvedValue([
-      {
-        roomId: 'r3',
-        title: 'C',
-        liveUserId: 't1',
-        joinCode: 'SC1',
-        status: 1,
-        startTime: new Date(1704067320000),
-        type: 0
-      }
-    ]);
+  it('分页参数下推 LIMIT/OFFSET 并完整映射字段', async () => {
+    const { service, manager } = createLiveService();
+    const q = stubQueries(manager, [roomRow()], 3);
     const res = await service.getStudentRooms('u1', 2, 2);
     expect(res.total).toBe(3);
-    expect(room.repo.findByIds).toHaveBeenCalledWith(['r3']);
+    expect(q.mock.calls[0][1]).toEqual(['u1', 2, 2]);
     expect(res.items).toHaveLength(1);
     expect(res.items[0]).toEqual({
       id: 'r3',
@@ -43,19 +49,27 @@ describe('LiveService.getStudentRooms', () => {
       status: 1,
       startTime: new Date(1704067320000),
       type: 0,
-      joinedAt: p3.joinedAt
+      joinedAt: new Date(1704067320000)
     });
   });
 
-  it('参与记录对应房间已消失时过滤该项', async () => {
-    const { service, participant, room } = createLiveService();
-    participant.repo.find.mockResolvedValue([
-      { userId: 'u1', roomId: 'rGone', joinedAt: new Date() }
-    ]);
-    room.repo.findByIds.mockResolvedValue([]);
-    const res = await service.getStudentRooms('u1');
-    expect(res.items).toHaveLength(0);
-    expect(res.total).toBe(1);
+  it('pageSize 钳制上限 100（防大 pageSize 穿透）', async () => {
+    const { service, manager } = createLiveService();
+    const q = stubQueries(manager, [], 0);
+    await service.getStudentRooms('u1', 1, 999999);
+    expect(q.mock.calls[0][1]).toEqual(['u1', 100, 0]);
+  });
+
+  it('合法 cursor 走 keyset，非法 cursor 回落 OFFSET', async () => {
+    const { service, manager } = createLiveService();
+    const q = stubQueries(manager, [roomRow()], 1);
+    await service.getStudentRooms('u1', 1, 10, '1704067200000|pid-9');
+    expect(q.mock.calls[0][0]).toContain('(p."joinedAt", p.id) <');
+    expect(q.mock.calls[0][1]).toEqual(['u1', new Date(1704067200000), 'pid-9', 10, 0]);
+    stubQueries(manager, [], 0);
+    await service.getStudentRooms('u1', 1, 10, 'bad-cursor');
+    expect(q.mock.calls[0][0]).not.toContain('(p."joinedAt", p.id) <');
+    expect(q.mock.calls[0][1]).toEqual(['u1', 10, 0]);
   });
 });
 

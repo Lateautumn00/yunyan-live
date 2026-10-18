@@ -3,10 +3,12 @@ import {
   PrimaryColumn,
   Column,
   CreateDateColumn,
+  Index,
   UpdateDateColumn,
   DeleteDateColumn
 } from 'typeorm';
 
+@Index('idx_live_rooms_teacher_created', ['liveUserId', 'createdAt'])
 @Entity('live_rooms')
 export class LiveRoom {
   @PrimaryColumn({ length: 50 })

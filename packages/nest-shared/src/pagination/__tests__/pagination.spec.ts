@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePageQuery, toGrpcPage } from '../index';
+import {
+  decodeCursor,
+  encodeCursor,
+  MAX_PAGE_SIZE,
+  normalizePageQuery,
+  toGrpcPage
+} from '../index';
 
 describe('normalizePageQuery', () => {
   it('空入参回落到 1/10', () => {
@@ -27,6 +33,45 @@ describe('normalizePageQuery', () => {
     expect(normalizePageQuery({ page: 'abc', pageSize: 'xyz' })).toEqual({ page: 1, pageSize: 10 });
     expect(normalizePageQuery({ page: 0, pageSize: 0 })).toEqual({ page: 1, pageSize: 10 });
     expect(normalizePageQuery({ page: '', pageSize: '' })).toEqual({ page: 1, pageSize: 10 });
+  });
+
+  it('负 page 钳制为 1（原 parseInt 负数穿透修复）', () => {
+    expect(normalizePageQuery({ page: -5, pageSize: 10 })).toEqual({ page: 1, pageSize: 10 });
+    expect(normalizePageQuery({ page: '-2' })).toEqual({ page: 1, pageSize: 10 });
+  });
+
+  it('pageSize 超上限截断至 MAX_PAGE_SIZE', () => {
+    expect(normalizePageQuery({ pageSize: 100000 })).toEqual({
+      page: 1,
+      pageSize: MAX_PAGE_SIZE
+    });
+    expect(normalizePageQuery({ pageSize: MAX_PAGE_SIZE })).toEqual({
+      page: 1,
+      pageSize: MAX_PAGE_SIZE
+    });
+    expect(normalizePageQuery({ pageSize: -1 })).toEqual({ page: 1, pageSize: 10 });
+  });
+});
+
+describe('cursor（keyset 深翻页）', () => {
+  it('encode/decode 往返', () => {
+    const raw = encodeCursor(1729123456789, 'u-1');
+    expect(raw).toBe('1729123456789|u-1');
+    expect(decodeCursor(raw)).toEqual({ timeMs: 1729123456789, id: 'u-1' });
+  });
+
+  it('空/非法游标回落 null（调用方走 OFFSET）', () => {
+    expect(decodeCursor(undefined)).toBeNull();
+    expect(decodeCursor('')).toBeNull();
+    expect(decodeCursor('no-separator')).toBeNull();
+    expect(decodeCursor('|abc')).toBeNull();
+    expect(decodeCursor('123|')).toBeNull();
+    expect(decodeCursor('abc|u-1')).toBeNull();
+    expect(decodeCursor('12.5|u-1')).toBeNull();
+  });
+
+  it('encode 对小数毫秒取整', () => {
+    expect(encodeCursor(1729123456789.7, 'i')).toBe('1729123456789|i');
   });
 });
 

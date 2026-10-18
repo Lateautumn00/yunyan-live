@@ -2,10 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict HEDwJfNq3cpwcBTFD1csHHGqjIe7dh0W8IlBX5g3BaoQArcDrxnP2ZQJ1Abj6MS
 
--- Dumped from database version 16.15
--- Dumped by pg_dump version 16.15
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -375,6 +372,41 @@ CREATE INDEX idx_chat_messages_room_time ON public.chat_messages USING btree (ro
 
 
 --
+-- Name: idx_live_participants_user_joined; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_live_participants_user_joined ON public.live_participants USING btree ("userId", "joinedAt" DESC, id DESC);
+
+
+--
+-- Name: idx_live_rooms_teacher_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_live_rooms_teacher_created ON public.live_rooms USING btree ("liveUserId", "createdAt" DESC);
+
+
+--
+-- Name: idx_user_watch_times_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_watch_times_created ON public.user_watch_times USING btree (created_at DESC, id DESC);
+
+
+--
+-- Name: idx_user_watch_times_room_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_watch_times_room_created ON public.user_watch_times USING btree (room_id, created_at);
+
+
+--
+-- Name: idx_video_recordings_room_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_video_recordings_room_created ON public.video_recordings USING btree ("roomId", "createdAt");
+
+
+--
 -- Name: uq_chat_messages_msg_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -384,6 +416,3 @@ CREATE UNIQUE INDEX uq_chat_messages_msg_id ON public.chat_messages USING btree 
 --
 -- PostgreSQL database dump complete
 --
-
-\unrestrict HEDwJfNq3cpwcBTFD1csHHGqjIe7dh0W8IlBX5g3BaoQArcDrxnP2ZQJ1Abj6MS
-

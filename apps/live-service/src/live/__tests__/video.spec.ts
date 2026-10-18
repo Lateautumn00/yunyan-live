@@ -1,118 +1,108 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { chainCalls, createLiveService, mockRepo } from './test-utils';
 
 describe('LiveService.getVideoList', () => {
-  it('无录制记录时返回空列表且不查房间表', async () => {
-    const video = mockRepo({ getRawMany: [] });
-    const { service, room } = createLiveService({ video });
+  function stubQueries(manager: Record<string, unknown>, pageRows: unknown[], total: number) {
+    const q = manager.query as ReturnType<typeof vi.fn>;
+    q.mockReset().mockResolvedValueOnce(pageRows).mockResolvedValueOnce([{ total }]);
+    return q;
+  }
+
+  it('空结果返回空列表；SQL 为 INNER JOIN（口径：仅含 ≥1 录制房间）', async () => {
+    const { service, manager } = createLiveService();
+    const q = stubQueries(manager, [], 0);
     await expect(service.getVideoList({})).resolves.toEqual({ items: [], total: 0 });
-    expect(video.repo.createQueryBuilder).toHaveBeenCalledTimes(1);
-    expect(room.repo.createQueryBuilder).not.toHaveBeenCalled();
+    expect(q).toHaveBeenCalledTimes(2);
+    const pageSql = q.mock.calls[0][0] as string;
+    expect(pageSql).toContain('JOIN video_recordings v');
+    expect(pageSql).toContain('r."deletedAt" IS NULL');
+    expect(pageSql).toContain('ORDER BY r."createdAt" DESC, r."roomId" DESC');
+    const countSql = q.mock.calls[1][0] as string;
+    expect(countSql).toContain('COUNT(*)');
+    expect(countSql).not.toContain('LIMIT');
   });
 
-  it('按 roomId 聚合录制次数与首录时间并映射字段', async () => {
-    const video = mockRepo({
-      getRawMany: [
-        { roomId: 'r1', count: '3', firstRecordedAt: '2024-01-01T00:00:00.000Z' },
-        { roomId: 'r2', count: '1', firstRecordedAt: new Date('2024-01-02T00:00:00.000Z') }
-      ]
-    });
-    const room = mockRepo({
-      getManyAndCount: [
-        [
-          { roomId: 'r1', title: '第一课', type: 0 },
-          { roomId: 'r2', title: '第二课', type: 1 }
-        ],
-        2
-      ]
-    });
-    const { service } = createLiveService({ video, room });
+  it('聚合字段映射：count 与首录毫秒来自 SQL，teacherName 保持空串', async () => {
+    const { service, manager } = createLiveService();
+    stubQueries(
+      manager,
+      [
+        {
+          roomId: 'r1',
+          title: '第一课',
+          type: 0,
+          count: '3',
+          first_recorded_ms: '1704067200000'
+        },
+        {
+          roomId: 'r2',
+          title: '第二课',
+          type: 1,
+          count: 1,
+          first_recorded_ms: '1704072200000'
+        }
+      ],
+      2
+    );
     const res = await service.getVideoList({ page: 1, pageSize: 10 });
     expect(res.total).toBe(2);
-    expect(res.items).toHaveLength(2);
     expect(res.items[0]).toEqual({
       roomId: 'r1',
       title: '第一课',
       teacherName: '',
       type: 0,
-      startTime: String(Date.parse('2024-01-01T00:00:00.000Z')),
+      startTime: '1704067200000',
       count: 3
     });
-    expect(res.items[1]).toEqual({
+    expect(res.items[1]).toMatchObject({
       roomId: 'r2',
-      title: '第二课',
-      teacherName: '',
       type: 1,
-      startTime: String(Date.parse('2024-01-02T00:00:00.000Z')),
+      startTime: '1704072200000',
       count: 1
     });
   });
 
-  it('按页码切片返回，total 为过滤后的房间总数', async () => {
-    const video = mockRepo({
-      getRawMany: ['r1', 'r2', 'r3'].map(roomId => ({
-        roomId,
-        count: '1',
-        firstRecordedAt: '2024-01-01T00:00:00.000Z'
-      }))
-    });
-    const room = mockRepo({
-      getManyAndCount: [
-        [
-          { roomId: 'r1', title: 'A', type: 0 },
-          { roomId: 'r2', title: 'B', type: 0 },
-          { roomId: 'r3', title: 'C', type: 0 }
-        ],
-        3
-      ]
-    });
-    const { service } = createLiveService({ video, room });
-    const res = await service.getVideoList({ page: 2, pageSize: 2 });
-    expect(res.total).toBe(3);
-    expect(res.items).toHaveLength(1);
-    expect(res.items[0]).toMatchObject({ roomId: 'r3', title: 'C' });
+  it('分页 LIMIT/OFFSET 下推并钳制 pageSize 上限', async () => {
+    const { service, manager } = createLiveService();
+    const q = stubQueries(manager, [], 0);
+    await service.getVideoList({ page: 2, pageSize: 999999 });
+    expect(q.mock.calls[0][1].slice(-2)).toEqual([100, 100]);
   });
 
-  it('过滤条件下推到房间查询构造器', async () => {
-    const video = mockRepo({
-      getRawMany: [{ roomId: 'r1', count: '1', firstRecordedAt: '2024-01-01T00:00:00.000Z' }]
-    });
-    const room = mockRepo({ getManyAndCount: [[], 0] });
-    const { service } = createLiveService({ video, room });
+  it('过滤条件参数化下推（type 负数不过滤）', async () => {
+    const { service, manager } = createLiveService();
+    const q = stubQueries(manager, [], 0);
     await service.getVideoList({
-      page: 1,
-      pageSize: 10,
       liveUserId: 't1',
       searchName: '数学',
       startTime: '1704067200000',
       endTime: '1704153600000',
       type: 0
     });
-    expect(chainCalls(room.qb, 'where')).toContainEqual([
-      'r.roomId IN (:...roomIds)',
-      { roomIds: ['r1'] }
+    const pageSql = q.mock.calls[0][0] as string;
+    expect(pageSql).toContain('r."liveUserId" = $1');
+    expect(pageSql).toContain('r.title LIKE $2');
+    expect(pageSql).toContain('r."startTime" >= $3');
+    expect(pageSql).toContain('r."startTime" <= $4');
+    expect(pageSql).toContain('r.type = $5');
+    expect(q.mock.calls[0][1].slice(0, 5)).toEqual([
+      't1',
+      '%数学%',
+      new Date(1704067200000),
+      new Date(1704153600000),
+      0
     ]);
-    expect(chainCalls(room.qb, 'andWhere')).toEqual([
-      ['r.liveUserId = :liveUserId', { liveUserId: 't1' }],
-      ['r.title LIKE :searchName', { searchName: '%数学%' }],
-      ['r.startTime >= :startTime', { startTime: new Date(1704067200000) }],
-      ['r.startTime <= :endTime', { endTime: new Date(1704153600000) }],
-      ['r.type = :type', { type: 0 }]
-    ]);
-    expect(chainCalls(room.qb, 'orderBy')).toContainEqual(['r.createdAt', 'DESC']);
+    stubQueries(manager, [], 0);
+    await service.getVideoList({ type: -1 });
+    expect(q.mock.calls[0][0]).not.toContain('r.type =');
   });
 
-  it('type 为负数时不下推 type 过滤', async () => {
-    const video = mockRepo({
-      getRawMany: [{ roomId: 'r1', count: '1', firstRecordedAt: '2024-01-01T00:00:00.000Z' }]
-    });
-    const room = mockRepo({ getManyAndCount: [[], 0] });
-    const { service } = createLiveService({ video, room });
-    await service.getVideoList({ page: 1, pageSize: 10, type: -1 });
-    const hasTypeFilter = chainCalls(room.qb, 'andWhere').some(
-      args => args[0] === 'r.type = :type'
-    );
-    expect(hasTypeFilter).toBe(false);
+  it('cursor keyset 只进页查询不进 total', async () => {
+    const { service, manager } = createLiveService();
+    const q = stubQueries(manager, [], 0);
+    await service.getVideoList({ cursor: '1704067200000|room-x' });
+    expect(q.mock.calls[0][0]).toContain('(r."createdAt", r."roomId") <');
+    expect(q.mock.calls[1][0]).not.toContain('(r."createdAt", r."roomId") <');
   });
 });
 

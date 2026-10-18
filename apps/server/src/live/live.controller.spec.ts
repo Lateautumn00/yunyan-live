@@ -548,9 +548,9 @@ describe('LiveController cmsList / getStudentRooms', () => {
 
   it('getStudentRooms query 字符串分页并映射 liveUserId', async () => {
     const { controller, liveService } = createController();
-    const res = await controller.getStudentRooms(q('2'), q('7'), req('u1'));
+    const res = await controller.getStudentRooms(q('2'), q('7'), '', req('u1'));
     expect(liveService.getStudentRooms).toHaveBeenCalledWith(
-      { page: 2, page_size: 7 },
+      { page: 2, page_size: 7, cursor: '' },
       expect.any(Metadata)
     );
     expect(res).toEqual({
@@ -572,9 +572,9 @@ describe('LiveController cmsList / getStudentRooms', () => {
 
   it('getStudentRooms 缺省分页 1/10', async () => {
     const { controller, liveService } = createController();
-    await controller.getStudentRooms(q(), q(), req('u1'));
+    await controller.getStudentRooms(q(), q(), '', req('u1'));
     expect(liveService.getStudentRooms).toHaveBeenCalledWith(
-      { page: 1, page_size: 10 },
+      { page: 1, page_size: 10, cursor: '' },
       expect.any(Metadata)
     );
   });
@@ -648,6 +648,7 @@ describe('LiveController video list / detail / delete', () => {
       '1704000000000',
       '1704999999000',
       '1',
+      '',
       req('u1')
     );
     expect(liveService.getVideoList).toHaveBeenCalledWith({
@@ -657,7 +658,8 @@ describe('LiveController video list / detail / delete', () => {
       search_name: '数学',
       start_time: '1704000000000',
       end_time: '1704999999000',
-      type: 1
+      type: 1,
+      cursor: ''
     });
     expect(res).toEqual({
       list: [
@@ -676,12 +678,12 @@ describe('LiveController video list / detail / delete', () => {
 
   it('getVideoList type 非法回 -1，缺 data 返回空列表', async () => {
     const { controller, liveService } = createController();
-    await controller.getVideoList(q(), q(), q(), q(), q(), q(), 'abc', req('u1'));
+    await controller.getVideoList(q(), q(), q(), q(), q(), q(), 'abc', '', req('u1'));
     expect(liveService.getVideoList).toHaveBeenCalledWith(
       expect.objectContaining({ type: -1, page: 1, page_size: 10 })
     );
     liveService.getVideoList.mockReturnValueOnce(of({ code: '0', msg: 'ok' }));
-    const res = await controller.getVideoList(q(), q(), q(), q(), q(), q(), '', req('u1'));
+    const res = await controller.getVideoList(q(), q(), q(), q(), q(), q(), '', '', req('u1'));
     expect(res).toEqual({ list: [], pageInfo: { totalElements: 0 } });
   });
 
@@ -835,7 +837,8 @@ describe('LiveController savePlayBackUrl / getUserWatchTimeList', () => {
       page: 3,
       page_size: 20,
       room_id: 'r1',
-      search_name: '甲'
+      search_name: '甲',
+      cursor: ''
     });
     expect(authService.batchGetUsers).toHaveBeenCalledWith({ user_ids: ['u1'] });
     expect(res).toEqual({

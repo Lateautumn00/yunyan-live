@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, LessThan, Not, In } from 'typeorm';
-import { grpcError } from '@yunyan-live/nest-shared';
+import { decodeCursor, grpcError, normalizePageQuery } from '@yunyan-live/nest-shared';
 import { status as GrpcStatus } from '@grpc/grpc-js';
 import {
   BoardSnapshot,
@@ -278,38 +278,51 @@ export class LiveService {
     return room.joinCode;
   }
 
-  async getStudentRooms(userId: string, page = 1, pageSize = 10) {
-    const participants = await this.participantRepo.find({
-      where: { userId },
-      order: { joinedAt: 'DESC' }
-    });
+  async getStudentRooms(userId: string, page = 1, pageSize = 10, cursor?: string) {
+    // F16 SQL 化：JOIN 过滤软删房间（旧实现 total 含软删房间导致 total 与页内容不一致）；
+    // 排序补 id tiebreaker；cursor 走 keyset（(joined_at,id)<cursor），非法 cursor 回落 OFFSET。
+    const pager = normalizePageQuery({ page, pageSize });
+    const decoded = decodeCursor(cursor);
 
-    if (participants.length === 0) return { items: [], total: 0 };
+    const baseParams: unknown[] = [userId];
+    let keyset = '';
+    if (decoded) {
+      baseParams.push(new Date(decoded.timeMs), decoded.id);
+      keyset = ' AND (p."joinedAt", p.id) < ($2::timestamptz, $3::uuid)';
+    }
+    const from = `
+      FROM live_participants p
+      JOIN live_rooms r ON r."roomId" = p."roomId" AND r."deletedAt" IS NULL
+      WHERE p."userId" = $1${keyset}`;
+    const countSql = `SELECT COUNT(*)::int AS total ${from}`;
 
-    const total = participants.length;
-    const paged = participants.slice((page - 1) * pageSize, page * pageSize);
-    const roomIds = paged.map(p => p.roomId);
-    const rooms = await this.repo.findByIds(roomIds);
-    const roomMap = new Map(rooms.map(r => [r.roomId, r]));
+    const pageParams = [...baseParams, pager.pageSize, (pager.page - 1) * pager.pageSize];
+    const limitIdx = baseParams.length + 1;
+    const offsetIdx = baseParams.length + 2;
+    const pageSql = `
+      SELECT p."joinedAt", r."roomId", r.title, r."liveUserId", r."joinCode",
+             r.status, r."startTime", r.type
+      ${from}
+      ORDER BY p."joinedAt" DESC, p.id DESC
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
 
-    const items = paged
-      .map(p => {
-        const room = roomMap.get(p.roomId);
-        if (!room) return null;
-        return {
-          id: room.roomId,
-          roomId: room.roomId,
-          title: room.title,
-          liveUserId: room.liveUserId,
-          joinCode: room.joinCode,
-          status: room.status,
-          startTime: room.startTime,
-          type: room.type,
-          joinedAt: p.joinedAt
-        };
-      })
-      .filter(Boolean);
-    return { items, total };
+    const [pageRows, countRows] = await Promise.all([
+      this.dataSource.manager.query(pageSql, pageParams),
+      this.dataSource.manager.query(countSql, baseParams)
+    ]);
+    const rows = (pageRows ?? []) as Record<string, unknown>[];
+    const items = rows.map(r => ({
+      id: r.roomId as string,
+      roomId: r.roomId as string,
+      title: r.title as string,
+      liveUserId: r.liveUserId as string,
+      joinCode: r.joinCode as string,
+      status: r.status as number,
+      startTime: r.startTime as Date,
+      type: r.type as number,
+      joinedAt: new Date(r.joinedAt as string | Date)
+    }));
+    return { items, total: Number((countRows as Record<string, unknown>[])[0]?.total ?? 0) };
   }
 
   async leaveRoom(userId: string, roomId: string) {
@@ -464,71 +477,73 @@ export class LiveService {
     startTime?: string;
     endTime?: string;
     type?: number;
+    cursor?: string;
   }) {
-    const page = dto.page || 1;
-    const pageSize = dto.pageSize || 10;
-
-    const qb = this.videoRepo
-      .createQueryBuilder('v')
-      .select('v.roomId', 'roomId')
-      .addSelect('COUNT(*)', 'count')
-      .addSelect('MIN(v.createdAt)', 'firstRecordedAt')
-      .groupBy('v.roomId');
-
-    const recordings = await qb.getRawMany();
-    const roomIds = recordings.map((r: { roomId: string }) => r.roomId);
-
-    if (roomIds.length === 0) {
-      return { items: [], total: 0 };
-    }
-
-    const roomQb = this.repo
-      .createQueryBuilder('r')
-      .where('r.roomId IN (:...roomIds)', { roomIds });
-
-    if (dto.liveUserId) {
-      roomQb.andWhere('r.liveUserId = :liveUserId', { liveUserId: dto.liveUserId });
-    }
-    if (dto.searchName) {
-      roomQb.andWhere('r.title LIKE :searchName', { searchName: `%${dto.searchName}%` });
-    }
+    // F16 SQL 化（口径经产品拍板）：仅含 ≥1 条录制的房间（INNER JOIN，0 录制房间不出现）；
+    // 排序保持 r.created_at DESC（补 room_id tiebreaker）；count/min 直接进 SQL，不再全量捞内存。
+    const pager = normalizePageQuery({ page: dto.page, pageSize: dto.pageSize });
+    const filters: string[] = ['r."deletedAt" IS NULL'];
+    const params: unknown[] = [];
+    const add = (v: unknown) => {
+      params.push(v);
+      return `$${params.length}`;
+    };
+    if (dto.liveUserId) filters.push(`r."liveUserId" = ${add(dto.liveUserId)}`);
+    if (dto.searchName) filters.push(`r.title LIKE ${add(`%${dto.searchName}%`)}`);
     if (dto.startTime) {
-      roomQb.andWhere('r.startTime >= :startTime', { startTime: new Date(Number(dto.startTime)) });
+      filters.push(`r."startTime" >= ${add(new Date(Number(dto.startTime)))}`);
     }
-    if (dto.endTime) {
-      roomQb.andWhere('r.startTime <= :endTime', { endTime: new Date(Number(dto.endTime)) });
-    }
+    if (dto.endTime) filters.push(`r."startTime" <= ${add(new Date(Number(dto.endTime)))}`);
     if (dto.type !== undefined && dto.type !== null && dto.type >= 0) {
-      roomQb.andWhere('r.type = :type', { type: dto.type });
+      filters.push(`r.type = ${add(dto.type)}`);
     }
+    const where = `WHERE ${filters.join(' AND ')}`;
+    const groupBase = `
+      FROM live_rooms r
+      JOIN video_recordings v ON v."roomId" = r."roomId"
+      ${where}`;
 
-    roomQb.orderBy('r.createdAt', 'DESC');
-    const [rooms, total] = await roomQb.getManyAndCount();
+    // total = 过滤后有录制的房间数（不随 cursor 截断）
+    const countSql = `
+      SELECT COUNT(*)::int AS total FROM (
+        SELECT r."roomId"
+        ${groupBase}
+        GROUP BY r."roomId", r.title, r.type, r."createdAt"
+      ) g`;
 
-    const countMap = new Map(
-      recordings.map((r: { roomId: string; count: string }) => [r.roomId, Number(r.count)])
-    );
-    const firstRecordedAtMap = new Map(
-      recordings.map((r: { roomId: string; firstRecordedAt: string | Date }) => {
-        const raw =
-          r.firstRecordedAt instanceof Date
-            ? r.firstRecordedAt
-            : new Date(String(r.firstRecordedAt));
-        return [r.roomId, String(raw.getTime())];
-      })
-    );
+    // keyset 只进页查询
+    const pageParams = [...params];
+    const decoded = decodeCursor(dto.cursor);
+    let keyset = '';
+    if (decoded) {
+      pageParams.push(new Date(decoded.timeMs), decoded.id);
+      keyset = ` AND (r."createdAt", r."roomId") < ($${pageParams.length - 1}::timestamptz, $${pageParams.length}::text)`;
+    }
+    pageParams.push(pager.pageSize, (pager.page - 1) * pager.pageSize);
+    const limitIdx = pageParams.length - 1;
+    const offsetIdx = pageParams.length;
+    const pageSql = `
+      SELECT r."roomId", r.title, r.type, COUNT(*)::int AS count,
+             (EXTRACT(EPOCH FROM MIN(v."createdAt")) * 1000)::bigint AS first_recorded_ms
+      ${groupBase}${keyset}
+      GROUP BY r."roomId", r.title, r.type, r."createdAt"
+      ORDER BY r."createdAt" DESC, r."roomId" DESC
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
 
-    const items = rooms.map(room => ({
-      roomId: room.roomId,
-      title: room.title,
+    const [pageRows, countRows] = await Promise.all([
+      this.dataSource.manager.query(pageSql, pageParams),
+      this.dataSource.manager.query(countSql, params)
+    ]);
+    const rows = (pageRows ?? []) as Record<string, unknown>[];
+    const items = rows.map(r => ({
+      roomId: r.roomId as string,
+      title: r.title as string,
       teacherName: '',
-      type: room.type,
-      startTime: firstRecordedAtMap.get(room.roomId) || '',
-      count: countMap.get(room.roomId) || 0
+      type: r.type as number,
+      startTime: r.first_recorded_ms != null ? String(Number(r.first_recorded_ms)) : '',
+      count: Number(r.count)
     }));
-
-    const paged = items.slice((page - 1) * pageSize, page * pageSize);
-    return { items: paged, total };
+    return { items, total: Number((countRows as Record<string, unknown>[])[0]?.total ?? 0) };
   }
 
   async getVideoDetail(dto: { roomId: string; startTime?: string; endTime?: string }) {
@@ -752,44 +767,73 @@ export class LiveService {
     pageSize?: number;
     roomId?: string;
     searchName?: string;
+    cursor?: string;
   }) {
-    const page = dto.page || 1;
-    const pageSize = dto.pageSize || 10;
-    const qb = this.watchTimeRepo
-      .createQueryBuilder('w')
-      .innerJoin(LiveRoom, 'r', 'r.roomId = w.roomId AND r.deletedAt IS NULL');
-    if (dto.roomId) qb.andWhere('w.roomId = :roomId', { roomId: dto.roomId });
-    if (dto.searchName)
-      qb.andWhere('r.title LIKE :searchName', { searchName: '%' + dto.searchName + '%' });
-    qb.select([
-      'w.id',
-      'w.userId',
-      'w.roomId',
-      'w.joinedAt',
-      'w.leftAt',
-      'w.createdAt',
-      'r.title',
-      'CASE WHEN w.leftAt IS NULL THEN true ELSE false END AS is_online'
-    ])
-      .groupBy('w.id, r.title')
-      .orderBy('w.createdAt', 'DESC');
-    const [rawItems, total] = await Promise.all([qb.getRawMany(), qb.getCount()]);
-    const now = Date.now();
-    const totalTime = rawItems.reduce((s, i) => {
-      const left = i.w_left_at ? new Date(i.w_left_at).getTime() : now;
-      return s + Math.floor((left - new Date(i.w_joined_at).getTime()) / 1000);
-    }, 0);
-    const items = rawItems.map(i => ({
-      id: i.w_id,
-      userId: i.w_user_id,
-      roomId: i.w_room_id,
-      joinedAt: new Date(i.w_joined_at),
-      leftAt: i.w_left_at ? new Date(i.w_left_at) : null,
-      createdAt: new Date(i.w_created_at),
-      roomTitle: i.r_title,
+    // F16 SQL 化：Q1=当页行（LIMIT/OFFSET 或 keyset）；Q2=过滤全量聚合（total+totalTime）。
+    // totalTime 是全量口径，绝不可随分页截断（旧实现靠"先全量捞再 slice"偶然成立，大表不可用）。
+    const pager = normalizePageQuery({ page: dto.page, pageSize: dto.pageSize });
+    const filters: string[] = ['r."deletedAt" IS NULL'];
+    const params: unknown[] = [];
+    const add = (v: unknown) => {
+      params.push(v);
+      return `$${params.length}`;
+    };
+    if (dto.roomId) filters.push(`w.room_id = ${add(dto.roomId)}`);
+    if (dto.searchName) filters.push(`r.title LIKE ${add('%' + dto.searchName + '%')}`);
+    const from = `
+      FROM user_watch_times w
+      JOIN live_rooms r ON r."roomId" = w.room_id AND r."deletedAt" IS NULL
+      WHERE ${filters.join(' AND ')}`;
+
+    // Q2 聚合（全量口径，与旧 JS reduce 语义等价：left_at NULL 计至 now）
+    const aggSql = `
+      SELECT COUNT(*)::int AS total,
+             COALESCE(SUM(
+               CASE WHEN w.left_at IS NULL
+                 THEN floor(EXTRACT(EPOCH FROM (now() - w.joined_at)))
+                 ELSE floor(EXTRACT(EPOCH FROM (w.left_at - w.joined_at)))
+               END
+             ), 0)::bigint AS total_time
+      ${from}`;
+
+    // Q1 分页（补 id tiebreaker 保证页间稳定；cursor 走 keyset）
+    const pageParams = [...params];
+    const decoded = decodeCursor(dto.cursor);
+    let keyset = '';
+    if (decoded) {
+      pageParams.push(new Date(decoded.timeMs), decoded.id);
+      keyset = ` AND (w.created_at, w.id) < ($${pageParams.length - 1}::timestamptz, $${pageParams.length}::uuid)`;
+    }
+    pageParams.push(pager.pageSize, (pager.page - 1) * pager.pageSize);
+    const limitIdx = pageParams.length - 1;
+    const offsetIdx = pageParams.length;
+    const pageSql = `
+      SELECT w.id, w.user_id, w.room_id, w.joined_at, w.left_at, w.created_at,
+             r.title AS room_title, (w.left_at IS NULL) AS is_online
+      ${from}${keyset}
+      ORDER BY w.created_at DESC, w.id DESC
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
+
+    const [pageRows, aggRows] = await Promise.all([
+      this.dataSource.manager.query(pageSql, pageParams),
+      this.dataSource.manager.query(aggSql, params)
+    ]);
+    const rows = (pageRows ?? []) as Record<string, unknown>[];
+    const agg = (aggRows as Record<string, unknown>[])[0] ?? {};
+    const items = rows.map(i => ({
+      id: i.id as string,
+      userId: i.user_id as string,
+      roomId: i.room_id as string,
+      joinedAt: new Date(i.joined_at as string | Date),
+      leftAt: i.left_at ? new Date(i.left_at as string | Date) : null,
+      createdAt: new Date(i.created_at as string | Date),
+      roomTitle: i.room_title as string,
       isOnline: i.is_online === true || i.is_online === 'true'
     }));
-    const paged = items.slice((page - 1) * pageSize, page * pageSize);
-    return { items: paged, total, totalTime };
+    return {
+      items,
+      total: Number(agg.total ?? 0),
+      totalTime: Number(agg.total_time ?? 0)
+    };
   }
 } // class LiveService

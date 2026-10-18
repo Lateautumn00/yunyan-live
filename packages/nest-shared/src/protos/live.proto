@@ -147,6 +147,7 @@ message UpdateLiveRequest {
 message GetStudentRoomsRequest {
   int32 page = 1;
   int32 page_size = 2;
+  string cursor = 3;
 }
 
 message StudentRoomsResponse {
@@ -235,6 +236,7 @@ message GetVideoListRequest {
   string start_time = 5;
   string end_time = 6;
   int32 type = 7;
+  string cursor = 8;
 }
 
 message VideoListResponse {
@@ -299,6 +301,7 @@ message GetUserWatchTimeListRequest {
   int32 page_size = 2;
   string room_id = 3;
   string search_name = 4;
+  string cursor = 5;
 }
 
 message GetUserWatchTimeListResponse {

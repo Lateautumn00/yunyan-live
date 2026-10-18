@@ -340,7 +340,14 @@ describe('LiveController gRPC 映射', () => {
       total: 5
     });
     const res = await controller.getStudentRooms({ page: 2, page_size: 3 }, userIdMetadata('u1'));
-    expect(service.getStudentRooms).toHaveBeenCalledWith('u1', 2, 3);
+    expect(service.getStudentRooms).toHaveBeenCalledWith('u1', 2, 3, undefined);
+
+    service.getStudentRooms.mockClear();
+    await controller.getStudentRooms(
+      { page: 1, page_size: 10, cursor: '1704067200000|pid-9' },
+      userIdMetadata('u1')
+    );
+    expect(service.getStudentRooms).toHaveBeenCalledWith('u1', 1, 10, '1704067200000|pid-9');
     expect(res.data).toEqual({
       items: [
         {

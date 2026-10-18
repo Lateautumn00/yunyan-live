@@ -78,7 +78,9 @@ function mockDataSource(): DataSourceMock {
   const manager: ManagerMock = {
     findOne: vi.fn(),
     count: vi.fn().mockResolvedValue(0),
-    save: vi.fn((input: unknown) => Promise.resolve(input))
+    save: vi.fn((input: unknown) => Promise.resolve(input)),
+    // F16 SQL 化：raw 查询统一走 DataSource.manager.query（测试用 mockResolvedValueOnce 序列控页/聚合两查）
+    query: vi.fn().mockResolvedValue([])
   };
   const queryRunner: QueryRunnerMock = {
     connect: vi.fn().mockResolvedValue(undefined),
@@ -88,7 +90,7 @@ function mockDataSource(): DataSourceMock {
     release: vi.fn().mockResolvedValue(undefined),
     manager
   };
-  const dataSource = { createQueryRunner: vi.fn(() => queryRunner) };
+  const dataSource = { createQueryRunner: vi.fn(() => queryRunner), manager };
   return { manager, queryRunner, dataSource };
 }
 

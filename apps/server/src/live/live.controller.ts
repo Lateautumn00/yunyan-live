@@ -156,7 +156,7 @@ interface LiveServiceClient {
   deleteLive(data: { room_id: string }, metadata?: Metadata): Observable<LiveResponse>;
   updateCode(data: { room_id: string }, metadata?: Metadata): Observable<UpdateCodeResponse>;
   getStudentRooms(
-    data: { page?: number; page_size?: number },
+    data: { page?: number; page_size?: number; cursor?: string },
     metadata?: Metadata
   ): Observable<StudentRoomsResponse>;
   leaveRoom(data: { room_id: string }, metadata?: Metadata): Observable<LiveResponse>;
@@ -190,6 +190,7 @@ interface LiveServiceClient {
     start_time?: string;
     end_time?: string;
     type?: number;
+    cursor?: string;
   }): Observable<{
     code: string;
     msg: string;
@@ -246,6 +247,7 @@ interface LiveServiceClient {
     page_size?: number;
     room_id?: string;
     search_name?: string;
+    cursor?: string;
   }): Observable<{
     code: string;
     msg: string;
@@ -608,13 +610,15 @@ export class LiveController implements OnModuleInit {
   async getStudentRooms(
     @Query('page') page: string,
     @Query('pageSize') pageSize: string,
+    @Query('cursor') cursor: string,
     @Request() req: { user: { userId: string } }
   ) {
     const metadata = userIdMetadata(req.user.userId);
     const result = await grpcCall(
       this.liveService.getStudentRooms(
         {
-          ...toGrpcPage(normalizePageQuery({ page, pageSize }))
+          ...toGrpcPage(normalizePageQuery({ page, pageSize })),
+          cursor: cursor || ''
         },
         metadata
       )
@@ -697,11 +701,13 @@ export class LiveController implements OnModuleInit {
     @Query('startTime') startTime: string,
     @Query('endTime') endTime: string,
     @Query('type') type: string,
+    @Query('cursor') cursor: string,
     @Request() req: { user: { userId: string } }
   ) {
     const result = await grpcCall(
       this.liveService.getVideoList({
         ...toGrpcPage(normalizePageQuery({ page, pageNum, pageSize })),
+        cursor: cursor || '',
         live_user_id: req.user.userId,
         search_name: searchName || '',
         start_time: startTime || '',
@@ -943,11 +949,19 @@ export class LiveController implements OnModuleInit {
   @Post('getUserWatchTimeList')
   @UseGuards(JwtAuthGuard)
   async getUserWatchTimeList(
-    @Body() body: { pageNum?: number; pageSize?: number; roomId?: string; searchName?: string }
+    @Body()
+    body: {
+      pageNum?: number;
+      pageSize?: number;
+      roomId?: string;
+      searchName?: string;
+      cursor?: string;
+    }
   ) {
     const result = await grpcCall(
       this.liveService.getUserWatchTimeList({
         ...toGrpcPage(normalizePageQuery({ pageNum: body.pageNum, pageSize: body.pageSize })),
+        cursor: body.cursor || '',
         room_id: body.roomId || '',
         search_name: body.searchName || ''
       })

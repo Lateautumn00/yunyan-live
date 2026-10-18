@@ -3,9 +3,11 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
   UpdateDateColumn
 } from 'typeorm';
 
+@Index('idx_video_recordings_room_created', ['roomId', 'createdAt'])
 @Entity('video_recordings')
 export class VideoRecording {
   @PrimaryGeneratedColumn('uuid')

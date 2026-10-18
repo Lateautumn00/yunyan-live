@@ -1,5 +1,7 @@
-﻿import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+﻿import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
 
+@Index('idx_user_watch_times_created', ['createdAt', 'id'])
+@Index('idx_user_watch_times_room_created', ['roomId', 'createdAt'])
 @Entity('user_watch_times')
 export class UserWatchTime {
   @PrimaryGeneratedColumn('uuid')

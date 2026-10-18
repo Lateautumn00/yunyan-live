@@ -224,13 +224,17 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'GetStudentRooms')
-  async getStudentRooms(data: { page?: number; page_size?: number }, metadata: Metadata) {
+  async getStudentRooms(
+    data: { page?: number; page_size?: number; cursor?: string },
+    metadata: Metadata
+  ) {
     const userId = userIdFromMetadata(metadata);
     this.logger.log(`gRPC GetStudentRooms: ${userId}`);
     const { items, total } = await this.liveService.getStudentRooms(
       userId,
       data.page,
-      data.page_size
+      data.page_size,
+      data.cursor
     );
     return ok({
       data: {
@@ -341,11 +345,13 @@ export class LiveController {
     start_time?: string;
     end_time?: string;
     type?: number;
+    cursor?: string;
   }) {
     this.logger.log(`gRPC GetVideoList: page=${data.page}`);
     const result = await this.liveService.getVideoList({
       page: data.page,
       pageSize: data.page_size,
+      cursor: data.cursor,
       liveUserId: data.live_user_id,
       searchName: data.search_name,
       startTime: data.start_time,
@@ -562,11 +568,13 @@ export class LiveController {
     page_size?: number;
     room_id?: string;
     search_name?: string;
+    cursor?: string;
   }) {
     this.logger.log('gRPC GetUserWatchTimeList');
     const result = await this.liveService.getUserWatchTimeList({
       page: data.page,
       pageSize: data.page_size,
+      cursor: data.cursor,
       roomId: data.room_id,
       searchName: data.search_name
     });
