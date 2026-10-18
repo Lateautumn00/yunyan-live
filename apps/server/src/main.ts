@@ -6,6 +6,9 @@ import { join } from 'path';
 import {
   HttpExceptionFilter,
   ResponseInterceptor,
+  createServiceMetrics,
+  httpMetricsMiddleware,
+  metricsRequestHandler,
   validationPipeOptions
 } from '@yunyan-live/nest-shared';
 import { AppModule } from './app.module';
@@ -13,6 +16,10 @@ import { uploadVerifyMiddleware } from './upload/upload-sign';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  const metrics = createServiceMetrics('server');
+  app.use(httpMetricsMiddleware(metrics));
+  app.use('/metrics', metricsRequestHandler(metrics));
 
   app.useGlobalPipes(new ValidationPipe(validationPipeOptions));
 

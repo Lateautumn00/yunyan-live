@@ -1,0 +1,11 @@
+# O5 首批：无外发渠道（邮件/webhook 待收尾按需接）。
+# 演练口径 = Prometheus /alerts 与本服务 /alerts API 可见 firing（receiver 空集成合法）。
+route:
+  receiver: default
+  group_by: ['alertname']
+  group_wait: 5s
+  group_interval: 15s
+  repeat_interval: 4h
+
+receivers:
+  - name: default

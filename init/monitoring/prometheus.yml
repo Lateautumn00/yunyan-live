@@ -1,0 +1,40 @@
+# O5 监控最小集 —— Prometheus 主配置
+# 命名与值域约定见 docs/research/monitoring-baseline.md（job_name ≡ 指标 service label）
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+scrape_configs:
+  # 宿主机上以 pnpm dev 运行的服务（compose 容器经 host-gateway 回访宿主机）
+  - job_name: server
+    static_configs:
+      - targets: ['host.docker.internal:3001']
+
+  - job_name: auth-service
+    static_configs:
+      - targets: ['host.docker.internal:9464']
+
+  - job_name: live-service
+    static_configs:
+      - targets: ['host.docker.internal:9465']
+
+  - job_name: chat-ws-service
+    static_configs:
+      - targets: ['host.docker.internal:50054']
+
+  # 基础设施：磁盘/主机指标（DiskSpaceLow 告警数据源）
+  - job_name: node
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

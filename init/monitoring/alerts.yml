@@ -1,0 +1,77 @@
+# O5 首批告警（台账 GAP-O5 范围：队列深度 / ws 在线数 / gRPC-HTTP 5xx / 容器重启 / 磁盘）
+# 阈值口径与 §4.8 日志线（chat-ws monitor.ts）对齐；演练以 alertmanager API/UI 可见 firing 为准。
+groups:
+  - name: yunyan-first-batch
+    rules:
+      # 队列深度：对齐 monitor.ts WORK_WARNING=10000（日志线 30s 即打，prom 侧 5m 持续才通知）
+      - alert: ChatQueueBacklog
+        expr: yunyan_chat_queue_depth{queue="work"} > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'chat-ws work 队列积压 > 10000（对齐 §4.8 WORK_WARNING 线）'
+          runbook: '查 consumer 消费速率 / RabbitMQ mgmt；根因见 O8 runbook 触发线监控'
+
+      # DLQ 非空 = 可靠性承诺被打破（对齐 §4.8 DLQ 线，持续 2m 即通知）
+      - alert: ChatDlqNonEmpty
+        expr: yunyan_chat_queue_depth{queue="dlq"} > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'chat-ws DLQ 非空（对齐 §4.8，>100 另有日志 critical）'
+          runbook: '查 DLQ 消息体 → 修复后重放；见 O8 runbook'
+
+      # ws 在线数：10m 零连接。语境提示——夜间空房属常态误报，重点是直播时段零连接
+      - alert: ChatWsNoConnections
+        expr: yunyan_chat_online_connections == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'chat-ws 10m 零在线连接（开播时段零连接=接入异常；空房时段为已知误报语境）'
+
+      # HTTP 5xx：gateway 5m 内 >5 次（绝对量口径，避免低流量比率误报）
+      - alert: Http5xxBurst
+        expr: increase(yunyan_http_requests_total{status=~"5.."}[5m]) > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'gateway 5 分钟内 5xx 响应 > 5 次'
+
+      # gRPC 5xx：服务端非 OK 状态 5m 内 >5 次
+      - alert: GrpcErrorBurst
+        expr: increase(yunyan_grpc_requests_total{code!="OK"}[5m]) > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'gRPC 服务端 5 分钟内非 OK 状态 > 5 次（code 见 grpc 状态名）'
+
+      # target 掉线（含服务进程死亡；容器重启期间必然出现 down 窗口）
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'scrape target 掉线 2m：{{ $labels.job }}（本地未启动服务同样命中，属正确语义）'
+
+      # 容器重启：15m 内 up 翻转（起-停-起的痕迹；纯 down 由 ServiceDown 覆盖）
+      - alert: ServiceFlapping
+        expr: changes(up[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: 'target 15m 内 up 状态翻转（重启痕迹）：{{ $labels.job }}'
+
+      # 磁盘：可用 <10%（node-exporter，rootfs 挂载 /host）
+      - alert: DiskSpaceLow
+        expr: node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint!~"/host/(boot|dev|proc|sys).*"} / node_filesystem_size_bytes < 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: '磁盘可用 <10%：{{ $labels.mountpoint }}（{{ $labels.instance }}）'

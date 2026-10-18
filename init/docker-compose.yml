@@ -77,8 +77,54 @@
       - /home/janus/recordings:/tmp/janus/recordings
       - janus-logs:/var/log/janus
 
+  # O5 监控最小集（批次 3 启动；演练与告警外发收尾在批次 5）
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: yunyan-live-prometheus
+    restart: unless-stopped
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    ports:
+      - '127.0.0.1:9090:9090'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - promdata:/prometheus
+    depends_on:
+      - alertmanager
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: yunyan-live-alertmanager
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    ports:
+      - '127.0.0.1:9093:9093'
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - amdata:/alertmanager
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: yunyan-live-node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+)($$|/)'
+    ports:
+      - '127.0.0.1:9100:9100'
+    volumes:
+      - /:/host:ro
+
 volumes:
   pgdata:
   rabbitmqdata:
   redisdata:
   janus-logs:
+  promdata:
+  amdata:

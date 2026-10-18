@@ -1,6 +1,12 @@
 import { NestFactory } from '@nestjs/core';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
-import { grpcServerOptions, resolveProto } from '@yunyan-live/nest-shared';
+import {
+  GrpcMetricsInterceptor,
+  createServiceMetrics,
+  grpcServerOptions,
+  resolveProto,
+  startMetricsServer
+} from '@yunyan-live/nest-shared';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -13,7 +19,11 @@ async function bootstrap() {
     })
   });
 
+  const metrics = createServiceMetrics('live-service');
+  app.useGlobalInterceptors(new GrpcMetricsInterceptor(metrics));
+
   await app.listen();
   console.log(`Live service gRPC listening on port ${process.env.GRPC_PORT || 50052}`);
+  startMetricsServer(metrics, Number(process.env.METRICS_PORT) || 9465);
 }
 bootstrap();

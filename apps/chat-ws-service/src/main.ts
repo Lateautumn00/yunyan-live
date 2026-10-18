@@ -14,7 +14,8 @@ import {
   subscribeKick,
   readForbid,
   validateSession,
-  verifyToken
+  verifyToken,
+  createServiceMetrics
 } from '@yunyan-live/nest-shared';
 import { buildBullet, sanitizeName } from './bullet';
 import { DEFAULT_BANNED_WORDS } from './wordfilter';
@@ -25,6 +26,8 @@ import { startDepthMonitor } from './monitor';
 import { createHistoryStore, decodeCursor, type HistoryStore } from './history';
 
 dotenv.config();
+
+const metrics = createServiceMetrics('chat-ws-service');
 
 interface WsClient {
   ws: WebSocket;
@@ -71,7 +74,11 @@ if (persistence.enabled) {
   publisher = createPublisher(requireRabbitUrl());
   consumer = createConsumer(requireRabbitUrl(), pool);
   stopDepthMonitor = startDepthMonitor({
-    depths: () => consumer?.depths() ?? Promise.resolve(null)
+    depths: () => consumer?.depths() ?? Promise.resolve(null),
+    onDepth: depths => {
+      metrics.chatQueueDepth.set({ queue: 'work' }, depths.work);
+      metrics.chatQueueDepth.set({ queue: 'dlq' }, depths.dlq);
+    }
   });
   console.log('[ChatWS] persistence: enabled');
 } else {
@@ -457,6 +464,15 @@ async function healthzBody(): Promise<Record<string, unknown>> {
 app.use(async (ctx, next) => {
   if (ctx.path === '/healthz') {
     ctx.body = await healthzBody();
+    return;
+  }
+  if (ctx.path === '/metrics') {
+    // O5：在线数实时求和（纯内存）；队列深度由 depth monitor 采样写入 gauge
+    let online = 0;
+    for (const clients of rooms.values()) online += clients.size;
+    metrics.chatOnlineConnections.set(online);
+    ctx.set('Content-Type', metrics.registry.contentType);
+    ctx.body = await metrics.registry.metrics();
     return;
   }
   await next();

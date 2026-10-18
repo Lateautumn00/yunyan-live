@@ -27,6 +27,21 @@ describe('startDepthMonitor（§4.8 日志级阈值告警）', () => {
     return stop;
   }
 
+  it('onDepth 每轮成功探测即回调（O5 metrics 采样口径）', async () => {
+    const onDepth = vi.fn<(d: { work: number; dlq: number }) => void>();
+    stop = startDepthMonitor({
+      depths: async () => ({ work: 3, dlq: 0 }),
+      intervalMs: DEPTH_INTERVAL_MS,
+      warn,
+      onDepth
+    });
+    await vi.advanceTimersByTimeAsync(DEPTH_INTERVAL_MS);
+    expect(onDepth).toHaveBeenCalledTimes(1);
+    expect(onDepth).toHaveBeenCalledWith({ work: 3, dlq: 0 });
+    await vi.advanceTimersByTimeAsync(DEPTH_INTERVAL_MS);
+    expect(onDepth).toHaveBeenCalledTimes(2);
+  });
+
   it('dlq=1 → 输出 [ChatWS][DLQ] depth=1（不带 critical）', async () => {
     start({ work: 0, dlq: 1 });
     await vi.advanceTimersByTimeAsync(DEPTH_INTERVAL_MS);

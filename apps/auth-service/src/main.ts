@@ -2,7 +2,14 @@ import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
-import { grpcServerOptions, resolveProto, validationPipeOptions } from '@yunyan-live/nest-shared';
+import {
+  GrpcMetricsInterceptor,
+  createServiceMetrics,
+  grpcServerOptions,
+  resolveProto,
+  startMetricsServer,
+  validationPipeOptions
+} from '@yunyan-live/nest-shared';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -17,7 +24,11 @@ async function bootstrap() {
 
   app.useGlobalPipes(new ValidationPipe(validationPipeOptions));
 
+  const metrics = createServiceMetrics('auth-service');
+  app.useGlobalInterceptors(new GrpcMetricsInterceptor(metrics));
+
   await app.listen();
   console.log(`Auth service gRPC listening on port ${process.env.GRPC_PORT || 50051}`);
+  startMetricsServer(metrics, Number(process.env.METRICS_PORT) || 9464);
 }
 bootstrap();

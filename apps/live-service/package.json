@@ -10,6 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@grpc/grpc-js": "~1.10.0",
+    "@grpc/proto-loader": "^0.8.1",
     "@nestjs/common": "^10.0.0",
     "@nestjs/config": "^3.0.0",
     "@nestjs/core": "^10.0.0",
@@ -17,13 +19,12 @@
     "@nestjs/typeorm": "^10.0.0",
     "@yunyan-live/nest-shared": "workspace:*",
     "@yunyan-live/shared": "workspace:*",
-    "@grpc/grpc-js": "~1.10.0",
-    "@grpc/proto-loader": "^0.8.1",
-    "typeorm": "^0.3.0",
-    "pg": "^8.0.0",
     "axios": "^1.0.0",
+    "pg": "^8.0.0",
+    "prom-client": "^15.1.3",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "typeorm": "^0.3.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",

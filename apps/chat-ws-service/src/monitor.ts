@@ -16,6 +16,8 @@ export interface DepthMonitorDeps {
   intervalMs?: number;
   /** 告警出口（测试注入；缺省 console.warn） */
   warn?: (message: string) => void;
+  /** 每轮成功探测后的采样回调（O5 metrics 队列深度 gauge 上报挂这里） */
+  onDepth?: (depths: { work: number; dlq: number }) => void;
 }
 
 /** 启动深度阈值轮询；返回停止函数（幂等）。异常仅记日志，不中断轮询。 */
@@ -26,6 +28,7 @@ export function startDepthMonitor(deps: DepthMonitorDeps): () => void {
       .depths()
       .then(depths => {
         if (!depths) return;
+        deps.onDepth?.(depths);
         if (depths.dlq > 0) {
           const critical = depths.dlq > DLQ_CRITICAL ? ' level=critical' : '';
           warn(`[ChatWS][DLQ] depth=${depths.dlq}${critical}`);
