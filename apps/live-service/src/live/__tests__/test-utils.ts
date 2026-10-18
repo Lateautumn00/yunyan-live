@@ -103,6 +103,7 @@ type LiveServiceHarness = {
   watchTime: RepoMock;
   courseware: RepoMock;
   boardSnapshot: RepoMock;
+  boardToolUsage: RepoMock;
   janus: JanusMock;
   manager: ManagerMock;
   queryRunner: QueryRunnerMock;
@@ -118,6 +119,7 @@ export function createLiveService(
     watchTime?: RepoMock;
     courseware?: RepoMock;
     boardSnapshot?: RepoMock;
+    boardToolUsage?: RepoMock;
     janus?: JanusMock;
     database?: DataSourceMock;
   } = {}
@@ -129,6 +131,7 @@ export function createLiveService(
   const watchTime = opts.watchTime ?? mockRepo();
   const courseware = opts.courseware ?? mockRepo();
   const boardSnapshot = opts.boardSnapshot ?? mockRepo();
+  const boardToolUsage = opts.boardToolUsage ?? mockRepo();
   const janus = opts.janus ?? { createRoom: vi.fn(), destroyRoom: vi.fn() };
   const database = opts.database ?? mockDataSource();
   const service = new LiveService(
@@ -139,6 +142,7 @@ export function createLiveService(
     watchTime.repo as never,
     courseware.repo as never,
     boardSnapshot.repo as never,
+    boardToolUsage.repo as never,
     database.dataSource as never,
     janus as never
   );
@@ -151,6 +155,7 @@ export function createLiveService(
     watchTime,
     courseware,
     boardSnapshot,
+    boardToolUsage,
     janus,
     ...database
   };

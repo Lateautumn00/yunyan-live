@@ -30,6 +30,12 @@ export default {
   watchtime_list(params: object) {
     return http.post(`${config.liveApi}/liveInfo/getUserWatchTimeList`, params);
   },
+  statistics(params: object) {
+    return http.post(`${config.liveApi}/liveInfo/statistics`, params);
+  },
+  track_tool_usage(params: object) {
+    return http.post(`${config.liveApi}/liveInfo/trackToolUsage`, params);
+  },
   video_list(params: object) {
     return http.get(`${config.liveApi}/liveInfo/videoList`, { params });
   },

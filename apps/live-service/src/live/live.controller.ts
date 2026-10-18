@@ -691,6 +691,42 @@ export class LiveController {
     });
   }
 
+  // F1：教师数据统计。教师身份只信 metadata（gateway 侧另有 @Roles(1) 403，S11①）。
+  @GrpcMethod('LiveService', 'GetTeacherStatistics')
+  async getTeacherStatistics(data: { start_time?: string; end_time?: string }, metadata: Metadata) {
+    const userId = userIdFromMetadata(metadata);
+    this.logger.log(`gRPC GetTeacherStatistics: ${userId}`);
+    const stats = await this.liveService.getTeacherStatistics(
+      userId,
+      data.start_time,
+      data.end_time
+    );
+    return ok({
+      data: {
+        total_viewers: stats.totalViewers,
+        total_seconds: stats.totalSeconds,
+        total_rooms: stats.totalRooms,
+        has_data: stats.hasData,
+        series: stats.series.map(p => ({
+          date: p.date,
+          seconds: p.seconds,
+          person_times: p.personTimes,
+          viewers: p.viewers
+        }))
+      }
+    });
+  }
+
+  @GrpcMethod('LiveService', 'RecordToolUsage')
+  async recordToolUsage(data: { room_id: string; tool: string }, metadata: Metadata) {
+    const userId = userIdFromMetadata(metadata);
+    if (!data.room_id || !data.tool) {
+      return { code: '0', msg: 'ignored' };
+    }
+    await this.liveService.recordToolUsage(userId, data.room_id, data.tool);
+    return { code: '0', msg: 'success' };
+  }
+
   private grpcCheckinSession(view: CheckinSessionView) {
     return {
       session_id: view.sessionId,

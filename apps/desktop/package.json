@@ -24,6 +24,7 @@
     "@element-plus/icons-vue": "^2.3.2",
     "dayjs": "^1.11.23",
     "dompurify": "^3.4.16",
+    "echarts": "^6.1.0",
     "electron-log": "^5.4.4",
     "electron-updater": "^6.8.9",
     "element-plus": "^2.14.4",

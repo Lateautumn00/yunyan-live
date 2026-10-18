@@ -6,5 +6,6 @@ export { VideoRecording } from './video-recording.entity';
 export { UserWatchTime } from './user-watch-time.entity';
 export { Courseware } from './courseware.entity';
 export { BoardSnapshot } from './board-snapshot.entity';
+export { BoardToolUsage } from './board-tool-usage.entity';
 export { CheckinSession } from './checkin-session.entity';
 export { CheckinRecord } from './checkin-record.entity';

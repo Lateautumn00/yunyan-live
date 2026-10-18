@@ -264,6 +264,24 @@ interface LiveServiceClient {
       total_time_by_room: number;
     };
   }>;
+  getTeacherStatistics(
+    data: { start_time?: string; end_time?: string },
+    metadata?: Metadata
+  ): Observable<{
+    code: string;
+    msg: string;
+    data: {
+      total_viewers: number;
+      total_seconds: number;
+      total_rooms: number;
+      has_data: boolean;
+      series: Array<{ date: string; seconds: number; person_times: number; viewers: number }>;
+    };
+  }>;
+  recordToolUsage(
+    data: { room_id: string; tool: string },
+    metadata?: Metadata
+  ): Observable<{ code: string; msg: string }>;
   saveCourseware(
     data: {
       room_id: string;
@@ -989,6 +1007,54 @@ export class LiveController implements OnModuleInit {
       other: { totalTimeByRoomId: result?.data?.total_time_by_room || 0 },
       pageInfo: { totalElements: result?.data?.total || 0 }
     };
+  }
+
+  // F1：教师数据统计（S11① 越权 403：JwtAuthGuard + RolesGuard + @Roles(教师)；
+  // 教师身份只信 req.user，dateRange 从 body 取，场次隔离由 service 的 liveUserId=本人完成）
+  @Post('statistics')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
+  async getStatistics(
+    @Body() body: { startTime?: string; endTime?: string },
+    @Request() req: { user: { userId: string } }
+  ) {
+    const result = await grpcCall(
+      this.liveService.getTeacherStatistics(
+        { start_time: body.startTime || '', end_time: body.endTime || '' },
+        userIdMetadata(req.user.userId)
+      )
+    );
+    const d = result?.data;
+    return {
+      totalViewers: Number(d?.total_viewers ?? 0),
+      totalSeconds: Number(d?.total_seconds ?? 0),
+      totalRooms: Number(d?.total_rooms ?? 0),
+      hasData: Boolean(d?.has_data),
+      series: (d?.series ?? []).map(p => ({
+        date: p.date,
+        seconds: Number(p.seconds ?? 0),
+        personTimes: Number(p.person_times ?? 0),
+        viewers: Number(p.viewers ?? 0)
+      }))
+    };
+  }
+
+  // F1 附带埋点：白板工具切换（F12 触发条件数据源）。学生也用白板 → 仅 JwtAuthGuard；
+  // 客户端 fire-and-forget，参数缺失直接吞掉（埋点不阻塞画板交互）
+  @Post('trackToolUsage')
+  @UseGuards(JwtAuthGuard)
+  async trackToolUsage(
+    @Body() body: { roomId?: string; tool?: string },
+    @Request() req: { user: { userId: string } }
+  ) {
+    if (!body.roomId || !body.tool) return { success: true };
+    await grpcCall(
+      this.liveService.recordToolUsage(
+        { room_id: body.roomId, tool: String(body.tool) },
+        userIdMetadata(req.user.userId)
+      )
+    );
+    return { success: true };
   }
 
   @Get('downloadRecording/:id')

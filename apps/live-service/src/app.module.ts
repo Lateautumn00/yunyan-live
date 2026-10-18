@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   BoardSnapshot,
+  BoardToolUsage,
   CheckinRecord,
   CheckinSession,
   Courseware,
@@ -34,6 +35,7 @@ import { LiveModule } from './live/live.module';
           UserWatchTime,
           Courseware,
           BoardSnapshot,
+          BoardToolUsage,
           CheckinSession,
           CheckinRecord
         ],

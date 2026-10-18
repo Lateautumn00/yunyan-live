@@ -49,6 +49,19 @@ CREATE TABLE public.board_snapshots (
 
 
 --
+-- Name: board_tool_usage; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.board_tool_usage (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    "roomId" character varying(50) NOT NULL,
+    "userId" character varying(50) NOT NULL,
+    tool character varying(40) NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: chat_messages; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -280,6 +293,14 @@ ALTER TABLE ONLY public.live_rooms
 
 
 --
+-- Name: board_tool_usage board_tool_usage_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.board_tool_usage
+    ADD CONSTRAINT board_tool_usage_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: chat_messages chat_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -362,6 +383,13 @@ CREATE INDEX "IDX_checkin_sessions_room_started" ON public.checkin_sessions USIN
 --
 
 CREATE UNIQUE INDEX "UQ_checkin_records_session_user" ON public.checkin_records USING btree ("sessionId", "userId");
+
+
+--
+-- Name: idx_board_tool_usage_room_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_board_tool_usage_room_created ON public.board_tool_usage USING btree ("roomId", "createdAt");
 
 
 --

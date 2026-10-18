@@ -893,6 +893,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import Konva from 'konva';
 import { debounce, formatFileSize, frameThrottle, throttle, uid } from '@yunyan-live/utils';
+import { reportToolUsage } from '@/utils/toolUsage';
 import { YjsProvider } from './whiteboard/YjsProvider';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { uploadPptFile, loadPptMeta, importPptPages, type PptMeta } from './whiteboard/pptImport';
@@ -2485,6 +2486,8 @@ function setMode(type: ToolMode) {
   renderer?.setSelectMode(type === 'cur' && props.isTeacher);
   // toolState.type 的唯一写点：工具态同步随模式切换收口（含 laser/file 等旁路）
   provider?.setToolState({ type });
+  // F1 附带埋点：全部工具切换的唯一收口（fire-and-forget，F12 触发条件数据源）
+  reportToolUsage(props.roomId, type);
 }
 
 // 激光笔：仅教师。点选进入（红点跟指），切走/Esc 熄灭（awareness 瞬时广播，学生端只见红点）

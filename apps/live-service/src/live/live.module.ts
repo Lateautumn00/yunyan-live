@@ -9,7 +9,8 @@ import {
   LiveRoom,
   LiveTransferCode,
   UserWatchTime,
-  VideoRecording
+  VideoRecording,
+  BoardToolUsage
 } from '@yunyan-live/shared';
 import { LiveController } from './live.controller';
 import { LiveService } from './live.service';
@@ -26,7 +27,8 @@ import { CheckinService } from './checkin.service';
       Courseware,
       BoardSnapshot,
       CheckinSession,
-      CheckinRecord
+      CheckinRecord,
+      BoardToolUsage
     ])
   ],
   controllers: [LiveController],

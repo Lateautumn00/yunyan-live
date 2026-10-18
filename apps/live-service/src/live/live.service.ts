@@ -5,6 +5,7 @@ import { decodeCursor, grpcError, normalizePageQuery } from '@yunyan-live/nest-s
 import { status as GrpcStatus } from '@grpc/grpc-js';
 import {
   BoardSnapshot,
+  BoardToolUsage,
   Courseware,
   LiveParticipant,
   LiveRoom,
@@ -36,6 +37,8 @@ export class LiveService {
     private coursewareRepo: Repository<Courseware>,
     @InjectRepository(BoardSnapshot)
     private boardSnapshotRepo: Repository<BoardSnapshot>,
+    @InjectRepository(BoardToolUsage)
+    private boardToolUsageRepo: Repository<BoardToolUsage>,
     private dataSource: DataSource,
     private janusService: JanusService
   ) {}
@@ -835,5 +838,76 @@ export class LiveService {
       total: Number(agg.total ?? 0),
       totalTime: Number(agg.total_time ?? 0)
     };
+  }
+
+  // F1：教师数据统计（口径见台账 GAP-F1）。
+  // 总观看人数 = 去重 userId；总直播时长 = Σ(left−joined)，left_at NULL 计至统计时刻；
+  // 断线重连 = 多条不重叠区间，DISTINCT/SUM 天然不重复累加；日期范围同时作用于卡片与 series；
+  // 教师仅见本人场次（r."liveUserId" = $1，身份来自 gRPC metadata）。
+  async getTeacherStatistics(userId: string, startTime?: string, endTime?: string) {
+    const params: unknown[] = [userId];
+    const add = (v: unknown) => {
+      params.push(v);
+      return `$${params.length}`;
+    };
+    const dateFilters: string[] = [];
+    if (startTime) dateFilters.push(`w.joined_at >= ${add(new Date(Number(startTime)))}`);
+    if (endTime) dateFilters.push(`w.joined_at <= ${add(new Date(Number(endTime)))}`);
+    const where = `WHERE r."liveUserId" = $1${
+      dateFilters.length ? ' AND ' + dateFilters.join(' AND ') : ''
+    }`;
+    const durationExpr = `CASE WHEN w.left_at IS NULL
+                 THEN floor(EXTRACT(EPOCH FROM (now() - w.joined_at)))
+                 ELSE floor(EXTRACT(EPOCH FROM (w.left_at - w.joined_at)))
+               END`;
+    const from = `
+      FROM user_watch_times w
+      JOIN live_rooms r ON r."roomId" = w.room_id AND r."deletedAt" IS NULL
+      ${where}`;
+
+    const cardsSql = `
+      SELECT COUNT(DISTINCT w.user_id)::int AS total_viewers,
+             COUNT(DISTINCT w.room_id)::int AS total_rooms,
+             COUNT(*)::int AS row_count,
+             COALESCE(SUM(${durationExpr}), 0)::bigint AS total_seconds
+      ${from}`;
+    const seriesSql = `
+      SELECT to_char(w.joined_at AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD') AS date,
+             COALESCE(SUM(${durationExpr}), 0)::bigint AS seconds,
+             COUNT(*)::int AS person_times,
+             COUNT(DISTINCT w.user_id)::int AS viewers
+      ${from}
+      GROUP BY 1
+      ORDER BY 1`;
+
+    const [cardRows, seriesRows] = await Promise.all([
+      this.dataSource.manager.query(cardsSql, params),
+      this.dataSource.manager.query(seriesSql, params)
+    ]);
+    const c = ((cardRows ?? []) as Record<string, unknown>[])[0] ?? {};
+    return {
+      totalViewers: Number(c.total_viewers ?? 0),
+      totalSeconds: Number(c.total_seconds ?? 0),
+      totalRooms: Number(c.total_rooms ?? 0),
+      hasData: Number(c.row_count ?? 0) > 0,
+      series: ((seriesRows ?? []) as Record<string, unknown>[]).map(r => ({
+        date: r.date as string,
+        seconds: Number(r.seconds ?? 0),
+        personTimes: Number(r.person_times ?? 0),
+        viewers: Number(r.viewers ?? 0)
+      }))
+    };
+  }
+
+  // F1 附带埋点：白板工具切换落库（F12 触发条件数据源；fire-and-forget 由调用侧兜底）
+  async recordToolUsage(userId: string, roomId: string, tool: string) {
+    await this.boardToolUsageRepo.insert({
+      roomId,
+      userId,
+      tool: String(tool || '')
+        .trim()
+        .slice(0, 40)
+    });
+    return { success: true };
   }
 } // class LiveService

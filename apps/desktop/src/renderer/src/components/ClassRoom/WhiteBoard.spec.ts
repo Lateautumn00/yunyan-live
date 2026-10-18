@@ -488,7 +488,8 @@ vi.mock('@/api/backstage', () => ({
   default: {
     save_courseware: (params: unknown) => liveMocks.saveCourseware(params),
     courseware_list: (params: unknown) => liveMocks.coursewareList(params),
-    delete_courseware: (params: unknown) => liveMocks.deleteCourseware(params)
+    delete_courseware: (params: unknown) => liveMocks.deleteCourseware(params),
+    track_tool_usage: vi.fn(() => Promise.resolve({}))
   }
 }));
 

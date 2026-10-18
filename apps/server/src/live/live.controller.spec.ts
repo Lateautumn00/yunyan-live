@@ -188,6 +188,31 @@ function createController() {
           }
         })
     ),
+    getTeacherStatistics: vi.fn(
+      (): Observable<{
+        code: string;
+        msg: string;
+        data?: {
+          total_viewers: number;
+          total_seconds: number;
+          total_rooms: number;
+          has_data: boolean;
+          series: Array<Record<string, unknown>>;
+        };
+      }> =>
+        of({
+          code: '0',
+          msg: 'ok',
+          data: {
+            total_viewers: 2,
+            total_seconds: 600,
+            total_rooms: 1,
+            has_data: true,
+            series: [{ date: '2026-10-18', seconds: 600, person_times: 3, viewers: 2 }]
+          }
+        })
+    ),
+    recordToolUsage: vi.fn(() => of({ code: '0', msg: 'success' })),
     saveCourseware: vi.fn(() => of({ code: '0', msg: 'ok' })),
     listCourseware: vi.fn(
       (): Observable<{
@@ -1165,5 +1190,86 @@ describe('S4 房间归属 + RBAC 权限矩阵（补偿控制，域层下沉待 S
     const fn = LiveController.prototype.updateLive as unknown as () => void;
     // Roles() 与 RolesGuard 共用 'roles' 键（spec 直接断言键值防口径漂移）
     expect(Reflect.getMetadata('roles', fn)).toEqual([1]);
+  });
+});
+
+describe('F1 教师统计（S11① 越权/隔离）+ 白板工具埋点', () => {
+  const reqOf = (userId: string, role?: number) => ({ user: { userId, role } });
+
+  it('statistics 挂载 JwtAuthGuard+RolesGuard+@Roles(教师)（S11① 签批：学生不得入）', () => {
+    const fn = LiveController.prototype.getStatistics as unknown as () => void;
+    const guards = Reflect.getMetadata('__guards__', fn);
+    expect(guards).toEqual(expect.arrayContaining([JwtAuthGuard, RolesGuard]));
+    expect(Reflect.getMetadata('roles', fn)).toEqual([1]);
+    expect(Reflect.getMetadata('roles', fn)).not.toContain(2);
+  });
+
+  it('RolesGuard 真逻辑：statistics 对 role=2/缺省拒绝，role=1 放行', async () => {
+    const { RolesGuard: RG } = await import('@yunyan-live/nest-shared');
+    const guard = new RG();
+    const handler = LiveController.prototype.getStatistics;
+    const ctx = (role?: number) =>
+      ({
+        getHandler: () => handler,
+        switchToHttp: () => ({ getRequest: () => ({ user: { userId: 'u1', role } }) })
+      }) as never;
+    expect(guard.canActivate(ctx(2))).toBe(false);
+    expect(guard.canActivate(ctx(undefined))).toBe(false);
+    expect(guard.canActivate(ctx(1))).toBe(true);
+  });
+
+  it('statistics：身份只信 req.user（metadata user-id），body 只有时间范围（无他人场次入口）', async () => {
+    const { controller, liveService } = createController();
+    const res = await controller.getStatistics(
+      { startTime: '1704067200000', endTime: '1704672000000' },
+      reqOf('t1', 1)
+    );
+    expect(liveService.getTeacherStatistics).toHaveBeenCalledWith(
+      { start_time: '1704067200000', end_time: '1704672000000' },
+      expect.any(Metadata)
+    );
+    expect(res).toEqual({
+      totalViewers: 2,
+      totalSeconds: 600,
+      totalRooms: 1,
+      hasData: true,
+      series: [{ date: '2026-10-18', seconds: 600, personTimes: 3, viewers: 2 }]
+    });
+  });
+
+  it('statistics：缺省时间透传空串；空数据映射空态', async () => {
+    const { controller, liveService } = createController();
+    liveService.getTeacherStatistics.mockReturnValueOnce(
+      of({
+        code: '0',
+        msg: 'ok',
+        data: { total_viewers: 0, total_seconds: 0, total_rooms: 0, has_data: false, series: [] }
+      })
+    );
+    const res = await controller.getStatistics({}, reqOf('t1', 1));
+    expect(liveService.getTeacherStatistics).toHaveBeenCalledWith(
+      { start_time: '', end_time: '' },
+      expect.any(Metadata)
+    );
+    expect(res).toEqual({
+      totalViewers: 0,
+      totalSeconds: 0,
+      totalRooms: 0,
+      hasData: false,
+      series: []
+    });
+  });
+
+  it('trackToolUsage：参数缺失直接吞掉不发 gRPC；正常带 metadata 透传', async () => {
+    const { controller, liveService } = createController();
+    await controller.trackToolUsage({}, reqOf('u1', 2));
+    await controller.trackToolUsage({ roomId: 'r1' }, reqOf('u1', 2));
+    expect(liveService.recordToolUsage).not.toHaveBeenCalled();
+    const res = await controller.trackToolUsage({ roomId: 'r1', tool: 'pen' }, reqOf('u1', 2));
+    expect(liveService.recordToolUsage).toHaveBeenCalledWith(
+      { room_id: 'r1', tool: 'pen' },
+      expect.any(Metadata)
+    );
+    expect(res).toEqual({ success: true });
   });
 });

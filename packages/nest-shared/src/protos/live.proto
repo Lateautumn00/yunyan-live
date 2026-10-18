@@ -38,6 +38,8 @@ service LiveService {
   rpc GetCheckinState (GetCheckinStateRequest) returns (GetCheckinStateResponse) {}
   rpc ListCheckinSessions (ListCheckinSessionsRequest) returns (ListCheckinSessionsResponse) {}
   rpc GetCheckinRecords (GetCheckinRecordsRequest) returns (GetCheckinRecordsResponse) {}
+  rpc GetTeacherStatistics (GetTeacherStatisticsRequest) returns (GetTeacherStatisticsResponse) {}
+  rpc RecordToolUsage (RecordToolUsageRequest) returns (CommonResponse) {}
 }
 
 message CreateLiveRequest {
@@ -542,4 +544,35 @@ message GetCheckinRecordsResponse {
   string code = 1;
   string msg = 2;
   GetCheckinRecordsData data = 3;
+}
+
+message GetTeacherStatisticsRequest {
+  string start_time = 1;
+  string end_time = 2;
+}
+
+message StatisticsDayPoint {
+  string date = 1;
+  int64 seconds = 2;
+  int32 person_times = 3;
+  int32 viewers = 4;
+}
+
+message GetTeacherStatisticsData {
+  int64 total_viewers = 1;
+  int64 total_seconds = 2;
+  int32 total_rooms = 3;
+  bool has_data = 4;
+  repeated StatisticsDayPoint series = 5;
+}
+
+message GetTeacherStatisticsResponse {
+  string code = 1;
+  string msg = 2;
+  GetTeacherStatisticsData data = 3;
+}
+
+message RecordToolUsageRequest {
+  string room_id = 1;
+  string tool = 2;
 }
