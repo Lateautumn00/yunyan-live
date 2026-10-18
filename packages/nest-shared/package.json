@@ -67,6 +67,7 @@
     "@nestjs/microservices": "^10.4.22",
     "@nestjs/passport": "^10.0.0",
     "@yunyan-live/types": "workspace:*",
+    "amqplib": "^2.0.1",
     "class-transformer": "^0.5.0",
     "class-validator": "^0.14.0",
     "ioredis": "^6.0.0",
@@ -76,6 +77,7 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
+    "@types/amqplib": "^0.10.8",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.0.0",

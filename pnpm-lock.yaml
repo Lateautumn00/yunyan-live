@@ -341,6 +341,9 @@ importers:
       '@yunyan-live/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      amqplib:
+        specifier: ^2.0.1
+        version: 2.0.1
       axios:
         specifier: ^1.0.0
         version: 1.19.0
@@ -363,6 +366,9 @@ importers:
       '@nestjs/cli':
         specifier: ^10.0.0
         version: 10.4.9
+      '@types/amqplib':
+        specifier: ^0.10.8
+        version: 0.10.8
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.1
@@ -619,6 +625,9 @@ importers:
       '@yunyan-live/types':
         specifier: workspace:*
         version: link:../types
+      amqplib:
+        specifier: ^2.0.1
+        version: 2.0.1
       class-transformer:
         specifier: ^0.5.0
         version: 0.5.1
@@ -641,6 +650,9 @@ importers:
         specifier: ^7.8.2
         version: 7.8.2
     devDependencies:
+      '@types/amqplib':
+        specifier: ^0.10.8
+        version: 0.10.8
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25

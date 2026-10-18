@@ -23,6 +23,8 @@ export interface ServiceMetrics {
   chatOnlineConnections: Gauge<string>;
   /** chat-ws 队列深度 {queue=work|dlq}；persistence 关闭时 series 不出现 */
   chatQueueDepth: Gauge<'queue'>;
+  /** live-service 审计队列深度 {queue=work|dlq}；S12 consumer 未启动时 series 不出现 */
+  auditQueueDepth: Gauge<'queue'>;
 }
 
 export function createServiceMetrics(service: string): ServiceMetrics {
@@ -52,13 +54,20 @@ export function createServiceMetrics(service: string): ServiceMetrics {
     labelNames: ['queue'],
     registers: [registry]
   });
+  const auditQueueDepth = new Gauge({
+    name: 'yunyan_audit_queue_depth',
+    help: 'Current RabbitMQ audit queue depth reported by live-service (queue=work|dlq)',
+    labelNames: ['queue'],
+    registers: [registry]
+  });
   return {
     service,
     registry,
     httpRequests,
     grpcRequests,
     chatOnlineConnections,
-    chatQueueDepth
+    chatQueueDepth,
+    auditQueueDepth
   };
 }
 

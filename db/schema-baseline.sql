@@ -29,9 +29,54 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
 
 
+--
+-- Name: audit_logs_immutable(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.audit_logs_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'audit_logs is append-only (S12): % is not allowed', TG_OP;
+END;
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
+
+--
+-- Name: audit_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.audit_logs (
+    id bigint NOT NULL,
+    occurred_at timestamp with time zone DEFAULT now() NOT NULL,
+    event_id uuid NOT NULL,
+    actor character varying(100) NOT NULL,
+    action character varying(100) NOT NULL,
+    target_type character varying(50),
+    target_id character varying(100),
+    request_id character varying(64),
+    ip character varying(45),
+    detail jsonb DEFAULT '{}'::jsonb NOT NULL
+);
+
+
+--
+-- Name: audit_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.audit_logs ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.audit_logs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
 
 --
 -- Name: board_snapshots; Type: TABLE; Schema: public; Owner: -
@@ -293,6 +338,22 @@ ALTER TABLE ONLY public.live_rooms
 
 
 --
+-- Name: audit_logs audit_logs_event_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.audit_logs
+    ADD CONSTRAINT audit_logs_event_id_key UNIQUE (event_id);
+
+
+--
+-- Name: audit_logs audit_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.audit_logs
+    ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id, occurred_at);
+
+
+--
 -- Name: board_tool_usage board_tool_usage_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -439,6 +500,13 @@ CREATE INDEX idx_video_recordings_room_created ON public.video_recordings USING 
 --
 
 CREATE UNIQUE INDEX uq_chat_messages_msg_id ON public.chat_messages USING btree (msg_id);
+
+
+--
+-- Name: audit_logs trg_audit_logs_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_audit_logs_immutable BEFORE DELETE OR UPDATE ON public.audit_logs FOR EACH ROW EXECUTE FUNCTION public.audit_logs_immutable();
 
 
 --

@@ -273,9 +273,10 @@ function createController() {
   };
   const liveClient = { getService: vi.fn(() => liveService) };
   const authClient = { getService: vi.fn(() => authService) };
-  const controller = new LiveController(liveClient as never, authClient as never);
+  const audit = { publish: vi.fn() };
+  const controller = new LiveController(liveClient as never, authClient as never, audit as never);
   controller.onModuleInit();
-  return { controller, liveService, authService, liveClient, authClient };
+  return { controller, liveService, authService, liveClient, authClient, audit };
 }
 
 function roomPayload() {
@@ -607,10 +608,18 @@ describe('LiveController cmsList / getStudentRooms', () => {
 
 describe('LiveController delete / updateCode / leave', () => {
   it('delete 返回文档约定的中文 msg', async () => {
-    const { controller, liveService } = createController();
+    const { controller, liveService, audit } = createController();
     const res = await controller.delete('r1', req('t1', 1));
     expect(liveService.deleteLive).toHaveBeenCalledWith({ room_id: 'r1' }, expect.any(Metadata));
     expect(res).toEqual({ msg: '删除成功' });
+    expect(audit.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 't1',
+        action: 'live.delete',
+        targetType: 'room',
+        targetId: 'r1'
+      })
+    );
   });
 
   it('updateCode 返回裸 join_code 字符串且忽略 operateType', async () => {
@@ -733,7 +742,7 @@ describe('LiveController video list / detail / delete', () => {
   });
 
   it('deleteVideo 两个入口透传 id 数组', async () => {
-    const { controller, liveService } = createController();
+    const { controller, liveService, audit } = createController();
     await controller.deleteVideoByRoomIds(['r1', 'r2'], req('t1', 1));
     expect(liveService.deleteVideoByRoomIds).toHaveBeenCalledWith(
       { room_ids: ['r1', 'r2'] },
@@ -745,6 +754,13 @@ describe('LiveController video list / detail / delete', () => {
       { video_ids: ['v1'] },
       expect.any(Metadata)
     );
+    // S12：房间删录制逐房记账，视频 id 删逐 id 记账
+    const auditEvents = audit.publish.mock.calls.map(c => c[0] as Record<string, unknown>);
+    expect(auditEvents.map(e => [e.action, e.targetType, e.targetId])).toEqual([
+      ['video.delete_rooms', 'room', 'r1'],
+      ['video.delete_rooms', 'room', 'r2'],
+      ['video.delete_ids', 'video', 'v1']
+    ]);
   });
 });
 
@@ -805,10 +821,18 @@ describe('LiveController courseware', () => {
   });
 
   it('deleteCourseware 透传 id', async () => {
-    const { controller, liveService } = createController();
+    const { controller, liveService, audit } = createController();
     await controller.deleteCourseware('c1', req('t1', 1));
     expect(liveService.getCoursewareRoom).toHaveBeenCalledWith({ id: 'c1' });
     expect(liveService.deleteCourseware).toHaveBeenCalledWith({ id: 'c1' }, expect.any(Metadata));
+    expect(audit.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 't1',
+        action: 'courseware.delete',
+        targetType: 'courseware',
+        targetId: 'c1'
+      })
+    );
   });
 });
 

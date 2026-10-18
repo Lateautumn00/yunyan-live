@@ -36,6 +36,7 @@
 | `yunyan_grpc_requests_total`     | Counter | rpc, code             | auth-service, live-service | gRPC 错误告警                                                             |
 | `yunyan_chat_online_connections` | Gauge   | —                     | chat-ws-service            | ws 在线数告警（scrape 时实时求和 `rooms`）                                |
 | `yunyan_chat_queue_depth`        | Gauge   | queue                 | chat-ws-service            | 队列/DLQ 深度告警（depth monitor 30s 采样写入，复用 §4.8 轮询零新增查询） |
+| `yunyan_audit_queue_depth`       | Gauge   | queue                 | live-service               | S12 审计队列/DLQ 深度（consumer 30s 采样；dlq>0 即 error 日志）           |
 | `process_*` / `nodejs_*`         | 默认集  | —                     | 全部 4 服务                | `collectDefaultMetrics`（CPU/内存/句柄/启动时间）                         |
 
 **实现位置**：共享模块 `packages/nest-shared/src/metrics.ts`

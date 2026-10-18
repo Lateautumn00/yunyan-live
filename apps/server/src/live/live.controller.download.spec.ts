@@ -74,12 +74,14 @@ function createController() {
       })
     )
   };
+  const audit = { publish: vi.fn() };
   const controller = new LiveController(
     { getService: vi.fn(() => liveService) } as never,
-    { getService: vi.fn(() => ({})) } as never
+    { getService: vi.fn(() => ({})) } as never,
+    audit as never
   );
   controller.onModuleInit();
-  return { controller, liveService };
+  return { controller, liveService, audit };
 }
 
 const reqRole = (userId: string, role: number) => ({ user: { userId, role } });
@@ -140,7 +142,7 @@ describe('downloadRecording 状态探测', () => {
   it('download=true 且 mp4 就绪时设置响应头并流式输出', async () => {
     h.present.add(videoMjr('1'));
     h.present.add(mp4('1'));
-    const { controller } = createController();
+    const { controller, audit } = createController();
     const res = createRes();
     await controller.downloadRecording('1', 'true', res as unknown as Response, reqRole('t1', 1));
     expect(res.set).toHaveBeenCalledWith({
@@ -152,6 +154,16 @@ describe('downloadRecording 状态探测', () => {
     expect(h.piped).toEqual([res]);
     expect(res.json).not.toHaveBeenCalled();
     expect(h.spawns).toHaveLength(0);
+    // S12：导出记录点（真实下载流，detail 只留 roomId/bytes）
+    expect(audit.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 't1',
+        action: 'recording.export',
+        targetType: 'recording',
+        targetId: '1',
+        detail: { roomId: 'r1', bytes: 4096 }
+      })
+    );
   });
 
   it('非 download 且 mp4 已就绪返回转码完成', async () => {

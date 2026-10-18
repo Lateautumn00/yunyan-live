@@ -25,6 +25,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { grpcCall } from '../common/helpers/grpc.helper';
 import {
+  AUDIT_ACTIONS,
+  AUDIT_PUBLISHER,
   ChangeStatusDto,
   CreateCoursewareDto,
   CreateLiveDto,
@@ -35,7 +37,8 @@ import {
   RolesGuard,
   toGrpcPage,
   UpdateLiveDto,
-  userIdMetadata
+  userIdMetadata,
+  type AuditPublisher
 } from '@yunyan-live/nest-shared';
 
 /** 与 push.controller 口径一致：1 = 教师 */
@@ -371,7 +374,8 @@ export class LiveController implements OnModuleInit {
 
   constructor(
     @Inject('LIVE_GRPC') private liveClient: ClientGrpc,
-    @Inject('AUTH_GRPC') private authClient: ClientGrpc
+    @Inject('AUTH_GRPC') private authClient: ClientGrpc,
+    @Inject(AUDIT_PUBLISHER) private audit: AuditPublisher
   ) {}
 
   private liveService: LiveServiceClient;
@@ -598,13 +602,22 @@ export class LiveController implements OnModuleInit {
   @Roles(TEACHER_ROLE)
   async delete(
     @Body('roomId') roomId: string,
-    @Request() req: { user: { userId: string; role?: number } }
+    @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
   ) {
     // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
     await this.assertRoomTeacher(req.user, roomId);
     await grpcCall(
       this.liveService.deleteLive({ room_id: roomId }, userIdMetadata(req.user.userId))
     );
+    // S12：删除记录点
+    this.audit.publish({
+      actor: req.user.userId,
+      action: AUDIT_ACTIONS.DELETE_LIVE,
+      targetType: 'room',
+      targetId: roomId,
+      requestId: req.requestId,
+      ip: req.ip
+    });
     return { msg: '删除成功' };
   }
 
@@ -781,15 +794,27 @@ export class LiveController implements OnModuleInit {
   @Roles(TEACHER_ROLE)
   async deleteVideoByRoomIds(
     @Body('roomIds') roomIds: string[],
-    @Request() req: { user: { userId: string; role?: number } }
+    @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
   ) {
     // S4 补偿控制：逐房间归属断言（域层下沉待 S10b）
     for (const roomId of roomIds) {
       await this.assertRoomTeacher(req.user, roomId);
     }
-    return grpcCall(
+    const result = await grpcCall(
       this.liveService.deleteVideoByRoomIds({ room_ids: roomIds }, userIdMetadata(req.user.userId))
     );
+    // S12：删除记录点（多房间逐条记，detail 只留 id 列表）
+    for (const roomId of roomIds) {
+      this.audit.publish({
+        actor: req.user.userId,
+        action: AUDIT_ACTIONS.DELETE_VIDEO_ROOMS,
+        targetType: 'room',
+        targetId: roomId,
+        requestId: req.requestId,
+        ip: req.ip
+      });
+    }
+    return result;
   }
 
   @Delete('deleteVideoByIds')
@@ -797,7 +822,7 @@ export class LiveController implements OnModuleInit {
   @Roles(TEACHER_ROLE)
   async deleteVideoByVideoIds(
     @Body('videoIds') videoIds: string[],
-    @Request() req: { user: { userId: string; role?: number } }
+    @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
   ) {
     // S4 补偿控制：video→room 映射后逐房归属断言（映射不存在的 id 跳过＝删除幂等）
     const map = await grpcCall(this.liveService.getVideoRoomMap({ video_ids: videoIds }));
@@ -805,12 +830,24 @@ export class LiveController implements OnModuleInit {
     for (const roomId of roomIds) {
       await this.assertRoomTeacher(req.user, roomId);
     }
-    return grpcCall(
+    const result = await grpcCall(
       this.liveService.deleteVideoByVideoIds(
         { video_ids: videoIds },
         userIdMetadata(req.user.userId)
       )
     );
+    // S12：删除记录点
+    for (const videoId of videoIds) {
+      this.audit.publish({
+        actor: req.user.userId,
+        action: AUDIT_ACTIONS.DELETE_VIDEO_IDS,
+        targetType: 'video',
+        targetId: videoId,
+        requestId: req.requestId,
+        ip: req.ip
+      });
+    }
+    return result;
   }
 
   @Post('saveCourseware')
@@ -862,12 +899,24 @@ export class LiveController implements OnModuleInit {
   @Roles(TEACHER_ROLE)
   async deleteCourseware(
     @Body('id') id: string,
-    @Request() req: { user: { userId: string; role?: number } }
+    @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
   ) {
     // S4 补偿控制：courseware→room 映射后归属断言（域层下沉待 S10b）
     const room = await grpcCall(this.liveService.getCoursewareRoom({ id }));
     await this.assertRoomTeacher(req.user, room.data.room_id);
-    return grpcCall(this.liveService.deleteCourseware({ id }, userIdMetadata(req.user.userId)));
+    const result = await grpcCall(
+      this.liveService.deleteCourseware({ id }, userIdMetadata(req.user.userId))
+    );
+    // S12：删除记录点
+    this.audit.publish({
+      actor: req.user.userId,
+      action: AUDIT_ACTIONS.DELETE_COURSEWARE,
+      targetType: 'courseware',
+      targetId: id,
+      requestId: req.requestId,
+      ip: req.ip
+    });
+    return result;
   }
 
   @Post('boardSnapshot')
@@ -1064,7 +1113,7 @@ export class LiveController implements OnModuleInit {
     @Param('id') id: string,
     @Query('download') download: string,
     @Res() res: Response,
-    @Request() req: { user: { userId: string; role?: number } }
+    @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
   ) {
     // S8 安全白名单：录制 id 由 Math.random().toString(36) 生成（[a-z0-9]），
     // 拒绝路径穿越（. / \）与命令注入元字符；后续全部路径拼接与 docker exec 均以此为前提
@@ -1095,6 +1144,16 @@ export class LiveController implements OnModuleInit {
         return res.json({ code: 2002, msg: '转码中，请稍后' });
       }
       const stat = fs.statSync(mp4Path);
+      // S12：导出记录点（真实下载流开始前打点；转码轮询 download=false 不记）
+      this.audit.publish({
+        actor: req.user.userId,
+        action: AUDIT_ACTIONS.EXPORT_RECORDING,
+        targetType: 'recording',
+        targetId: id,
+        requestId: req.requestId,
+        ip: req.ip,
+        detail: { roomId: recRoomId ?? '', bytes: stat.size }
+      });
       res.set({
         'Content-Type': 'video/mp4',
         'Content-Length': stat.size.toString(),

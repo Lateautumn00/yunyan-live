@@ -37,18 +37,31 @@ function createController() {
     sign: vi.fn(() => 'signed.token')
   };
   const session = {
-    createSession: vi.fn(async () => ({ sid: 'SID1', oldSid: null })),
+    createSession: vi.fn(async (): Promise<{ sid: string; oldSid: string | null }> => ({
+      sid: 'SID1',
+      oldSid: null
+    })),
     removeSession: vi.fn(async () => undefined),
     revokeAllSessions: vi.fn(async () => undefined),
     touchSession: vi.fn(async () => undefined)
   };
-  const controller = new AuthController(authClient as never, jwt as never, session as never);
+  const audit = { publish: vi.fn() };
+  const controller = new AuthController(
+    authClient as never,
+    jwt as never,
+    session as never,
+    audit as never
+  );
   controller.onModuleInit();
-  return { controller, authService, authClient, jwt, session };
+  return { controller, authService, authClient, jwt, session, audit };
 }
 
 function loginDto() {
   return Object.assign(new LoginDto(), { email: 'a@b.com', password: 'p' });
+}
+
+function reqCtx() {
+  return { requestId: 'req-test', ip: '127.0.0.1' };
 }
 
 beforeAll(() => {
@@ -74,7 +87,7 @@ describe('AuthController.login', () => {
     );
     jwt.decode.mockReturnValueOnce({ sub: 'u1', email: 'a@b.com', role: 3 });
 
-    const res = await controller.login(loginDto());
+    const res = await controller.login(loginDto(), reqCtx());
 
     expect(authService.login).toHaveBeenCalledWith({ email: 'a@b.com', password: 'p' });
     expect(session.createSession).toHaveBeenCalledWith('g1');
@@ -92,7 +105,7 @@ describe('AuthController.login', () => {
     const { controller, jwt, session } = createController();
     jwt.decode.mockReturnValueOnce(null);
 
-    await controller.login(loginDto());
+    await controller.login(loginDto(), reqCtx());
 
     expect(session.createSession).toHaveBeenCalledWith('g1');
     expect(jwt.sign).toHaveBeenCalledWith({
@@ -110,7 +123,7 @@ describe('AuthController.login', () => {
     );
     jwt.decode.mockReturnValueOnce(null);
 
-    await controller.login(loginDto());
+    await controller.login(loginDto(), reqCtx());
 
     expect(jwt.sign).toHaveBeenCalledWith(expect.objectContaining({ sub: 'g1', role: 5 }));
   });
@@ -118,7 +131,7 @@ describe('AuthController.login', () => {
   it('gRPC 登录失败时不创建会话', async () => {
     const { controller, authService, session } = createController();
     authService.login.mockReturnValueOnce(throwError(() => ({ code: 5, details: '用户不存在' })));
-    await expect(controller.login(loginDto())).rejects.toThrow('用户不存在');
+    await expect(controller.login(loginDto(), reqCtx())).rejects.toThrow('用户不存在');
     expect(session.createSession).not.toHaveBeenCalled();
   });
 });
@@ -163,7 +176,7 @@ describe('AuthController.register / resetPassword / updateUserName', () => {
       code: '123456',
       password: 'np'
     });
-    await controller.resetPassword(dto);
+    await controller.resetPassword(dto, reqCtx());
     expect(authService.resetPassword).toHaveBeenCalledWith(dto);
   });
 
@@ -175,7 +188,7 @@ describe('AuthController.register / resetPassword / updateUserName', () => {
       code: '123456',
       password: 'np'
     });
-    await controller.resetPassword(dto);
+    await controller.resetPassword(dto, reqCtx());
     expect(session.revokeAllSessions).toHaveBeenCalledWith('g9');
   });
 
@@ -186,7 +199,7 @@ describe('AuthController.register / resetPassword / updateUserName', () => {
       code: '123456',
       password: 'np'
     });
-    await controller.resetPassword(dto);
+    await controller.resetPassword(dto, reqCtx());
     expect(session.revokeAllSessions).not.toHaveBeenCalled();
   });
 
@@ -239,7 +252,7 @@ describe('AuthController.changePassword', () => {
   });
 
   it('changePassword gRPC 失败时不吊销会话', async () => {
-    const { controller, authService, session } = createController();
+    const { controller, authService, session, audit } = createController();
     authService.changePassword.mockReturnValueOnce(
       throwError(() => ({ code: 16, details: '旧密码错误' }))
     );
@@ -248,6 +261,114 @@ describe('AuthController.changePassword', () => {
       '旧密码错误'
     );
     expect(session.revokeAllSessions).not.toHaveBeenCalled();
+    expect(audit.publish).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'user.change_password' })
+    );
+  });
+});
+
+describe('S12 审计打点（登录/踢人/改密/重置）', () => {
+  it('登录成功发 auth.login.ok（actor=guid，携带 requestId/ip）', async () => {
+    const { controller, audit } = createController();
+    await controller.login(loginDto(), reqCtx());
+    expect(audit.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 'g1',
+        action: 'auth.login.ok',
+        targetType: 'user',
+        targetId: 'g1',
+        requestId: 'req-test',
+        ip: '127.0.0.1'
+      })
+    );
+  });
+
+  it('旧会话被顶掉时补发 session.kick（reason=replaced_by_login）', async () => {
+    const { controller, audit, session } = createController();
+    session.createSession.mockResolvedValueOnce({ sid: 'S2', oldSid: 'OLD' });
+    await controller.login(loginDto(), reqCtx());
+    const actions = audit.publish.mock.calls.map(c => (c[0] as { action: string }).action);
+    expect(actions).toEqual(['auth.login.ok', 'session.kick']);
+    expect(audit.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'session.kick',
+        targetId: 'g1',
+        detail: { reason: 'replaced_by_login' }
+      })
+    );
+  });
+
+  it('登录失败发 auth.login.failed，detail 只含分类与状态码（无凭据）', async () => {
+    const { controller, authService, audit } = createController();
+    authService.login.mockReturnValueOnce(throwError(() => ({ code: 5, details: '用户不存在' })));
+    await expect(controller.login(loginDto(), reqCtx())).rejects.toThrow('用户不存在');
+    expect(audit.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 'a@b.com',
+        action: 'auth.login.failed',
+        requestId: 'req-test',
+        detail: expect.objectContaining({ reason: 'rejected', status: 404 })
+      })
+    );
+    const detail = (audit.publish.mock.calls[0]?.[0] as { detail: Record<string, unknown> }).detail;
+    expect(Object.keys(detail)).toEqual(['reason', 'status']);
+    expect(detail).not.toHaveProperty('password');
+    expect(detail).not.toHaveProperty('token');
+  });
+
+  it('resetPassword 成功发 user.reset_password 且 sessionsRevoked=true', async () => {
+    const { controller, authService, audit } = createController();
+    authService.resetPassword.mockReturnValueOnce(of({ code: '0', msg: 'ok', guid: 'g9' }));
+    const dto = Object.assign(new ResetPasswordDto(), {
+      email: 'a@b.com',
+      code: '123456',
+      password: 'np'
+    });
+    await controller.resetPassword(dto, reqCtx());
+    expect(audit.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 'g9',
+        action: 'user.reset_password',
+        targetId: 'g9',
+        detail: { sessionsRevoked: true }
+      })
+    );
+  });
+
+  it('resetPassword 无 guid（旧 auth-service）时 sessionsRevoked=false', async () => {
+    const { controller, audit } = createController();
+    const dto = Object.assign(new ResetPasswordDto(), {
+      email: 'a@b.com',
+      code: '123456',
+      password: 'np'
+    });
+    await controller.resetPassword(dto, reqCtx());
+    expect(audit.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.reset_password',
+        actor: 'a@b.com',
+        detail: { sessionsRevoked: false }
+      })
+    );
+  });
+
+  it('changePassword 成功发 user.change_password 且 sessionsRevoked=true', async () => {
+    const { controller, authService, audit } = createController();
+    authService.changePassword.mockReturnValueOnce(of({ code: '0', msg: 'ok' }));
+    const dto = Object.assign(new ChangePasswordDto(), { oldPassword: 'old', password: 'new' });
+    await controller.changePassword(dto, {
+      user: { userId: 'u1' },
+      ...reqCtx()
+    });
+    expect(audit.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 'u1',
+        action: 'user.change_password',
+        targetId: 'u1',
+        requestId: 'req-test',
+        detail: { sessionsRevoked: true }
+      })
+    );
   });
 });
 

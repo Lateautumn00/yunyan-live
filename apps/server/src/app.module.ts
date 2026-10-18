@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
-import { RedisModule } from '@yunyan-live/nest-shared';
+import { AuditModule, RedisModule } from '@yunyan-live/nest-shared';
 import { GatewayClientsModule } from './gateway/clients.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -19,6 +19,7 @@ import { DEFAULT_THROTTLE, RateLimitGuard } from './common/guards/rate-limit.gua
     // 数组形式：commonOptions 置空，key 生成与 429 响应统一由 RateLimitGuard 覆写决定
     ThrottlerModule.forRoot([DEFAULT_THROTTLE]),
     RedisModule,
+    AuditModule,
     GatewayClientsModule,
     AuthModule,
     UsersModule,

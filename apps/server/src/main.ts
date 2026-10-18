@@ -9,6 +9,7 @@ import {
   createServiceMetrics,
   httpMetricsMiddleware,
   metricsRequestHandler,
+  requestIdMiddleware,
   validationPipeOptions
 } from '@yunyan-live/nest-shared';
 import { AppModule } from './app.module';
@@ -18,6 +19,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   const metrics = createServiceMetrics('server');
+  app.use(requestIdMiddleware);
   app.use(httpMetricsMiddleware(metrics));
   app.use('/metrics', metricsRequestHandler(metrics));
 

@@ -7,3 +7,4 @@ export * from './guards';
 export * from './http';
 export * from './pagination';
 export * from './metrics';
+export * from './audit';

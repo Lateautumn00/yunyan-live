@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Body,
+  HttpException,
   UseGuards,
   Request,
   Inject,
@@ -16,6 +17,8 @@ import { Observable } from 'rxjs';
 import { grpcCall } from '../common/helpers/grpc.helper';
 import { STRICT_THROTTLE } from '../common/guards/rate-limit.guard';
 import {
+  AUDIT_ACTIONS,
+  AUDIT_PUBLISHER,
   ChangePasswordDto,
   JwtAuthGuard,
   LoginDto,
@@ -23,7 +26,8 @@ import {
   ResetPasswordDto,
   SessionService,
   UpdateUserNameDto,
-  userIdMetadata
+  userIdMetadata,
+  type AuditPublisher
 } from '@yunyan-live/nest-shared';
 
 interface AuthResponse {
@@ -80,7 +84,8 @@ export class AuthController implements OnModuleInit {
   constructor(
     @Inject('AUTH_GRPC') private authClient: ClientGrpc,
     private jwtService: JwtService,
-    private sessionService: SessionService
+    private sessionService: SessionService,
+    @Inject(AUDIT_PUBLISHER) private audit: AuditPublisher
   ) {}
 
   private authService: AuthServiceClient;
@@ -91,9 +96,25 @@ export class AuthController implements OnModuleInit {
 
   @Post('login')
   @Throttle({ default: STRICT_THROTTLE })
-  async login(@Body() dto: LoginDto) {
-    const result = await grpcCall(this.authService.login(dto));
-    const { sid } = await this.sessionService.createSession(result.guid!);
+  async login(@Body() dto: LoginDto, @Request() req: { requestId?: string; ip?: string }) {
+    let result: AuthResponse;
+    try {
+      result = await grpcCall(this.authService.login(dto));
+    } catch (err) {
+      // S12：登录失败记录点（detail 白名单只留原因分类，不落凭据）
+      this.audit.publish({
+        actor: dto.email,
+        action: AUDIT_ACTIONS.LOGIN_FAILED,
+        requestId: req.requestId,
+        ip: req.ip,
+        detail: {
+          reason: 'rejected',
+          status: err instanceof HttpException ? err.getStatus() : 500
+        }
+      });
+      throw err;
+    }
+    const { sid, oldSid } = await this.sessionService.createSession(result.guid!);
     // Token comes from the internal gRPC response (already authenticated by auth-service),
     // so decode instead of verify to avoid coupling to its JWT_SECRET.
     const payload = this.jwtService.decode<{ sub: string; email: string; role: number }>(
@@ -105,6 +126,26 @@ export class AuthController implements OnModuleInit {
       role: payload?.role ?? result.role ?? 2,
       sid
     });
+    // S12：登录成功 + 顶下线（旧会话被顶掉时的踢人记录）
+    this.audit.publish({
+      actor: result.guid ?? dto.email,
+      action: AUDIT_ACTIONS.LOGIN_OK,
+      targetType: 'user',
+      targetId: result.guid ?? undefined,
+      requestId: req.requestId,
+      ip: req.ip
+    });
+    if (oldSid) {
+      this.audit.publish({
+        actor: result.guid ?? dto.email,
+        action: AUDIT_ACTIONS.SESSION_KICK,
+        targetType: 'user',
+        targetId: result.guid ?? undefined,
+        requestId: req.requestId,
+        ip: req.ip,
+        detail: { reason: 'replaced_by_login' }
+      });
+    }
     return {
       token,
       guid: result.guid,
@@ -137,12 +178,25 @@ export class AuthController implements OnModuleInit {
 
   @Post('resetPassword')
   @Throttle({ default: STRICT_THROTTLE })
-  async resetPassword(@Body() dto: ResetPasswordDto) {
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+    @Request() req: { requestId?: string; ip?: string }
+  ) {
     const result = await grpcCall(this.authService.resetPassword(dto));
     // S6: 重置密码后吊销该用户全部会话（含其它设备），强制重新登录
     if (result.guid) {
       await this.sessionService.revokeAllSessions(result.guid);
     }
+    // S12：改密类记录点（actor 取 guid，无 guid 时回落邮箱）
+    this.audit.publish({
+      actor: result.guid ?? dto.email,
+      action: AUDIT_ACTIONS.RESET_PASSWORD,
+      targetType: 'user',
+      targetId: result.guid ?? undefined,
+      requestId: req.requestId,
+      ip: req.ip,
+      detail: { sessionsRevoked: Boolean(result.guid) }
+    });
     return result;
   }
 
@@ -150,7 +204,7 @@ export class AuthController implements OnModuleInit {
   @UseGuards(JwtAuthGuard)
   async changePassword(
     @Body() dto: ChangePasswordDto,
-    @Request() req: { user: { userId: string } }
+    @Request() req: { user: { userId: string }; requestId?: string; ip?: string }
   ) {
     const metadata = userIdMetadata(req.user.userId);
     const result = await grpcCall(
@@ -161,6 +215,16 @@ export class AuthController implements OnModuleInit {
     );
     // S6: 改密成功后吊销该用户全部会话，当前设备也需重新登录
     await this.sessionService.revokeAllSessions(req.user.userId);
+    // S12：改密记录点（detail 白名单 sessionsRevoked，不落任何密码字段）
+    this.audit.publish({
+      actor: req.user.userId,
+      action: AUDIT_ACTIONS.CHANGE_PASSWORD,
+      targetType: 'user',
+      targetId: req.user.userId,
+      requestId: req.requestId,
+      ip: req.ip,
+      detail: { sessionsRevoked: true }
+    });
     return result;
   }
 
