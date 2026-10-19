@@ -7,10 +7,10 @@
 | 阶段                 | 批次 | 交付                                                                                                                            |
 | -------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------- |
 | 启动（本文档落库时） | 3    | 基线命名 + 4 服务 `/metrics` 接入 + prometheus/alertmanager/node-exporter 进 compose + 首批 8 条告警规则 + promtool/amtool 校验 |
-| 收尾                 | 5    | 告警演练触发一次记录 + dashboard 可用验收 + 按需外发渠道（邮件/webhook）                                                        |
+| 收尾                 | 5    | 告警演练触发→恢复双向留痕 + dashboard/UI 可用验收；外发渠道**本批拍板不做**（翻案条件见 §10）                                   |
 
-- 覆盖服务：`server`(gateway)、`auth-service`、`live-service`、`chat-ws-service`。
-  yjs-ws-service / mail-service 不在本批范围（台账「4 后端服务」口径）。
+- 覆盖服务：`server`(gateway)、`auth-service`、`live-service`、`chat-ws-service`（批次 3）
+  - `mail-service`（批次 4b F9 通知指标）。yjs-ws-service 不在范围（无独立业务告警口径）。
 - dashboard = Prometheus 内置 UI（`http://127.0.0.1:9090` 的 Graph/Alerts/Targets）；
   Grafana 不在本批范围，如需再议。
 
@@ -68,8 +68,11 @@ O7 延后但触发后不得改指标名，因此现在锁定：
 | alertmanager               | 127.0.0.1:9093         | 首批 receiver 空集成（见 alertmanager.yml 注释） |
 | node-exporter              | 127.0.0.1:9100         | 挂 `/` 只读，磁盘指标数据源                      |
 
-compose 容器经 `host.docker.internal`（`host-gateway`）回访宿主机上的开发服务；
-宿主机服务未启动时 `up==0` 会被 `ServiceDown` 告警 —— 本地语境下属正确语义（服务确实没在跑）。
+**O3 容器化后（批次 5 对齐）**：5 个业务 target 改用 compose 网络服务名
+（`gateway:3001` / `auth-service:9464` / `live-service:9465` / `mail-service:9466` / `chat-ws-service:50054`），
+与业务服务同栈拉起时 7/7 active target 全 up（§9.1）。
+宿主机 `pnpm dev` 单跑（不走 compose）时这些 target 不可达 → `up==0` → `ServiceDown`：
+语义正确但属 dev 单跑预期噪声，dev 场景以 `/targets` 可达性为准。
 
 ## 6. 首批告警（8 条，`init/monitoring/alerts.yml`）
 
@@ -82,7 +85,7 @@ compose 容器经 `host.docker.internal`（`host-gateway`）回访宿主机上�
 | GrpcErrorBurst      | 非 OK increase[5m] > 5 | 1m  | critical | 同上                           |
 | ServiceDown         | up == 0                | 2m  | critical | 含容器死亡窗口                 |
 | ServiceFlapping     | changes(up[15m]) > 0   | 0   | warning  | 容器重启痕迹                   |
-| DiskSpaceLow        | avail/size < 10%       | 10m | warning  | node-exporter                  |
+| DiskSpaceLow        | avail/size < 10%       | 10m | warning  | 排除不可操作卷（§9.2）         |
 
 ## 7. 校验与操作
 
@@ -103,8 +106,78 @@ docker compose -f init/docker-compose.yml up -d prometheus alertmanager node-exp
 curl -X POST http://127.0.0.1:9090/-/reload
 ```
 
+> **单文件 bind 注意**：`init/monitoring/*.yml` 是容器单文件 bind mount，rename 式原子写
+> （部分编辑工具的保存方式）会断挂载 → 容器内文件 ENOENT → `/-/reload` 报
+> `couldn't load configuration ... no such file or directory`。两种安全改法：
+>
+> 1. truncate 写保 inode：`cat 新内容 > 文件`（或 `>>` 追加）后再 `/-/reload`；
+> 2. 改完 `docker restart yunyan-live-prometheus`（重挂 + 冷加载）。
+
 ## 8. 验收锚点
 
 - 批次 3（启动）：三份配置 promtool/amtool 全绿；`/targets` 中 4 个业务服务 target 可 up（服务启动时）；
   告警规则在 `/alerts` 可见；本文件命名规范有单测防回归。
-- 批次 5（收尾）：告警演练触发一次留痕（改阈值/灌数据择一，恢复后复验 resolve）+ dashboard 可用验收。
+- 批次 5（收尾）：触发→resolve 双向留痕（prom + alertmanager 双侧）+ dashboard/UI 可用验收
+  —— **全部达成，证据见 §9**；外发渠道拍板不做（§10）。
+
+## 9. 批次 5 收尾验收记录（2026-10-19）
+
+### 9.1 拓扑修复（O3 容器化后的 ServiceDown）
+
+- 背景：O3 业务服务容器化后仅发布 127.0.0.1，prometheus 旧 target（`host.docker.internal`）
+  5 个业务 job 全 down → 4×ServiceDown 自 2026-10-18 持续 firing
+  （activeAt：`2026-10-18T10:15:51Z` ×2、`2026-10-19T00:15:06Z` ×2，修复前已采）。
+- 修复：prometheus.yml 5 target 改 compose 服务 DNS（§5）；单文件 bind 被编辑工具断挂载 →
+  `docker restart yunyan-live-prometheus` 重挂（见 §7 注意）。
+- 复验：7/7 active target `health=up`（gateway/auth/live/mail/chat/node/prometheus）；
+  ServiceDown 经 5m 陈旧窗口后自然归零（约 09:05，无手动干预），
+  `ALERTS{alertname="ServiceDown"}` 空。
+
+### 9.2 DiskSpaceLow 口径修复（10 → 0）
+
+- 修复前持续 firing 10 条（自 2026-10-18T09:43）：8×`/snap/*`（`fstype=fuse.snapfuse`，
+  只读 squashfs 镜像，avail 恒 0）+ 2×`/usr/lib/linux-tools*|/usr/src/linux-headers*`
+  （WSL 内核工具链目录，系统托管）—— 均为不可操作卷，非真实可清理盘压。
+- 修复：DiskSpaceLow expr 追加排除 `fuse.snapfuse` fstype 与上述 mountpoint（alerts.yml 注释留档）。
+- 复验：promtool 8 rules OK → 热加载 → `ALERTS{alertname="DiskSpaceLow"}` 0 条；
+  真实盘压仍由根文件系统挂载覆盖（口径未削弱）。
+
+### 9.3 告警演练（触发 → 恢复，prom + AM 双侧留痕）
+
+- 方法：临时规则 `O5DrillAlwaysFiring`（`expr: vector(1) > 0`、`for: 0s`）经 shell
+  truncate/append（保 bind inode，禁 rename 写）+ `/-/reload` 注入；采证后同法回滚，
+  `diff` 与基线 IDENTICAL、文件 0 残留。
+- 成功轮次时间线（UTC，第 3 次注入）：
+  - 触发：reload `09:18:49` → `09:19:09` prom `ALERTS{...}` firing=1 **且 AM `/api/v2/alerts`
+    可见**；AM 可见性 t+20s…t+120s 连续 11 采样全 =1（锚点：AM API 可见 firing ✓）。
+  - 恢复：回滚 reload `09:21:19` → prom 30s 内 firing=0；AM 侧 endsAt 自然过期：
+    `09:23:34` 仍在 → `09:24:34` 已移除（resolve 传播 ≤3m15s ≤ resolve_timeout 5m，属设计）。
+  - 历史可查性：`ALERTS{alertname="O5DrillAlwaysFiring"} at T_FIRED=1792401216` → `value=[…,"1"]`；
+    `at T_RESOLVED=1792401261` → 空集。
+- 前两轮教训（复盘）：`prometheus_notifications_dropped_total` 时间线精确落在两轮 reload
+  过渡窗（09:09:20、09:13:00、09:13:40，共 6 drops）——notifier 随 reload 重建 AM target 时
+  在途批次被丢；转换事件一次性，窗口内 AM 收不到且不再补发。稳定态该计数零增长，
+  `errors_total=0`、无 error 日志。
+  **演练 SOP：reload 后等 ≥2 个 flush 周期（30s）再采 AM 侧证据，连续两窗确认稳定。**
+- 终态 `/alerts`：5×`ChatWsNoConnections`——`yunyan_chat_online_connections` 由 5 个 job
+  各报一条（全服务同注册该 gauge），空房=0 属 §6 已知误报语境，非本批新问题。
+
+### 9.4 UI/dashboard 验收
+
+- 页面：`/` →302→`/graph`；`/graph`、`/alerts`、`/targets`、`/rules`、`/config`、`/status`
+  均 200；健康端点 `/-/healthy`、`/-/ready`、`/api/v1/status/buildinfo` 均 200。
+  （`/-/status/flags` 实测 404，v2.53 非关键端点，以 buildinfo 为准。）
+
+### 9.5 演练产物状态
+
+- `init/monitoring/alerts.yml` diff 仅含 DiskSpaceLow 口径修复（临时规则 0 残留）；
+  `init/monitoring/prometheus.yml` diff 仅含 5 target 拓扑对齐。
+- 采证日志在 WSL `/tmp/o5-*.log`（本机留存不入库，关键数值已固化于本节）。
+
+## 10. 外发渠道（邮件/webhook）—— 本批拍板不做
+
+- 批次 5 拍板：不做。**翻案条件：出现无人值守告警需求**（如生产部署、夜间无人看护的
+  长稳跑测），需要告警离开本机时启用。
+- 启用路径：alertmanager.yml `receivers` 接邮件（mail-service 已有 SMTP 出口，见 F9）
+  或 webhook；接入后 amtool check + 按 §9.3 SOP 做一次端到端留痕。
+- 现状 receiver 空集成 = 合法（演练口径 = AM API/UI 可见 firing，alertmanager.yml 注释同步）。
