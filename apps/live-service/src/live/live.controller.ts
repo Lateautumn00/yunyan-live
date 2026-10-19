@@ -1,7 +1,7 @@
 import { Controller, Logger } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { Metadata } from '@grpc/grpc-js';
-import { ok, userIdFromMetadata } from '@yunyan-live/nest-shared';
+import { fail, ok, userIdFromMetadata } from '@yunyan-live/nest-shared';
 
 import { LiveService } from './live.service';
 import { CheckinService, type CheckinSessionView } from './checkin.service';
@@ -725,6 +725,27 @@ export class LiveController {
     }
     await this.liveService.recordToolUsage(userId, data.room_id, data.tool);
     return { code: '0', msg: 'success' };
+  }
+
+  // F3：单用户禁言/踢出写库（网关 PushController 经 gRPC 调用；操作者身份只信 metadata，S11① 同口径）
+  @GrpcMethod('LiveService', 'ModerateUser')
+  async moderateUser(
+    data: { room_id?: string; user_id?: string; kind?: string; op?: string; minutes?: number },
+    metadata: Metadata
+  ) {
+    const byUserId = userIdFromMetadata(metadata);
+    if (!byUserId) return fail('unauthorized');
+    const kind = data.kind;
+    const op = data.op;
+    if (kind !== 'mute' && kind !== 'kick') return fail('invalid kind');
+    if (op !== 'set' && op !== 'release') return fail('invalid op');
+    if (!data.room_id || !data.user_id) return fail('missing room_id/user_id');
+    const minutes = Number(data.minutes ?? 0);
+    if (op === 'set' && kind === 'mute' && minutes !== 1 && minutes !== 5 && minutes !== 10) {
+      return fail('invalid minutes');
+    }
+    await this.liveService.moderateUser(data.room_id, data.user_id, kind, op, minutes, byUserId);
+    return ok();
   }
 
   private grpcCheckinSession(view: CheckinSessionView) {

@@ -22,6 +22,18 @@ export default {
   updateForbid(params: { roomId: string; liveUserId: string; status: number }) {
     return http.post(`${config.liveApi}/push/updateForbid`, params);
   },
+  /** F3 单用户禁言（minutes 仅 1/5/10；userId=目标 JWT sub） */
+  mute(params: { roomId: string; userId: string; minutes: number }) {
+    return http.post(`${config.liveApi}/push/mute`, params);
+  },
+  /** F3 移出本场（chat 层；同场重进被 4005 拒绝，直至解除） */
+  kick(params: { roomId: string; userId: string }) {
+    return http.post(`${config.liveApi}/push/kick`, params);
+  },
+  /** F3 解除禁言/移出（kind: mute | kick） */
+  releaseModeration(params: { roomId: string; userId: string; kind: 'mute' | 'kick' }) {
+    return http.post(`${config.liveApi}/push/release`, params);
+  },
   async register(params: {
     email: string;
     userName: string;

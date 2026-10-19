@@ -14,7 +14,10 @@ export const AUDIT_ACTIONS = {
   DELETE_VIDEO_ROOMS: 'video.delete_rooms',
   DELETE_VIDEO_IDS: 'video.delete_ids',
   DELETE_COURSEWARE: 'courseware.delete',
-  EXPORT_RECORDING: 'recording.export'
+  EXPORT_RECORDING: 'recording.export',
+  MODERATION_MUTE: 'moderation.mute',
+  MODERATION_KICK: 'moderation.kick',
+  MODERATION_RELEASE: 'moderation.release'
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

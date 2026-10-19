@@ -107,7 +107,10 @@ describe('F5.3-B MediaOverlay 播放状态同步', () => {
       ts: Date.now()
     };
     await w.setProps({ remote });
-    expect(f.calls).toContain('seek:6');
+    // 回拉目标 ~6s（watch 内两次 Date.now() 可能差 1ms → 6.001，按容差断言）
+    expect(
+      f.calls.some(c => c.startsWith('seek:') && Math.abs(Number(c.slice(5)) - 6) < 0.05)
+    ).toBe(true);
 
     // 断线（null）→ 不追加动作、不崩
     await w.setProps({ remote: null });

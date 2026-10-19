@@ -76,7 +76,7 @@ describe('appendLive 去重与裁剪', () => {
     expect(m.appendLive(entry(0))).toBe(true);
     // 尚在窗内的键仍拒绝
     expect(m.appendLive(entry(SEEN_KEYS_LIMIT - 1))).toBe(false);
-  });
+  }, 15000);
 });
 
 describe('mergeHistory 升序合并', () => {

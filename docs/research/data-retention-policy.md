@@ -46,6 +46,9 @@
 | `video.delete_ids`     | DELETE deleteVideoByIds 按视频删，**逐 id 一条**              | userId             | —（target=video）                                   |
 | `courseware.delete`    | DELETE deleteCourseware 成功后                                | userId             | —（target=courseware）                              |
 | `recording.export`     | downloadRecording `download=true` 且 mp4 就绪、**流式输出前** | userId             | `roomId`, `bytes`（转码轮询 `download=false` 不记） |
+| `moderation.mute`      | POST live/push/mute gRPC 落库成功且广播后（F3）               | userId             | `userId`（被禁者）, `minutes`（target=room）        |
+| `moderation.kick`      | POST live/push/kick gRPC 落库成功且广播后（F3）               | userId             | `userId`（被踢者）（target=room）                   |
+| `moderation.release`   | POST live/push/release gRPC 落库成功且广播后（F3）            | userId             | `userId`, `kind`（target=room）                     |
 
 - **降级留痕（拍板）**：板书导出（F6.1 `exportBoard`）是纯客户端导出，无服务端端点，
   **不可审计**——经拍板不为打点新增端点，该记录点以此文档降级说明收口。

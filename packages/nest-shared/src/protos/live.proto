@@ -40,6 +40,7 @@ service LiveService {
   rpc GetCheckinRecords (GetCheckinRecordsRequest) returns (GetCheckinRecordsResponse) {}
   rpc GetTeacherStatistics (GetTeacherStatisticsRequest) returns (GetTeacherStatisticsResponse) {}
   rpc RecordToolUsage (RecordToolUsageRequest) returns (CommonResponse) {}
+  rpc ModerateUser (ModerateUserRequest) returns (CommonResponse) {}
 }
 
 message CreateLiveRequest {
@@ -575,4 +576,15 @@ message GetTeacherStatisticsResponse {
 message RecordToolUsageRequest {
   string room_id = 1;
   string tool = 2;
+}
+
+message ModerateUserRequest {
+  string room_id = 1;
+  string user_id = 2;
+  // mute | kick
+  string kind = 3;
+  // set | release
+  string op = 4;
+  // mute 生效时长（1/5/10 分钟）；kind=kick 时为 0
+  int32 minutes = 5;
 }

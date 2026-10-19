@@ -36,7 +36,8 @@ function makeService(): ServiceMock {
     getBoardSnapshot: vi.fn(),
     getLatestBoardSnapshot: vi.fn(),
     checkRoomAccess: vi.fn(),
-    getUserWatchTimeList: vi.fn()
+    getUserWatchTimeList: vi.fn(),
+    moderateUser: vi.fn()
   };
 }
 
@@ -805,5 +806,59 @@ describe('LiveController gRPC 映射', () => {
       total: 2,
       total_time_by_room: 260
     });
+  });
+
+  it('ModerateUser：操作者身份只信 metadata（S11①），透传 kind/op/minutes', async () => {
+    const { controller, service } = makeController();
+    service.moderateUser.mockResolvedValue(undefined);
+    const res = await controller.moderateUser(
+      { room_id: 'r1', user_id: 'u1', kind: 'mute', op: 'set', minutes: 5 },
+      userIdMetadata('teacher-1')
+    );
+    expect(res.code).toBe('0');
+    expect(service.moderateUser).toHaveBeenCalledWith('r1', 'u1', 'mute', 'set', 5, 'teacher-1');
+  });
+
+  it('ModerateUser：metadata 缺失身份 → unauthorized，不落库', async () => {
+    const { controller, service } = makeController();
+    const res = await controller.moderateUser(
+      { room_id: 'r1', user_id: 'u1', kind: 'mute', op: 'set', minutes: 5 },
+      userIdMetadata('')
+    );
+    expect(res.code).toBe('1');
+    expect(res.msg).toBe('unauthorized');
+    expect(service.moderateUser).not.toHaveBeenCalled();
+  });
+
+  it('ModerateUser：非法 kind/op → fail envelope，不落库', async () => {
+    const { controller, service } = makeController();
+    const badKind = await controller.moderateUser(
+      { room_id: 'r1', user_id: 'u1', kind: 'ban', op: 'set', minutes: 5 },
+      userIdMetadata('t1')
+    );
+    expect(badKind).toMatchObject({ code: '1', msg: 'invalid kind' });
+    const badOp = await controller.moderateUser(
+      { room_id: 'r1', user_id: 'u1', kind: 'mute', op: 'nuke', minutes: 5 },
+      userIdMetadata('t1')
+    );
+    expect(badOp).toMatchObject({ code: '1', msg: 'invalid op' });
+    expect(service.moderateUser).not.toHaveBeenCalled();
+  });
+
+  it('ModerateUser：mute set 仅接受 1/5/10 分钟；kick/release 不校验 minutes', async () => {
+    const { controller, service } = makeController();
+    service.moderateUser.mockResolvedValue(undefined);
+    const bad = await controller.moderateUser(
+      { room_id: 'r1', user_id: 'u1', kind: 'mute', op: 'set', minutes: 7 },
+      userIdMetadata('t1')
+    );
+    expect(bad).toMatchObject({ code: '1', msg: 'invalid minutes' });
+    const kick = await controller.moderateUser(
+      { room_id: 'r1', user_id: 'u1', kind: 'kick', op: 'set', minutes: 0 },
+      userIdMetadata('t1')
+    );
+    expect(kick.code).toBe('0');
+    expect(service.moderateUser).toHaveBeenCalledTimes(1);
+    expect(service.moderateUser).toHaveBeenCalledWith('r1', 'u1', 'kick', 'set', 0, 't1');
   });
 });

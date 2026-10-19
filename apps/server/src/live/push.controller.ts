@@ -2,36 +2,212 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Inject,
+  OnModuleInit,
   Post,
   Request,
   UseGuards
 } from '@nestjs/common';
-import { JwtAuthGuard, REDIS_CLIENT, UpdateForbidDto, writeForbid } from '@yunyan-live/nest-shared';
+import type { ClientGrpc } from '@nestjs/microservices';
+import type { Metadata } from '@grpc/grpc-js';
+import type { Observable } from 'rxjs';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_PUBLISHER,
+  JwtAuthGuard,
+  ModerationKickDto,
+  ModerationMuteDto,
+  ModerationReleaseDto,
+  publishModeration,
+  REDIS_CLIENT,
+  UpdateForbidDto,
+  userIdMetadata,
+  writeForbid,
+  type AuditPublisher
+} from '@yunyan-live/nest-shared';
 import type { Redis } from 'ioredis';
+import { grpcCall } from '../common/helpers/grpc.helper';
 
 /** 教师角色（JWT payload.role；与 auth-service 签发一致，role 1 = 教师） */
 const TEACHER_ROLE = 1;
 
+interface ShowRoomResponse {
+  code: string;
+  msg: string;
+  data?: { live_user_id?: string };
+}
+
+interface ModerateUserResponse {
+  code: string;
+  msg: string;
+}
+
+interface PushLiveServiceClient {
+  showRoom(data: { room_id: string }): Observable<ShowRoomResponse>;
+  moderateUser(
+    data: { room_id: string; user_id: string; kind: string; op: string; minutes: number },
+    metadata?: Metadata
+  ): Observable<ModerateUserResponse>;
+}
+
 /**
- * 课堂禁言状态入口：写 Redis（live:forbid:{roomId}）并 publish 到 live:forbid 频道，
- * 由 chat-ws-service 订阅后广播给房间内客户端。
+ * 课堂管控状态入口（全房禁言 + F3 单用户禁言/踢出）：
+ * - 全房禁言：写 Redis live:forbid:{roomId} 并 publish live:forbid
+ * - 单用户：gRPC ModerateUser 落 PG（chat_moderation，live-service 独占 DB）后 publish live:moderation
+ * 状态由 chat-ws-service 订阅转播给房间内客户端。
  */
 @Controller('live/push')
-export class PushController {
-  constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
+export class PushController implements OnModuleInit {
+  constructor(
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    @Inject('LIVE_GRPC') private readonly liveClient: ClientGrpc,
+    @Inject(AUDIT_PUBLISHER) private readonly audit: AuditPublisher
+  ) {}
+
+  private liveService: PushLiveServiceClient;
+
+  onModuleInit() {
+    this.liveService = this.liveClient.getService<PushLiveServiceClient>('LiveService');
+  }
+
+  /** 房间级权限断言：仅教师（role=1）且为该房间 liveUserId 所有者（与 LiveController 同口径） */
+  private async assertRoomTeacher(
+    user: { userId: string; role?: number },
+    roomId: string
+  ): Promise<void> {
+    if (user.role !== TEACHER_ROLE) {
+      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+    }
+    const room = await grpcCall(this.liveService.showRoom({ room_id: roomId }));
+    if (room?.data?.live_user_id !== user.userId) {
+      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+    }
+  }
 
   @Post('updateForbid')
   @UseGuards(JwtAuthGuard)
   async updateForbid(
     @Body() dto: UpdateForbidDto,
-    @Request() req: { user: { role: number } }
+    @Request() req: { user: { userId: string; role?: number } }
   ): Promise<{ updated: boolean }> {
     // 仅教师可改全房禁言态（现状任意登录学生可调用，服务端强制后放大为全房 DoS）
     if (req.user.role !== TEACHER_ROLE) {
       throw new ForbiddenException('仅教师可修改禁言状态');
     }
+    // 房间归属断言：他房教师不得改本房间禁言态（顺手项）
+    await this.assertRoomTeacher(req.user, dto.roomId);
     await writeForbid(this.redis, dto.roomId, dto.status);
+    return { updated: true };
+  }
+
+  @Post('mute')
+  @UseGuards(JwtAuthGuard)
+  async mute(
+    @Body() dto: ModerationMuteDto,
+    @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
+  ): Promise<{ updated: true }> {
+    await this.assertRoomTeacher(req.user, dto.roomId);
+    const res = await grpcCall(
+      this.liveService.moderateUser(
+        {
+          room_id: dto.roomId,
+          user_id: dto.userId,
+          kind: 'mute',
+          op: 'set',
+          minutes: dto.minutes
+        },
+        userIdMetadata(req.user.userId)
+      )
+    );
+    if (res.code !== '0') throw new HttpException(res.msg || '禁言失败', HttpStatus.BAD_GATEWAY);
+    await publishModeration(this.redis, {
+      roomId: dto.roomId,
+      userId: dto.userId,
+      kind: 'mute',
+      op: 'set',
+      untilMs: Date.now() + dto.minutes * 60_000
+    });
+    this.audit.publish({
+      actor: req.user.userId,
+      action: AUDIT_ACTIONS.MODERATION_MUTE,
+      targetType: 'room',
+      targetId: dto.roomId,
+      requestId: req.requestId,
+      ip: req.ip,
+      detail: { userId: dto.userId, minutes: dto.minutes }
+    });
+    return { updated: true };
+  }
+
+  @Post('kick')
+  @UseGuards(JwtAuthGuard)
+  async kick(
+    @Body() dto: ModerationKickDto,
+    @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
+  ): Promise<{ updated: true }> {
+    await this.assertRoomTeacher(req.user, dto.roomId);
+    const res = await grpcCall(
+      this.liveService.moderateUser(
+        { room_id: dto.roomId, user_id: dto.userId, kind: 'kick', op: 'set', minutes: 0 },
+        userIdMetadata(req.user.userId)
+      )
+    );
+    if (res.code !== '0') throw new HttpException(res.msg || '移出失败', HttpStatus.BAD_GATEWAY);
+    await publishModeration(this.redis, {
+      roomId: dto.roomId,
+      userId: dto.userId,
+      kind: 'kick',
+      op: 'set'
+    });
+    this.audit.publish({
+      actor: req.user.userId,
+      action: AUDIT_ACTIONS.MODERATION_KICK,
+      targetType: 'room',
+      targetId: dto.roomId,
+      requestId: req.requestId,
+      ip: req.ip,
+      detail: { userId: dto.userId }
+    });
+    return { updated: true };
+  }
+
+  @Post('release')
+  @UseGuards(JwtAuthGuard)
+  async release(
+    @Body() dto: ModerationReleaseDto,
+    @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
+  ): Promise<{ updated: true }> {
+    await this.assertRoomTeacher(req.user, dto.roomId);
+    const res = await grpcCall(
+      this.liveService.moderateUser(
+        {
+          room_id: dto.roomId,
+          user_id: dto.userId,
+          kind: dto.kind,
+          op: 'release',
+          minutes: 0
+        },
+        userIdMetadata(req.user.userId)
+      )
+    );
+    if (res.code !== '0') throw new HttpException(res.msg || '解除失败', HttpStatus.BAD_GATEWAY);
+    await publishModeration(this.redis, {
+      roomId: dto.roomId,
+      userId: dto.userId,
+      kind: dto.kind,
+      op: 'release'
+    });
+    this.audit.publish({
+      actor: req.user.userId,
+      action: AUDIT_ACTIONS.MODERATION_RELEASE,
+      targetType: 'room',
+      targetId: dto.roomId,
+      requestId: req.requestId,
+      ip: req.ip,
+      detail: { userId: dto.userId, kind: dto.kind }
+    });
     return { updated: true };
   }
 }

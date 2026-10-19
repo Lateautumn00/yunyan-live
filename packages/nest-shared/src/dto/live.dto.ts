@@ -153,3 +153,46 @@ export class CheckinSessionActionDto {
   @IsNotEmpty()
   sessionId: string;
 }
+
+export class ModerationMuteDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+
+  /** 目标用户稳定身份（users.id / JWT sub） */
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  userId: string;
+
+  /** 台账拍板时长：1/5/10 分钟（到期由 chat-ws 自动解禁并广播 expire） */
+  @IsNumber()
+  @IsIn([1, 5, 10])
+  minutes: number;
+}
+
+export class ModerationKickDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  userId: string;
+}
+
+export class ModerationReleaseDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  userId: string;
+
+  @IsString()
+  @IsIn(['mute', 'kick'])
+  kind: 'mute' | 'kick';
+}

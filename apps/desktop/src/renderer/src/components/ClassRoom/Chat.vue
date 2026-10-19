@@ -138,6 +138,7 @@ import { WsClose, type MentionTarget } from '@yunyan-live/types';
 import api from '@/api';
 import { config } from '@/api';
 import { useUserStore } from '@/store/user';
+import { useRoomStore } from '@/store/room';
 import { useAsyncAction } from '@/composables/useAsyncAction';
 import { useChatInput } from '@/composables/useChatInput';
 import {
@@ -209,6 +210,7 @@ const sockets = ref<{
 });
 const sendContent = ref('');
 const userStore = useUserStore();
+const roomStore = useRoomStore();
 const {
   messages: tanmuMessage,
   appendLive,
@@ -356,11 +358,25 @@ function liveSocketMessage(e: MessageEvent) {
     }
     case 'bullet_rejected':
       if (redata.reason === 'forbidden') ElMessage.warning('当前处于禁言状态，无法发言');
+      else if (redata.reason === 'muted') ElMessage.warning('你已被禁言，暂时无法发言');
       else if (redata.reason === 'too_long')
         ElMessage.warning(`消息超过${CHAT_LIMITS.MAX_MESSAGE_LENGTH}字`);
       else if (redata.reason === 'rate_limited') ElMessage.warning('发送过于频繁，请稍后再试');
       else if (redata.reason === 'blocked_word') ElMessage.warning('消息包含禁用词，无法发送');
       else ElMessage.error('消息发送失败');
+      break;
+    case 'roster':
+      roomStore.setChatRoster(redata.data?.members ?? []);
+      break;
+    case 'moderation':
+      if (redata.userId && redata.kind && redata.op) {
+        roomStore.applyModeration({
+          userId: redata.userId,
+          kind: redata.kind,
+          op: redata.op,
+          untilMs: redata.untilMs
+        });
+      }
       break;
     case 'history':
     case 'historyPage': {
@@ -398,6 +414,13 @@ function liveSocketClose(e?: Event) {
     sessionClosed = true;
     stopReconnect();
     useUserStore().sessionInterrupted('kicked');
+    return;
+  }
+  if (code === WsClose.MODERATION_KICKED) {
+    // F3：被教师移出本场——停自动重连（解除后可手动刷新重进），不登出会话
+    sessionClosed = true;
+    stopReconnect();
+    ElMessage.warning('你已被讲师移出本场');
     return;
   }
   if (code === WsClose.UNAUTHORIZED && localStorage.getItem('token')) {

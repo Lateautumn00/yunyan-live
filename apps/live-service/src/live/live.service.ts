@@ -910,4 +910,51 @@ export class LiveService {
     });
     return { success: true };
   }
+
+  // F3：单用户禁言/踢出状态落 PG（chat_moderation；网关无 DB，写路径唯一入口是 ModerateUser gRPC）。
+  // set = 先 deactivate 同 (room,user,kind) 活跃行再 insert（部分唯一索引下至多一条 active 行）；
+  // release = 仅置 active=false（留痕 created_at/released_at，操作者由 audit_logs 记录，表不冗余存）。
+  // until：mute 用 DB 时钟 now()+minutes（读侧判活跃须同时看 until > now()，chat-ws 惰性过期外兜底）；
+  // kick until=NULL（绑 roomId=本场，新场次新行天然重置）。
+  async moderateUser(
+    roomId: string,
+    userId: string,
+    kind: 'mute' | 'kick',
+    op: 'set' | 'release',
+    minutes: number,
+    byUserId: string
+  ): Promise<void> {
+    if (op === 'set') {
+      if (kind === 'mute') {
+        await this.dataSource.manager.query(
+          `WITH deactivated AS (
+             UPDATE chat_moderation
+                SET active = false, released_at = now(), released_reason = 'replaced'
+              WHERE room_id = $1 AND user_id = $2 AND kind = 'mute' AND active = true
+           )
+           INSERT INTO chat_moderation (room_id, user_id, kind, until, active, created_by)
+           VALUES ($1, $2, 'mute', now() + ($3 * interval '1 minute'), true, $4)`,
+          [roomId, userId, minutes, byUserId]
+        );
+        return;
+      }
+      await this.dataSource.manager.query(
+        `WITH deactivated AS (
+           UPDATE chat_moderation
+              SET active = false, released_at = now(), released_reason = 'replaced'
+            WHERE room_id = $1 AND user_id = $2 AND kind = 'kick' AND active = true
+         )
+         INSERT INTO chat_moderation (room_id, user_id, kind, until, active, created_by)
+         VALUES ($1, $2, 'kick', NULL, true, $3)`,
+        [roomId, userId, byUserId]
+      );
+      return;
+    }
+    await this.dataSource.manager.query(
+      `UPDATE chat_moderation
+          SET active = false, released_at = now(), released_reason = 'manual'
+        WHERE room_id = $1 AND user_id = $2 AND kind = $3 AND active = true`,
+      [roomId, userId, kind]
+    );
+  }
 } // class LiveService

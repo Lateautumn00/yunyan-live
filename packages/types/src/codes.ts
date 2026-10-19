@@ -25,7 +25,9 @@ export const WsClose = {
   /** 未授权/会话过期（Token 缺失、无效、过期） */
   UNAUTHORIZED: 4001,
   /** 被顶下线（会话被另一登录替换） */
-  SESSION_KICKED: 4002
+  SESSION_KICKED: 4002,
+  /** 被教师移出本场（F3 房间级踢出；4003/4004 已被 ApiCode 占用，跳段防语义混淆） */
+  MODERATION_KICKED: 4005
 } as const;
 
 /**

@@ -678,4 +678,61 @@ describe('ClassRoom Chat.vue', () => {
       expect(document.body.textContent).toContain('消息包含禁用词');
     });
   });
+
+  it('roster 帧写入 room store 名册（senderId/liveUserId 桥接）', async () => {
+    const pinia = createPinia();
+    const wrapper = mountChat({}, pinia);
+    const ws = await openSocket(wrapper);
+    pushFrame(ws, 'roster', {
+      members: [{ senderId: 'g2', liveUserId: 'u2', nickName: '同学', isTeacher: false }]
+    });
+    expect(useRoomStore(pinia).chatRoster).toEqual([
+      { senderId: 'g2', liveUserId: 'u2', nickName: '同学', isTeacher: false }
+    ]);
+    wrapper.unmount();
+  });
+
+  it('moderation 帧驱动禁言/移出视图（set → expire/release 清除）', async () => {
+    const pinia = createPinia();
+    const wrapper = mountChat({}, pinia);
+    const ws = await openSocket(wrapper);
+    const roomStore = useRoomStore(pinia);
+    const pushModeration = (frame: Record<string, unknown>) =>
+      ws.onmessage?.({ data: JSON.stringify({ type: 'moderation', ...frame }) });
+
+    pushModeration({ userId: 'g2', kind: 'mute', op: 'set', untilMs: 123 });
+    expect(roomStore.moderation['g2']).toEqual({ mutedUntilMs: 123 });
+    pushModeration({ userId: 'g2', kind: 'mute', op: 'expire' });
+    expect(roomStore.moderation['g2']).toBeUndefined();
+
+    pushModeration({ userId: 'g2', kind: 'kick', op: 'set' });
+    expect(roomStore.moderation['g2']).toEqual({ kicked: true });
+    pushModeration({ userId: 'g2', kind: 'kick', op: 'release' });
+    expect(roomStore.moderation['g2']).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('bullet_rejected reason=muted → 禁言提示文案', async () => {
+    const wrapper = mountChat();
+    const ws = await openSocket(wrapper);
+    ws.onmessage?.({ data: JSON.stringify({ type: 'bullet_rejected', reason: 'muted' }) });
+    await flushPromises();
+    expect(document.body.textContent).toContain('你已被禁言');
+    wrapper.unmount();
+  });
+
+  it('关闭码 4005 停止重连、不登出会话，提示被移出', async () => {
+    const wrapper = mountChat();
+    const vm = vmOf(wrapper);
+    vm.createTutorSocket();
+
+    vm.liveSocketClose(closeEventWith(4005));
+    await flushPromises();
+    expect(storeMocks.sessionInterrupted).not.toHaveBeenCalled();
+
+    vm.createTutorSocket();
+    expect(MockWebSocket.instances).toHaveLength(1); // sessionClosed 阻断自动重连
+    expect(document.body.textContent).toContain('已被讲师移出');
+    wrapper.unmount();
+  });
 });

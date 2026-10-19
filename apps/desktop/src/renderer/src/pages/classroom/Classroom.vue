@@ -108,7 +108,12 @@
               @live-started="onLiveStarted"
               @checkin="onCheckin"
             />
-            <Pople v-show="activeName === 'people'" ref="pople" :live-user-id="opaqueId" />
+            <Pople
+              v-show="activeName === 'people'"
+              ref="pople"
+              :live-user-id="opaqueId"
+              :room-id="roomId"
+            />
           </div>
         </div>
       </template>

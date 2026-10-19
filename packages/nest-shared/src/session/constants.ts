@@ -54,3 +54,19 @@ export interface CheckinPayload {
 }
 
 export const CHECKIN_ACTIONS: readonly CheckinAction[] = ['started', 'update', 'ended', 'makeup'];
+
+/** F3 单用户禁言/踢出广播频道（网关写库成功后 publish ModerationPayload） */
+export const MODERATION_CHANNEL = 'live:moderation';
+
+export type ModerationKind = 'mute' | 'kick';
+export type ModerationOp = 'set' | 'release';
+
+export interface ModerationPayload {
+  roomId: string;
+  userId: string;
+  kind: ModerationKind;
+  /** set=生效（mute 带 untilMs；kick 无）；release=解除（状态读侧自行清空对应 kind） */
+  op: ModerationOp;
+  /** kind=mute 时的到期 epoch ms；kick 为 undefined */
+  untilMs?: number;
+}

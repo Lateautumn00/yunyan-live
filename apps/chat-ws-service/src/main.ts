@@ -12,12 +12,23 @@ import {
   subscribeCheckin,
   subscribeForbid,
   subscribeKick,
+  subscribeModeration,
   readForbid,
   validateSession,
   verifyToken,
   createServiceMetrics
 } from '@yunyan-live/nest-shared';
 import { buildBullet, sanitizeName } from './bullet';
+import {
+  applyModeration,
+  collectExpired,
+  dropRoom,
+  ensureRoom,
+  isMuted,
+  loadModeration,
+  sweepExpiredModeration,
+  type ModerationState
+} from './moderation';
 import { DEFAULT_BANNED_WORDS } from './wordfilter';
 import { loadPersistenceConfig, requireDatabaseUrl, requireRabbitUrl } from './config';
 import { createPublisher, type Publisher } from './queue';
@@ -54,6 +65,8 @@ const rooms = new Map<string, Map<string, WsClient>>();
 const clientIds = new WeakMap<WebSocket, string>();
 /** 房间禁言态缓存（0=禁言 1=可发言）：连接建立时 readForbid 回填、订阅推送时更新 */
 const roomForbid = new Map<string, number>();
+/** F3 单用户管控缓存（authUserId 维度）：订阅推送更新、握手 PG 回填、房间空丢弃 */
+const moderationState: ModerationState = new Map();
 
 const JWT_SECRET = requireJwtSecret();
 
@@ -88,6 +101,26 @@ if (persistence.enabled) {
         ? ' — DATABASE_URL and RABBITMQ_URL must both be set'
         : '')
   );
+}
+
+// F3 管控读库：与 history 开关解耦——持久化开则复用同一池，否则有 DATABASE_URL 单开小池
+// （握手 kick/mute 回填 + 到期扫尾）；无 DATABASE_URL → null，读路径 fail-open。
+let moderationPool: Pool | null = null;
+let ownsModerationPool = false;
+if (persistence.enabled && pool) {
+  moderationPool = pool;
+} else if (process.env.DATABASE_URL) {
+  moderationPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+  moderationPool.on('error', err => {
+    console.error(
+      '[ChatWS][PG] moderation pool error:',
+      err instanceof Error ? err.message : String(err)
+    );
+  });
+  ownsModerationPool = true;
+}
+if (!moderationPool) {
+  console.error('[ChatWS] moderation: no DATABASE_URL → fail-open (kick 不可拒入)');
 }
 
 /** 令牌桶：5 条/s、容量 10（突发后匀速）；仅 bullet 计数 */
@@ -163,6 +196,40 @@ subscribeForbid(
   }
 );
 
+// F3 单用户禁言/踢出（网关 live/push/mute|kick|release 经 gRPC 落库后 publish live:moderation）
+subscribeModeration(
+  redis,
+  payload => {
+    applyModeration(moderationState, payload);
+    broadcast(
+      payload.roomId,
+      JSON.stringify({
+        type: 'moderation',
+        userId: payload.userId,
+        kind: payload.kind,
+        op: payload.op,
+        ...(payload.untilMs !== undefined ? { untilMs: payload.untilMs } : {})
+      })
+    );
+    if (payload.kind === 'kick' && payload.op === 'set') {
+      const clients = rooms.get(payload.roomId);
+      if (clients) {
+        for (const client of clients.values()) {
+          if (client.authUserId === payload.userId) {
+            client.ws.close(WsClose.MODERATION_KICKED, 'Removed by teacher');
+          }
+        }
+      }
+    }
+  },
+  (err, stage) => {
+    console.error(
+      `[ChatWS] moderation ${stage}:`,
+      err instanceof Error ? err.message : String(err)
+    );
+  }
+);
+
 // 签到事件（网关 live/checkin publish）→ 广播 {type:'checkin', data:{roomId,action,sessionId,deadlineAt?,signedCount?}}
 subscribeCheckin(
   redis,
@@ -173,6 +240,23 @@ subscribeCheckin(
     console.error(`[ChatWS] checkin ${stage}:`, err instanceof Error ? err.message : String(err));
   }
 );
+
+// F3 到期轮询（15s）：缓存过期 → 广播 expire 帧；PG 全局扫尾置 active=false（留痕 expired）。
+// 单实例语义（GAP-F14 同边界）：多实例间 expire 广播不互通，但读路径惰性过期仍正确。
+const moderationPoll = setInterval(() => {
+  for (const { roomId, userId } of collectExpired(moderationState)) {
+    broadcast(roomId, JSON.stringify({ type: 'moderation', userId, kind: 'mute', op: 'expire' }));
+  }
+  if (moderationPool) {
+    sweepExpiredModeration(moderationPool).catch((err: unknown) => {
+      console.error(
+        '[ChatWS][PG] moderation sweep failed:',
+        err instanceof Error ? err.message : String(err)
+      );
+    });
+  }
+}, 15_000);
+moderationPoll.unref?.();
 
 function sendTo(client: WebSocket, data: LiveMessage) {
   if (client.readyState === WebSocket.OPEN) {
@@ -188,6 +272,33 @@ function broadcast(roomId: string, raw: string, excludeId?: string) {
       ws.send(raw);
     }
   }
+}
+
+/** 房间成员名册快照（按 liveUserId 去重；senderId=JWT sub，供前端把禁言/踢出并回成员列表） */
+function rosterMembers(roomId: string) {
+  const clients = rooms.get(roomId);
+  const members: Array<{
+    senderId: string;
+    liveUserId: string;
+    nickName: string;
+    isTeacher: boolean;
+  }> = [];
+  const seen = new Set<string>();
+  for (const client of clients?.values() ?? []) {
+    if (seen.has(client.userId)) continue;
+    seen.add(client.userId);
+    members.push({
+      senderId: client.authUserId ?? '',
+      liveUserId: client.userId,
+      nickName: client.nickName,
+      isTeacher: client.isTeacher
+    });
+  }
+  return members;
+}
+
+function broadcastRoster(roomId: string) {
+  broadcast(roomId, JSON.stringify({ type: 'roster', data: { members: rosterMembers(roomId) } }));
 }
 
 function registerClient(
@@ -250,6 +361,11 @@ function handleMessage(client: WebSocket, raw: string) {
       case 'bullet': {
         if (!sender) {
           sendTo(client, { type: 'bullet_rejected', reason: 'not_joined' });
+          break;
+        }
+        // F3：单用户禁言先于全房禁言（台账"单用户优先"）；教师豁免
+        if (!sender.isTeacher && isMuted(moderationState, roomId, sender.authUserId)) {
+          sendTo(client, { type: 'bullet_rejected', reason: 'muted' });
           break;
         }
         if (!allowBullet(sender)) {
@@ -370,6 +486,20 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
   const userId = url.searchParams.get('liveUserId') || 'anonymous';
   const nickName = sanitizeName(url.searchParams.get('nickName') || '');
 
+  // F3 握手回填：活跃 kick → 拒入本场（4005）；活跃 mute → 缓存供 bullet 判定
+  const moderation = await loadModeration(moderationPool, roomId, payload.sub);
+  if (moderation?.kicked) {
+    connection.close(WsClose.MODERATION_KICKED, 'Removed by teacher');
+    return;
+  }
+  if (moderation?.muteUntilMs !== undefined) {
+    const roomModeration = ensureRoom(moderationState, roomId);
+    const entry = roomModeration.get(payload.sub) ?? {};
+    entry.muteUntilMs = moderation.muteUntilMs;
+    roomModeration.set(payload.sub, entry);
+  }
+  if (connection.readyState !== WebSocket.OPEN) return;
+
   const clientId = registerClient(
     connection,
     roomId,
@@ -396,6 +526,8 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
     }
   }
 
+  broadcastRoster(roomId);
+
   console.log(`[ChatWS] Connected: roomId=${roomId}, userId=${userId}, id=${clientId}`);
 
   registered = true;
@@ -410,6 +542,9 @@ async function handleConnection(connection: WebSocket, req: http.IncomingMessage
         if (clients.size === 0) {
           rooms.delete(rid);
           roomForbid.delete(rid);
+          dropRoom(moderationState, rid);
+        } else {
+          broadcastRoster(rid);
         }
         console.log(`[ChatWS] Disconnected: roomId=${rid}, id=${cid}`);
         break;
@@ -493,6 +628,7 @@ server.listen(port, '0.0.0.0', () => {
 
 process.on('SIGTERM', () => {
   console.log('[ChatWS] Shutting down...');
+  clearInterval(moderationPoll);
   wss.clients.forEach(client => client.close(1001, 'Server shutting down'));
   stopDepthMonitor?.();
   void (async () => {
@@ -504,12 +640,19 @@ process.on('SIGTERM', () => {
     try {
       await publisher?.close();
     } catch (err) {
-      console.error('[ChatWS] publisher close error:', err);
+      console.error('[ChatWS] publisher stop error:', err);
     }
     try {
       await pool?.end();
     } catch (err) {
-      console.error('[ChatWS] pool end error:', err);
+      console.error('[ChatWS] pool stop error:', err);
+    }
+    if (ownsModerationPool && moderationPool && moderationPool !== pool) {
+      try {
+        await moderationPool.end();
+      } catch (err) {
+        console.error('[ChatWS] moderation pool stop error:', err);
+      }
     }
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 5000).unref?.();

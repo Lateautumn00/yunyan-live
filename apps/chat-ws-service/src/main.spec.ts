@@ -94,6 +94,8 @@ class TestClient {
       this.waiters = this.waiters.filter(w => {
         if (w.pred(frame)) {
           clearTimeout(w.timer);
+          // waiter 命中与 scan 命中同语义：消费至该帧（后续同类型 next 不复吃旧帧）
+          this.cursor = Math.max(this.cursor, this.received.length);
           w.resolve(frame);
           return false;
         }
@@ -149,9 +151,9 @@ class TestClient {
 
 const token = jwt.sign({ sub: 'u-main', email: 'u@x', role: 0, sid: SID }, SECRET);
 
-async function connect(extra: Record<string, string> = {}): Promise<TestClient> {
+async function connect(extra: Record<string, string> = {}, tok = token): Promise<TestClient> {
   const qs = new URLSearchParams({
-    token,
+    token: tok,
     roomId: 'r-main',
     liveUserId: 'u1',
     nickName: '小明',
@@ -483,5 +485,276 @@ describe('签到广播（live:checkin → {type:"checkin"}）', () => {
     sub.emit('message', CHECKIN_CHANNEL, JSON.stringify({ roomId: 'r-main' }));
     await c.expectNo('checkin');
     c.close();
+  });
+});
+
+describe('F3 单用户禁言/踢出（live:moderation）', () => {
+  const tokenMuted = jwt.sign({ sub: 'u-mute', email: 'm@x', role: 0, sid: SID }, SECRET);
+  const tokenTeacher = jwt.sign({ sub: 'u-teacher', email: 't@x', role: 1, sid: SID }, SECRET);
+  const tokenOther = jwt.sign({ sub: 'u-other', email: 'o@x', role: 0, sid: SID }, SECRET);
+
+  /** 只替换 chat_moderation 读：branch(sub, row) 返回活跃行或 [] */
+  function stubModeration(
+    branch: (userId: string) => Array<{ kind: string; until: Date | null }>
+  ): () => void {
+    const prev = h.query;
+    h.query = async (sql: string, params?: unknown[]) => {
+      if (sql.includes('FROM chat_moderation')) {
+        const rows = branch(String(params?.[1] ?? ''));
+        return { rows, rowCount: rows.length };
+      }
+      if (sql.includes('FROM chat_messages')) {
+        return { rows: cannedHistory, rowCount: cannedHistory.length };
+      }
+      return { rows: [], rowCount: 0 };
+    };
+    return () => {
+      h.query = prev;
+    };
+  }
+
+  async function moderationSubscriber() {
+    const { MODERATION_CHANNEL } = await import('@yunyan-live/nest-shared');
+    const sub = h.redisInstances.find(x =>
+      x.subscribe.mock.calls.some(call => call[0] === MODERATION_CHANNEL)
+    );
+    expect(sub).toBeDefined();
+    return { MODERATION_CHANNEL, sub: sub! };
+  }
+
+  function closeCode(c: TestClient): Promise<number> {
+    return new Promise<number>(resolve => c.ws.once('close', code => resolve(code)));
+  }
+
+  it('握手：PG 活跃 kick → 4005 拒入本场，不注册', async () => {
+    const restore = stubModeration(userId =>
+      userId === 'u-kick' ? [{ kind: 'kick', until: null }] : []
+    );
+    try {
+      const c = await connect(
+        {},
+        jwt.sign({ sub: 'u-kick', email: 'k@x', role: 0, sid: SID }, SECRET)
+      );
+      const code = await closeCode(c);
+      expect(code).toBe(4005);
+      expect(c.received.filter(f => f.type === 'msg')).toHaveLength(0);
+    } finally {
+      restore();
+    }
+  });
+
+  it('握手：PG 活跃 mute → 回填缓存，bullet 拒发 reason=muted；他人不受影响', async () => {
+    const restore = stubModeration(userId =>
+      userId === 'u-mute' ? [{ kind: 'mute', until: new Date(Date.now() + 60_000) }] : []
+    );
+    try {
+      const muted = await connect({}, tokenMuted);
+      await muted.next('history');
+      muted.send({ type: 'bullet', data: { liveMsg: { msg: 'hi' } } });
+      const rej = await muted.next('bullet_rejected');
+      expect(rej.reason).toBe('muted');
+
+      const other = await connect({}, tokenOther);
+      await other.next('history');
+      other.send({ type: 'bullet', data: { liveMsg: { msg: 'ok' } } });
+      const f = await other.next('bullet');
+      expect((f.data?.liveMsg as Record<string, unknown>).msg).toBe('ok');
+
+      muted.close();
+      other.close();
+    } finally {
+      restore();
+    }
+  });
+
+  it('握手：教师即使有活跃 mute 行也豁免发送（教师豁免）', async () => {
+    const restore = stubModeration(userId =>
+      userId === 'u-teacher' ? [{ kind: 'mute', until: new Date(Date.now() + 60_000) }] : []
+    );
+    try {
+      const t = await connect({}, tokenTeacher);
+      await t.next('history');
+      t.send({ type: 'bullet', data: { liveMsg: { msg: 'teacher' } } });
+      const f = await t.next('bullet');
+      expect((f.data?.liveMsg as Record<string, unknown>).msg).toBe('teacher');
+      t.close();
+    } finally {
+      restore();
+    }
+  });
+
+  it('订阅 mute/set → 房间收到 moderation 帧；目标被拒 muted；release 后恢复', async () => {
+    const { MODERATION_CHANNEL, sub } = await moderationSubscriber();
+    const target = await connect({}, tokenMuted);
+    const watcher = await connect({}, tokenOther);
+    await target.next('history');
+    await watcher.next('history');
+
+    sub.emit(
+      'message',
+      MODERATION_CHANNEL,
+      JSON.stringify({
+        roomId: 'r-main',
+        userId: 'u-mute',
+        kind: 'mute',
+        op: 'set',
+        untilMs: Date.now() + 60_000
+      })
+    );
+    const applied = await watcher.next('moderation');
+    expect(applied).toMatchObject({ userId: 'u-mute', kind: 'mute', op: 'set' });
+
+    target.send({ type: 'bullet', data: { liveMsg: { msg: 'blocked' } } });
+    const rej = await target.next('bullet_rejected');
+    expect(rej.reason).toBe('muted');
+
+    sub.emit(
+      'message',
+      MODERATION_CHANNEL,
+      JSON.stringify({ roomId: 'r-main', userId: 'u-mute', kind: 'mute', op: 'release' })
+    );
+    const released = await watcher.next('moderation');
+    expect(released).toMatchObject({ op: 'release' });
+
+    target.send({ type: 'bullet', data: { liveMsg: { msg: 'again' } } });
+    const f = await target.next('bullet');
+    expect((f.data?.liveMsg as Record<string, unknown>).msg).toBe('again');
+
+    target.close();
+    watcher.close();
+  });
+
+  it('单用户禁言优先于全房禁言：forbid=0 时目标仍回 muted（非 forbidden）', async () => {
+    const { FORBID_CHANNEL } = await import('@yunyan-live/nest-shared');
+    const forbidSub = h.redisInstances.find(x =>
+      x.subscribe.mock.calls.some(call => call[0] === FORBID_CHANNEL)
+    );
+    expect(forbidSub).toBeDefined();
+    const { MODERATION_CHANNEL, sub: moderationSub } = await moderationSubscriber();
+
+    const target = await connect({}, tokenMuted);
+    const bystander = await connect({}, tokenOther);
+    await target.next('history');
+    await bystander.next('history');
+
+    // 全房禁言生效
+    forbidSub!.emit('message', FORBID_CHANNEL, JSON.stringify({ roomId: 'r-main', status: 0 }));
+    await bystander.next('updateForbid');
+    // 目标叠加单用户禁言
+    moderationSub.emit(
+      'message',
+      MODERATION_CHANNEL,
+      JSON.stringify({
+        roomId: 'r-main',
+        userId: 'u-mute',
+        kind: 'mute',
+        op: 'set',
+        untilMs: Date.now() + 60_000
+      })
+    );
+    await target.next('moderation');
+
+    target.send({ type: 'bullet', data: { liveMsg: { msg: 'both' } } });
+    const rej = await target.next('bullet_rejected');
+    expect(rej.reason).toBe('muted'); // 单用户优先于全房 forbidden
+
+    bystander.send({ type: 'bullet', data: { liveMsg: { msg: 'other' } } });
+    const rej2 = await bystander.next('bullet_rejected');
+    expect(rej2.reason).toBe('forbidden'); // 无单用户标记者仍受全房禁言
+
+    target.close();
+    bystander.close();
+  });
+
+  it('订阅 kick/set → 目标连接 4005 关闭 + 房间收到 moderation 帧', async () => {
+    const { MODERATION_CHANNEL, sub } = await moderationSubscriber();
+    const target = await connect({}, tokenOther);
+    const watcher = await connect({}, tokenMuted);
+    await target.next('history');
+    await watcher.next('history');
+
+    const closed = closeCode(target);
+    sub.emit(
+      'message',
+      MODERATION_CHANNEL,
+      JSON.stringify({ roomId: 'r-main', userId: 'u-other', kind: 'kick', op: 'set' })
+    );
+    expect(await closed).toBe(4005);
+
+    const frame = await watcher.next('moderation');
+    expect(frame).toMatchObject({ userId: 'u-other', kind: 'kick', op: 'set' });
+    watcher.close();
+  });
+
+  it('其它房间的 moderation 事件不广播到本房间', async () => {
+    const { MODERATION_CHANNEL, sub } = await moderationSubscriber();
+    const c = await connect();
+    await c.next('history');
+    sub.emit(
+      'message',
+      MODERATION_CHANNEL,
+      JSON.stringify({ roomId: 'r-other', userId: 'u-x', kind: 'mute', op: 'set', untilMs: 1 })
+    );
+    await c.expectNo('moderation');
+    c.close();
+  });
+});
+
+describe('成员名册 roster 帧（F3 前端身份桥）', () => {
+  const tokenRoster2 = jwt.sign({ sub: 'u-roster-2', email: 'r2@x', role: 0, sid: SID }, SECRET);
+
+  /** 持续消费 roster 帧直到出现指定人数快照（上一测试尾部 close 的 leave 广播可能穿插，避免误匹配） */
+  async function nextRosterWith(c: TestClient, size: number): Promise<Frame> {
+    for (let i = 0; i < 10; i += 1) {
+      const f = await c.next('roster');
+      if ((f.data as { members?: unknown[] }).members?.length === size) return f;
+    }
+    throw new Error(`no roster snapshot with ${size} members`);
+  }
+
+  it('注册后收到 roster 快照；新成员加入/离线触发全量更新（senderId=JWT sub）', async () => {
+    const c1 = await connect();
+    await c1.next('history');
+    const r1 = await nextRosterWith(c1, 1);
+    const members1 = (r1.data as { members: Array<Record<string, unknown>> }).members;
+    expect(members1).toEqual([
+      { senderId: 'u-main', liveUserId: 'u1', nickName: '小明', isTeacher: false }
+    ]);
+
+    const c2 = await connect({ liveUserId: 'u2' }, tokenRoster2);
+    const r2c2 = await c2.next('roster');
+    expect((r2c2.data as { members: unknown[] }).members).toHaveLength(2);
+    const r2 = await nextRosterWith(c1, 2);
+    const members2 = (r2.data as { members: Array<Record<string, unknown>> }).members;
+    expect(members2).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ senderId: 'u-main', liveUserId: 'u1' }),
+        expect.objectContaining({ senderId: 'u-roster-2', liveUserId: 'u2' })
+      ])
+    );
+    expect(members2).toHaveLength(2);
+
+    c2.close();
+    const r3 = await nextRosterWith(c1, 1);
+    const members3 = (r3.data as { members: Array<Record<string, unknown>> }).members;
+    expect(members3[0]).toMatchObject({ liveUserId: 'u1' });
+    c1.close();
+  });
+
+  it('同 liveUserId 重复连接按名册去重（liveUserId 维度一员）', async () => {
+    const a = await connect();
+    await a.next('history');
+    await nextRosterWith(a, 1);
+    const b = await connect(
+      {},
+      jwt.sign({ sub: 'u-dup', email: 'd@x', role: 0, sid: SID }, SECRET)
+    );
+    const rb = await b.next('roster');
+    expect((rb.data as { members: unknown[] }).members).toHaveLength(1);
+    const frame = await nextRosterWith(a, 1);
+    const members = (frame.data as { members: Array<Record<string, unknown>> }).members;
+    expect(members.filter(m => m.liveUserId === 'u1')).toHaveLength(1);
+    a.close();
+    b.close();
   });
 });

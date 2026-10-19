@@ -50,11 +50,27 @@ export interface BulletEnvelope {
 
 /** 拒发回执（仅回发送者；旧客户端 default 分支安全忽略） */
 export type BulletRejectReason =
-  'forbidden' | 'too_long' | 'invalid' | 'not_joined' | 'rate_limited' | 'blocked_word';
+  'forbidden' | 'too_long' | 'invalid' | 'not_joined' | 'rate_limited' | 'blocked_word' | 'muted';
 
 export interface BulletRejectedMessage {
   type: 'bullet_rejected';
   reason: BulletRejectReason;
+}
+
+/**
+ * F3 单用户禁言/踢出广播（chat-ws 订阅 live:moderation 后转播给房间）：
+ * - kind=mute, op=set → untilMs=到期毫秒（受禁者禁发、教师豁免、可查看）
+ * - kind=mute, op=expire → 服务端 15s 轮询到点自动解禁
+ * - kind=kick, op=set → 受禁者被 close(MODERATION_KICKED) 且握手拒入本场（roomId=本场）
+ * - op=release → 教师手动解除
+ * 旧客户端 default 分支安全忽略本帧。
+ */
+export interface ModerationMessage {
+  type: 'moderation';
+  userId: string;
+  kind: 'mute' | 'kick';
+  op: 'set' | 'release' | 'expire';
+  untilMs?: number;
 }
 
 /** 历史回放页大小（进场 push 与 getHistory 翻页共用，服务端固定不接受 limit 参数） */
@@ -95,6 +111,23 @@ export interface GetHistoryMessage {
 export interface RoomStateMessage {
   type: 'msg';
   data: { liveMsg: { liveNums?: number; forbid?: number } };
+}
+
+/**
+ * 成员名册（chat-ws 注册/离线时全量快照广播）：
+ * senderId=JWT sub（users.id，单用户禁言/踢出的落库身份）；liveUserId=连接声明 opaqueId
+ * （与 Janus 成员列表 display 同源，前端用它把名册并回成员列表）。
+ */
+export interface RosterMember {
+  senderId: string;
+  liveUserId: string;
+  nickName: string;
+  isTeacher: boolean;
+}
+
+export interface RosterMessage {
+  type: 'roster';
+  data: { members: RosterMember[] };
 }
 
 /**
