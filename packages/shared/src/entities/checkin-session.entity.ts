@@ -3,6 +3,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 
 /** 签到轮次（一轮=一次限时签到；状态由 endedAt/deadlineAt 派生，无 status 列） */
 @Entity('checkin_sessions')
 @Index('IDX_checkin_sessions_room_started', ['roomId', 'startedAt'])
+@Index('idx_checkin_sessions_started', ['startedAt'])
 export class CheckinSession {
   @PrimaryGeneratedColumn('uuid')
   id: string;

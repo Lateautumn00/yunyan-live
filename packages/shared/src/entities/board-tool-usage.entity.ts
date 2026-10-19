@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
 
 @Index('idx_board_tool_usage_room_created', ['roomId', 'createdAt'])
+@Index('idx_board_tool_usage_created', ['createdAt'])
 @Entity('board_tool_usage')
 export class BoardToolUsage {
   @PrimaryGeneratedColumn('uuid')

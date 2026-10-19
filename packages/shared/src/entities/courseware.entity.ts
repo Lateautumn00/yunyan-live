@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
 
+@Index('idx_coursewares_room_created', ['roomId', 'createdAt'])
 @Entity('coursewares')
 export class Courseware {
   @PrimaryGeneratedColumn('uuid')

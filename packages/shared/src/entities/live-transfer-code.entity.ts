@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
 
+@Index('idx_live_transfer_codes_room_user', ['roomId', 'targetUserId'])
 @Entity('live_transfer_codes')
 export class LiveTransferCode {
   @PrimaryGeneratedColumn('uuid')

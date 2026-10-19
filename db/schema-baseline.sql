@@ -490,10 +490,24 @@ CREATE UNIQUE INDEX "UQ_checkin_records_session_user" ON public.checkin_records 
 
 
 --
+-- Name: idx_board_tool_usage_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_board_tool_usage_created ON public.board_tool_usage USING btree ("createdAt");
+
+
+--
 -- Name: idx_board_tool_usage_room_created; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_board_tool_usage_room_created ON public.board_tool_usage USING btree ("roomId", "createdAt");
+
+
+--
+-- Name: idx_chat_messages_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_messages_created ON public.chat_messages USING btree (created_at);
 
 
 --
@@ -511,6 +525,27 @@ CREATE INDEX idx_chat_moderation_room_user_active ON public.chat_moderation USIN
 
 
 --
+-- Name: idx_checkin_sessions_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_checkin_sessions_started ON public.checkin_sessions USING btree ("startedAt");
+
+
+--
+-- Name: idx_coursewares_room_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_coursewares_room_created ON public.coursewares USING btree ("roomId", "createdAt");
+
+
+--
+-- Name: idx_live_participants_room_joined; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_live_participants_room_joined ON public.live_participants USING btree ("roomId", "joinedAt" DESC);
+
+
+--
 -- Name: idx_live_participants_user_joined; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -522,6 +557,13 @@ CREATE INDEX idx_live_participants_user_joined ON public.live_participants USING
 --
 
 CREATE INDEX idx_live_rooms_teacher_created ON public.live_rooms USING btree ("liveUserId", "createdAt" DESC);
+
+
+--
+-- Name: idx_live_transfer_codes_room_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_live_transfer_codes_room_user ON public.live_transfer_codes USING btree ("roomId", "targetUserId");
 
 
 --

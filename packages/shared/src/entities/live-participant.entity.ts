@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index, Unique } from 'typeorm';
 
 @Index('idx_live_participants_user_joined', ['userId', 'joinedAt', 'id'])
+@Index('idx_live_participants_room_joined', ['roomId', 'joinedAt'])
 @Entity('live_participants')
 @Unique(['userId', 'roomId'])
 export class LiveParticipant {

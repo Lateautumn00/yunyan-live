@@ -3,6 +3,7 @@
 > 本目录是**唯一**的 schema 变更入口。三轨并存（TypeORM `synchronize` / `init/schema.sql` /
 > 手工 SQL）已于批次 2 关闭：`live-service` 默认 `synchronize: false`（`NODE_ENV=production`
 > 下显式请求 `TYPEORM_SYNC=true` 直接拒启动），其余手工 SQL 目录封存。
+> 批次 5 起 compose 建库改为直载 `db/schema-baseline.sql`（单一事实源），`init/schema.sql` 已移除。
 
 ## 目录与迁移序列
 
@@ -78,17 +79,20 @@ DATABASE_URL=... node scripts/db-migrate.mjs --status   # 5 recorded, 0 pending
 
 > 登记前确保现网库已有 O1 备份（`scripts/backup-postgres.sh`，见 README 备份节）。
 
-## docker compose 全新起库（init/schema.sql 衔接）
+## docker compose 全新起库（直载 db/schema-baseline.sql）
 
-`init/docker-compose.yml` 的 postgres 首次启动仍由 `init/schema.sql` 一次性建表（**仅**开发/演示
-环境便利轨；表集合与 baseline 一致）。起库后登记一次即可纳入 runner 管理：
+`init/docker-compose.yml` 的 postgres 首次启动直接装载本目录的 `schema-baseline.sql`
+（docker-entrypoint-initdb.d；单一事实源，杜绝 `init/schema.sql` 与 baseline 的双轨漂移——
+批次 5 实测旧便利轨缺 `audit_logs`/`board_tool_usage`/`chat_moderation` 3 表与
+chat_messages 的 recall 列）。起库后登记两次即可纳入 runner 管理：
 
 ```bash
-pnpm db:migrate -- --baseline   # 对已由 schema.sql 建表的库
-pnpm db:migrate:status          # 5 recorded, 0 pending
+pnpm db:migrate -- --baseline   # 对已由 baseline 直载建表的库（登记 baseline+legacy）
+pnpm db:migrate                 # 幂等重放 0001+（全部 IF NOT EXISTS，纯登记）
+pnpm db:migrate:status          # 11 recorded, 0 pending
 ```
 
-禁止向 `init/schema.sql` 追加新表（同 legacy 封存语义）；新表走 `db/migrations/` SOP。
+新表/新列一律走 `db/migrations/` SOP 并同步 `schema-baseline.sql`；compose 侧无需任何动作。
 
 ## 冻结生效开关（live-service）
 
