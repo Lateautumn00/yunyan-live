@@ -11,7 +11,8 @@
       - '127.0.0.1:5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      # 批次 5：直载 db/schema-baseline.sql（单一事实源，替代已封存的 init/schema.sql）
+      - ../db/schema-baseline.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 5s
@@ -76,6 +77,220 @@
     volumes:
       - /home/janus/recordings:/tmp/janus/recordings
       - janus-logs:/var/log/janus
+
+  # ==== O3 业务服务（批次 5）：走 --profile app，缺省 `docker compose up` 仍只起基础设施 ====
+  # 起停: docker compose --profile app up -d --build
+  # 注意: 与宿主机 pnpm dev 同端口互斥（3001/50054/50055/9464-9466），二选一运行
+  gateway:
+    build:
+      context: ..
+      dockerfile: apps/server/Dockerfile
+    image: yunyan-live-server:latest
+    container_name: yunyan-live-gateway
+    profiles: ['app']
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:3001:3001'
+    environment:
+      SERVER_PORT: '3001'
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/yunyan_live
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
+      AUTH_GRPC_URL: auth-service:50051
+      LIVE_GRPC_URL: live-service:50052
+      MAIL_GRPC_URL: mail-service:50053
+      JANUS_URL: http://janus-gateway:8088
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:?}:${RABBITMQ_PASSWORD:?}@rabbitmq:5672
+      RECORDINGS_DIR: /home/janus/recordings
+    volumes:
+      # 与 janus-gateway 同宿主目录，保证录制文件两侧可见（宿主机路径随 init/.env 部署环境）
+      - /home/janus/recordings:/home/janus/recordings
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      live-service:
+        condition: service_started
+      mail-service:
+        condition: service_started
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:3001/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  auth-service:
+    build:
+      context: ..
+      dockerfile: apps/auth-service/Dockerfile
+    image: yunyan-live-auth:latest
+    container_name: yunyan-live-auth
+    profiles: ['app']
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/yunyan_live
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
+      GRPC_HOST: 0.0.0.0
+      GRPC_PORT: '50051'
+      MAIL_GRPC_URL: mail-service:50053
+      METRICS_PORT: '9464'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mail-service:
+        condition: service_started
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:9464/metrics || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  live-service:
+    build:
+      context: ..
+      dockerfile: apps/live-service/Dockerfile
+    image: yunyan-live-live:latest
+    container_name: yunyan-live-live
+    profiles: ['app']
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/yunyan_live
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
+      GRPC_HOST: 0.0.0.0
+      GRPC_PORT: '50052'
+      JANUS_URL: http://janus-gateway:8088
+      TYPEORM_SYNC: 'false'
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:?}:${RABBITMQ_PASSWORD:?}@rabbitmq:5672
+      METRICS_PORT: '9465'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:9465/metrics || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  mail-service:
+    build:
+      context: ..
+      dockerfile: apps/mail-service/Dockerfile
+    image: yunyan-live-mail:latest
+    container_name: yunyan-live-mail
+    profiles: ['app']
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      GRPC_HOST: 0.0.0.0
+      GRPC_PORT: '50053'
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:?}:${RABBITMQ_PASSWORD:?}@rabbitmq:5672
+      METRICS_PORT: '9466'
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:9466/metrics || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  chat-ws-service:
+    build:
+      context: ..
+      dockerfile: apps/chat-ws-service/Dockerfile
+    image: yunyan-live-chat-ws:latest
+    container_name: yunyan-live-chat-ws
+    profiles: ['app']
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:50054:50054'
+    environment:
+      CHAT_WS_PORT: '50054'
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/yunyan_live
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:?}:${RABBITMQ_PASSWORD:?}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:50054/metrics || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  yjs-ws-service:
+    build:
+      context: ..
+      dockerfile: apps/yjs-ws-service/Dockerfile
+    image: yunyan-live-yjs-ws:latest
+    container_name: yunyan-live-yjs-ws
+    profiles: ['app']
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:50055:50055'
+    environment:
+      YJS_WS_PORT: '50055'
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      LIVE_GRPC_URL: live-service:50052
+    depends_on:
+      redis:
+        condition: service_healthy
+      live-service:
+        condition: service_started
+    healthcheck:
+      test: ['CMD-SHELL', 'nc -z 127.0.0.1 50055 || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
 
   # O5 监控最小集（批次 3 启动；演练与告警外发收尾在批次 5）
   prometheus:

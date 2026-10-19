@@ -96,7 +96,6 @@ yunyan-live/
 │   ├── Dockerfile                      # 多阶段构建 Janus 镜像
 │   ├── docker-compose.yml              # 容器编排
 │   ├── entrypoint.sh                   # 启动脚本（生成 Janus 配置）
-│   ├── schema.sql                      # 数据库初始化脚本
 │   ├── .env.example                    # Docker 环境变量模板
 │   └── yunyan-live-download/           # 安装包下载/自动更新静态站（nginx :8080）
 │       ├── docker-compose.yml
@@ -235,7 +234,7 @@ VITE_UPLOAD_PPT_URL=http://192.168.x.x:3001/upload/ppt
 ```bash
 cd init
 
-# 首次启动会自动建表（schema.sql）
+# 首次启动会自动建表（直载 db/schema-baseline.sql）
 docker compose up -d --build
 
 # 查看 PostgreSQL 日志，确认表已创建
@@ -244,7 +243,7 @@ docker logs yunyan-live-postgres --tail 20
 
 数据库初始化说明：
 
-- PostgreSQL 容器首次启动时，自动执行 `schema.sql` 创建 11 张表（表清单见 `init/schema.sql`）
+- PostgreSQL 容器首次启动时，直载 `db/schema-baseline.sql` 创建 14 张表（与 CI schema 门禁同一事实源）
 - 已有数据的容器不会重复执行（`pgdata` 卷存在时跳过）
 - 重置数据库：`docker compose down -v && docker compose up -d`
 
@@ -326,12 +325,12 @@ docker logs yunyan-live-redis --tail 20
 
 PostgreSQL 容器使用 `/docker-entrypoint-initdb.d/` 机制：
 
-- 首次启动时自动执行挂载的 `schema.sql`，创建 11 张表
+- 首次启动时自动执行挂载的 `db/schema-baseline.sql`，创建 14 张表
 - 通过 `docker-compose.yml` 中的 volume 挂载实现：
   ```yaml
   volumes:
     - pgdata:/var/lib/postgresql/data
-    - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    - ../db/schema-baseline.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
   ```
 
 **重置数据库**（删除所有数据并重新建表）：
@@ -339,10 +338,10 @@ PostgreSQL 容器使用 `/docker-entrypoint-initdb.d/` 机制：
 ```bash
 cd init
 docker compose down -v    # 删除数据卷
-docker compose up -d      # 重新启动，自动执行 schema.sql
+docker compose up -d      # 重新启动，自动执行 schema-baseline.sql
 ```
 
-**存量数据库升级（唯一入口 = 迁移 runner，GAP-S9a）**：全新库由 `schema.sql` 一次性建表后登记；
+**存量数据库升级（唯一入口 = 迁移 runner，GAP-S9a）**：全新库由 baseline 直载建表后登记；
 已有 schema 且无迁移记录的库（如现网首次纳入）先登记再升级：
 
 ```bash
@@ -352,7 +351,7 @@ pnpm db:migrate                                              # 应用 db/migrati
 ```
 
 机制、规则与新增迁移 SOP 见 [`db/README.md`](db/README.md)。
-`apps/*/src/migrations/` 与 `init/schema.sql` 已封存——**禁止**再手工执行 SQL，新表/新列一律走
+`apps/*/src/migrations/` 已封存——**禁止**再手工执行 SQL，新表/新列一律走
 `db/migrations/` 并同步更新 `db/schema-baseline.sql`（CI schema diff 门禁强制）。
 
 > **备份基线**：PostgreSQL 日备、文件级备份与恢复演练脚本已入库

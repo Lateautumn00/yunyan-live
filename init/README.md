@@ -287,9 +287,8 @@ dist/
 
 ```
 init/
-+-- schema.sql                   # 数据库建表 SQL（PostgreSQL 首次启动自动执行）
 +-- Dockerfile                   # 多阶段构建：编译 Janus + 运行时镜像
-+-- docker-compose.yml           # 容器编排（PostgreSQL + Redis + Janus）
++-- docker-compose.yml           # 容器编排（基础设施 + --profile app 业务服务 + 监控）
 +-- entrypoint.sh                # 启动脚本：从环境变量生成配置 + 启动 Janus
 +-- .env                         # 环境变量（GATEWAY_IP, STUN 等）
 +-- .env.example                 # 环境变量模板

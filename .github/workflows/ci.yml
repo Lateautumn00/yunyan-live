@@ -102,3 +102,23 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+  container:
+    name: Container build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # compose 插值必需项（${VAR:?}）；仅用于校验/构建，不部署
+      RABBITMQ_USER: ci
+      RABBITMQ_PASSWORD: ci-password
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate compose config
+        run: docker compose -f init/docker-compose.yml config -q
+
+      - name: Build service images
+        run: >-
+          docker compose -f init/docker-compose.yml --profile app build
+          gateway auth-service live-service mail-service
+          chat-ws-service yjs-ws-service

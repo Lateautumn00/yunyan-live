@@ -32,10 +32,15 @@ export class AppService {
   }
 
   async getServicesHealth() {
+    // gRPC 探测目标与 clients.module 同源（env 可覆盖，容器内指向服务名）
+    const target = (name: string, url: string) => {
+      const [host, port] = url.split(':');
+      return { name, host: host || '127.0.0.1', port: Number(port) || 0 };
+    };
     const services = [
-      { name: 'auth-service', host: '127.0.0.1', port: 50051 },
-      { name: 'live-service', host: '127.0.0.1', port: 50052 },
-      { name: 'mail-service', host: '127.0.0.1', port: 50053 }
+      target('auth-service', process.env.AUTH_GRPC_URL || '127.0.0.1:50051'),
+      target('live-service', process.env.LIVE_GRPC_URL || '127.0.0.1:50052'),
+      target('mail-service', process.env.MAIL_GRPC_URL || '127.0.0.1:50053')
     ];
 
     const results = await Promise.all(

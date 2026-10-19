@@ -10,7 +10,7 @@ import { grpcClientOptions, resolveProto } from '@yunyan-live/nest-shared';
         options: grpcClientOptions({
           package: 'mail',
           protoPath: resolveProto('mail.proto'),
-          url: 'localhost:50053'
+          url: process.env.MAIL_GRPC_URL || 'localhost:50053'
         })
       },
       {
@@ -19,7 +19,7 @@ import { grpcClientOptions, resolveProto } from '@yunyan-live/nest-shared';
         options: grpcClientOptions({
           package: 'auth',
           protoPath: resolveProto('auth.proto'),
-          url: 'localhost:50051'
+          url: process.env.AUTH_GRPC_URL || 'localhost:50051'
         })
       },
       {
@@ -28,7 +28,7 @@ import { grpcClientOptions, resolveProto } from '@yunyan-live/nest-shared';
         options: grpcClientOptions({
           package: 'live',
           protoPath: resolveProto('live.proto'),
-          url: 'localhost:50052'
+          url: process.env.LIVE_GRPC_URL || 'localhost:50052'
         })
       }
     ])
