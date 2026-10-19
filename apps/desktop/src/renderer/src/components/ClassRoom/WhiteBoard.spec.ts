@@ -1793,6 +1793,12 @@ describe('WhiteBoard.vue PPT 课件', () => {
       formulaVisible: boolean;
       formulaInput: string;
     };
+    // F7 清屏撤销用例（撤销条 10 秒过期走 fake timers，钩子保证失败时也还原）
+    type F7VM = F51VM & { toastActionLabel: string };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
 
     async function openTwoPageCourseware(wrapper: ReturnType<typeof mountWB>) {
       const vm = wrapper.vm as unknown as F51VM;
@@ -1921,18 +1927,143 @@ describe('WhiteBoard.vue PPT 课件', () => {
       wrapper.unmount();
     });
 
-    it('课件页清页钉现状：整页（含底图）清空且 undo 栈一并清空', async () => {
+    it('课件页清屏可撤销：整页（含底图）清空占一档 undo，撤销恢复、重做再清空', async () => {
       const wrapper = mountWB();
       const vm = await openTwoPageCourseware(wrapper);
+      vm.tool('brush');
+      dragDraw(100, 100, 300, 160);
+      expect(vm.getCurrentPageShapes().length).toBe(2);
+      const undoBefore = vm.provider!.undoManager.undoStack.length;
+
+      vm.layerClear();
+      expect(vm.getCurrentPageShapes().length).toBe(0);
+      expect(vm.provider!.undoManager.undoStack.length).toBe(undoBefore + 1);
+
+      vm.revocation('pre');
+      expect(vm.getCurrentPageShapes().length).toBe(2);
+      expect(vm.getCurrentPageShapes()[0]).toMatchObject({ type: 'ppt-image' });
+
+      vm.revocation('next');
+      expect(vm.getCurrentPageShapes().length).toBe(0);
+      wrapper.unmount();
+    });
+
+    it('F7 正向：清屏弹 10 秒撤销条，点击撤销恢复整页且撤销条消失', async () => {
+      const wrapper = mountWB();
+      const vm = (await openTwoPageCourseware(wrapper)) as F7VM;
+      vm.tool('brush');
+      dragDraw(100, 100, 300, 160);
+      vm.layerClear();
+      await nextTick();
+
+      expect(vm.toastMsg).toContain('已清空画布');
+      expect(vm.toastActionLabel).toBe('撤销');
+      const btn = wrapper.find('.alert-act');
+      expect(btn.exists()).toBe(true);
+
+      await btn.trigger('click');
+      await nextTick();
+      expect(vm.getCurrentPageShapes().length).toBe(2);
+      expect(vm.toastMsg).toBe('');
+      expect(vm.toastActionLabel).toBe('');
+      expect(wrapper.find('.alert-act').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('F7 正向：撤销窗口 10 秒后自动关闭（撤销条消失且文案清空）', async () => {
+      const wrapper = mountWB();
+      const vm = (await openTwoPageCourseware(wrapper)) as F7VM;
+      vm.tool('brush');
+      dragDraw(100, 100, 300, 160);
+      vi.useFakeTimers();
+      vm.layerClear();
+      await nextTick();
+
+      expect(vm.toastActionLabel).toBe('撤销');
+      vi.advanceTimersByTime(9000);
+      expect(vm.toastActionLabel).toBe('撤销');
+      vi.advanceTimersByTime(1100);
+      expect(vm.toastActionLabel).toBe('');
+      expect(vm.toastMsg).toBe('');
+      await nextTick();
+      expect(wrapper.find('.alert-act').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('F7 跨页：页 2 清屏→翻到页 1（只清 redo 不动 undo）→撤销跳回页 2 并恢复', async () => {
+      const wrapper = mountWB();
+      const vm = await openTwoPageCourseware(wrapper);
+      vm.showLayer(2);
+      await nextTick();
+      expect(unwrapVal(vm.curLayerIndex)).toBe(2);
       vm.tool('brush');
       dragDraw(100, 100, 300, 160);
       expect(vm.getCurrentPageShapes().length).toBe(2);
 
       vm.layerClear();
       expect(vm.getCurrentPageShapes().length).toBe(0);
-      // 现状钉死：清页连课件底图一并删除、撤销栈清空；是否应保护底图留待实机走查裁决
+
+      vm.showLayer(1);
+      await nextTick();
+      expect(unwrapVal(vm.curLayerIndex)).toBe(1);
+
       vm.revocation('pre');
+      await nextTick();
+      // jumpToUndoMeta 按栈项 meta.pageIndex 跳回清屏发生页
+      expect(unwrapVal(vm.curLayerIndex)).toBe(2);
+      expect(vm.getCurrentPageShapes().length).toBe(2);
+      expect(vm.getCurrentPageShapes()[0]).toMatchObject({ type: 'ppt-image' });
+      wrapper.unmount();
+    });
+
+    it('F7 交错：画→清→撤销两次按 LIFO（先撤清屏再撤笔迹），重做两次反向回到清空', async () => {
+      const wrapper = mountWB();
+      const vm = await openTwoPageCourseware(wrapper);
+      vm.tool('brush');
+      dragDraw(100, 100, 300, 160);
+      const undoBefore = vm.provider!.undoManager.undoStack.length;
+
+      vm.layerClear();
       expect(vm.getCurrentPageShapes().length).toBe(0);
+      expect(vm.provider!.undoManager.undoStack.length).toBe(undoBefore + 1);
+
+      vm.revocation('pre'); // 撤清屏 → 底图+笔迹回来
+      expect(vm.getCurrentPageShapes().length).toBe(2);
+      vm.revocation('pre'); // 撤笔迹 → 只剩底图
+      expect(vm.getCurrentPageShapes().length).toBe(1);
+
+      vm.revocation('next'); // 重做笔迹
+      expect(vm.getCurrentPageShapes().length).toBe(2);
+      vm.revocation('next'); // 重做清屏
+      expect(vm.getCurrentPageShapes().length).toBe(0);
+      wrapper.unmount();
+    });
+
+    it('F7 负向：空画布清屏不产新栈项也不出撤销条（防误撤上一档）', async () => {
+      const wrapper = mountWB();
+      const vm = (await openTwoPageCourseware(wrapper)) as F7VM;
+      vm.tool('brush');
+      dragDraw(100, 100, 300, 160);
+      vm.layerClear();
+      await nextTick();
+      expect(vm.getCurrentPageShapes().length).toBe(0);
+      const undoAfterFirst = vm.provider!.undoManager.undoStack.length;
+
+      vm.layerClear(); // 画布已空：不追加栈项、不重发撤销条（首条撤销条仍在 10 秒窗内）
+      await nextTick();
+      expect(vm.provider!.undoManager.undoStack.length).toBe(undoAfterFirst);
+      expect(vm.toastMsg).toContain('已清空画布');
+      expect(vm.toastActionLabel).toBe('撤销');
+
+      // 真正的空画布（未建页）同样无栈项无 toast
+      const fresh = mountWB();
+      const freshTyped = fresh.vm as unknown as F7VM;
+      const before = freshTyped.provider!.undoManager.undoStack.length;
+      freshTyped.layerClear();
+      await nextTick();
+      expect(freshTyped.provider!.undoManager.undoStack.length).toBe(before);
+      expect(freshTyped.toastActionLabel).toBe('');
+      fresh.unmount();
       wrapper.unmount();
     });
 

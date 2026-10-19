@@ -4475,9 +4475,14 @@ function layerClear() {
   if (!props.isTeacher) return;
   renderer?.clearCurrentPage();
   const activeEls = provider?.getActiveElements();
+  const hadContent = !!activeEls && activeEls.length > 0;
   if (activeEls) activeEls.delete(0, activeEls.length);
-  // 与旧栈一致：清空画布后无撤销/重做可言
-  provider?.clearUndoStack();
+  // F7：清屏是单事务，天然成一档 undo（与 removePagesByIds 同构），不再清栈；
+  // 栈项仅存于清屏端（本端栈语义），undo 恢复经 Yjs 同步全端。
+  // 空画布不给撤销条：此时无新栈项，误点会撤销上一档操作
+  if (hadContent) {
+    toastWithAction('已清空画布，10 秒内可撤销', '撤销', () => revocation('pre'), 10000);
+  }
 }
 
 // --- Zoom ---
