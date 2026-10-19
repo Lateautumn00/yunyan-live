@@ -4,8 +4,8 @@
     :class="!isTeacher && (isInteraction == 2 || isInteraction == 3) ? 'chats1' : 'chats2'"
   >
     <div class="con">
-      <ul ref="dialogueList" @scroll="fetchData">
-        <li v-for="item in tanmuMessage" :key="item.msgId ?? keyOf(item)">
+      <ul ref="dialogueList" :style="scrollPadStyle" @scroll="fetchData">
+        <li v-for="item in visibleMessages" :key="item.msgId ?? keyOf(item)">
           <div v-if="item.showTime" class="msg-time">
             {{ formatChatTime(item.time) }}
           </div>
@@ -140,7 +140,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onUnmounted, onUpdated, ref } from 'vue';
+import { computed, nextTick, onUnmounted, onUpdated, ref } from 'vue';
 import { ElMessage, type MentionInstance } from 'element-plus';
 import { Top as RaiseHand } from '@element-plus/icons-vue';
 import {
@@ -156,11 +156,13 @@ import { useRoomStore } from '@/store/room';
 import { useAsyncAction } from '@/composables/useAsyncAction';
 import { useChatInput } from '@/composables/useChatInput';
 import {
+  MESSAGE_LIST_LIMIT,
   useChatMessages,
   type ChatEntry,
   type DisplayMessage
 } from '@/composables/useChatMessages';
 import { useChatHistoryPager } from '@/composables/useChatHistoryPager';
+import { computeChatWindow } from '@/composables/chatVirtualWindow';
 import EmojiPicker from './EmojiPicker.vue';
 import type { CheckinWsPayload } from '@/composables/useClassroomCheckin';
 import { CHAT_LIMITS, extractMentions, formatChatTime } from '@/utils/chatFormat';
@@ -239,6 +241,55 @@ const {
     guid: userStore.guid
   })
 });
+
+/** F6 虚拟窗口状态：scrollTop/视口高度（无布局环境恒 0 → 全量渲染 fallback） */
+const scrollTopPx = ref(0);
+const viewportHPx = ref(0);
+/** F6 实测高度缓存：key 与 li :key 同源（msgId ?? keyOf）；jsdom 无布局不回填，估高恒定保证测试可复算 */
+const measuredHeights = ref<Record<string, number>>({});
+const win = computed(() =>
+  computeChatWindow({
+    count: tanmuMessage.value.length,
+    scrollTop: scrollTopPx.value,
+    viewportH: viewportHPx.value,
+    heightAt: i => {
+      const item = tanmuMessage.value[i];
+      return item ? measuredHeights.value[item.msgId ?? keyOf(item)] : undefined;
+    }
+  })
+);
+/** 窗口化渲染面：全量数据仍在 tanmuMessage（分页锚点/未读/信息行读全量） */
+const visibleMessages = computed(() => tanmuMessage.value.slice(win.value.start, win.value.end));
+/** spacer 走 ul padding（不产占位 li）：滚动高度 = 合成 total */
+const scrollPadStyle = computed(() => ({
+  paddingTop: `${win.value.spacerTop}px`,
+  paddingBottom: `${win.value.spacerBottom}px`
+}));
+
+/** F6 实测：窗口内消息按 key 回填 offsetHeight（跨距=自身盒高，li 边距已全部转 padding 不外逃） */
+function measureVisible() {
+  const ul = dialogueList.value;
+  if (!ul || viewportHPx.value <= 0) return;
+  const items = tanmuMessage.value;
+  const start = win.value.start;
+  const nodes = ul.querySelectorAll(':scope > li');
+  for (let i = 0; i < nodes.length; i++) {
+    const item = items[start + i];
+    if (!item) break;
+    const h = (nodes[i] as HTMLElement).offsetHeight;
+    if (h <= 0) continue; // jsdom/未布局：保留估高
+    const key = item.msgId ?? keyOf(item);
+    if (measuredHeights.value[key] !== h) measuredHeights.value[key] = h;
+  }
+  // 消息列表有界裁剪时淘汰缓存，防止长会话无限增长
+  if (Object.keys(measuredHeights.value).length > MESSAGE_LIST_LIMIT * 2) {
+    const live = new Set(items.map(m => m.msgId ?? keyOf(m)));
+    for (const k of Object.keys(measuredHeights.value)) {
+      if (!live.has(k)) delete measuredHeights.value[k];
+    }
+  }
+}
+
 /** F4 撤回入口门（客户端快捷门；权限/窗口以服务端裁决为准）：有 msgId、未撤回、2 分钟内、自己或教师 */
 function canRecall(item: {
   msgId?: string;
@@ -295,7 +346,12 @@ function fetchData(e: Event) {
   const scrollTop = Math.floor(target.scrollTop);
   const clientHeight = Math.floor(target.clientHeight);
   const scrollHeight = Math.floor(target.scrollHeight);
-  if (scrollHeight > clientHeight && scrollTop + clientHeight === scrollHeight) {
+  // F6：滚动状态同步给虚拟窗口（首帧/无布局时为 0 → 全量渲染）
+  scrollTopPx.value = scrollTop;
+  viewportHPx.value = clientHeight;
+  // 底部判定容差 ±2px：合成/取整后的 scrollHeight 与视觉底部可能差 1~2px
+  const gap = scrollHeight - scrollTop - clientHeight;
+  if (scrollHeight > clientHeight && gap >= -2 && gap <= 2) {
     updateBottom();
   } else {
     isBottom.value = false;
@@ -314,15 +370,33 @@ function setNum() {
   noSpeakMessageNum.value += 1;
 }
 
-onUpdated(handleScrollToBottom);
+onUpdated(() => {
+  // F6：先测高再吸底（测量不改 DOM 布局，仅回填缓存供下一轮窗口计算）
+  measureVisible();
+  const el = dialogueList.value;
+  if (el) viewportHPx.value = Math.floor(el.clientHeight);
+  handleScrollToBottom();
+});
 
 function handleScrollToBottom() {
   if (!isBottom.value) return;
   const ele = dialogueList.value;
-  if (ele) ele.scrollTop = ele.scrollHeight;
+  if (ele) {
+    ele.scrollTop = ele.scrollHeight;
+    // F6：窗口状态与真实滚动保持同步（jsdom 无布局时 scrollHeight=0 → 0，无副作用）
+    scrollTopPx.value = Math.floor(ele.scrollHeight);
+  }
 }
 
+function handleViewportResize() {
+  const el = dialogueList.value;
+  if (el) viewportHPx.value = Math.floor(el.clientHeight);
+}
+
+window.addEventListener('resize', handleViewportResize);
+
 onUnmounted(() => {
+  window.removeEventListener('resize', handleViewportResize);
   stopReconnect();
   clearLiveSocket();
 });
@@ -521,7 +595,11 @@ async function applyHistoryPage(entries: ChatEntry[]) {
   if (!added || !el) return;
   await nextTick();
   const delta = el.scrollHeight - oldHeight;
-  if (delta > 0) el.scrollTop = oldTop + delta;
+  if (delta > 0) {
+    el.scrollTop = oldTop + delta;
+    // F6：锚点回填后立即同步窗口状态（不等异步 scroll 事件）
+    scrollTopPx.value = Math.floor(el.scrollTop);
+  }
 }
 
 /** 未读单一漏斗：chat 与 chat-mention 双出口同门（time > maxSeenTime 已在 isUnread 判定） */
@@ -706,13 +784,14 @@ li:hover .recall-btn {
         list-style-type: none;
         font-size: 14px;
         color: #323232;
-        margin-top: 4px;
-        padding: 0px 12px;
+        /* F6：垂直边距全部转 padding（不外逃、offsetHeight=跨距），4px 节奏与原 margin 等效 */
+        padding: 4px 12px 0;
         .msg-time {
           text-align: center;
           color: #9ca3af;
           font-size: 12px;
-          margin: 6px 0 2px;
+          /* 原 margin 6/2 与 li margin-top 4 折叠为 6px；转 padding 后 4+2=6 等效 */
+          padding: 2px 0;
         }
         .mention {
           color: #1989fa;

@@ -683,6 +683,85 @@ describe('ClassRoom Chat.vue', () => {
     });
   });
 
+  describe('F6 虚拟窗口（台账 DoD：恒定节点 + 吸底；翻页/锚点见上方历史回放用例）', () => {
+    it('500 条消息多滚动位置渲染 li 数恒定有界，数据层全量保留', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'history', {
+        messages: Array.from({ length: 500 }, (_, i) =>
+          historyEntry(`m${i}`, '甲', 1700000000000 + i * 1000, 'u2')
+        ),
+        nextCursor: null
+      });
+      await flushPromises();
+
+      const ul = wrapper.find('ul').element as HTMLElement;
+      Object.defineProperty(ul, 'clientHeight', { value: 400, configurable: true });
+      Object.defineProperty(ul, 'scrollTop', { value: 0, configurable: true, writable: true });
+      const fetch = wrapper.vm as unknown as { fetchData: (e: Event) => void };
+
+      const counts: number[] = [];
+      for (const top of [0, 8000, 16000, 60000]) {
+        (ul as unknown as { scrollTop: number }).scrollTop = top;
+        await fetch.fetchData(scrollEvent(ul));
+        await flushPromises();
+        await wrapper.vm.$nextTick();
+        counts.push(wrapper.findAll('li').length);
+      }
+      // 窗口容量有界（一屏 400px + 估高 48 + 双向 overscan），绝随总量增长
+      for (const c of counts) {
+        expect(c).toBeGreaterThan(0);
+        expect(c).toBeLessThanOrEqual(30);
+      }
+      // 末次位置（深滚动）渲染列表尾部、不渲染头部
+      expect(wrapper.text()).toContain('历史m499');
+      expect(wrapper.text()).not.toContain('历史m0');
+      // 数据层全量保留：分页/未读/信息行仍读 tanmuMessage
+      expect((wrapper.vm as unknown as { tanmuMessage: unknown[] }).tanmuMessage).toHaveLength(500);
+      wrapper.unmount();
+    });
+
+    it('底部时新消息到达：scrollTop 推到合成总高吸底且末条可见', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'history', {
+        messages: Array.from({ length: 20 }, (_, i) =>
+          historyEntry(`h${i}`, '甲', 1700000000000 + i * 1000, 'u2')
+        ),
+        nextCursor: null
+      });
+      await flushPromises();
+
+      const ul = wrapper.find('ul').element as HTMLElement;
+      Object.defineProperty(ul, 'clientHeight', { value: 400, configurable: true });
+      Object.defineProperty(ul, 'scrollTop', { value: 0, configurable: true, writable: true });
+      // scrollHeight 走组件合成总高（jsdom 无布局，等价于浏览器 scrollHeight=total）
+      Object.defineProperty(ul, 'scrollHeight', {
+        get: () => (wrapper.vm as unknown as { win: { total: number } }).win.total,
+        configurable: true
+      });
+      const fetch = wrapper.vm as unknown as { fetchData: (e: Event) => void; isBottom: boolean };
+
+      // 20 条 × 48 = 960；滚到 960-400=560 → gap=0 → 底部判定成立
+      (ul as unknown as { scrollTop: number }).scrollTop = 560;
+      await fetch.fetchData(scrollEvent(ul));
+      expect(fetch.isBottom).toBe(true);
+
+      pushBullet(ws, {
+        liveMsg: { name: '乙', msg: '底部新消息', time: 1700000030000 },
+        info: { liveUserId: 'u3', isTeacher: false }
+      });
+      await flushPromises();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      // 吸底：scrollTop 推到新合成总高 21×48=1008，末条在窗口内可见
+      expect(ul.scrollTop).toBe(1008);
+      expect(wrapper.text()).toContain('底部新消息');
+      wrapper.unmount();
+    });
+  });
+
   it('roster 帧写入 room store 名册（senderId/liveUserId 桥接）', async () => {
     const pinia = createPinia();
     const wrapper = mountChat({}, pinia);
