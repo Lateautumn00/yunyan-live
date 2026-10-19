@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsIn,
   IsBoolean,
+  IsUUID,
   MinLength,
   MaxLength
 } from 'class-validator';
@@ -195,4 +196,14 @@ export class ModerationReleaseDto {
   @IsString()
   @IsIn(['mute', 'kick'])
   kind: 'mute' | 'kick';
+}
+
+export class RecallMessageDto {
+  @IsString()
+  @IsNotEmpty()
+  roomId: string;
+
+  /** 消息 UUID（chat_messages.msg_id；live-service 按唯一索引定位并裁决权限/窗口） */
+  @IsUUID()
+  msgId: string;
 }

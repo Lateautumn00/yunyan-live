@@ -34,6 +34,10 @@ export default {
   releaseModeration(params: { roomId: string; userId: string; kind: 'mute' | 'kick' }) {
     return http.post(`${config.liveApi}/push/release`, params);
   },
+  /** F4 撤回（发言者 2 分钟内撤自己；房主可撤本房他人，同窗；服务端裁决权限） */
+  recall(params: { roomId: string; msgId: string }) {
+    return http.post(`${config.liveApi}/push/recall`, params);
+  },
   async register(params: {
     email: string;
     userName: string;

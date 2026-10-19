@@ -13,6 +13,7 @@ import {
   subscribeForbid,
   subscribeKick,
   subscribeModeration,
+  subscribeRecall,
   readForbid,
   validateSession,
   verifyToken,
@@ -227,6 +228,18 @@ subscribeModeration(
       `[ChatWS] moderation ${stage}:`,
       err instanceof Error ? err.message : String(err)
     );
+  }
+);
+
+// F4 撤回（网关 live/push/recall 经 gRPC 落库后 publish live:recall）→ 转播 recall 帧；
+// 按 msgId 定位，客户端把已渲染消息替换为 RECALLED_PLACEHOLDER（历史读侧同源占位）
+subscribeRecall(
+  redis,
+  payload => {
+    broadcast(payload.roomId, JSON.stringify({ type: 'recall', data: { msgId: payload.msgId } }));
+  },
+  (err, stage) => {
+    console.error(`[ChatWS] recall ${stage}:`, err instanceof Error ? err.message : String(err));
   }
 );
 

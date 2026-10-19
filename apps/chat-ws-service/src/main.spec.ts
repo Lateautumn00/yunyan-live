@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import jwt from 'jsonwebtoken';
 import WebSocket from 'ws';
+import { RECALLED_PLACEHOLDER } from '@yunyan-live/types';
 
 /**
  * 持久化开启路径的端到端契约（方案 §4.1/§4.5/§4.6/§4.7）。
@@ -756,5 +757,71 @@ describe('成员名册 roster 帧（F3 前端身份桥）', () => {
     expect(members.filter(m => m.liveUserId === 'u1')).toHaveLength(1);
     a.close();
     b.close();
+  });
+});
+
+describe('F4 撤回（live:recall → recall 帧 + 历史占位，台账 DoD chat-ws 层）', () => {
+  async function recallSubscriber() {
+    const { RECALL_CHANNEL } = await import('@yunyan-live/nest-shared');
+    const sub = h.redisInstances.find(x =>
+      x.subscribe.mock.calls.some(call => call[0] === RECALL_CHANNEL)
+    );
+    expect(sub).toBeDefined();
+    return { RECALL_CHANNEL, sub: sub! };
+  }
+
+  it('订阅撤回频道：emit → 房间内客户端收到 recall 帧（data.msgId 透传）', async () => {
+    const { RECALL_CHANNEL, sub } = await recallSubscriber();
+    const c = await connect();
+    await c.next('history');
+    sub.emit('message', RECALL_CHANNEL, JSON.stringify({ roomId: 'r-main', msgId: 'm-1' }));
+    const f = await c.next('recall');
+    expect(f.data).toEqual({ msgId: 'm-1' });
+    c.close();
+  });
+
+  it('其它房间的撤回事件不广播到本房间', async () => {
+    const { RECALL_CHANNEL, sub } = await recallSubscriber();
+    const c = await connect();
+    await c.next('history');
+    sub.emit('message', RECALL_CHANNEL, JSON.stringify({ roomId: 'r-other', msgId: 'm-9' }));
+    await c.expectNo('recall');
+    c.close();
+  });
+
+  it('坏载荷（缺 msgId）不广播（subscribeRecall 解析层拦截）', async () => {
+    const { RECALL_CHANNEL, sub } = await recallSubscriber();
+    const c = await connect();
+    await c.next('history');
+    sub.emit('message', RECALL_CHANNEL, JSON.stringify({ roomId: 'r-main' }));
+    await c.expectNo('recall');
+    c.close();
+  });
+
+  it('离线重连：recalled 行 → 进场 history 帧回占位、原文不下发（DoD 闭环）', async () => {
+    const prev = h.query;
+    h.query = async (sql: string) => {
+      if (sql.includes('FROM chat_messages')) {
+        const rows = [
+          { ...cannedHistory[0]!, recalled_at: null },
+          { ...cannedHistory[1]!, content: '', recalled_at: '2026-10-19T02:00:00.000Z' }
+        ];
+        return { rows, rowCount: rows.length };
+      }
+      return { rows: [], rowCount: 0 };
+    };
+    try {
+      const c = await connect();
+      const f = await c.next('history');
+      const messages = f.data?.messages as Array<{ msgId: string; liveMsg?: { msg?: string } }>;
+      expect(messages).toHaveLength(2);
+      expect(messages[0]?.msgId).toBe('m-1');
+      expect(messages[0]?.liveMsg?.msg).toBe(RECALLED_PLACEHOLDER);
+      expect(messages[1]?.liveMsg?.msg).toBe('第二条');
+      expect(JSON.stringify(f.data)).not.toContain('第一条');
+      c.close();
+    } finally {
+      h.query = prev;
+    }
   });
 });

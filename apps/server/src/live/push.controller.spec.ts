@@ -5,10 +5,12 @@ import {
   FORBID_CHANNEL,
   forbidKey,
   MODERATION_CHANNEL,
+  RECALL_CHANNEL,
   UpdateForbidDto,
   ModerationMuteDto,
   ModerationKickDto,
-  ModerationReleaseDto
+  ModerationReleaseDto,
+  RecallMessageDto
 } from '@yunyan-live/nest-shared';
 import { PushController } from './push.controller';
 
@@ -21,7 +23,14 @@ function makeRedis() {
   };
 }
 
-function makeClient(overrides: { moderateCode?: string; moderateMsg?: string } = {}) {
+function makeClient(
+  overrides: {
+    moderateCode?: string;
+    moderateMsg?: string;
+    recallCode?: string;
+    recallMsg?: string;
+  } = {}
+) {
   const showRoom = vi.fn((_data: { room_id: string }) =>
     of({ code: '0', msg: 'success', data: { live_user_id: TEACHER } })
   );
@@ -35,9 +44,12 @@ function makeClient(overrides: { moderateCode?: string; moderateMsg?: string } =
         msg: overrides.moderateMsg ?? 'success'
       })
   );
-  const liveService = { showRoom, moderateUser };
+  const recallMessage = vi.fn((_data: { room_id: string; msg_id: string }, _metadata?: unknown) =>
+    of({ code: overrides.recallCode ?? '0', msg: overrides.recallMsg ?? 'success' })
+  );
+  const liveService = { showRoom, moderateUser, recallMessage };
   const liveClient = { getService: vi.fn(() => liveService) };
-  return { showRoom, moderateUser, liveClient };
+  return { showRoom, moderateUser, recallMessage, liveClient };
 }
 
 function makeAudit() {
@@ -45,10 +57,21 @@ function makeAudit() {
 }
 
 function makeController(
-  opts: { moderateCode?: string; moderateMsg?: string; owner?: string } = {}
+  opts: {
+    moderateCode?: string;
+    moderateMsg?: string;
+    recallCode?: string;
+    recallMsg?: string;
+    owner?: string;
+  } = {}
 ) {
   const redis = makeRedis();
-  const client = makeClient({ moderateCode: opts.moderateCode, moderateMsg: opts.moderateMsg });
+  const client = makeClient({
+    moderateCode: opts.moderateCode,
+    moderateMsg: opts.moderateMsg,
+    recallCode: opts.recallCode,
+    recallMsg: opts.recallMsg
+  });
   const owner = opts.owner;
   if (owner !== undefined) {
     client.showRoom.mockImplementation(() =>
@@ -62,7 +85,14 @@ function makeController(
     audit as never
   );
   controller.onModuleInit();
-  return { controller, redis, showRoom: client.showRoom, moderateUser: client.moderateUser, audit };
+  return {
+    controller,
+    redis,
+    showRoom: client.showRoom,
+    moderateUser: client.moderateUser,
+    recallMessage: client.recallMessage,
+    audit
+  };
 }
 
 function makeReq(role: number, userId = TEACHER) {
@@ -95,6 +125,12 @@ function makeForbidDto(overrides: Partial<UpdateForbidDto> = {}): UpdateForbidDt
     { roomId: 'r1', liveUserId: 'u1', status: 0 },
     overrides
   );
+}
+
+const MSG_ID = '3f1c9a02-1d4e-4b7a-9c2f-8e5d6a4b3c21';
+
+function recallDto(overrides: Partial<RecallMessageDto> = {}): RecallMessageDto {
+  return Object.assign(new RecallMessageDto(), { roomId: 'r1', msgId: MSG_ID }, overrides);
 }
 
 describe('PushController.updateForbid', () => {
@@ -237,5 +273,86 @@ describe('Moderation DTO 校验', () => {
     expect(validateSync(kickDto({ roomId: '' })).length).toBeGreaterThan(0);
     expect(validateSync(releaseDto({ kind: 'ban' as never })).length).toBeGreaterThan(0);
     expect(validateSync(releaseDto({ kind: 'kick' }))).toHaveLength(0);
+  });
+});
+
+describe('PushController.recall（F4 撤回）', () => {
+  it('学生自撤成功：gRPC RecallMessage + 发布 live:recall + 审计 message.recall（不走 assertRoomTeacher）', async () => {
+    const { controller, redis, showRoom, recallMessage, audit } = makeController();
+    const res = await controller.recall(recallDto(), makeReq(0, 'stu-1'));
+    expect(res).toEqual({ recalled: true });
+    const [payload, metadata] = recallMessage.mock.calls[0] as [
+      { room_id: string; msg_id: string },
+      { get: (k: string) => unknown[] }
+    ];
+    expect(payload).toEqual({ room_id: 'r1', msg_id: MSG_ID });
+    expect(metadata.get('user-id')?.[0]).toBe('stu-1');
+    expect(showRoom).not.toHaveBeenCalled();
+    expect(redis.publish).toHaveBeenCalledWith(
+      RECALL_CHANNEL,
+      JSON.stringify({ roomId: 'r1', msgId: MSG_ID })
+    );
+    expect(audit.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 'stu-1',
+        action: 'message.recall',
+        targetType: 'message',
+        targetId: MSG_ID,
+        detail: { roomId: 'r1' }
+      })
+    );
+  });
+
+  it('幂等重复（msg=already_recalled）→ {recalled:true}，不广播不审计', async () => {
+    const { controller, redis, recallMessage, audit } = makeController({
+      recallMsg: 'already_recalled'
+    });
+    const res = await controller.recall(recallDto(), makeReq(1));
+    expect(res).toEqual({ recalled: true });
+    expect(recallMessage).toHaveBeenCalledTimes(1);
+    expect(redis.publish).not.toHaveBeenCalled();
+    expect(audit.publish).not.toHaveBeenCalled();
+  });
+
+  it('forbidden（非发言者且非房主）→ 403，不广播不审计', async () => {
+    const { controller, redis, audit } = makeController({
+      recallCode: '1',
+      recallMsg: 'forbidden'
+    });
+    const err = await controller.recall(recallDto(), makeReq(1)).catch((e: unknown) => e);
+    expect((err as { getStatus: () => number }).getStatus()).toBe(403);
+    expect(redis.publish).not.toHaveBeenCalled();
+    expect(audit.publish).not.toHaveBeenCalled();
+  });
+
+  it('not found → 404；expired → 400；其余 gRPC 失败 → 502', async () => {
+    const notFound = makeController({ recallCode: '1', recallMsg: 'not found' });
+    const err404 = await notFound.controller
+      .recall(recallDto(), makeReq(1))
+      .catch((e: unknown) => e);
+    expect((err404 as { getStatus: () => number }).getStatus()).toBe(404);
+    expect(notFound.redis.publish).not.toHaveBeenCalled();
+
+    const expired = makeController({ recallCode: '1', recallMsg: 'expired' });
+    const err400 = await expired.controller
+      .recall(recallDto(), makeReq(1))
+      .catch((e: unknown) => e);
+    expect((err400 as { getStatus: () => number }).getStatus()).toBe(400);
+
+    const down = makeController({ recallCode: '1', recallMsg: 'db down' });
+    const err502 = await down.controller.recall(recallDto(), makeReq(1)).catch((e: unknown) => e);
+    expect((err502 as { getStatus: () => number }).getStatus()).toBe(502);
+    expect(down.redis.publish).not.toHaveBeenCalled();
+    expect(down.audit.publish).not.toHaveBeenCalled();
+  });
+});
+
+describe('Recall DTO 校验', () => {
+  it('msgId 必须是 uuid；roomId 必填', async () => {
+    const { validateSync } = await import('class-validator');
+    expect(validateSync(recallDto())).toHaveLength(0);
+    expect(validateSync(recallDto({ msgId: 'not-a-uuid' })).length).toBeGreaterThan(0);
+    expect(validateSync(recallDto({ msgId: '' })).length).toBeGreaterThan(0);
+    expect(validateSync(recallDto({ roomId: '' })).length).toBeGreaterThan(0);
   });
 });

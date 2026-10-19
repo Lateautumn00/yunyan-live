@@ -34,21 +34,22 @@
 
 ### 1.3 action 枚举与记录点（S12 DoD：登录/踢人/改密/删除/导出）
 
-| action                 | 触发点（gateway）                                             | actor              | detail（白名单收口）                                |
-| ---------------------- | ------------------------------------------------------------- | ------------------ | --------------------------------------------------- |
-| `auth.login.ok`        | POST user/user/login 上游认证成功                             | guid               | —                                                   |
-| `auth.login.failed`    | login 上游 gRPC 拒绝（捕获后重抛，不吞）                      | email              | `reason=rejected`, `status`（HTTP 码）              |
-| `session.kick`         | login 时旧会话被顶下线（`createSession` 回传 oldSid 非空）    | guid               | `reason=replaced_by_login`（sid 不落库）            |
-| `user.reset_password`  | POST resetPassword 成功后                                     | guid（缺省 email） | `sessionsRevoked`                                   |
-| `user.change_password` | POST changePassword 成功后                                    | userId             | `sessionsRevoked=true`                              |
-| `live.delete`          | DELETE deleteLive 成功后                                      | userId             | —（target=room）                                    |
-| `video.delete_rooms`   | DELETE deleteVideo 按房间删，**逐房一条**                     | userId             | —（target=room）                                    |
-| `video.delete_ids`     | DELETE deleteVideoByIds 按视频删，**逐 id 一条**              | userId             | —（target=video）                                   |
-| `courseware.delete`    | DELETE deleteCourseware 成功后                                | userId             | —（target=courseware）                              |
-| `recording.export`     | downloadRecording `download=true` 且 mp4 就绪、**流式输出前** | userId             | `roomId`, `bytes`（转码轮询 `download=false` 不记） |
-| `moderation.mute`      | POST live/push/mute gRPC 落库成功且广播后（F3）               | userId             | `userId`（被禁者）, `minutes`（target=room）        |
-| `moderation.kick`      | POST live/push/kick gRPC 落库成功且广播后（F3）               | userId             | `userId`（被踢者）（target=room）                   |
-| `moderation.release`   | POST live/push/release gRPC 落库成功且广播后（F3）            | userId             | `userId`, `kind`（target=room）                     |
+| action                 | 触发点（gateway）                                               | actor              | detail（白名单收口）                                |
+| ---------------------- | --------------------------------------------------------------- | ------------------ | --------------------------------------------------- |
+| `auth.login.ok`        | POST user/user/login 上游认证成功                               | guid               | —                                                   |
+| `auth.login.failed`    | login 上游 gRPC 拒绝（捕获后重抛，不吞）                        | email              | `reason=rejected`, `status`（HTTP 码）              |
+| `session.kick`         | login 时旧会话被顶下线（`createSession` 回传 oldSid 非空）      | guid               | `reason=replaced_by_login`（sid 不落库）            |
+| `user.reset_password`  | POST resetPassword 成功后                                       | guid（缺省 email） | `sessionsRevoked`                                   |
+| `user.change_password` | POST changePassword 成功后                                      | userId             | `sessionsRevoked=true`                              |
+| `live.delete`          | DELETE deleteLive 成功后                                        | userId             | —（target=room）                                    |
+| `video.delete_rooms`   | DELETE deleteVideo 按房间删，**逐房一条**                       | userId             | —（target=room）                                    |
+| `video.delete_ids`     | DELETE deleteVideoByIds 按视频删，**逐 id 一条**                | userId             | —（target=video）                                   |
+| `courseware.delete`    | DELETE deleteCourseware 成功后                                  | userId             | —（target=courseware）                              |
+| `recording.export`     | downloadRecording `download=true` 且 mp4 就绪、**流式输出前**   | userId             | `roomId`, `bytes`（转码轮询 `download=false` 不记） |
+| `moderation.mute`      | POST live/push/mute gRPC 落库成功且广播后（F3）                 | userId             | `userId`（被禁者）, `minutes`（target=room）        |
+| `moderation.kick`      | POST live/push/kick gRPC 落库成功且广播后（F3）                 | userId             | `userId`（被踢者）（target=room）                   |
+| `moderation.release`   | POST live/push/release gRPC 落库成功且广播后（F3）              | userId             | `userId`, `kind`（target=room）                     |
+| `message.recall`       | POST live/push/recall gRPC 落库成功且广播后（F4）；幂等重复不记 | userId             | `roomId`（target=message, targetId=msgId）          |
 
 - **降级留痕（拍板）**：板书导出（F6.1 `exportBoard`）是纯客户端导出，无服务端端点，
   **不可审计**——经拍板不为打点新增端点，该记录点以此文档降级说明收口。

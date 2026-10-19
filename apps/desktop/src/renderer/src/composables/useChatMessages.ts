@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue';
-import type { ChatMessageItem, MentionTarget } from '@yunyan-live/types';
+import { RECALLED_PLACEHOLDER, type ChatMessageItem, type MentionTarget } from '@yunyan-live/types';
 import { segmentMessage, type MessageSegment } from '@/utils/chatFormat';
 
 export type DisplayMessage = ChatMessageItem & {
@@ -63,8 +63,10 @@ export interface ChatMessages {
   messages: Ref<DisplayMessage[]>;
   /** 实时 bullet：msgId/键去重 → 追加 → 裁剪 → 分组重算；返回是否真正入列 */
   appendLive(entry: ChatEntry): boolean;
-  /** history/historyPage 升序批次：键去重 → 双向有序合并（不重排既有序）→ 裁剪 → 分组重算 */
+  /** history/historyPage 升序批次：msgId 对账（服务端真相覆盖本地）→ 键去重 → 双向有序合并 → 裁剪 → 分组重算 */
   mergeHistory(entries: readonly ChatEntry[]): boolean;
+  /** F4 按 msgId 本地撤回：正文换占位、seen 键迁移（防重连对账重复）；已撤回再调幂等 false */
+  recallByMsgId(msgId: string): boolean;
   /** 未读门（单一漏斗）：time > maxSeenTime（首连 history 不走此门 → 不计未读） */
   isUnread(time: number): boolean;
   /** maxSeenTime 快照（测试断言用） */
@@ -98,6 +100,8 @@ function toDisplay(
     time: num(liveMsg.time) ?? Date.now(),
     mentions: mentions.length ? mentions : undefined,
     segments: segmentMessage(msg, mentions),
+    // 占位来源（历史 recalled 行 / 本地撤回）统一置位：灰色渲染 + 隐藏撤回入口
+    ...(msg === RECALLED_PLACEHOLDER ? { recalled: true } : {}),
     mentionMe,
     liveUser: false,
     showTime: false
@@ -160,15 +164,37 @@ export function useChatMessages(deps: ChatMessagesDeps): ChatMessages {
   function mergeHistory(entries: readonly ChatEntry[]): boolean {
     const batch: DisplayMessage[] = [];
     const batchKeys: string[] = [];
+    let replaced = false;
     for (const entry of entries) {
       if (isHostMarked(entry)) continue;
+      const msgId = typeof entry.msgId === 'string' ? entry.msgId : undefined;
+      if (msgId !== undefined) {
+        const localIdx = messages.value.findIndex(m => m.msgId === msgId);
+        const local = localIdx >= 0 ? messages.value[localIdx] : undefined;
+        if (local && keyOf(entry) !== keyOf(local)) {
+          // msgId 对账（F4 DoD 关键）：键不一致（如离线期间被撤回 → 历史下发占位）时
+          // 服务端真相原位覆盖本地，避免"本地原文 + 占位"并存泄漏原文；
+          // seen 同步迁移旧键，后续同键批次不重复入列
+          seen.delete(keyOf(local));
+          const fresh = toDisplay(entry, deps.self());
+          messages.value.splice(localIdx, 1, fresh);
+          markSeen(keyOf(fresh));
+          noteTime(num(entry.liveMsg?.time));
+          replaced = true;
+          continue;
+        }
+      }
       const k = keyOf(entry);
       if (seen.has(k)) continue;
       batch.push(toDisplay(entry, deps.self()));
       batchKeys.push(k);
       noteTime(num(entry.liveMsg?.time));
     }
-    if (batch.length === 0) return false;
+    if (batch.length === 0) {
+      // 纯替换路径也要重算分组：fresh 由 toDisplay 构造，showTime/liveUser 需按邻接关系回填
+      if (replaced) recomputeGroups(messages.value);
+      return replaced;
+    }
 
     // 双方均已按时间升序（local 由构造保证；batch 服务端 ASC 下发）→ 归并，平局保留 local 在前（不重排）
     const local = messages.value;
@@ -202,12 +228,28 @@ export function useChatMessages(deps: ChatMessagesDeps): ChatMessages {
     return true;
   }
 
+  function recallByMsgId(msgId: string): boolean {
+    const idx = messages.value.findIndex(m => m.msgId === msgId);
+    if (idx < 0) return false;
+    const item = messages.value[idx];
+    if (!item || item.recalled) return false;
+    // seen 键迁移：旧键（原文）删除、新键（占位）补记 → 重连对账命中占位键直接跳过
+    seen.delete(keyOf(item));
+    item.message = RECALLED_PLACEHOLDER;
+    item.mentions = undefined;
+    item.segments = segmentMessage(RECALLED_PLACEHOLDER, []);
+    item.recalled = true;
+    markSeen(keyOf(item));
+    return true;
+  }
+
   const isUnread = (time: number): boolean => time > maxSeen;
 
   return {
     messages,
     appendLive,
     mergeHistory,
+    recallByMsgId,
     isUnread,
     maxSeenTime: () => maxSeen,
     keyOf

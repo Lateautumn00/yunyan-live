@@ -748,6 +748,31 @@ export class LiveController {
     return ok();
   }
 
+  @GrpcMethod('LiveService', 'RecallMessage')
+  async recallMessage(data: { room_id?: string; msg_id?: string }, metadata: Metadata) {
+    const byUserId = userIdFromMetadata(metadata);
+    if (!byUserId) return fail('unauthorized');
+    if (!data.room_id || !data.msg_id) return fail('missing room_id/msg_id');
+    // 防御：非法 msg_id 直接按未命中处理（免 PG uuid cast 抛错经 grpcCall 变 502）
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.msg_id)) {
+      return fail('not found');
+    }
+    const status = await this.liveService.recallMessage(data.room_id, data.msg_id, byUserId);
+    switch (status) {
+      case 'not_found':
+        return fail('not found');
+      case 'forbidden':
+        return fail('forbidden');
+      case 'expired':
+        return fail('expired');
+      case 'already':
+        // 幂等信号：网关据此跳过 publishRecall 与审计（CommonResponse 仅 code/msg，借 msg 传输）
+        return ok({}, 'already_recalled');
+      default:
+        return ok();
+    }
+  }
+
   private grpcCheckinSession(view: CheckinSessionView) {
     return {
       session_id: view.sessionId,

@@ -1,7 +1,12 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, LessThan, Not, In } from 'typeorm';
-import { decodeCursor, grpcError, normalizePageQuery } from '@yunyan-live/nest-shared';
+import {
+  decodeCursor,
+  grpcError,
+  normalizePageQuery,
+  RECALL_WINDOW_MINUTES
+} from '@yunyan-live/nest-shared';
 import { status as GrpcStatus } from '@grpc/grpc-js';
 import {
   BoardSnapshot,
@@ -17,6 +22,9 @@ import { JanusService } from '../janus/janus.service';
 
 // 快照滚动保留：每房间保留最近 N 条（Q8 拍板后固化口径，暂按报告默认 10）
 const BOARD_SNAPSHOT_KEEP = Math.max(1, Number(process.env.BOARD_SNAPSHOT_KEEP) || 10);
+
+/** F4 撤回裁决结果（controller 据此映射 gRPC 信封，见 live.controller RecallMessage） */
+export type RecallStatus = 'ok' | 'already' | 'not_found' | 'forbidden' | 'expired';
 
 @Injectable()
 export class LiveService {
@@ -956,5 +964,38 @@ export class LiveService {
         WHERE room_id = $1 AND user_id = $2 AND kind = $3 AND active = true`,
       [roomId, userId, kind]
     );
+  }
+
+  /**
+   * F4 撤回：权限（发言者本人/房主）+ 2 分钟窗 + 幂等全在此裁决。
+   * 单条 SELECT（m.msg_id 走 uq_chat_messages_msg_id 单行索引，JOIN live_rooms 拿房主）：
+   * not_found（无行/跨房）→ forbidden（非发言者且非房主）→ already（幂等重复，不重复 UPDATE）
+   * → expired（超窗）→ UPDATE 置空原文留痕 → ok。
+   * 窗口在 SQL 侧计算（now() 对齐，免应用时钟偏差）；UPDATE 带 recalled_at IS NULL 兜并发双撤。
+   * 撤回=保留行：content/mentions/extra 物理置空，历史按 recalled_at 回占位（台账 DoD）。
+   */
+  async recallMessage(roomId: string, msgId: string, byUserId: string): Promise<RecallStatus> {
+    const rows = (await this.dataSource.manager.query(
+      `SELECT m.sender_id::text AS sender_id,
+              m.recalled_at IS NOT NULL AS recalled,
+              m.created_at > now() - ($3 * interval '1 minute') AS in_window,
+              r."liveUserId" AS owner_id
+         FROM chat_messages m
+         JOIN live_rooms r ON r."roomId" = m.room_id
+        WHERE m.msg_id = $1 AND m.room_id = $2`,
+      [msgId, roomId, RECALL_WINDOW_MINUTES]
+    )) as Array<Record<string, unknown>>;
+    const row = rows?.[0];
+    if (!row) return 'not_found';
+    if (row.sender_id !== byUserId && row.owner_id !== byUserId) return 'forbidden';
+    if (row.recalled) return 'already';
+    if (!row.in_window) return 'expired';
+    await this.dataSource.manager.query(
+      `UPDATE chat_messages
+          SET recalled_at = now(), recalled_by = $3, content = '', mentions = NULL, extra = NULL
+        WHERE msg_id = $1 AND room_id = $2 AND recalled_at IS NULL`,
+      [msgId, roomId, byUserId]
+    );
+    return 'ok';
   }
 } // class LiveService

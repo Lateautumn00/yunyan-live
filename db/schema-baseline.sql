@@ -121,7 +121,9 @@ CREATE TABLE public.chat_messages (
     msg_type smallint DEFAULT 1 NOT NULL,
     mentions jsonb,
     extra jsonb,
-    created_at timestamp with time zone NOT NULL
+    created_at timestamp with time zone NOT NULL,
+    recalled_at timestamp with time zone,
+    recalled_by uuid
 );
 
 

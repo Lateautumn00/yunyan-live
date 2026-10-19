@@ -1,3 +1,5 @@
+import { RECALL_WINDOW_MS } from '@yunyan-live/types';
+
 /** 与 JWT_EXPIRES_IN 默认值（7d）一致 */
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 
@@ -69,4 +71,18 @@ export interface ModerationPayload {
   op: ModerationOp;
   /** kind=mute 时的到期 epoch ms；kick 为 undefined */
   untilMs?: number;
+}
+
+/** F4 撤回广播频道（网关 gRPC 落库成功且未重复时 publish RecallPayload） */
+export const RECALL_CHANNEL = 'live:recall';
+
+/**
+ * F4 撤回时限（分钟）：单源于 @yunyan-live/types 的 RECALL_WINDOW_MS（桌面悬停入口同源），
+ * live-service 据此裁决 SQL 窗口——防前后端窗值漂移。
+ */
+export const RECALL_WINDOW_MINUTES = RECALL_WINDOW_MS / 60_000;
+
+export interface RecallPayload {
+  roomId: string;
+  msgId: string;
 }

@@ -25,7 +25,8 @@
           <div
             :class="[
               item.isMe ? 'message message-me' : 'message',
-              item.mentionMe ? 'mention-me' : ''
+              item.mentionMe ? 'mention-me' : '',
+              item.recalled ? 'recalled' : ''
             ]"
           >
             <template v-for="(seg, si) in item.segments" :key="si">
@@ -34,6 +35,14 @@
                 {{ seg.text }}
               </template>
             </template>
+            <button
+              v-if="canRecall(item)"
+              type="button"
+              class="recall-btn"
+              @click="handleRecall(item)"
+            >
+              撤回
+            </button>
           </div>
         </li>
       </ul>
@@ -134,7 +143,12 @@
 import { nextTick, onUnmounted, onUpdated, ref } from 'vue';
 import { ElMessage, type MentionInstance } from 'element-plus';
 import { Top as RaiseHand } from '@element-plus/icons-vue';
-import { WsClose, type MentionTarget } from '@yunyan-live/types';
+import {
+  WsClose,
+  RECALL_WINDOW_MS,
+  RECALLED_PLACEHOLDER,
+  type MentionTarget
+} from '@yunyan-live/types';
 import api from '@/api';
 import { config } from '@/api';
 import { useUserStore } from '@/store/user';
@@ -215,6 +229,7 @@ const {
   messages: tanmuMessage,
   appendLive,
   mergeHistory,
+  recallByMsgId,
   isUnread,
   keyOf
 } = useChatMessages({
@@ -224,6 +239,41 @@ const {
     guid: userStore.guid
   })
 });
+/** F4 撤回入口门（客户端快捷门；权限/窗口以服务端裁决为准）：有 msgId、未撤回、2 分钟内、自己或教师 */
+function canRecall(item: {
+  msgId?: string;
+  recalled?: boolean;
+  message?: string;
+  time?: number;
+  isMe?: boolean;
+}) {
+  if (!item.msgId || item.recalled) return false;
+  if (item.message === RECALLED_PLACEHOLDER) return false;
+  if ((item.time ?? 0) + RECALL_WINDOW_MS < Date.now()) return false;
+  return item.isMe === true || props.isTeacher === true;
+}
+
+async function handleRecall(item: { msgId?: string }) {
+  if (!item.msgId) return;
+  try {
+    await api.recall({ roomId: props.roomId ?? '', msgId: item.msgId });
+    // 乐观本地替换；服务端广播的 recall 帧再触发 recallByMsgId 为幂等 no-op
+    recallByMsgId(item.msgId);
+  } catch (e: unknown) {
+    // http 拦截器 reject 的是响应体（本端点为 HttpException 字符串消息）
+    const text =
+      typeof e === 'string'
+        ? e
+        : ((e as { msg?: unknown; message?: unknown })?.msg ??
+          (e as { message?: unknown })?.message ??
+          '');
+    if (text === '仅发言者本人或房主可撤回') ElMessage.error('仅发言者本人或房主可撤回');
+    else if (text === '消息不存在') ElMessage.error('消息不存在');
+    else if (text === '超过2分钟撤回时限') ElMessage.error('超过2分钟撤回时限');
+    else ElMessage.error('撤回失败');
+  }
+}
+
 const pager = useChatHistoryPager({
   fetchHistory: (cursor, signal) => {
     if (signal.aborted) return;
@@ -378,6 +428,12 @@ function liveSocketMessage(e: MessageEvent) {
         });
       }
       break;
+    case 'recall': {
+      // F4：按 msgId 把已渲染消息替换为占位（seen 键同步迁移，与历史读侧占位同文案）
+      const recallMsgId = redata.data?.msgId;
+      if (typeof recallMsgId === 'string') recallByMsgId(recallMsgId);
+      break;
+    }
     case 'history':
     case 'historyPage': {
       const page = pager.ingest(redata.type, redata.data);
@@ -616,6 +672,24 @@ defineExpose({ createTutorSocket, liveSocketClose, setSocketSend, sendMes });
 }
 .chats2 {
   height: 100%;
+}
+/* F4 撤回：悬停显示入口；已撤回正文灰显（占位文案与服务端历史读侧同源） */
+.recall-btn {
+  display: none;
+  margin-left: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: #f56c6c;
+  cursor: pointer;
+}
+li:hover .recall-btn {
+  display: inline-block;
+}
+.message.recalled {
+  color: #999;
+  font-style: normal;
 }
 .classroom-chat {
   .con {

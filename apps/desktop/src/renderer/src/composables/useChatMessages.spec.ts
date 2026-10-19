@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RECALLED_PLACEHOLDER } from '@yunyan-live/types';
 import {
   keyOf,
   MESSAGE_LIST_LIMIT,
@@ -261,5 +262,71 @@ describe('self 判定（isMe：优先稳定 senderId，缺失回退会话 liveUs
       ['guid-peer', true],
       ['guid-other2', false]
     ]);
+  });
+});
+
+describe('F4 撤回（recallByMsgId + mergeHistory msgId 对账）', () => {
+  it('recallByMsgId：正文换占位、recalled 置位、mentions 清空；重复调用幂等 false', () => {
+    const m = msgs();
+    m.appendLive(entry(1));
+    expect(m.recallByMsgId('m-1')).toBe(true);
+    const item = m.messages.value[0]!;
+    expect(item.message).toBe(RECALLED_PLACEHOLDER);
+    expect(item.recalled).toBe(true);
+    expect(item.mentions).toBeUndefined();
+    expect(item.segments.map(s => s.text).join('')).toBe(RECALLED_PLACEHOLDER);
+    expect(m.recallByMsgId('m-1')).toBe(false);
+    expect(m.messages.value).toHaveLength(1);
+  });
+
+  it('recallByMsgId：未知 msgId → false，列表不变', () => {
+    const m = msgs();
+    m.appendLive(entry(1));
+    expect(m.recallByMsgId('m-nope')).toBe(false);
+    expect(m.messages.value[0]!.message).toBe('内容1');
+  });
+
+  it('离线期间被撤回（未收 recall 帧）：本地原文 + 重连下发占位 → 原位替换、不并存不追加', () => {
+    const m = msgs();
+    m.appendLive(entry(1));
+    const placeholder: ChatEntry = {
+      ...entry(1),
+      liveMsg: { ...entry(1).liveMsg, msg: RECALLED_PLACEHOLDER }
+    };
+    expect(m.mergeHistory([placeholder])).toBe(true);
+    expect(m.messages.value).toHaveLength(1);
+    const item = m.messages.value[0]!;
+    expect(item.message).toBe(RECALLED_PLACEHOLDER);
+    expect(item.recalled).toBe(true);
+    // 占位键已迁移入 seen：再次重连同占位 → 不重复
+    expect(m.mergeHistory([placeholder])).toBe(false);
+    expect(m.messages.value).toHaveLength(1);
+  });
+
+  it('seen 键迁移：撤回后再收到同 msgId 占位历史 → 幂等跳过（键同源）', () => {
+    const m = msgs();
+    m.appendLive(entry(2));
+    expect(m.recallByMsgId('m-2')).toBe(true);
+    const placeholder: ChatEntry = {
+      ...entry(2),
+      liveMsg: { ...entry(2).liveMsg, msg: RECALLED_PLACEHOLDER }
+    };
+    expect(m.mergeHistory([placeholder])).toBe(false);
+    expect(m.messages.value).toHaveLength(1);
+    expect(m.messages.value[0]!.message).toBe(RECALLED_PLACEHOLDER);
+  });
+
+  it('对账不误伤：无 msgId 本地项（缺省键）不参与 msgId 匹配', () => {
+    const m = msgs();
+    m.appendLive({ liveMsg: { msg: '旧消息', name: '甲', time: 1700000000000 }, info: {} });
+    expect(m.messages.value).toHaveLength(1);
+    const other: ChatEntry = {
+      msgId: 'm-x',
+      liveMsg: { msg: '他条', name: '乙', time: 1700000001000 },
+      info: {}
+    };
+    expect(m.mergeHistory([other])).toBe(true);
+    expect(m.messages.value).toHaveLength(2);
+    expect(m.messages.value[0]!.message).toBe('旧消息');
   });
 });

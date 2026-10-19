@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool, QueryResult } from 'pg';
+import { RECALLED_PLACEHOLDER } from '@yunyan-live/types';
 import {
   createHistoryStore,
   decodeCursor,
@@ -21,6 +22,7 @@ interface FakeRow {
   mentions: unknown;
   extra: unknown;
   time_ms: string;
+  recalled_at?: unknown;
 }
 
 function makeRow(i: number, overrides: Partial<FakeRow> = {}): FakeRow {
@@ -239,5 +241,47 @@ describe('createHistoryStore.page（keyset 翻页）', () => {
       100
     );
     await expect(store.page('r1', { ms: 1, id: '1' }, 50)).rejects.toThrow('boom');
+  });
+});
+
+describe('F4 撤回占位（recalled 行 → 历史不得再现原文，台账 DoD History 层）', () => {
+  it('recalled_at 非空 → liveMsg.msg 回占位，正文即使残留原文也被覆盖、mentions 丢弃、senderId 保留', () => {
+    const entry = rowToEntry(
+      makeRow(1, {
+        content: '原文应消失',
+        mentions: [{ userId: 'u9', userName: '九' }],
+        extra: { liveUserId: 'u1' },
+        recalled_at: new Date('2026-10-19T02:00:00Z')
+      })
+    );
+    expect(entry.liveMsg?.msg).toBe(RECALLED_PLACEHOLDER);
+    expect(JSON.stringify(entry)).not.toContain('原文应消失');
+    expect(entry.liveMsg?.mentions).toBeUndefined();
+    expect(entry.info?.senderId).toBe('guid-1');
+  });
+
+  it('写路径已置空 content：recalled_at 非空 → 占位而非空串（读侧不吐空消息）', () => {
+    const entry = rowToEntry(makeRow(2, { content: '', recalled_at: new Date() }));
+    expect(entry.liveMsg?.msg).toBe(RECALLED_PLACEHOLDER);
+  });
+
+  it('recalled_at 为 null / 缺席 → 原文正常（未撤回语义不变）', () => {
+    expect(rowToEntry(makeRow(3, { recalled_at: null })).liveMsg?.msg).toBe('内容3');
+    expect(rowToEntry(makeRow(4)).liveMsg?.msg).toBe('内容4');
+  });
+
+  it('SQL_RECENT / SQL_PAGE 读列均含 recalled_at（进场页与翻页同口径）', () => {
+    expect(SQL_RECENT).toContain('recalled_at');
+    expect(SQL_PAGE).toContain('recalled_at');
+  });
+
+  it('store.recent：recalled 行经 buildPage 进 wire 帧即占位（History 层 e2e）', async () => {
+    const rows = [makeRow(5, { content: '', recalled_at: new Date() })];
+    const pool = fakePool(async () => result(rows));
+    const store = createHistoryStore(pool, 100);
+    const page = await store.recent('r1', 50);
+    expect(page?.messages).toHaveLength(1);
+    expect(page?.messages[0]?.liveMsg?.msg).toBe(RECALLED_PLACEHOLDER);
+    expect(page?.messages[0]?.msgId).toBe('m-5');
   });
 });

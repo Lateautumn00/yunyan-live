@@ -17,7 +17,8 @@ export const AUDIT_ACTIONS = {
   EXPORT_RECORDING: 'recording.export',
   MODERATION_MUTE: 'moderation.mute',
   MODERATION_KICK: 'moderation.kick',
-  MODERATION_RELEASE: 'moderation.release'
+  MODERATION_RELEASE: 'moderation.release',
+  MESSAGE_RECALL: 'message.recall'
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

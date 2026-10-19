@@ -41,6 +41,7 @@ service LiveService {
   rpc GetTeacherStatistics (GetTeacherStatisticsRequest) returns (GetTeacherStatisticsResponse) {}
   rpc RecordToolUsage (RecordToolUsageRequest) returns (CommonResponse) {}
   rpc ModerateUser (ModerateUserRequest) returns (CommonResponse) {}
+  rpc RecallMessage (RecallMessageRequest) returns (CommonResponse) {}
 }
 
 message CreateLiveRequest {
@@ -587,4 +588,11 @@ message ModerateUserRequest {
   string op = 4;
   // mute 生效时长（1/5/10 分钟）；kind=kick 时为 0
   int32 minutes = 5;
+}
+
+// F4 消息撤回：权限（发言者本人/房主）与 2 分钟窗在 live-service 裁决；
+// 成功 code=0，msg='already_recalled' 表示幂等重复（网关据此跳过广播/审计）
+message RecallMessageRequest {
+  string room_id = 1;
+  string msg_id = 2;
 }

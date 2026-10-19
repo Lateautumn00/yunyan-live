@@ -21,6 +21,8 @@ import {
   ModerationMuteDto,
   ModerationReleaseDto,
   publishModeration,
+  publishRecall,
+  RecallMessageDto,
   REDIS_CLIENT,
   UpdateForbidDto,
   userIdMetadata,
@@ -44,12 +46,21 @@ interface ModerateUserResponse {
   msg: string;
 }
 
+interface RecallMessageResponse {
+  code: string;
+  msg: string;
+}
+
 interface PushLiveServiceClient {
   showRoom(data: { room_id: string }): Observable<ShowRoomResponse>;
   moderateUser(
     data: { room_id: string; user_id: string; kind: string; op: string; minutes: number },
     metadata?: Metadata
   ): Observable<ModerateUserResponse>;
+  recallMessage(
+    data: { room_id: string; msg_id: string },
+    metadata?: Metadata
+  ): Observable<RecallMessageResponse>;
 }
 
 /**
@@ -209,5 +220,49 @@ export class PushController implements OnModuleInit {
       detail: { userId: dto.userId, kind: dto.kind }
     });
     return { updated: true };
+  }
+
+  /**
+   * F4 撤回：不做 assertRoomTeacher——发言者（学生）自撤必须放行；
+   * 权限（发言者本人/房主）+ 2 分钟窗 + 幂等由 live-service RecallMessage 裁决
+   * （单一裁决点，防双口径）。成功且非幂等重复 → publish live:recall + 审计 message.recall。
+   */
+  @Post('recall')
+  @UseGuards(JwtAuthGuard)
+  async recall(
+    @Body() dto: RecallMessageDto,
+    @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
+  ): Promise<{ recalled: true }> {
+    const res = await grpcCall(
+      this.liveService.recallMessage(
+        { room_id: dto.roomId, msg_id: dto.msgId },
+        userIdMetadata(req.user.userId)
+      )
+    );
+    if (res.code !== '0') {
+      if (res.msg === 'not found') {
+        throw new HttpException('消息不存在', HttpStatus.NOT_FOUND);
+      }
+      if (res.msg === 'forbidden') {
+        throw new HttpException('仅发言者本人或房主可撤回', HttpStatus.FORBIDDEN);
+      }
+      if (res.msg === 'expired') {
+        throw new HttpException('超过2分钟撤回时限', HttpStatus.BAD_REQUEST);
+      }
+      throw new HttpException(res.msg || '撤回失败', HttpStatus.BAD_GATEWAY);
+    }
+    if (res.msg !== 'already_recalled') {
+      await publishRecall(this.redis, { roomId: dto.roomId, msgId: dto.msgId });
+      this.audit.publish({
+        actor: req.user.userId,
+        action: AUDIT_ACTIONS.MESSAGE_RECALL,
+        targetType: 'message',
+        targetId: dto.msgId,
+        requestId: req.requestId,
+        ip: req.ip,
+        detail: { roomId: dto.roomId }
+      });
+    }
+    return { recalled: true };
   }
 }

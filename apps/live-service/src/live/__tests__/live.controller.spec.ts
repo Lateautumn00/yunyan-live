@@ -37,7 +37,8 @@ function makeService(): ServiceMock {
     getLatestBoardSnapshot: vi.fn(),
     checkRoomAccess: vi.fn(),
     getUserWatchTimeList: vi.fn(),
-    moderateUser: vi.fn()
+    moderateUser: vi.fn(),
+    recallMessage: vi.fn()
   };
 }
 
@@ -860,5 +861,80 @@ describe('LiveController gRPC 映射', () => {
     expect(kick.code).toBe('0');
     expect(service.moderateUser).toHaveBeenCalledTimes(1);
     expect(service.moderateUser).toHaveBeenCalledWith('r1', 'u1', 'kick', 'set', 0, 't1');
+  });
+});
+
+describe('LiveController RecallMessage（F4 撤回信封映射）', () => {
+  const MSG_ID = '3f1c9a02-1d4e-4b7a-9c2f-8e5d6a4b3c21';
+
+  it('裁决 ok → code=0/success，身份只信 metadata（S11①）透传 room/msg', async () => {
+    const { controller, service } = makeController();
+    service.recallMessage.mockResolvedValue('ok');
+    const res = await controller.recallMessage(
+      { room_id: 'r1', msg_id: MSG_ID },
+      userIdMetadata('u1')
+    );
+    expect(res.code).toBe('0');
+    expect(res.msg).toBe('success');
+    expect(service.recallMessage).toHaveBeenCalledWith('r1', MSG_ID, 'u1');
+  });
+
+  it('already（幂等重复）→ code=0 + msg=already_recalled（网关据此跳过广播/审计）', async () => {
+    const { controller, service } = makeController();
+    service.recallMessage.mockResolvedValue('already');
+    const res = await controller.recallMessage(
+      { room_id: 'r1', msg_id: MSG_ID },
+      userIdMetadata('u1')
+    );
+    expect(res).toMatchObject({ code: '0', msg: 'already_recalled' });
+  });
+
+  it('not_found / forbidden / expired → 一一映射 fail msg', async () => {
+    const { controller, service } = makeController();
+    service.recallMessage.mockResolvedValue('not_found');
+    const nf = await controller.recallMessage(
+      { room_id: 'r1', msg_id: MSG_ID },
+      userIdMetadata('u1')
+    );
+    expect(nf).toMatchObject({ code: '1', msg: 'not found' });
+    service.recallMessage.mockResolvedValue('forbidden');
+    const fb = await controller.recallMessage(
+      { room_id: 'r1', msg_id: MSG_ID },
+      userIdMetadata('u1')
+    );
+    expect(fb).toMatchObject({ code: '1', msg: 'forbidden' });
+    service.recallMessage.mockResolvedValue('expired');
+    const ex = await controller.recallMessage(
+      { room_id: 'r1', msg_id: MSG_ID },
+      userIdMetadata('u1')
+    );
+    expect(ex).toMatchObject({ code: '1', msg: 'expired' });
+  });
+
+  it('metadata 缺失身份 → unauthorized，不查库', async () => {
+    const { controller, service } = makeController();
+    const res = await controller.recallMessage(
+      { room_id: 'r1', msg_id: MSG_ID },
+      userIdMetadata('')
+    );
+    expect(res).toMatchObject({ code: '1', msg: 'unauthorized' });
+    expect(service.recallMessage).not.toHaveBeenCalled();
+  });
+
+  it('缺 room_id/msg_id → missing，不查库', async () => {
+    const { controller, service } = makeController();
+    const res = await controller.recallMessage({ room_id: 'r1' }, userIdMetadata('u1'));
+    expect(res).toMatchObject({ code: '1', msg: 'missing room_id/msg_id' });
+    expect(service.recallMessage).not.toHaveBeenCalled();
+  });
+
+  it('非法 msg_id（非 uuid）→ not found，不落库不抛错', async () => {
+    const { controller, service } = makeController();
+    const res = await controller.recallMessage(
+      { room_id: 'r1', msg_id: 'not-a-uuid' },
+      userIdMetadata('u1')
+    );
+    expect(res).toMatchObject({ code: '1', msg: 'not found' });
+    expect(service.recallMessage).not.toHaveBeenCalled();
   });
 });

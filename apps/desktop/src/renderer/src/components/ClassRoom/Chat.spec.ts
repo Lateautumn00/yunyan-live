@@ -5,9 +5,11 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import { createPinia } from 'pinia';
 import Chat from '@/components/ClassRoom/Chat.vue';
 import { useRoomStore } from '@/store/room';
+import { RECALLED_PLACEHOLDER } from '@yunyan-live/types';
 
 const apiMocks = vi.hoisted(() => ({
-  updateForbid: vi.fn()
+  updateForbid: vi.fn(),
+  recall: vi.fn()
 }));
 
 const storeMocks = vi.hoisted(() => ({
@@ -17,7 +19,8 @@ const storeMocks = vi.hoisted(() => ({
 
 vi.mock('@/api', () => ({
   default: {
-    updateForbid: (params: unknown) => apiMocks.updateForbid(params)
+    updateForbid: (params: unknown) => apiMocks.updateForbid(params),
+    recall: (params: unknown) => apiMocks.recall(params)
   },
   config: {
     messageWs: 'ws://test.local/socket'
@@ -131,6 +134,7 @@ function lastSent(ws: MockWebSocket): SentBullet {
 describe('ClassRoom Chat.vue', () => {
   beforeEach(() => {
     apiMocks.updateForbid.mockReset();
+    apiMocks.recall.mockReset();
     storeMocks.sessionInterrupted.mockReset();
     MockWebSocket.instances = [];
     localStorage.removeItem('token');
@@ -734,5 +738,155 @@ describe('ClassRoom Chat.vue', () => {
     expect(MockWebSocket.instances).toHaveLength(1); // sessionClosed 阻断自动重连
     expect(document.body.textContent).toContain('已被讲师移出');
     wrapper.unmount();
+  });
+
+  describe('F4 撤回（入口 + recall 帧 + 历史占位，台账 DoD Chat 层）', () => {
+    it('recall 帧：已渲染消息按 msgId 换占位，原文消失', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'bullet', {
+        msgId: 'm-1',
+        liveMsg: { name: '李四', msg: '敏感内容', time: Date.now() },
+        info: { liveUserId: 'u2', isTeacher: false, senderId: 'guid-other' }
+      });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.text()).toContain('敏感内容');
+      ws.onmessage?.({ data: JSON.stringify({ type: 'recall', data: { msgId: 'm-1' } }) });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.text()).not.toContain('敏感内容');
+      expect(wrapper.text()).toContain(RECALLED_PLACEHOLDER);
+      wrapper.unmount();
+    });
+
+    it('撤回入口可见性（学生视角）：自己 2 分钟内可见；他人/超窗不可见', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'bullet', {
+        msgId: 'm-mine',
+        liveMsg: { name: '小明', msg: '我的', time: Date.now() },
+        info: { liveUserId: 'u1', senderId: 'guid-me' }
+      });
+      pushFrame(ws, 'bullet', {
+        msgId: 'm-other',
+        liveMsg: { name: '李四', msg: '他的', time: Date.now() },
+        info: { liveUserId: 'u2', senderId: 'guid-other' }
+      });
+      pushFrame(ws, 'bullet', {
+        msgId: 'm-stale',
+        liveMsg: { name: '小明', msg: '旧的', time: Date.now() - (120_000 + 1_000) },
+        info: { liveUserId: 'u1', senderId: 'guid-me' }
+      });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.findAll('.recall-btn')).toHaveLength(1);
+      expect(wrapper.text()).toContain('我的');
+      wrapper.unmount();
+    });
+
+    it('撤回入口：教师可见他人消息入口；已撤回消息入口隐藏', async () => {
+      const wrapper = mountChat({ isTeacher: true });
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'bullet', {
+        msgId: 'm-other',
+        liveMsg: { name: '李四', msg: '他的', time: Date.now() },
+        info: { liveUserId: 'u2', senderId: 'guid-other' }
+      });
+      pushFrame(ws, 'bullet', {
+        msgId: 'm-mine2',
+        liveMsg: { name: '老师', msg: '我的', time: Date.now() },
+        info: { liveUserId: 'u9', senderId: 'guid-me' }
+      });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.findAll('.recall-btn')).toHaveLength(2);
+      ws.onmessage?.({ data: JSON.stringify({ type: 'recall', data: { msgId: 'm-mine2' } }) });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.findAll('.recall-btn')).toHaveLength(1);
+      wrapper.unmount();
+    });
+
+    it('点击撤回：api.recall 参数正确，成功后本地立即换占位', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'bullet', {
+        msgId: 'm-9',
+        liveMsg: { name: '小明', msg: '待撤内容', time: Date.now() },
+        info: { liveUserId: 'u1', senderId: 'guid-me' }
+      });
+      await wrapper.vm.$nextTick();
+      apiMocks.recall.mockResolvedValue({ code: 1000 });
+      await wrapper.findAll('.recall-btn')[0]!.trigger('click');
+      await flushPromises();
+      expect(apiMocks.recall).toHaveBeenCalledWith({ roomId: 'r1', msgId: 'm-9' });
+      expect(wrapper.text()).not.toContain('待撤内容');
+      expect(wrapper.text()).toContain(RECALLED_PLACEHOLDER);
+      wrapper.unmount();
+    });
+
+    it('撤回失败（服务端拒绝文案）：提示且原文保留', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'bullet', {
+        msgId: 'm-10',
+        liveMsg: { name: '小明', msg: '仍要显示', time: Date.now() },
+        info: { liveUserId: 'u1', senderId: 'guid-me' }
+      });
+      await wrapper.vm.$nextTick();
+      apiMocks.recall.mockRejectedValue('仅发言者本人或房主可撤回');
+      await wrapper.findAll('.recall-btn')[0]!.trigger('click');
+      await flushPromises();
+      expect(wrapper.text()).toContain('仍要显示');
+      expect(document.body.textContent).toContain('仅发言者本人或房主可撤回');
+      wrapper.unmount();
+    });
+
+    it('进场 history 含 recalled 占位：渲染占位与 .recalled 样式、不渲染原文（DoD Chat 层）', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'history', {
+        messages: [
+          {
+            msgId: 'h-recalled',
+            liveMsg: { msg: RECALLED_PLACEHOLDER, name: '甲', time: 1700000000000 },
+            info: { liveUserId: 'u2', senderId: 'guid-x' }
+          },
+          historyEntry('h2', '乙', 1700000100000, 'u3')
+        ],
+        nextCursor: null
+      });
+      await flushPromises();
+      expect(wrapper.text()).toContain(RECALLED_PLACEHOLDER);
+      expect(wrapper.text()).toContain('历史h2');
+      expect(wrapper.find('.message.recalled').exists()).toBe(true);
+      // 占位消息（已撤回语义）不出撤回入口
+      expect(wrapper.findAll('.recall-btn')).toHaveLength(0);
+      wrapper.unmount();
+    });
+
+    it('离线重连对账（DoD）：本地原文残留 + 进场 history 占位 → 原文原位替换、不并存', async () => {
+      const wrapper = mountChat();
+      const ws = await openSocket(wrapper);
+      pushFrame(ws, 'bullet', {
+        msgId: 'm-77',
+        liveMsg: { name: '小明', msg: '离线前原文', time: 1700000000000 },
+        info: { liveUserId: 'u1', senderId: 'guid-me' }
+      });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.text()).toContain('离线前原文');
+      pushFrame(ws, 'history', {
+        messages: [
+          {
+            msgId: 'm-77',
+            liveMsg: { msg: RECALLED_PLACEHOLDER, name: '小明', time: 1700000000000 },
+            info: { liveUserId: 'u1', senderId: 'guid-me' }
+          }
+        ],
+        nextCursor: null
+      });
+      await flushPromises();
+      expect(wrapper.text()).not.toContain('离线前原文');
+      expect(wrapper.text()).toContain(RECALLED_PLACEHOLDER);
+      const hits = wrapper.findAll('li').filter(li => li.text().includes(RECALLED_PLACEHOLDER));
+      expect(hits).toHaveLength(1);
+      wrapper.unmount();
+    });
   });
 });

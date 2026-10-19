@@ -73,6 +73,25 @@ export interface ModerationMessage {
   untilMs?: number;
 }
 
+/**
+ * F4 撤回占位文案（历史 rowToEntry 与客户端本地替换共用同一常量，
+ * 保证占位渲染字节一致，DoD「历史不得再现原文」可断言）。
+ */
+export const RECALLED_PLACEHOLDER = '该消息已撤回';
+
+/** F4 撤回时限（ms）：发言者撤自己 / 房主撤本房他人，同一 2 分钟窗（前后端同源，防窗值漂移） */
+export const RECALL_WINDOW_MS = 120_000;
+
+/**
+ * F4 撤回广播（chat-ws 订阅 live:recall 后转播给房间）：
+ * 按 msgId 定位——本地已渲染消息替换为 RECALLED_PLACEHOLDER（seen 键同步迁移）；
+ * 携带方无 roomId（广播本身按房间投递）。旧客户端 default 分支安全忽略本帧。
+ */
+export interface RecallMessage {
+  type: 'recall';
+  data: { msgId: string };
+}
+
 /** 历史回放页大小（进场 push 与 getHistory 翻页共用，服务端固定不接受 limit 参数） */
 export const CHAT_HISTORY_PAGE_SIZE = 50;
 
@@ -146,4 +165,6 @@ export interface ChatMessageItem {
   /** 展示用时间（ms）：优先服务端 time，缺失回退客户端接收时间 */
   time?: number;
   mentions?: MentionTarget[];
+  /** F4：已被撤回（本地 recallByMsgId 或占位历史命中后置位；用于灰色渲染与撤回入口隐藏） */
+  recalled?: boolean;
 }

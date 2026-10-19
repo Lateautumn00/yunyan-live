@@ -1,5 +1,5 @@
 import type { Pool, QueryResult } from 'pg';
-import type { HistoryEntry, MentionTarget } from '@yunyan-live/types';
+import { RECALLED_PLACEHOLDER, type HistoryEntry, type MentionTarget } from '@yunyan-live/types';
 
 export interface HistoryPage {
   messages: HistoryEntry[];
@@ -32,16 +32,20 @@ export function rowToEntry(row: {
   mentions: unknown;
   extra: unknown;
   time_ms: string;
+  /** F4：非空=已撤回 → 正文强制回占位、mentions 丢弃（写路径已物理置空原文，此处读侧兜底） */
+  recalled_at?: unknown;
 }): HistoryEntry {
   const extra = (typeof row.extra === 'object' && row.extra !== null ? row.extra : {}) as {
     liveUserId?: string;
     infoType?: number;
   };
-  const mentions = Array.isArray(row.mentions) ? (row.mentions as MentionTarget[]) : undefined;
+  const recalled = row.recalled_at !== null && row.recalled_at !== undefined;
+  const mentions =
+    !recalled && Array.isArray(row.mentions) ? (row.mentions as MentionTarget[]) : undefined;
   return {
     msgId: row.msg_id,
     liveMsg: {
-      msg: row.content,
+      msg: recalled ? RECALLED_PLACEHOLDER : row.content,
       roomId: row.room_id,
       name: row.sender_name,
       time: Number(row.time_ms),
@@ -58,7 +62,7 @@ export function rowToEntry(row: {
 
 /** 最近一页：SQL DESC 取最新 50 → 应用层 reverse 成 ASC（直接 ASC LIMIT 会取到最早 50 条） */
 export const SQL_RECENT = `
-SELECT msg_id, id::text AS id, room_id, sender_id::text AS sender_id, sender_name, is_teacher, content, msg_type, mentions, extra,
+SELECT msg_id, id::text AS id, room_id, sender_id::text AS sender_id, sender_name, is_teacher, content, msg_type, mentions, extra, recalled_at,
        floor(EXTRACT(EPOCH FROM created_at) * 1000)::bigint AS time_ms
 FROM chat_messages
 WHERE room_id = $1
@@ -67,7 +71,7 @@ LIMIT $2`.trim();
 
 /** keyset 翻页：行比较 + 参数化（前导 room_id 等值 + 两列 DESC → 索引前向扫描无 Sort） */
 export const SQL_PAGE = `
-SELECT msg_id, id::text AS id, room_id, sender_id::text AS sender_id, sender_name, is_teacher, content, msg_type, mentions, extra,
+SELECT msg_id, id::text AS id, room_id, sender_id::text AS sender_id, sender_name, is_teacher, content, msg_type, mentions, extra, recalled_at,
        floor(EXTRACT(EPOCH FROM created_at) * 1000)::bigint AS time_ms
 FROM chat_messages
 WHERE room_id = $1
@@ -98,6 +102,7 @@ interface HistoryRow {
   mentions: unknown;
   extra: unknown;
   time_ms: string;
+  recalled_at: unknown;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
