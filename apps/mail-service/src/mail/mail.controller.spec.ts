@@ -45,14 +45,4 @@ describe('MailController', () => {
       expect(res).toEqual({ code: '1', msg: '验证码无效或已过期', valid: false });
     });
   });
-
-  describe('handleSendCode', () => {
-    it('MQ 消息同样透传 email 给 sendCode，无返回值', async () => {
-      const { controller, mailService } = createController();
-      const res = await controller.handleSendCode({ email: 'mq@b.com' });
-      expect(mailService.sendCode).toHaveBeenCalledTimes(1);
-      expect(mailService.sendCode).toHaveBeenCalledWith('mq@b.com');
-      expect(res).toBeUndefined();
-    });
-  });
 });

@@ -16,10 +16,13 @@ import {
 import { resolveSynchronize, SYNC_ENV_KEY } from './db/sync-policy';
 import { JanusModule } from './janus/janus.module';
 import { LiveModule } from './live/live.module';
+import { NotifyModule } from '@yunyan-live/nest-shared';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // F9：开课提醒 publisher（RABBITMQ_URL 空 → disabled，恒丢弃+单次告警）
+    NotifyModule,
     JanusModule,
     TypeOrmModule.forRootAsync({
       useFactory: (config: ConfigService) => ({

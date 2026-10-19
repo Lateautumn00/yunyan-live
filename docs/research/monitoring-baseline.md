@@ -30,14 +30,16 @@
 
 ## 3. 指标清单
 
-| 指标                             | 类型    | labels                | 上报方                     | 用途                                                                      |
-| -------------------------------- | ------- | --------------------- | -------------------------- | ------------------------------------------------------------------------- |
-| `yunyan_http_requests_total`     | Counter | method, route, status | server                     | HTTP 5xx 告警、QPS dashboard                                              |
-| `yunyan_grpc_requests_total`     | Counter | rpc, code             | auth-service, live-service | gRPC 错误告警                                                             |
-| `yunyan_chat_online_connections` | Gauge   | —                     | chat-ws-service            | ws 在线数告警（scrape 时实时求和 `rooms`）                                |
-| `yunyan_chat_queue_depth`        | Gauge   | queue                 | chat-ws-service            | 队列/DLQ 深度告警（depth monitor 30s 采样写入，复用 §4.8 轮询零新增查询） |
-| `yunyan_audit_queue_depth`       | Gauge   | queue                 | live-service               | S12 审计队列/DLQ 深度（consumer 30s 采样；dlq>0 即 error 日志）           |
-| `process_*` / `nodejs_*`         | 默认集  | —                     | 全部 4 服务                | `collectDefaultMetrics`（CPU/内存/句柄/启动时间）                         |
+| 指标                             | 类型    | labels                | 上报方                                    | 用途                                                                            |
+| -------------------------------- | ------- | --------------------- | ----------------------------------------- | ------------------------------------------------------------------------------- |
+| `yunyan_http_requests_total`     | Counter | method, route, status | server                                    | HTTP 5xx 告警、QPS dashboard                                                    |
+| `yunyan_grpc_requests_total`     | Counter | rpc, code             | auth-service, live-service                | gRPC 错误告警                                                                   |
+| `yunyan_chat_online_connections` | Gauge   | —                     | chat-ws-service                           | ws 在线数告警（scrape 时实时求和 `rooms`）                                      |
+| `yunyan_chat_queue_depth`        | Gauge   | queue                 | chat-ws-service                           | 队列/DLQ 深度告警（depth monitor 30s 采样写入，复用 §4.8 轮询零新增查询）       |
+| `yunyan_audit_queue_depth`       | Gauge   | queue                 | live-service                              | S12 审计队列/DLQ 深度（consumer 30s 采样；dlq>0 即 error 日志）                 |
+| `yunyan_notify_total`            | Counter | kind, result          | mail-service                              | F9 通知结果（sent/skipped_dedupe/skipped_rate/failed；failed 持续 → SMTP 故障） |
+| `yunyan_notify_queue_depth`      | Gauge   | queue                 | mail-service                              | F9 通知队列/DLQ 深度（consumer 30s 采样；dlq>0 即 error 日志）                  |
+| `process_*` / `nodejs_*`         | 默认集  | —                     | 全部服务（server/auth/live/chat-ws/mail） | `collectDefaultMetrics`（CPU/内存/句柄/启动时间）                               |
 
 **实现位置**：共享模块 `packages/nest-shared/src/metrics.ts`
 （`createServiceMetrics` / `httpMetricsMiddleware` / `metricsRequestHandler` / `startMetricsServer` / `GrpcMetricsInterceptor` / `grpcCodeName`），
@@ -60,6 +62,7 @@ O7 延后但触发后不得改指标名，因此现在锁定：
 | server `/metrics`          | 127.0.0.1:3001/metrics | 挂 gateway 自有 HTTP                             |
 | auth-service metrics       | 0.0.0.0:9464/metrics   | gRPC 服务无 HTTP，独立轻量端口（`METRICS_PORT`） |
 | live-service metrics       | 0.0.0.0:9465/metrics   | 同上（`METRICS_PORT`）                           |
+| mail-service metrics       | 0.0.0.0:9466/metrics   | 同上（`METRICS_PORT`，F9 通知队列/结果指标）     |
 | chat-ws-service `/metrics` | 0.0.0.0:50054/metrics  | 挂 Koa 自有 HTTP，与 `/healthz` 同层             |
 | prometheus                 | 127.0.0.1:9090         | 含 `--web.enable-lifecycle`（规则热加载）        |
 | alertmanager               | 127.0.0.1:9093         | 首批 receiver 空集成（见 alertmanager.yml 注释） |

@@ -274,7 +274,13 @@ function createController() {
   const liveClient = { getService: vi.fn(() => liveService) };
   const authClient = { getService: vi.fn(() => authService) };
   const audit = { publish: vi.fn() };
-  const controller = new LiveController(liveClient as never, authClient as never, audit as never);
+  const notify = { publish: vi.fn() };
+  const controller = new LiveController(
+    liveClient as never,
+    authClient as never,
+    audit as never,
+    notify as never
+  );
   controller.onModuleInit();
   return { controller, liveService, authService, liveClient, authClient, audit };
 }

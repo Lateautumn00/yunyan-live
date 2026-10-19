@@ -25,6 +25,10 @@ export interface ServiceMetrics {
   chatQueueDepth: Gauge<'queue'>;
   /** live-service 审计队列深度 {queue=work|dlq}；S12 consumer 未启动时 series 不出现 */
   auditQueueDepth: Gauge<'queue'>;
+  /** mail-service 通知结果计数 {kind, result=sent|skipped_dedupe|skipped_rate|failed}；F9 */
+  notifyTotal: Counter<'kind' | 'result'>;
+  /** mail-service 通知队列深度 {queue=work|dlq}；F9 consumer 未启动时 series 不出现 */
+  notifyQueueDepth: Gauge<'queue'>;
 }
 
 export function createServiceMetrics(service: string): ServiceMetrics {
@@ -60,6 +64,18 @@ export function createServiceMetrics(service: string): ServiceMetrics {
     labelNames: ['queue'],
     registers: [registry]
   });
+  const notifyTotal = new Counter({
+    name: 'yunyan_notify_total',
+    help: 'Total notification emails by kind and result (sent|skipped_dedupe|skipped_rate|failed)',
+    labelNames: ['kind', 'result'],
+    registers: [registry]
+  });
+  const notifyQueueDepth = new Gauge({
+    name: 'yunyan_notify_queue_depth',
+    help: 'Current RabbitMQ notify queue depth reported by mail-service (queue=work|dlq)',
+    labelNames: ['queue'],
+    registers: [registry]
+  });
   return {
     service,
     registry,
@@ -67,7 +83,9 @@ export function createServiceMetrics(service: string): ServiceMetrics {
     grpcRequests,
     chatOnlineConnections,
     chatQueueDepth,
-    auditQueueDepth
+    auditQueueDepth,
+    notifyTotal,
+    notifyQueueDepth
   };
 }
 

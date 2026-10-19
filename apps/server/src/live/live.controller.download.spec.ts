@@ -14,7 +14,8 @@ const h = vi.hoisted(() => ({
   piped: [] as unknown[],
   removed: [] as string[],
   spawns: [] as Array<{ file: string; args: string[]; opts: { stdio?: string } }>,
-  statSize: 4096
+  statSize: 4096,
+  spawnExit: 0
 }));
 
 vi.mock('fs', async importOriginal => {
@@ -50,7 +51,7 @@ vi.mock('child_process', async importOriginal => {
     spawn: (file: string, args: string[], opts: { stdio?: string }) => {
       h.spawns.push({ file, args, opts });
       const child = new EventEmitter() as ReturnType<typeof actual.spawn>;
-      queueMicrotask(() => child.emit('close', 0));
+      queueMicrotask(() => child.emit('close', h.spawnExit));
       return child;
     }
   };
@@ -75,16 +76,20 @@ function createController() {
     )
   };
   const audit = { publish: vi.fn() };
+  const notify = { publish: vi.fn() };
   const controller = new LiveController(
     { getService: vi.fn(() => liveService) } as never,
     { getService: vi.fn(() => ({})) } as never,
-    audit as never
+    audit as never,
+    notify as never
   );
   controller.onModuleInit();
-  return { controller, liveService, audit };
+  return { controller, liveService, audit, notify };
 }
 
-const reqRole = (userId: string, role: number) => ({ user: { userId, role } });
+const reqRole = (userId: string, role: number, email?: string) => ({
+  user: { userId, role, ...(email ? { email } : {}) }
+});
 
 function createRes() {
   const res = {
@@ -113,6 +118,7 @@ beforeEach(() => {
   h.piped.length = 0;
   h.removed.length = 0;
   h.spawns.length = 0;
+  h.spawnExit = 0;
 });
 
 afterEach(() => {
@@ -329,5 +335,70 @@ describe('downloadRecording 转码触发', () => {
     }
     expect(h.spawns).toHaveLength(0);
     expect(h.written).toHaveLength(0);
+  });
+});
+
+describe('downloadRecording F9 录制完成通知', () => {
+  it('转码成功且有邮箱 → 发布 recording_ready（收件人=操作者邮箱，scope=rec-id）', async () => {
+    h.present.add(videoMjr('1'));
+    const { controller, notify } = createController();
+    const res = createRes();
+    await controller.downloadRecording(
+      '1',
+      q(),
+      res as unknown as Response,
+      reqRole('t1', 1, 'teacher@example.com')
+    );
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(notify.publish).toHaveBeenCalledTimes(1);
+    expect(notify.publish).toHaveBeenCalledWith({
+      kind: 'recording_ready',
+      to: 'teacher@example.com',
+      scope: 'rec-1',
+      payload: { recordingId: '1', roomId: 'r1' }
+    });
+  });
+
+  it('无邮箱（老 token）→ 不发布通知，转码照常', async () => {
+    h.present.add(videoMjr('1'));
+    const { controller, notify } = createController();
+    const res = createRes();
+    await controller.downloadRecording('1', q(), res as unknown as Response, reqRole('t1', 1));
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(notify.publish).not.toHaveBeenCalled();
+    expect(h.spawns).toHaveLength(3);
+  });
+
+  it('转码失败（docker exec 非 0）→ 不发布通知，marker 照常清理', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    h.present.add(videoMjr('1'));
+    h.spawnExit = 1;
+    const { controller, notify } = createController();
+    const res = createRes();
+    await controller.downloadRecording(
+      '1',
+      q(),
+      res as unknown as Response,
+      reqRole('t1', 1, 'teacher@example.com')
+    );
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(notify.publish).not.toHaveBeenCalled();
+    // 失败清理的是容器内 mp4 路径（catch 内 rmSync containerMp4），marker 随 finally 清理
+    expect(h.removed).toEqual(['/tmp/janus/recordings/1.mp4', marker('1')]);
+    expect(errSpy).toHaveBeenCalledWith('[live] recording transcode failed:', expect.any(Error));
+    errSpy.mockRestore();
+  });
+
+  it('已就绪 mp4 直接返回（download 状态探测）不重复发布', async () => {
+    h.present.add(videoMjr('1'));
+    h.present.add(mp4('1'));
+    const { controller, notify } = createController();
+    const res = createRes();
+    await controller.downloadRecording('1', q(), res as unknown as Response, reqRole('t1', 1));
+    expect(res.json).toHaveBeenCalledWith({ code: 1000, msg: '转码完成' });
+    expect(notify.publish).not.toHaveBeenCalled();
   });
 });

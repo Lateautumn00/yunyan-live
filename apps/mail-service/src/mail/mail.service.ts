@@ -3,7 +3,13 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MailerService } from '@nestjs-modules/mailer';
 import Redis from 'ioredis';
-import { REDIS_CLIENT } from '@yunyan-live/nest-shared';
+import {
+  NOTIFY_DEDUPE_TTL_S,
+  NOTIFY_DAILY_LIMIT,
+  REDIS_CLIENT,
+  type NotifyWireEvent
+} from '@yunyan-live/nest-shared';
+import { renderNotify } from './templates';
 
 @Injectable()
 export class MailService {
@@ -117,5 +123,71 @@ export class MailService {
       this.logger.error(`清空失败计数失败: ${err instanceof Error ? err.message : String(err)}`);
     }
     return true;
+  }
+
+  /**
+   * F9 通知发送（MQ consumer 唯一投递出口）：
+   * 1) 场次模板去重 dedupeKey=kind:scope:to（7d NX，命中直接跳过）
+   * 2) 单用户单日 ≤5 次投递尝试（INCR 分桶，超限跳过）
+   * 3) SMTP 失败回滚 dedupe 键并抛出（交 consumer 重试阶梯 5s/30s/120s → DLQ）
+   * Redis 故障一律 fail-open（放行发送，error 日志留痕）——与 sendCode 冷却同口径。
+   */
+  async notify(event: NotifyWireEvent): Promise<'sent' | 'skipped_dedupe' | 'skipped_rate'> {
+    const dedupeRedisKey = `notify_dedupe:${event.dedupeKey}`;
+    try {
+      const existing = await this.redis.get(dedupeRedisKey);
+      if (existing) {
+        this.logger.log(`通知去重跳过: ${event.dedupeKey}`);
+        return 'skipped_dedupe';
+      }
+    } catch (err) {
+      this.logger.error(
+        `去重检查失败(fail-open): ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+
+    try {
+      const day = new Date().toISOString().slice(0, 10);
+      const dailyKey = `notify_daily:${event.to}:${day}`;
+      const n = await this.redis.incr(dailyKey);
+      if (n === 1) await this.redis.expire(dailyKey, 2 * 24 * 60 * 60);
+      if (n > NOTIFY_DAILY_LIMIT) {
+        this.logger.warn(`单日通知超限跳过: ${event.to} n=${n}`);
+        return 'skipped_rate';
+      }
+    } catch (err) {
+      this.logger.error(
+        `频控计数失败(fail-open): ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+
+    try {
+      const ok = await this.redis.set(dedupeRedisKey, '1', 'EX', NOTIFY_DEDUPE_TTL_S, 'NX');
+      if (ok !== 'OK') {
+        this.logger.log(`通知去重跳过(并发): ${event.dedupeKey}`);
+        return 'skipped_dedupe';
+      }
+    } catch (err) {
+      this.logger.error(
+        `去重写入失败(fail-open): ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+
+    const { subject, html } = renderNotify(event.kind, event.payload);
+    try {
+      await this.mailerService.sendMail({ to: event.to, subject, html });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`通知邮件发送失败: kind=${event.kind} to=${event.to}: ${message}`);
+      // 回滚 dedupe：重试投递须真正发出，不被本次失败占用去重位
+      try {
+        await this.redis.del(dedupeRedisKey);
+      } catch (err) {
+        this.logger.error(`去重回滚失败: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      throw error instanceof Error ? error : new Error(message);
+    }
+    this.logger.log(`通知邮件已发送: kind=${event.kind} to=${event.to}`);
+    return 'sent';
   }
 }

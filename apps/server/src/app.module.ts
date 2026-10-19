@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
-import { AuditModule, RedisModule } from '@yunyan-live/nest-shared';
+import { AuditModule, NotifyModule, RedisModule } from '@yunyan-live/nest-shared';
 import { GatewayClientsModule } from './gateway/clients.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -20,6 +20,7 @@ import { DEFAULT_THROTTLE, RateLimitGuard } from './common/guards/rate-limit.gua
     ThrottlerModule.forRoot([DEFAULT_THROTTLE]),
     RedisModule,
     AuditModule,
+    NotifyModule,
     GatewayClientsModule,
     AuthModule,
     UsersModule,

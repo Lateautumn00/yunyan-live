@@ -26,6 +26,11 @@ scrape_configs:
     static_configs:
       - targets: ['host.docker.internal:9465']
 
+  # F9：通知队列/发送结果（docs/research/notification-matrix.md）
+  - job_name: mail-service
+    static_configs:
+      - targets: ['host.docker.internal:9466']
+
   - job_name: chat-ws-service
     static_configs:
       - targets: ['host.docker.internal:50054']

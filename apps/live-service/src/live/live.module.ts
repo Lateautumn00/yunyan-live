@@ -15,6 +15,7 @@ import {
 import { LiveController } from './live.controller';
 import { LiveService } from './live.service';
 import { CheckinService } from './checkin.service';
+import { ReminderService } from './reminder.service';
 
 @Module({
   imports: [
@@ -32,7 +33,7 @@ import { CheckinService } from './checkin.service';
     ])
   ],
   controllers: [LiveController],
-  providers: [LiveService, CheckinService],
+  providers: [LiveService, CheckinService, ReminderService],
   exports: [LiveService, CheckinService]
 })
 export class LiveModule {}

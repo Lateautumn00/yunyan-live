@@ -18,13 +18,15 @@ import {
   CheckinPayload,
   CheckinSessionActionDto,
   JwtAuthGuard,
+  NOTIFY_PUBLISHER,
   REDIS_CLIENT,
   RespondCheckinDto,
   StartCheckinDto,
   normalizePageQuery,
   publishCheckin,
   toGrpcPage,
-  userIdMetadata
+  userIdMetadata,
+  type NotifyPublisher
 } from '@yunyan-live/nest-shared';
 import type { Redis } from 'ioredis';
 import { grpcCall } from '../common/helpers/grpc.helper';
@@ -144,7 +146,8 @@ export class CheckinController implements OnModuleInit {
   constructor(
     @Inject('LIVE_GRPC') private liveClient: ClientGrpc,
     @Inject('AUTH_GRPC') private authClient: ClientGrpc,
-    @Inject(REDIS_CLIENT) private redis: Redis
+    @Inject(REDIS_CLIENT) private redis: Redis,
+    @Inject(NOTIFY_PUBLISHER) private notify: NotifyPublisher
   ) {}
 
   onModuleInit() {
@@ -236,7 +239,10 @@ export class CheckinController implements OnModuleInit {
 
   @Post('end')
   @UseGuards(JwtAuthGuard)
-  async end(@Body() dto: CheckinSessionActionDto, @Request() req: { user: { userId: string } }) {
+  async end(
+    @Body() dto: CheckinSessionActionDto,
+    @Request() req: { user: { userId: string; email?: string } }
+  ) {
     const result = await grpcCall(
       this.liveService.endCheckin(
         { room_id: dto.roomId, session_id: dto.sessionId },
@@ -250,6 +256,15 @@ export class CheckinController implements OnModuleInit {
       sessionId: dto.sessionId,
       signedCount: session.signedCount
     });
+    // F9：签到结束 → 教师邮件（scope=sessionId，每场次每模板 7d 去重；无邮箱跳过）
+    if (req.user.email) {
+      this.notify.publish({
+        kind: 'checkin_ended',
+        to: req.user.email,
+        scope: dto.sessionId,
+        payload: { roomId: dto.roomId, sessionId: dto.sessionId, signedCount: session.signedCount }
+      });
+    }
     return session;
   }
 

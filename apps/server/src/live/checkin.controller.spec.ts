@@ -91,17 +91,19 @@ function makeController() {
   const redis = { publish: vi.fn().mockResolvedValue(1) };
   const liveClient = { getService: vi.fn(() => live) };
   const authClient = { getService: vi.fn(() => auth) };
+  const notify = { publish: vi.fn() };
   const controller = new CheckinController(
     liveClient as never,
     authClient as never,
-    redis as never
+    redis as never,
+    notify as never
   );
   controller.onModuleInit();
-  return { controller, live, auth, redis };
+  return { controller, live, auth, redis, notify };
 }
 
-function req(userId = 't1') {
-  return { user: { userId } };
+function req(userId = 't1', email?: string) {
+  return { user: { userId, ...(email ? { email } : {}) } };
 }
 
 describe('CheckinController', () => {
@@ -183,6 +185,43 @@ describe('CheckinController', () => {
     const [channel, raw] = redis.publish.mock.calls[0];
     expect(channel).toBe(CHECKIN_CHANNEL);
     expect(JSON.parse(raw)).toMatchObject({ action: 'ended', sessionId: 's1' });
+  });
+
+  it('end F9：有邮箱 → 发布 checkin_ended（scope=sessionId，payload 带签到人数）', async () => {
+    const { controller, notify } = makeController();
+    await controller.end(
+      Object.assign(new CheckinSessionActionDto(), { roomId: 'r1', sessionId: 's1' }),
+      req('t1', 'teacher@example.com')
+    );
+    expect(notify.publish).toHaveBeenCalledTimes(1);
+    expect(notify.publish).toHaveBeenCalledWith({
+      kind: 'checkin_ended',
+      to: 'teacher@example.com',
+      scope: 's1',
+      payload: { roomId: 'r1', sessionId: 's1', signedCount: 2 }
+    });
+  });
+
+  it('end F9：无邮箱 → 不发布通知，广播照常', async () => {
+    const { controller, notify, redis } = makeController();
+    await controller.end(
+      Object.assign(new CheckinSessionActionDto(), { roomId: 'r1', sessionId: 's1' }),
+      req()
+    );
+    expect(notify.publish).not.toHaveBeenCalled();
+    expect(redis.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('end F9：gRPC 结束失败 → 不发布通知', async () => {
+    const { controller, live, notify } = makeController();
+    live.endCheckin.mockReturnValueOnce(throwError(() => new Error('boom')));
+    await expect(
+      controller.end(
+        Object.assign(new CheckinSessionActionDto(), { roomId: 'r1', sessionId: 's1' }),
+        req('t1', 'teacher@example.com')
+      )
+    ).rejects.toThrow();
+    expect(notify.publish).not.toHaveBeenCalled();
   });
 
   it('openMakeup：广播 makeup', async () => {

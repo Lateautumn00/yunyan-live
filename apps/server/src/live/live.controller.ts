@@ -32,13 +32,16 @@ import {
   CreateLiveDto,
   JoinLiveDto,
   JwtAuthGuard,
+  NOTIFY_PUBLISHER,
   normalizePageQuery,
   Roles,
   RolesGuard,
   toGrpcPage,
   UpdateLiveDto,
   userIdMetadata,
-  type AuditPublisher
+  type AuditPublisher,
+  type NotifyEventInput,
+  type NotifyPublisher
 } from '@yunyan-live/nest-shared';
 
 /** 与 push.controller 口径一致：1 = 教师 */
@@ -375,7 +378,8 @@ export class LiveController implements OnModuleInit {
   constructor(
     @Inject('LIVE_GRPC') private liveClient: ClientGrpc,
     @Inject('AUTH_GRPC') private authClient: ClientGrpc,
-    @Inject(AUDIT_PUBLISHER) private audit: AuditPublisher
+    @Inject(AUDIT_PUBLISHER) private audit: AuditPublisher,
+    @Inject(NOTIFY_PUBLISHER) private notify: NotifyPublisher
   ) {}
 
   private liveService: LiveServiceClient;
@@ -1113,7 +1117,12 @@ export class LiveController implements OnModuleInit {
     @Param('id') id: string,
     @Query('download') download: string,
     @Res() res: Response,
-    @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
+    @Request()
+    req: {
+      user: { userId: string; role?: number; email?: string };
+      requestId?: string;
+      ip?: string;
+    }
   ) {
     // S8 安全白名单：录制 id 由 Math.random().toString(36) 生成（[a-z0-9]），
     // 拒绝路径穿越（. / \）与命令注入元字符；后续全部路径拼接与 docker exec 均以此为前提
@@ -1177,6 +1186,17 @@ export class LiveController implements OnModuleInit {
 
     fs.writeFileSync(markerFile, '');
 
+    // F9 录制完成通知：转码异步跑在 req 生命周期之外，触发前先捕获收件人（无邮箱 → 不发）
+    const notifyTo = req.user.email;
+    const notifyInput: NotifyEventInput | null = notifyTo
+      ? {
+          kind: 'recording_ready',
+          to: notifyTo,
+          scope: `rec-${id}`,
+          payload: { recordingId: id, roomId: recRoomId ?? '' }
+        }
+      : null;
+
     // 异步转码：数组传参 docker exec（不经 shell），finally 必删 marker 保证失败可重试
     void this.transcodeRecording({
       container,
@@ -1187,7 +1207,8 @@ export class LiveController implements OnModuleInit {
       containerVideoWebm: `${containerRecordings}/${id}-video.webm`,
       containerAudioOpus: `${containerRecordings}/${id}-audio.opus`,
       containerMp4: `${containerRecordings}/${id}.mp4`,
-      markerFile
+      markerFile,
+      notify: notifyInput
     });
 
     return res.json({ code: 2002, msg: '转码中，请稍后' });
@@ -1204,6 +1225,8 @@ export class LiveController implements OnModuleInit {
     containerAudioOpus: string;
     containerMp4: string;
     markerFile: string;
+    /** F9：mp4 就绪才发布（catch 分支不发），null = 无收件邮箱跳过 */
+    notify: NotifyEventInput | null;
   }): Promise<void> {
     const exec = (inner: string[]): Promise<void> =>
       new Promise((resolve, reject) => {
@@ -1248,6 +1271,10 @@ export class LiveController implements OnModuleInit {
               args.containerMp4
             ]
       );
+      // F9：ffmpeg 写完 mp4 即就绪 → 录制完成通知（随后仅清理中间产物）
+      if (args.notify) {
+        this.notify.publish(args.notify);
+      }
       await exec(
         args.hasAudio
           ? ['rm', '-f', args.containerVideoWebm, args.containerAudioOpus]
