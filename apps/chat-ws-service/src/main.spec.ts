@@ -27,9 +27,10 @@ const h = vi.hoisted(() => ({
   query: undefined as unknown as (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>,
   /** 历史查询延迟（单飞测试用，ms） */
   historyDelay: 0,
-  /** ioredis 实例（含 duplicate 出的订阅连接）：签到订阅测试定位用 */
+  /** ioredis 实例（含 duplicate 出的订阅连接）：签到/转播订阅测试定位用 */
   redisInstances: [] as Array<{
     subscribe: { mock: { calls: unknown[][] } };
+    publish: { mock: { calls: unknown[][] } };
     emit: (event: string, ...args: unknown[]) => boolean;
   }>
 }));
@@ -320,6 +321,108 @@ describe('bullet 广播与持久化旁路（§4.2 fire-and-forget）', () => {
     c.send({ type: 'bullet', data: { liveMsg: { msg: '' } } });
     const f = await c.next('bullet_rejected');
     expect(f.reason).toBe('invalid');
+    c.close();
+  });
+});
+
+describe('F14 弹幕跨实例转播（live:bullet）', () => {
+  async function bulletChannel(): Promise<string> {
+    return (await import('@yunyan-live/nest-shared')).BULLET_CHANNEL;
+  }
+
+  /** 定位订阅了 live:bullet 的连接（subscribeBullet 的 duplicate 实例） */
+  function bulletSubscriber(channel: string) {
+    const sub = h.redisInstances.find(x =>
+      x.subscribe.mock.calls.some(call => call[0] === channel)
+    );
+    if (!sub) throw new Error('live:bullet subscriber not found');
+    return sub;
+  }
+
+  /** 全部实例上发往 live:bullet 的 publish 调用（信封断言用） */
+  function relayPublishes(channel: string): unknown[][] {
+    return h.redisInstances.flatMap(x => x.publish.mock.calls.filter(call => call[0] === channel));
+  }
+
+  it('本实例 bullet → 本地广播照旧 + fire-and-forget 转播信封（src/roomId/payload）', async () => {
+    const channel = await bulletChannel();
+    const before = relayPublishes(channel).length;
+    const c = await connect();
+    await c.next('history');
+    c.send({ type: 'bullet', data: { liveMsg: { msg: '来自本实例' } } });
+    const frame = await c.next('bullet');
+    expect((frame.data as { liveMsg: { msg: string } }).liveMsg.msg).toBe('来自本实例');
+    const publishes = relayPublishes(channel);
+    expect(publishes.length).toBe(before + 1); // 每条成功广播恰转播一次
+    const envelope = JSON.parse(String(publishes[before]?.[1])) as {
+      src: string;
+      roomId: string;
+      payload: string;
+    };
+    expect(envelope.src).toBeTruthy(); // 实例 id（randomUUID）
+    expect(envelope.roomId).toBe('r-main');
+    const relayed = JSON.parse(envelope.payload) as Frame;
+    expect(relayed.type).toBe('bullet'); // 帧字节透传，与本地广播同形
+    expect((relayed.data as { liveMsg: { msg: string } }).liveMsg.msg).toBe('来自本实例');
+    c.close();
+  });
+
+  it('远端实例信封（src≠自身）→ 转播到本地房间客户端', async () => {
+    const channel = await bulletChannel();
+    const c = await connect();
+    await c.next('history');
+    const payload = JSON.stringify({
+      type: 'bullet',
+      data: {
+        msgId: 'remote-1',
+        liveMsg: { msg: '来自远端实例', name: '远端甲' }
+      }
+    });
+    bulletSubscriber(channel).emit(
+      'message',
+      channel,
+      JSON.stringify({ src: 'remote-node-b', roomId: 'r-main', payload })
+    );
+    const frame = await c.next('bullet');
+    expect((frame.data as { liveMsg: { msg: string } }).liveMsg.msg).toBe('来自远端实例');
+    c.close();
+  });
+
+  it('src===本实例的信封 → 回环丢弃不重发', async () => {
+    const channel = await bulletChannel();
+    const c = await connect();
+    await c.next('history');
+    c.send({ type: 'bullet', data: { liveMsg: { msg: '探 src' } } });
+    await c.next('bullet');
+    const publishes = relayPublishes(channel);
+    const selfSrc = JSON.parse(String(publishes[publishes.length - 1]?.[1])) as { src: string };
+    bulletSubscriber(channel).emit(
+      'message',
+      channel,
+      JSON.stringify({
+        src: selfSrc.src,
+        roomId: 'r-main',
+        payload: JSON.stringify({ type: 'bullet', data: { liveMsg: { msg: '回环' } } })
+      })
+    );
+    await c.expectNo('bullet'); // 自身信封不二次下发
+    c.close();
+  });
+
+  it('远端信封属其它房间 → 不广播到本连接', async () => {
+    const channel = await bulletChannel();
+    const c = await connect();
+    await c.next('history');
+    bulletSubscriber(channel).emit(
+      'message',
+      channel,
+      JSON.stringify({
+        src: 'remote-node-b',
+        roomId: 'r-other',
+        payload: JSON.stringify({ type: 'bullet', data: { liveMsg: { msg: '他房' } } })
+      })
+    );
+    await c.expectNo('bullet');
     c.close();
   });
 });

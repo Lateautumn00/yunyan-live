@@ -9,6 +9,8 @@ import { Pool } from 'pg';
 import { WsClose, CHAT_HISTORY_PAGE_SIZE, type BulletRejectReason } from '@yunyan-live/types';
 import {
   requireJwtSecret,
+  publishBullet,
+  subscribeBullet,
   subscribeCheckin,
   subscribeForbid,
   subscribeKick,
@@ -40,6 +42,9 @@ import { createHistoryStore, decodeCursor, type HistoryStore } from './history';
 dotenv.config();
 
 const metrics = createServiceMetrics('chat-ws-service');
+
+/** F14：本进程实例 id——弹幕转播信封 src，订阅侧据此做回环抑制 */
+const INSTANCE_ID = randomUUID();
 
 interface WsClient {
   ws: WebSocket;
@@ -254,8 +259,24 @@ subscribeCheckin(
   }
 );
 
+// F14 弹幕跨实例转播（live:bullet）：远端信封 → 向本地房间转播（帧字节透传）；
+// src===本实例 → 回环丢弃。落库仍由 MQ publisher 独立负责，与转播互不依赖。
+subscribeBullet(
+  redis,
+  envelope => {
+    if (envelope.src === INSTANCE_ID) return;
+    broadcast(envelope.roomId, envelope.payload);
+  },
+  (err, stage) => {
+    console.error(
+      `[ChatWS] bullet relay ${stage}:`,
+      err instanceof Error ? err.message : String(err)
+    );
+  }
+);
+
 // F3 到期轮询（15s）：缓存过期 → 广播 expire 帧；PG 全局扫尾置 active=false（留痕 expired）。
-// 单实例语义（GAP-F14 同边界）：多实例间 expire 广播不互通，但读路径惰性过期仍正确。
+// 单实例语义（F14 边界留痕：bullet 已跨实例互通，expire 广播/liveNums 仍按实例口径，读路径惰性过期兜底）。
 const moderationPoll = setInterval(() => {
   for (const { roomId, userId } of collectExpired(moderationState)) {
     broadcast(roomId, JSON.stringify({ type: 'moderation', userId, kind: 'mute', op: 'expire' }));
@@ -400,6 +421,15 @@ function handleMessage(client: WebSocket, raw: string) {
           if (publisher && result.entry) publisher.publish(result.entry);
           // ② 再广播（行为与现状一致）
           broadcast(roomId, result.payload);
+          // ③ F14 跨实例转播（fire-forget：失败仅日志，回环抑制在订阅侧按 src 判定）
+          publishBullet(redis, { src: INSTANCE_ID, roomId, payload: result.payload }).catch(
+            (err: unknown) => {
+              console.error(
+                '[ChatWS] bullet relay publish:',
+                err instanceof Error ? err.message : String(err)
+              );
+            }
+          );
         } else sendTo(client, { type: 'bullet_rejected', reason: result.reason });
         break;
       }

@@ -86,3 +86,17 @@ export interface RecallPayload {
   roomId: string;
   msgId: string;
 }
+
+/** F14 弹幕跨实例转播频道（chat-ws 实例间 fanout；落库仍走 MQ publisher，两侧独立） */
+export const BULLET_CHANNEL = 'live:bullet';
+
+/**
+ * F14 弹幕转播信封：
+ * - src = 发布方实例 id（进程启动 randomUUID），订阅方 src===自身 → 丢弃防回环；
+ * - payload = 已构建的下发帧 JSON 字符串（与本进程 broadcast 同字节，透传不重建）。
+ */
+export interface BulletEnvelope {
+  src: string;
+  roomId: string;
+  payload: string;
+}
