@@ -68,8 +68,11 @@ groups:
           summary: 'target 15m 内 up 状态翻转（重启痕迹）：{{ $labels.job }}'
 
       # 磁盘：可用 <10%（node-exporter，rootfs 挂载 /host）
+      # O5 收尾排除口径（2026-10-19 演练实测）：fuse.snapfuse = snap 只读镜像（avail 恒 0，
+      # 不可清理）；/usr/lib/linux-tools 与 /usr/src/linux-headers 为 WSL 内核工具链目录
+      # （系统托管）——均属不可操作卷，不构成可执行的磁盘告警。
       - alert: DiskSpaceLow
-        expr: node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint!~"/host/(boot|dev|proc|sys).*"} / node_filesystem_size_bytes < 0.1
+        expr: node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|fuse.snapfuse",mountpoint!~"/host/(boot|dev|proc|sys).*|/snap/.*|/usr/lib/linux-tools.*|/usr/src/linux-headers.*"} / node_filesystem_size_bytes < 0.1
         for: 10m
         labels:
           severity: warning

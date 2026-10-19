@@ -13,27 +13,28 @@ alerting:
         - targets: ['alertmanager:9093']
 
 scrape_configs:
-  # 宿主机上以 pnpm dev 运行的服务（compose 容器经 host-gateway 回访宿主机）
+  # O3 容器化后：与业务服务同 compose 网络，直连服务名（批次 5 O5 收尾对齐；
+  # 宿主机 pnpm dev 单跑时此配置不可达，见 monitoring-baseline §5 拓扑说明）
   - job_name: server
     static_configs:
-      - targets: ['host.docker.internal:3001']
+      - targets: ['gateway:3001']
 
   - job_name: auth-service
     static_configs:
-      - targets: ['host.docker.internal:9464']
+      - targets: ['auth-service:9464']
 
   - job_name: live-service
     static_configs:
-      - targets: ['host.docker.internal:9465']
+      - targets: ['live-service:9465']
 
   # F9：通知队列/发送结果（docs/research/notification-matrix.md）
   - job_name: mail-service
     static_configs:
-      - targets: ['host.docker.internal:9466']
+      - targets: ['mail-service:9466']
 
   - job_name: chat-ws-service
     static_configs:
-      - targets: ['host.docker.internal:50054']
+      - targets: ['chat-ws-service:50054']
 
   # 基础设施：磁盘/主机指标（DiskSpaceLow 告警数据源）
   - job_name: node
