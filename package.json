@@ -28,6 +28,7 @@
     "test": "turbo run test",
     "test:desktop": "pnpm --filter @yunyan-live/desktop test",
     "kill-backend": "node scripts/kill-backend.mjs",
+    "audit:gate": "node scripts/audit-gate.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:migrate:status": "node scripts/db-migrate.mjs --status",
     "format": "prettier --write .",
@@ -43,15 +44,6 @@
     "*.{js,mjs,cjs,json,less,css,html,md}": [
       "prettier --write"
     ]
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "esbuild"
-    ],
-    "overrides": {
-      "@grpc/grpc-js": "~1.10.0"
-    }
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.2",

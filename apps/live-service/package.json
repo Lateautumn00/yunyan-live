@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@grpc/grpc-js": "~1.10.0",
+    "@grpc/grpc-js": "~1.14.6",
     "@grpc/proto-loader": "^0.8.1",
     "@nestjs/common": "^10.0.0",
     "@nestjs/config": "^3.0.0",
@@ -20,7 +20,7 @@
     "@yunyan-live/nest-shared": "workspace:*",
     "@yunyan-live/shared": "workspace:*",
     "amqplib": "^2.0.1",
-    "axios": "^1.0.0",
+    "axios": "^1.20.0",
     "pg": "^8.0.0",
     "prom-client": "^15.1.3",
     "reflect-metadata": "^0.2.0",

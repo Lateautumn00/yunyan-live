@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@grpc/grpc-js": "~1.10.0",
+    "@grpc/grpc-js": "~1.14.6",
     "@grpc/proto-loader": "^0.8.1",
     "@nestjs-modules/mailer": "^2.3.7",
     "@nestjs/common": "^10.0.0",
@@ -20,7 +20,7 @@
     "@yunyan-live/nest-shared": "workspace:*",
     "amqplib": "^2.0.1",
     "ioredis": "^6.0.0",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "^9.1.1",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.2"
   },
