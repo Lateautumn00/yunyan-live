@@ -272,7 +272,7 @@ pnpm dev:desktop   # Electron 桌面端
 │  Docker                                                  │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐ │
 │  │ PostgreSQL   │ │ Redis        │ │ Janus Gateway    │ │
-│  │ :5432        │ │ :6379        │ │ :8188 (WS)       │ │
+│  │ :15432       │ │ :16379       │ │ :8188 (WS)       │ │
 │  │              │ │              │ │ :8088 (HTTP API) │ │
 │  │              │ │              │ │ :20000-20100/UDP │ │
 │  └──────────────┘ └──────────────┘ └──────────────────┘ │
@@ -435,8 +435,8 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 | ----------- | --------- | ------------------------------------ | -------------- |
 | 3001        | TCP       | Gateway HTTP API                     | 全接口         |
 | 8080        | TCP       | 安装包下载/自动更新静态站（nginx）   | 全接口         |
-| 5432        | TCP       | PostgreSQL 数据库                    | 仅本机         |
-| 6379        | TCP       | Redis 缓存                           | 仅本机         |
+| 15432       | TCP       | PostgreSQL 数据库（compose 发布口）   | 仅本机         |
+| 16379       | TCP       | Redis 缓存（compose 发布口）         | 仅本机         |
 | 5672        | TCP       | RabbitMQ AMQP（仅 127.0.0.1 绑定）   | 仅本机         |
 | 15672       | TCP       | RabbitMQ 管理台（仅 127.0.0.1 绑定） | 仅本机         |
 | 8088        | TCP       | Janus HTTP API（录制控制）           | 全接口         |
@@ -456,7 +456,7 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 ### Server (`apps/server/.env`)
 
 ```bash
-DATABASE_URL=postgres://postgres:postgres@192.168.x.x:5432/yunyan_live
+DATABASE_URL=postgres://postgres:postgres@192.168.x.x:15432/yunyan_live
 JWT_SECRET=<your-jwt-secret>
 JWT_EXPIRES_IN=7d
 JANUS_URL=http://192.168.x.x:8088
@@ -466,7 +466,7 @@ BASE_URL=http://192.168.x.x:3001
 
 # Redis
 REDIS_HOST=192.168.x.x
-REDIS_PORT=6379
+REDIS_PORT=16379
 
 # LibreOffice (PPT to PDF conversion)
 SOFFICE_PATH=/usr/bin/libreoffice
@@ -482,7 +482,7 @@ SMTP_FROM=云砚直播 <your-email@qq.com>
 ### Live Service (`apps/live-service/.env`)
 
 ```bash
-DATABASE_URL=postgres://postgres:postgres@192.168.x.x:5432/yunyan_live
+DATABASE_URL=postgres://postgres:postgres@192.168.x.x:15432/yunyan_live
 JANUS_URL=http://192.168.x.x:8088
 GRPC_PORT=50052
 ```

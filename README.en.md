@@ -203,7 +203,7 @@ Open the desktop app → register page → email, username, password → pick a 
 │  Docker                                                  │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐ │
 │  │ PostgreSQL   │ │ Redis        │ │ Janus Gateway    │ │
-│  │ :5432        │ │ :6379        │ │ :8188 (WS)       │ │
+│  │ :15432       │ │ :16379       │ │ :8188 (WS)       │ │
 │  │              │ │              │ │ :8088 (HTTP API) │ │
 │  │              │ │              │ │ :20000-20100/UDP │ │
 │  └──────────────┘ └──────────────┘ └──────────────────┘ │
@@ -327,8 +327,8 @@ Configure in `init/.env`:
 | ----------- | --------- | ------------------------------------ |
 | 3001        | TCP       | Gateway HTTP API                     |
 | 8080        | TCP       | Installer download / auto-update static site (nginx) |
-| 5432        | TCP       | PostgreSQL                           |
-| 6379        | TCP       | Redis                                |
+| 15432       | TCP       | PostgreSQL (compose published port)   |
+| 16379       | TCP       | Redis (compose published port)        |
 | 5672        | TCP       | RabbitMQ AMQP (bound to 127.0.0.1)   |
 | 15672       | TCP       | RabbitMQ management UI (127.0.0.1)   |
 | 8088        | TCP       | Janus HTTP API (recording control)   |
@@ -345,7 +345,7 @@ Configure in `init/.env`:
 ### Server (`apps/server/.env`)
 
 ```bash
-DATABASE_URL=postgres://postgres:postgres@192.168.x.x:5432/yunyan_live
+DATABASE_URL=postgres://postgres:postgres@192.168.x.x:15432/yunyan_live
 JWT_SECRET=<your-jwt-secret>
 JWT_EXPIRES_IN=7d
 JANUS_URL=http://192.168.x.x:8088
@@ -355,7 +355,7 @@ BASE_URL=http://192.168.x.x:3001
 
 # Redis
 REDIS_HOST=192.168.x.x
-REDIS_PORT=6379
+REDIS_PORT=16379
 
 # LibreOffice (PPT to PDF conversion)
 SOFFICE_PATH=/usr/bin/libreoffice
@@ -371,7 +371,7 @@ SMTP_FROM=Yunyan Live <your-email@qq.com>
 ### Live Service (`apps/live-service/.env`)
 
 ```bash
-DATABASE_URL=postgres://postgres:postgres@192.168.x.x:5432/yunyan_live
+DATABASE_URL=postgres://postgres:postgres@192.168.x.x:15432/yunyan_live
 JANUS_URL=http://192.168.x.x:8088
 GRPC_PORT=50052
 ```
