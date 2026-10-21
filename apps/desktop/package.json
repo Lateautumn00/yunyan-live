@@ -1,6 +1,6 @@
 {
   "name": "@yunyan-live/desktop",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "private": true,
   "description": "云砚直播桌面端 (Electron)",
   "main": "./out/main/index.js",
