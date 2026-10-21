@@ -247,7 +247,10 @@ function createController() {
         data: { items: [{ video_id: 'v1', room_id: 'r1' }] }
       })
     ),
-    getCoursewareRoom: vi.fn(() => of({ code: '0', msg: 'ok', data: { room_id: 'r1' } }))
+    // S4 域层下沉：归属判定走 CheckRoomAccess（默认调用者=房主教师）
+    checkRoomAccess: vi.fn(() =>
+      of({ code: '0', msg: 'ok', data: { allowed: true, is_teacher: true } })
+    )
   };
   const authService = {
     getUser: vi.fn((): Observable<{ code: string; msg: string; data?: UserRow }> =>
@@ -755,7 +758,6 @@ describe('LiveController video list / detail / delete', () => {
       expect.any(Metadata)
     );
     await controller.deleteVideoByVideoIds(['v1'], req('t1', 1));
-    expect(liveService.getVideoRoomMap).toHaveBeenCalledWith({ video_ids: ['v1'] });
     expect(liveService.deleteVideoByVideoIds).toHaveBeenCalledWith(
       { video_ids: ['v1'] },
       expect.any(Metadata)
@@ -829,7 +831,6 @@ describe('LiveController courseware', () => {
   it('deleteCourseware 透传 id', async () => {
     const { controller, liveService, audit } = createController();
     await controller.deleteCourseware('c1', req('t1', 1));
-    expect(liveService.getCoursewareRoom).toHaveBeenCalledWith({ id: 'c1' });
     expect(liveService.deleteCourseware).toHaveBeenCalledWith({ id: 'c1' }, expect.any(Metadata));
     expect(audit.publish).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -924,42 +925,61 @@ describe('LiveController savePlayBackUrl / getUserWatchTimeList', () => {
 describe('LiveController board snapshot（房间级 403，Q4 MVP 仅教师）', () => {
   const reqRole = (userId: string, role?: number) => ({ user: { userId, role } });
 
-  it('非教师（role=2）访问 boardHistory 直接 403，不发起 gRPC', async () => {
-    const { controller, liveService } = createController();
-    await expect(
-      controller.boardHistory('r1', undefined, undefined, reqRole('t1', 2))
-    ).rejects.toMatchObject({ status: 403 });
-    expect(liveService.listBoardSnapshots).not.toHaveBeenCalled();
+  it('boardHistory/saveBoardSnapshot/getBoardSnapshot 挂载 JwtAuthGuard+RolesGuard+@Roles(教师)（学生边缘拒绝）', async () => {
+    const { RolesGuard: RG } = await import('@yunyan-live/nest-shared');
+    const guard = new RG();
+    const methods = ['boardHistory', 'saveBoardSnapshot', 'getBoardSnapshot'] as const;
+    const ctxOf = (m: (typeof methods)[number], role?: number) =>
+      ({
+        getHandler: () => (LiveController.prototype as never as Record<string, () => void>)[m],
+        switchToHttp: () => ({ getRequest: () => ({ user: { userId: 'u1', role } }) })
+      }) as never;
+    for (const m of methods) {
+      const fn = (LiveController.prototype as never as Record<string, () => void>)[m];
+      const guards = Reflect.getMetadata('__guards__', fn);
+      expect(guards, `${m} guards`).toEqual(expect.arrayContaining([JwtAuthGuard, RolesGuard]));
+      expect(Reflect.getMetadata('roles', fn), `${m} @Roles`).toEqual([1]);
+      expect(guard.canActivate(ctxOf(m, 2)), `${m} 学生应拒`).toBe(false);
+      expect(guard.canActivate(ctxOf(m, 1)), `${m} 教师放行`).toBe(true);
+    }
   });
 
-  it('教师非房间所有者（liveUserId 不匹配）403', async () => {
+  it('教师非房间所有者：域层 PERMISSION_DENIED（code=7）→ 403', async () => {
     const { controller, liveService } = createController();
+    liveService.listBoardSnapshots.mockReturnValueOnce(
+      throwError(() => ({ code: 7, message: 'not room owner' }))
+    );
     await expect(
       controller.boardHistory('r1', undefined, undefined, reqRole('t2', 1))
     ).rejects.toMatchObject({ status: 403 });
-    expect(liveService.showRoom).toHaveBeenCalledWith({ room_id: 'r1' });
-    expect(liveService.listBoardSnapshots).not.toHaveBeenCalled();
+    expect(liveService.listBoardSnapshots).toHaveBeenCalledWith(
+      expect.objectContaining({ room_id: 'r1' }),
+      expect.any(Metadata)
+    );
   });
 
-  it('房间不存在时 showRoom 的 NOT_FOUND 映射 404 透出', async () => {
+  it('房间不存在：域层归属判定 fail-closed → 403（不泄露房间存在性）', async () => {
     const { controller, liveService } = createController();
-    liveService.showRoom.mockReturnValueOnce(
-      throwError(() => ({ code: 5, details: '房间不存在' }))
+    // 域层 checkRoomAccess：房间不存在返回 {allowed:false,isTeacher:false} → PERMISSION_DENIED
+    liveService.listBoardSnapshots.mockReturnValueOnce(
+      throwError(() => ({ code: 7, message: 'not room owner' }))
     );
     await expect(
       controller.boardHistory('missing', undefined, undefined, reqRole('t1', 1))
-    ).rejects.toMatchObject({ status: 404 });
-    expect(liveService.listBoardSnapshots).not.toHaveBeenCalled();
+    ).rejects.toMatchObject({ status: 403 });
   });
 
   it('房间所有者教师可读：snake_case 映射为 camelCase + hasMore', async () => {
     const { controller, liveService } = createController();
     const res = await controller.boardHistory('r1', '1704067200000', '20', reqRole('t1', 1));
-    expect(liveService.listBoardSnapshots).toHaveBeenCalledWith({
-      room_id: 'r1',
-      cursor: '1704067200000',
-      limit: 20
-    });
+    expect(liveService.listBoardSnapshots).toHaveBeenCalledWith(
+      {
+        room_id: 'r1',
+        cursor: '1704067200000',
+        limit: 20
+      },
+      expect.any(Metadata)
+    );
     expect(res).toEqual({
       items: [
         {
@@ -975,31 +995,37 @@ describe('LiveController board snapshot（房间级 403，Q4 MVP 仅教师）', 
     });
   });
 
-  it('saveBoardSnapshot：base64 解码为字节、format_version=1、鉴权先行', async () => {
+  it('saveBoardSnapshot：base64 解码为字节、format_version=1、携带签名 metadata', async () => {
     const { controller, liveService } = createController();
     const res = await controller.saveBoardSnapshot(
       { roomId: 'r1', data: Buffer.from([1, 2, 3]).toString('base64') },
       reqRole('t1', 1)
     );
-    expect(liveService.saveBoardSnapshot).toHaveBeenCalledWith({
-      room_id: 'r1',
-      lesson_id: undefined,
-      format_version: 1,
-      data: Buffer.from([1, 2, 3])
-    });
+    expect(liveService.saveBoardSnapshot).toHaveBeenCalledWith(
+      {
+        room_id: 'r1',
+        lesson_id: undefined,
+        format_version: 1,
+        data: Buffer.from([1, 2, 3])
+      },
+      expect.any(Metadata)
+    );
     expect(res).toEqual({ success: true });
 
+    // 域层下沉：非房主由域层 PERMISSION_DENIED（code=7）→ 网关 403
     liveService.saveBoardSnapshot.mockClear();
+    liveService.saveBoardSnapshot.mockReturnValueOnce(
+      throwError(() => ({ code: 7, message: 'not room owner' }))
+    );
     await expect(
       controller.saveBoardSnapshot({ roomId: 'r1', data: '' }, reqRole('u1', 2))
     ).rejects.toMatchObject({ status: 403 });
-    expect(liveService.saveBoardSnapshot).not.toHaveBeenCalled();
   });
 
-  it('boardSnapshot/:id：先取详情再按其 roomId 鉴权，data 回 base64', async () => {
+  it('boardSnapshot/:id：携带签名 metadata，域层非房主 PERMISSION_DENIED → 403', async () => {
     const { controller, liveService } = createController();
     const res = await controller.getBoardSnapshot('s1', reqRole('t1', 1));
-    expect(liveService.getBoardSnapshot).toHaveBeenCalledWith({ id: 's1' });
+    expect(liveService.getBoardSnapshot).toHaveBeenCalledWith({ id: 's1' }, expect.any(Metadata));
     expect(res).toEqual({
       id: 's1',
       roomId: 'r1',
@@ -1009,6 +1035,9 @@ describe('LiveController board snapshot（房间级 403，Q4 MVP 仅教师）', 
       data: Buffer.from([7, 8]).toString('base64')
     });
 
+    liveService.getBoardSnapshot.mockReturnValueOnce(
+      throwError(() => ({ code: 7, message: 'not room owner' }))
+    );
     await expect(controller.getBoardSnapshot('s1', reqRole('t2', 1))).rejects.toMatchObject({
       status: 403
     });
@@ -1049,7 +1078,7 @@ describe('LiveController downloadRecording 安全净化（S8）', () => {
   });
 });
 
-describe('S4 房间归属 + RBAC 权限矩阵（补偿控制，域层下沉待 S10b）', () => {
+describe('S4 房间归属矩阵（域层下沉：归属判定唯一落层 live-service）', () => {
   const mkRes = () => {
     const res = {
       status: vi.fn(() => res),
@@ -1061,11 +1090,30 @@ describe('S4 房间归属 + RBAC 权限矩阵（补偿控制，域层下沉待 S
   // roomPayload 的 live_user_id = 't1'：t1 = 房主教师；t2 = 他人房间教师；u1 = 学生
   const owner = () => req('t1', 1);
   const stranger = () => req('t2', 1);
-  const student = () => req('u1', 2);
   const TEACHER = 1;
 
-  it('非房主教师对 10 个写接口全部 403，且写方法未被调用（真守卫生效）', async () => {
-    const { controller, liveService } = createController();
+  /** 域层下沉：写 RPC 本身即域层，非房主由域层抛 PERMISSION_DENIED（code=7 → 网关 403） */
+  const denyOwnership = (svc: Record<string, ReturnType<typeof vi.fn>>) => {
+    const denied = () => throwError(() => ({ code: 7, message: 'not room owner' }));
+    for (const k of [
+      'updateLive',
+      'changeStatus',
+      'deleteLive',
+      'updateCode',
+      'deleteVideoByRoomIds',
+      'deleteVideoByVideoIds',
+      'saveCourseware',
+      'deleteCourseware',
+      'saveVideoRecording',
+      'checkRoomAccess' // downloadRecording 的网关侧归属判定
+    ]) {
+      svc[k].mockImplementation(denied);
+    }
+  };
+
+  it('非房主教师（域层 PERMISSION_DENIED）→ 10 个写接口全部 403，审计零落点', async () => {
+    const { controller, liveService, audit } = createController();
+    denyOwnership(liveService as unknown as Record<string, ReturnType<typeof vi.fn>>);
     const dtoUpdate = Object.assign(new UpdateLiveDto(), { roomId: 'r1', title: 'x' });
     const dtoStatus = Object.assign(new ChangeStatusDto(), { roomId: 'r1', status: 1 });
     const dtoCourse = Object.assign(new CreateCoursewareDto(), {
@@ -1074,91 +1122,65 @@ describe('S4 房间归属 + RBAC 权限矩阵（补偿控制，域层下沉待 S
       fileUrl: '/u/a.pptx'
     });
 
-    const cases: Array<[string, (u: ReturnType<typeof stranger>) => Promise<unknown>, unknown]> = [
-      ['updateLive', u => controller.updateLive(dtoUpdate, u), liveService.updateLive],
-      ['changeLiveStatus', u => controller.changeStatus(dtoStatus, u), liveService.changeStatus],
-      ['deleteLive', u => controller.delete('r1', u), liveService.deleteLive],
-      [
-        'updateLiveCode',
-        u => controller.updateCode({ roomId: 'r1', operateType: 'r' }, u),
-        liveService.updateCode
-      ],
-      [
-        'deleteVideo',
-        u => controller.deleteVideoByRoomIds(['r1'], u),
-        liveService.deleteVideoByRoomIds
-      ],
-      [
-        'deleteVideoByIds',
-        u => controller.deleteVideoByVideoIds(['v1'], u),
-        liveService.deleteVideoByVideoIds
-      ],
-      ['saveCourseware', u => controller.saveCourseware(dtoCourse, u), liveService.saveCourseware],
-      ['deleteCourseware', u => controller.deleteCourseware('c1', u), liveService.deleteCourseware],
+    const cases: Array<[string, (u: ReturnType<typeof stranger>) => Promise<unknown>]> = [
+      ['updateLive', u => controller.updateLive(dtoUpdate, u)],
+      ['changeLiveStatus', u => controller.changeStatus(dtoStatus, u)],
+      ['deleteLive', u => controller.delete('r1', u)],
+      ['updateLiveCode', u => controller.updateCode({ roomId: 'r1', operateType: 'r' }, u)],
+      ['deleteVideo', u => controller.deleteVideoByRoomIds(['r1'], u)],
+      ['deleteVideoByIds', u => controller.deleteVideoByVideoIds(['v1'], u)],
+      ['saveCourseware', u => controller.saveCourseware(dtoCourse, u)],
+      ['deleteCourseware', u => controller.deleteCourseware('c1', u)],
       [
         'savePlayBackUrl',
-        u => controller.savePlayBackUrl({ roomId: 'r1', playBackUrl: 'r', duration: 1 }, u),
-        liveService.saveVideoRecording
+        u => controller.savePlayBackUrl({ roomId: 'r1', playBackUrl: 'r', duration: 1 }, u)
       ],
-      [
-        'downloadRecording',
-        u => controller.downloadRecording('1', q(), mkRes() as never, u),
-        liveService.getVideoRoomMap
-      ]
+      ['downloadRecording', u => controller.downloadRecording('1', q(), mkRes() as never, u)]
     ];
 
-    for (const [name, run, writeMock] of cases) {
+    for (const [name, run] of cases) {
       vi.clearAllMocks();
       await expect(run(stranger()), `${name} 应 403`).rejects.toMatchObject({ status: 403 });
-      // 归属断言先行的接口：映射/房间查询可发生，但**写方法**必须零调用
-      if (
-        name !== 'downloadRecording' &&
-        name !== 'deleteVideoByIds' &&
-        name !== 'deleteCourseware'
-      ) {
-        expect(writeMock, `${name} 写方法应零调用`).not.toHaveBeenCalled();
-      }
-      if (name === 'deleteVideoByIds') {
-        expect(liveService.deleteVideoByVideoIds).not.toHaveBeenCalled();
-      }
-      if (name === 'deleteCourseware') {
-        expect(liveService.deleteCourseware).not.toHaveBeenCalled();
-      }
+      expect(audit.publish, `${name} 拒绝后不应审计`).not.toHaveBeenCalled();
       if (name === 'downloadRecording') {
-        // 403 先于文件系统触碰：video mjr 存在也应被归属挡住 → 不写 marker、不 spawn
-        // （这里用例环境未设文件，仅断言映射断言已执行且未进入转码）
+        // 403 先于文件系统触碰：映射可发生，归属（CheckRoomAccess）拒绝后不 spawn 不写 marker
         expect(liveService.getVideoRoomMap).toHaveBeenCalled();
+        expect(liveService.checkRoomAccess).toHaveBeenCalledWith(
+          { room_id: 'r1', user_id: 't2' },
+          expect.any(Metadata)
+        );
       }
     }
   });
 
-  it('学生（role=2）越权 403，写方法零调用（抽样 updateLive/deleteLive/saveCourseware）', async () => {
-    const { controller, liveService } = createController();
-    const dtoUpdate = Object.assign(new UpdateLiveDto(), { roomId: 'r1' });
-    const dtoStatus = Object.assign(new ChangeStatusDto(), { roomId: 'r1', status: 1 });
-    const dtoCourse = Object.assign(new CreateCoursewareDto(), {
-      roomId: 'r1',
-      filename: 'a.pptx'
-    });
-
-    await expect(controller.updateLive(dtoUpdate, student())).rejects.toMatchObject({
-      status: 403
-    });
-    await expect(controller.changeStatus(dtoStatus, student())).rejects.toMatchObject({
-      status: 403
-    });
-    await expect(controller.delete('r1', student())).rejects.toMatchObject({ status: 403 });
-    await expect(controller.saveCourseware(dtoCourse, student())).rejects.toMatchObject({
-      status: 403
-    });
-    expect(liveService.updateLive).not.toHaveBeenCalled();
-    expect(liveService.changeStatus).not.toHaveBeenCalled();
-    expect(liveService.deleteLive).not.toHaveBeenCalled();
-    expect(liveService.saveCourseware).not.toHaveBeenCalled();
-    expect(liveService.showRoom).not.toHaveBeenCalled(); // role 检查先于房间查询
+  it('学生（role=2）：@Roles(教师) 边缘守卫拒绝（RolesGuard 真逻辑，10 端点全量）', async () => {
+    const { RolesGuard: RG } = await import('@yunyan-live/nest-shared');
+    const guard = new RG();
+    const methods = [
+      'updateLive',
+      'changeStatus',
+      'delete',
+      'updateCode',
+      'deleteVideoByRoomIds',
+      'deleteVideoByVideoIds',
+      'saveCourseware',
+      'deleteCourseware',
+      'savePlayBackUrl',
+      'downloadRecording'
+    ] as const;
+    const ctxOf = (m: (typeof methods)[number], role?: number) =>
+      ({
+        getHandler: () => (LiveController.prototype as never as Record<string, () => void>)[m],
+        switchToHttp: () => ({ getRequest: () => ({ user: { userId: 'u1', role } }) })
+      }) as never;
+    for (const m of methods) {
+      expect(guard.canActivate(ctxOf(m, 2)), `${m} 学生应拒`).toBe(false);
+      expect(guard.canActivate(ctxOf(m, undefined)), `${m} 缺 role 应拒`).toBe(false);
+      expect(guard.canActivate(ctxOf(m, 1)), `${m} 教师放行`).toBe(true);
+    }
   });
 
-  it('房主教师（t1/role=1）全部放行（对照组：矩阵非单边封锁）', async () => {
+  it('房主教师（t1/role=1）全部放行，downloadRecording 归属判定携签名 metadata（对照组）', async () => {
     const { controller, liveService } = createController();
     const dtoUpdate = Object.assign(new UpdateLiveDto(), { roomId: 'r1', title: 'x' });
     const dtoStatus = Object.assign(new ChangeStatusDto(), { roomId: 'r1', status: 1 });
@@ -1189,7 +1211,10 @@ describe('S4 房间归属 + RBAC 权限矩阵（补偿控制，域层下沉待 S
     expect(liveService.saveCourseware).toHaveBeenCalled();
     expect(liveService.deleteCourseware).toHaveBeenCalled();
     expect(liveService.saveVideoRecording).toHaveBeenCalled();
-    expect(liveService.getVideoRoomMap).toHaveBeenCalled();
+    expect(liveService.checkRoomAccess).toHaveBeenCalledWith(
+      { room_id: 'r1', user_id: 't1' },
+      expect.any(Metadata)
+    );
   });
 
   it('10 个写接口挂载 JwtAuthGuard+RolesGuard 且 @Roles(教师)（装饰器元数据回归）', () => {

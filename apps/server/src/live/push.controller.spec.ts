@@ -1,11 +1,15 @@
+import 'reflect-metadata';
 import type { Redis } from 'ioredis';
-import { of } from 'rxjs';
+import { Metadata } from '@grpc/grpc-js';
+import { of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import {
   FORBID_CHANNEL,
   forbidKey,
+  JwtAuthGuard,
   MODERATION_CHANNEL,
   RECALL_CHANNEL,
+  RolesGuard,
   UpdateForbidDto,
   ModerationMuteDto,
   ModerationKickDto,
@@ -31,8 +35,10 @@ function makeClient(
     recallMsg?: string;
   } = {}
 ) {
-  const showRoom = vi.fn((_data: { room_id: string }) =>
-    of({ code: '0', msg: 'success', data: { live_user_id: TEACHER } })
+  // S4 域层下沉：归属判定走 CheckRoomAccess（默认调用者=房主教师）
+  const checkRoomAccess = vi.fn(
+    (_data: { room_id: string; user_id: string }, _metadata?: unknown) =>
+      of({ code: '0', msg: 'success', data: { allowed: true, is_teacher: true } })
   );
   const moderateUser = vi.fn(
     (
@@ -47,9 +53,9 @@ function makeClient(
   const recallMessage = vi.fn((_data: { room_id: string; msg_id: string }, _metadata?: unknown) =>
     of({ code: overrides.recallCode ?? '0', msg: overrides.recallMsg ?? 'success' })
   );
-  const liveService = { showRoom, moderateUser, recallMessage };
+  const liveService = { checkRoomAccess, moderateUser, recallMessage };
   const liveClient = { getService: vi.fn(() => liveService) };
-  return { showRoom, moderateUser, recallMessage, liveClient };
+  return { checkRoomAccess, moderateUser, recallMessage, liveClient };
 }
 
 function makeAudit() {
@@ -62,7 +68,8 @@ function makeController(
     moderateMsg?: string;
     recallCode?: string;
     recallMsg?: string;
-    owner?: string;
+    /** 调用者非房主（CheckRoomAccess 判定 is_teacher=false） */
+    callerIsOwner?: boolean;
   } = {}
 ) {
   const redis = makeRedis();
@@ -72,10 +79,9 @@ function makeController(
     recallCode: opts.recallCode,
     recallMsg: opts.recallMsg
   });
-  const owner = opts.owner;
-  if (owner !== undefined) {
-    client.showRoom.mockImplementation(() =>
-      of({ code: '0', msg: 'success', data: { live_user_id: owner } })
+  if (opts.callerIsOwner === false) {
+    client.checkRoomAccess.mockImplementation(() =>
+      of({ code: '0', msg: 'success', data: { allowed: true, is_teacher: false } })
     );
   }
   const audit = makeAudit();
@@ -88,7 +94,7 @@ function makeController(
   return {
     controller,
     redis,
-    showRoom: client.showRoom,
+    checkRoomAccess: client.checkRoomAccess,
     moderateUser: client.moderateUser,
     recallMessage: client.recallMessage,
     audit
@@ -135,10 +141,13 @@ function recallDto(overrides: Partial<RecallMessageDto> = {}): RecallMessageDto 
 
 describe('PushController.updateForbid', () => {
   it('房间所有者教师写入禁言状态并广播到房间', async () => {
-    const { controller, redis, showRoom } = makeController();
+    const { controller, redis, checkRoomAccess } = makeController();
     const result = await controller.updateForbid(makeForbidDto({ status: 0 }), makeReq(1));
     expect(result).toEqual({ updated: true });
-    expect(showRoom).toHaveBeenCalledWith({ room_id: 'r1' });
+    expect(checkRoomAccess).toHaveBeenCalledWith(
+      { room_id: 'r1', user_id: TEACHER },
+      expect.any(Metadata)
+    );
     expect(redis.set).toHaveBeenCalledWith(forbidKey('r1'), '0');
     expect(redis.publish).toHaveBeenCalledWith(
       FORBID_CHANNEL,
@@ -147,19 +156,22 @@ describe('PushController.updateForbid', () => {
   });
 
   it('学生（role 0）被拒且不查房/不写 Redis', async () => {
-    const { controller, redis, showRoom } = makeController();
+    const { controller, redis, checkRoomAccess } = makeController();
     await expect(controller.updateForbid(makeForbidDto(), makeReq(0, 'stu-1'))).rejects.toThrow(
       '仅教师可修改禁言状态'
     );
-    expect(showRoom).not.toHaveBeenCalled();
+    expect(checkRoomAccess).not.toHaveBeenCalled();
     expect(redis.set).not.toHaveBeenCalled();
     expect(redis.publish).not.toHaveBeenCalled();
   });
 
-  it('他房教师（非 liveUserId 所有者）被 403 拒绝（归属断言）', async () => {
-    const { controller, redis, showRoom } = makeController({ owner: 'other-teacher' });
+  it('他房教师（CheckRoomAccess is_teacher=false）被 403 拒绝（归属断言落域层）', async () => {
+    const { controller, redis, checkRoomAccess } = makeController({ callerIsOwner: false });
     await expect(controller.updateForbid(makeForbidDto(), makeReq(1))).rejects.toThrow('Forbidden');
-    expect(showRoom).toHaveBeenCalledWith({ room_id: 'r1' });
+    expect(checkRoomAccess).toHaveBeenCalledWith(
+      { room_id: 'r1', user_id: TEACHER },
+      expect.any(Metadata)
+    );
     expect(redis.set).not.toHaveBeenCalled();
     expect(redis.publish).not.toHaveBeenCalled();
   });
@@ -232,19 +244,36 @@ describe('PushController.mute / kick / release（F3 单用户管控）', () => {
     );
   });
 
-  it('学生调用被 403 拒绝，不发 gRPC/不广播/不审计', async () => {
-    const { controller, redis, showRoom, moderateUser, audit } = makeController();
-    await expect(controller.mute(muteDto(), makeReq(0, 'stu-1'))).rejects.toThrow('Forbidden');
-    expect(showRoom).not.toHaveBeenCalled();
-    expect(moderateUser).not.toHaveBeenCalled();
-    expect(redis.publish).not.toHaveBeenCalled();
-    expect(audit.publish).not.toHaveBeenCalled();
+  it('mute/kick/release 挂载 JwtAuthGuard+RolesGuard+@Roles(教师)（学生边缘拒绝，装饰器元数据回归）', async () => {
+    const guard = new RolesGuard();
+    const handlerOf = (m: 'mute' | 'kick' | 'release') =>
+      (PushController.prototype as never as Record<string, () => void>)[m];
+    const ctxOf = (m: 'mute' | 'kick' | 'release', role?: number) =>
+      ({
+        getHandler: () => handlerOf(m),
+        switchToHttp: () => ({ getRequest: () => ({ user: { userId: 'stu-1', role } }) })
+      }) as never;
+    for (const m of ['mute', 'kick', 'release'] as const) {
+      expect(guard.canActivate(ctxOf(m, 0)), `${m} role=0 应拒`).toBe(false);
+      expect(guard.canActivate(ctxOf(m, 2)), `${m} role=2 应拒`).toBe(false);
+      expect(guard.canActivate(ctxOf(m, undefined)), `${m} 缺 role 应拒`).toBe(false);
+      expect(guard.canActivate(ctxOf(m, 1)), `${m} 教师应放行`).toBe(true);
+      const guards = Reflect.getMetadata('__guards__', handlerOf(m));
+      expect(guards, `${m} guards`).toEqual(expect.arrayContaining([JwtAuthGuard, RolesGuard]));
+      expect(Reflect.getMetadata('roles', handlerOf(m)), `${m} @Roles`).toEqual([1]);
+    }
   });
 
-  it('他房教师被 403 拒绝（showRoom 归属断言），不发 gRPC', async () => {
-    const { controller, moderateUser } = makeController({ owner: 'other-teacher' });
-    await expect(controller.kick(kickDto(), makeReq(1))).rejects.toThrow('Forbidden');
-    expect(moderateUser).not.toHaveBeenCalled();
+  it('他房教师：域层 ModerateUser PERMISSION_DENIED（code=7）→ 403，不广播不审计', async () => {
+    const { controller, moderateUser, redis, audit } = makeController();
+    moderateUser.mockReturnValueOnce(throwError(() => ({ code: 7, message: 'not room owner' })));
+    await expect(controller.kick(kickDto(), makeReq(1))).rejects.toMatchObject({ status: 403 });
+    expect(moderateUser).toHaveBeenCalledWith(
+      { room_id: 'r1', user_id: 'u1', kind: 'kick', op: 'set', minutes: 0 },
+      expect.any(Metadata)
+    );
+    expect(redis.publish).not.toHaveBeenCalled();
+    expect(audit.publish).not.toHaveBeenCalled();
   });
 
   it('gRPC 落库失败（code=1）→ 502，不广播不审计', async () => {
@@ -277,8 +306,8 @@ describe('Moderation DTO 校验', () => {
 });
 
 describe('PushController.recall（F4 撤回）', () => {
-  it('学生自撤成功：gRPC RecallMessage + 发布 live:recall + 审计 message.recall（不走 assertRoomTeacher）', async () => {
-    const { controller, redis, showRoom, recallMessage, audit } = makeController();
+  it('学生自撤成功：gRPC RecallMessage + 发布 live:recall + 审计 message.recall（不走归属断言）', async () => {
+    const { controller, redis, checkRoomAccess, recallMessage, audit } = makeController();
     const res = await controller.recall(recallDto(), makeReq(0, 'stu-1'));
     expect(res).toEqual({ recalled: true });
     const [payload, metadata] = recallMessage.mock.calls[0] as [
@@ -287,7 +316,7 @@ describe('PushController.recall（F4 撤回）', () => {
     ];
     expect(payload).toEqual({ room_id: 'r1', msg_id: MSG_ID });
     expect(metadata.get('user-id')?.[0]).toBe('stu-1');
-    expect(showRoom).not.toHaveBeenCalled();
+    expect(checkRoomAccess).not.toHaveBeenCalled();
     expect(redis.publish).toHaveBeenCalledWith(
       RECALL_CHANNEL,
       JSON.stringify({ roomId: 'r1', msgId: MSG_ID })

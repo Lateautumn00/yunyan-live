@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { status as GrpcStatus } from '@grpc/grpc-js';
+import type { Metadata } from '@grpc/grpc-js';
 import { userIdMetadata } from '@yunyan-live/nest-shared';
 import { LiveController } from '../live.controller';
 import type { LiveService } from '../live.service';
@@ -30,6 +31,8 @@ function makeService(): ServiceMock {
     getVideoDetail: vi.fn(),
     deleteVideoByRoomIds: vi.fn(),
     deleteVideoByVideoIds: vi.fn(),
+    getVideoRoomMap: vi.fn(),
+    getCoursewareRoom: vi.fn(),
     saveCourseware: vi.fn(),
     listCoursewares: vi.fn(),
     deleteCourseware: vi.fn(),
@@ -64,6 +67,13 @@ function makeController() {
     checkinService as unknown as ConstructorParameters<typeof LiveController>[1]
   );
   return { controller, service, checkinService };
+}
+
+/** S4 域层下沉：房主 fixture（checkRoomAccess 判定 mock） */
+const OWNER = 't1';
+const ownerMeta = () => userIdMetadata(OWNER);
+function mockOwner(service: ServiceMock) {
+  service.checkRoomAccess.mockResolvedValue({ allowed: true, isTeacher: true });
 }
 
 describe('LiveController gRPC 映射', () => {
@@ -165,13 +175,14 @@ describe('LiveController gRPC 映射', () => {
 
   it('ChangeStatus：room_id/status 双向映射', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
     service.changeStatus.mockResolvedValue({
       roomId: 'r1',
       title: '第一课',
       joinCode: 'SA1',
       status: 2
     });
-    const res = await controller.changeStatus({ room_id: 'r1', status: 2 });
+    const res = await controller.changeStatus({ room_id: 'r1', status: 2 }, ownerMeta());
     expect(service.changeStatus).toHaveBeenCalledWith({ roomId: 'r1', status: 2 });
     expect(res.data).toEqual({
       room_id: 'r1',
@@ -184,6 +195,7 @@ describe('LiveController gRPC 映射', () => {
 
   it('UpdateLive：字段透传且 startTime 序列化为毫秒字符串', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
     service.update.mockResolvedValue({
       roomId: 'r1',
       title: '改名',
@@ -193,13 +205,16 @@ describe('LiveController gRPC 映射', () => {
       startTime: new Date(1704153600000),
       duration: 90
     });
-    const res = await controller.updateLive({
-      room_id: 'r1',
-      title: '改名',
-      type: 1,
-      start_time: '1704153600000',
-      duration: 90
-    });
+    const res = await controller.updateLive(
+      {
+        room_id: 'r1',
+        title: '改名',
+        type: 1,
+        start_time: '1704153600000',
+        duration: 90
+      },
+      ownerMeta()
+    );
     expect(service.update).toHaveBeenCalledWith({
       roomId: 'r1',
       title: '改名',
@@ -312,16 +327,18 @@ describe('LiveController gRPC 映射', () => {
 
   it('DeleteLive：透传 room_id 并返回空成功信封', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
     service.delete.mockResolvedValue({ success: true });
-    const res = await controller.deleteLive({ room_id: 'r1' });
+    const res = await controller.deleteLive({ room_id: 'r1' }, ownerMeta());
     expect(service.delete).toHaveBeenCalledWith('r1');
     expect(res).toEqual({ code: '0', msg: 'success' });
   });
 
   it('UpdateCode：join_code 平铺返回（不包 data）', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
     service.updateCode.mockResolvedValue('SB9ZZZZZ');
-    const res = await controller.updateCode({ room_id: 'r1' });
+    const res = await controller.updateCode({ room_id: 'r1' }, ownerMeta());
     expect(service.updateCode).toHaveBeenCalledWith('r1');
     expect(res).toEqual({ code: '0', msg: 'success', join_code: 'SB9ZZZZZ' });
   });
@@ -432,16 +449,20 @@ describe('LiveController gRPC 映射', () => {
 
   it('SaveVideoRecording：七个 snake_case 字段映射为 camelCase', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
     service.saveVideoRecording.mockResolvedValue(undefined);
-    const res = await controller.saveVideoRecording({
-      room_id: 'r1',
-      file_path: '/r/v1.mp4',
-      file_name: 'v1.mp4',
-      file_size: 1024,
-      duration: 3600,
-      record_type: 1,
-      teacher_name: '张老师'
-    });
+    const res = await controller.saveVideoRecording(
+      {
+        room_id: 'r1',
+        file_path: '/r/v1.mp4',
+        file_name: 'v1.mp4',
+        file_size: 1024,
+        duration: 3600,
+        record_type: 1,
+        teacher_name: '张老师'
+      },
+      ownerMeta()
+    );
     expect(service.saveVideoRecording).toHaveBeenCalledWith({
       roomId: 'r1',
       filePath: '/r/v1.mp4',
@@ -546,31 +567,38 @@ describe('LiveController gRPC 映射', () => {
 
   it('DeleteVideoByRoomIds：数组透传', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
     service.deleteVideoByRoomIds.mockResolvedValue({ success: true });
-    const res = await controller.deleteVideoByRoomIds({ room_ids: ['r1', 'r2'] });
+    const res = await controller.deleteVideoByRoomIds({ room_ids: ['r1', 'r2'] }, ownerMeta());
     expect(service.deleteVideoByRoomIds).toHaveBeenCalledWith(['r1', 'r2']);
     expect(res).toEqual({ code: '0', msg: 'success' });
   });
 
   it('DeleteVideoByVideoIds：数组透传', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
+    service.getVideoRoomMap.mockResolvedValue([{ videoId: 'v1', roomId: 'r1' }]);
     service.deleteVideoByVideoIds.mockResolvedValue({ success: true });
-    const res = await controller.deleteVideoByVideoIds({ video_ids: ['v1'] });
+    const res = await controller.deleteVideoByVideoIds({ video_ids: ['v1'] }, ownerMeta());
     expect(service.deleteVideoByVideoIds).toHaveBeenCalledWith(['v1']);
     expect(res).toEqual({ code: '0', msg: 'success' });
   });
 
   it('SaveCourseware：filesize 数字化，非法值回退 0', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
     service.saveCourseware.mockResolvedValue(undefined);
-    await controller.saveCourseware({
-      room_id: 'r1',
-      filename: 'a.pptx',
-      filext: 'pptx',
-      filesize: '123' as unknown as number,
-      fileurl: '/u/a.pptx',
-      create_user_id: 'u1'
-    });
+    await controller.saveCourseware(
+      {
+        room_id: 'r1',
+        filename: 'a.pptx',
+        filext: 'pptx',
+        filesize: '123' as unknown as number,
+        fileurl: '/u/a.pptx',
+        create_user_id: 'u1'
+      },
+      ownerMeta()
+    );
     expect(service.saveCourseware).toHaveBeenCalledWith({
       roomId: 'r1',
       filename: 'a.pptx',
@@ -580,13 +608,16 @@ describe('LiveController gRPC 映射', () => {
       createUserId: 'u1'
     });
 
-    await controller.saveCourseware({
-      room_id: 'r1',
-      filename: 'b.pdf',
-      filext: 'pdf',
-      filesize: 'garbage' as unknown as number,
-      fileurl: '/u/b.pdf'
-    });
+    await controller.saveCourseware(
+      {
+        room_id: 'r1',
+        filename: 'b.pdf',
+        filext: 'pdf',
+        filesize: 'garbage' as unknown as number,
+        fileurl: '/u/b.pdf'
+      },
+      ownerMeta()
+    );
     expect(service.saveCourseware).toHaveBeenLastCalledWith(
       expect.objectContaining({ filesize: 0, createUserId: undefined })
     );
@@ -628,13 +659,15 @@ describe('LiveController gRPC 映射', () => {
 
   it('DeleteCourseware：id 透传', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
+    service.getCoursewareRoom.mockResolvedValue('r1');
     service.deleteCourseware.mockResolvedValue(undefined);
-    const res = await controller.deleteCourseware({ id: 'c1' });
+    const res = await controller.deleteCourseware({ id: 'c1' }, ownerMeta());
     expect(service.deleteCourseware).toHaveBeenCalledWith('c1');
     expect(res).toEqual({ code: '0', msg: 'success' });
   });
 
-  it('SaveBoardSnapshot：snake_case 入参映射，返回空成功信封', async () => {
+  it('SaveBoardSnapshot：snake_case 入参映射，返回空成功信封（无身份=系统路径放行）', async () => {
     const { controller, service } = makeController();
     service.saveBoardSnapshot.mockResolvedValue({ id: 's1' });
     const bytes = new Uint8Array([1, 2]);
@@ -644,6 +677,7 @@ describe('LiveController gRPC 映射', () => {
       format_version: 1,
       data: bytes
     });
+    expect(service.checkRoomAccess).not.toHaveBeenCalled(); // 无身份=系统调用，不触发归属
     expect(service.saveBoardSnapshot).toHaveBeenCalledWith({
       roomId: 'r1',
       lessonId: 'L-9',
@@ -661,6 +695,7 @@ describe('LiveController gRPC 映射', () => {
 
   it('ListBoardSnapshots：条目 snake_case 映射，lessonId 空值转空串', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
     service.listBoardSnapshots.mockResolvedValue({
       items: [
         {
@@ -674,11 +709,14 @@ describe('LiveController gRPC 映射', () => {
       ],
       hasMore: true
     });
-    const res = await controller.listBoardSnapshots({
-      room_id: 'r1',
-      cursor: '1704067200000',
-      limit: 20
-    });
+    const res = await controller.listBoardSnapshots(
+      {
+        room_id: 'r1',
+        cursor: '1704067200000',
+        limit: 20
+      },
+      ownerMeta()
+    );
     expect(service.listBoardSnapshots).toHaveBeenCalledWith({
       roomId: 'r1',
       cursor: '1704067200000',
@@ -701,6 +739,7 @@ describe('LiveController gRPC 映射', () => {
 
   it('GetBoardSnapshot：id 透传，data 字节与 snake_case 元信息回传', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
     const bytes = Buffer.from([7, 8]);
     service.getBoardSnapshot.mockResolvedValue({
       id: 's1',
@@ -710,7 +749,7 @@ describe('LiveController gRPC 映射', () => {
       data: bytes,
       createdAt: '1704067200000'
     });
-    const res = await controller.getBoardSnapshot({ id: 's1' });
+    const res = await controller.getBoardSnapshot({ id: 's1' }, ownerMeta());
     expect(service.getBoardSnapshot).toHaveBeenCalledWith('s1');
     expect(res.data).toEqual({
       id: 's1',
@@ -836,12 +875,14 @@ describe('LiveController gRPC 映射', () => {
 
   it('ModerateUser：操作者身份只信 metadata（S11①），透传 kind/op/minutes', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
     service.moderateUser.mockResolvedValue(undefined);
     const res = await controller.moderateUser(
       { room_id: 'r1', user_id: 'u1', kind: 'mute', op: 'set', minutes: 5 },
       userIdMetadata('teacher-1')
     );
     expect(res.code).toBe('0');
+    expect(service.checkRoomAccess).toHaveBeenCalledWith('r1', 'teacher-1');
     expect(service.moderateUser).toHaveBeenCalledWith('r1', 'u1', 'mute', 'set', 5, 'teacher-1');
   });
 
@@ -873,6 +914,7 @@ describe('LiveController gRPC 映射', () => {
 
   it('ModerateUser：mute set 仅接受 1/5/10 分钟；kick/release 不校验 minutes', async () => {
     const { controller, service } = makeController();
+    mockOwner(service);
     service.moderateUser.mockResolvedValue(undefined);
     const bad = await controller.moderateUser(
       { room_id: 'r1', user_id: 'u1', kind: 'mute', op: 'set', minutes: 7 },
@@ -961,5 +1003,167 @@ describe('LiveController RecallMessage（F4 撤回信封映射）', () => {
     );
     expect(res).toMatchObject({ code: '1', msg: 'not found' });
     expect(service.recallMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('LiveController S4 域层下沉：房间归属断言唯一落层', () => {
+  const OWNER_CALLS: Array<{
+    name: string;
+    invoke: (c: LiveController, meta: Metadata | undefined) => Promise<unknown>;
+    /** 读端点（如 GetBoardSnapshot）无写方法，可省略 */
+    write?: string;
+    setup?: (s: ServiceMock) => void;
+  }> = [
+    {
+      name: 'ChangeStatus',
+      invoke: (c, m) => c.changeStatus({ room_id: 'r1', status: 2 }, m),
+      write: 'changeStatus'
+    },
+    {
+      name: 'UpdateLive',
+      invoke: (c, m) => c.updateLive({ room_id: 'r1', title: 'x' }, m),
+      write: 'update'
+    },
+    {
+      name: 'DeleteLive',
+      invoke: (c, m) => c.deleteLive({ room_id: 'r1' }, m),
+      write: 'delete'
+    },
+    {
+      name: 'UpdateCode',
+      invoke: (c, m) => c.updateCode({ room_id: 'r1' }, m),
+      write: 'updateCode'
+    },
+    {
+      name: 'SaveVideoRecording',
+      invoke: (c, m) =>
+        c.saveVideoRecording(
+          {
+            room_id: 'r1',
+            file_path: '/r/v1.mp4',
+            file_name: 'v1.mp4',
+            file_size: 1,
+            duration: 1,
+            record_type: 1,
+            teacher_name: 't'
+          },
+          m
+        ),
+      write: 'saveVideoRecording'
+    },
+    {
+      name: 'DeleteVideoByRoomIds',
+      invoke: (c, m) => c.deleteVideoByRoomIds({ room_ids: ['r1'] }, m),
+      write: 'deleteVideoByRoomIds'
+    },
+    {
+      name: 'DeleteVideoByVideoIds',
+      invoke: (c, m) => c.deleteVideoByVideoIds({ video_ids: ['v1'] }, m),
+      write: 'deleteVideoByVideoIds',
+      setup: s => s.getVideoRoomMap.mockResolvedValue([{ videoId: 'v1', roomId: 'r1' }])
+    },
+    {
+      name: 'SaveCourseware',
+      invoke: (c, m) =>
+        c.saveCourseware(
+          { room_id: 'r1', filename: 'a.pptx', filext: 'pptx', filesize: 1, fileurl: '/u/a.pptx' },
+          m
+        ),
+      write: 'saveCourseware'
+    },
+    {
+      name: 'DeleteCourseware',
+      invoke: (c, m) => c.deleteCourseware({ id: 'c1' }, m),
+      write: 'deleteCourseware',
+      setup: s => s.getCoursewareRoom.mockResolvedValue('r1')
+    },
+    {
+      name: 'ListBoardSnapshots',
+      invoke: (c, m) => c.listBoardSnapshots({ room_id: 'r1' }, m),
+      write: 'listBoardSnapshots'
+    },
+    {
+      name: 'GetBoardSnapshot',
+      invoke: (c, m) => c.getBoardSnapshot({ id: 's1' }, m),
+      setup: s =>
+        s.getBoardSnapshot.mockResolvedValue({
+          id: 's1',
+          roomId: 'r1',
+          lessonId: 'L-9',
+          formatVersion: 1,
+          data: Buffer.from([]),
+          createdAt: '1704067200000'
+        })
+    }
+  ];
+
+  it.each(OWNER_CALLS)(
+    '$name：缺 metadata → UNAUTHENTICATED（fail-closed，不查归属不落写）',
+    async ({ invoke, setup }) => {
+      const { controller, service } = makeController();
+      setup?.(service);
+      await expectGrpcError(
+        invoke(controller, undefined),
+        GrpcStatus.UNAUTHENTICATED,
+        'missing user-id metadata'
+      );
+      expect(service.checkRoomAccess).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(OWNER_CALLS)(
+    '$name：非房主 → PERMISSION_DENIED，写方法零调用',
+    async ({ invoke, write, setup }) => {
+      const { controller, service } = makeController();
+      setup?.(service);
+      service.checkRoomAccess.mockResolvedValue({ allowed: true, isTeacher: false });
+      await expectGrpcError(
+        invoke(controller, userIdMetadata('student-1')),
+        GrpcStatus.PERMISSION_DENIED,
+        'not room owner'
+      );
+      expect(service.checkRoomAccess).toHaveBeenCalledWith('r1', 'student-1');
+      if (write) expect(service[write]).not.toHaveBeenCalled();
+    }
+  );
+
+  it('SaveBoardSnapshot：带身份非房主 → PERMISSION_DENIED（网关路径）；无身份 → 系统路径放行（yjs-ws）', async () => {
+    const { controller, service } = makeController();
+    service.saveBoardSnapshot.mockResolvedValue({ id: 's1' });
+    service.checkRoomAccess.mockResolvedValue({ allowed: true, isTeacher: false });
+    const bytes = new Uint8Array([1]);
+    await expectGrpcError(
+      controller.saveBoardSnapshot({ room_id: 'r1', data: bytes }, userIdMetadata('student-1')),
+      GrpcStatus.PERMISSION_DENIED,
+      'not room owner'
+    );
+    expect(service.saveBoardSnapshot).not.toHaveBeenCalled();
+
+    // 无身份（yjs-ws 系统落盘）：不触发归属，直接落库
+    await controller.saveBoardSnapshot({ room_id: 'r1', data: bytes });
+    expect(service.saveBoardSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('ModerateUser：缺身份 → unauthorized 信封；非房主 → PERMISSION_DENIED 且零落写', async () => {
+    const { controller, service } = makeController();
+    service.moderateUser.mockResolvedValue(undefined);
+
+    const noAuth = await controller.moderateUser(
+      { room_id: 'r1', user_id: 'u1', kind: 'kick', op: 'set' },
+      undefined as unknown as Metadata
+    );
+    expect(noAuth).toMatchObject({ code: '1', msg: 'unauthorized' });
+    expect(service.moderateUser).not.toHaveBeenCalled();
+
+    service.checkRoomAccess.mockResolvedValue({ allowed: true, isTeacher: false });
+    await expectGrpcError(
+      controller.moderateUser(
+        { room_id: 'r1', user_id: 'u1', kind: 'kick', op: 'set' },
+        userIdMetadata('student-1')
+      ),
+      GrpcStatus.PERMISSION_DENIED,
+      'not room owner'
+    );
+    expect(service.moderateUser).not.toHaveBeenCalled();
   });
 });

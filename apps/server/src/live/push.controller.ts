@@ -24,6 +24,8 @@ import {
   publishRecall,
   RecallMessageDto,
   REDIS_CLIENT,
+  Roles,
+  RolesGuard,
   UpdateForbidDto,
   userIdMetadata,
   writeForbid,
@@ -35,10 +37,10 @@ import { grpcCall } from '../common/helpers/grpc.helper';
 /** 教师角色（JWT payload.role；与 auth-service 签发一致，role 1 = 教师） */
 const TEACHER_ROLE = 1;
 
-interface ShowRoomResponse {
+interface CheckRoomAccessResponse {
   code: string;
   msg: string;
-  data?: { live_user_id?: string };
+  data?: { allowed?: boolean; is_teacher?: boolean };
 }
 
 interface ModerateUserResponse {
@@ -52,7 +54,10 @@ interface RecallMessageResponse {
 }
 
 interface PushLiveServiceClient {
-  showRoom(data: { room_id: string }): Observable<ShowRoomResponse>;
+  checkRoomAccess(
+    data: { room_id: string; user_id: string },
+    metadata?: Metadata
+  ): Observable<CheckRoomAccessResponse>;
   moderateUser(
     data: { room_id: string; user_id: string; kind: string; op: string; minutes: number },
     metadata?: Metadata
@@ -83,16 +88,18 @@ export class PushController implements OnModuleInit {
     this.liveService = this.liveClient.getService<PushLiveServiceClient>('LiveService');
   }
 
-  /** 房间级权限断言：仅教师（role=1）且为该房间 liveUserId 所有者（与 LiveController 同口径） */
-  private async assertRoomTeacher(
-    user: { userId: string; role?: number },
-    roomId: string
-  ): Promise<void> {
-    if (user.role !== TEACHER_ROLE) {
-      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
-    }
-    const room = await grpcCall(this.liveService.showRoom({ room_id: roomId }));
-    if (room?.data?.live_user_id !== user.userId) {
+  /**
+   * S4 域层下沉：房间归属判定走 live-service CheckRoomAccess（唯一落层）。
+   * 身份经签名 metadata 透传，域层交叉校验后按 is_teacher 判定；非房主 403。
+   */
+  private async assertRoomOwner(user: { userId: string }, roomId: string): Promise<void> {
+    const access = await grpcCall(
+      this.liveService.checkRoomAccess(
+        { room_id: roomId, user_id: user.userId },
+        userIdMetadata(user.userId)
+      )
+    );
+    if (!access.data?.allowed || !access.data?.is_teacher) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
   }
@@ -107,19 +114,20 @@ export class PushController implements OnModuleInit {
     if (req.user.role !== TEACHER_ROLE) {
       throw new ForbiddenException('仅教师可修改禁言状态');
     }
-    // 房间归属断言：他房教师不得改本房间禁言态（顺手项）
-    await this.assertRoomTeacher(req.user, dto.roomId);
+    // 房间归属判定（域层 CheckRoomAccess）：他房教师不得改本房间禁言态
+    await this.assertRoomOwner(req.user, dto.roomId);
     await writeForbid(this.redis, dto.roomId, dto.status);
     return { updated: true };
   }
 
   @Post('mute')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
   async mute(
     @Body() dto: ModerationMuteDto,
     @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
   ): Promise<{ updated: true }> {
-    await this.assertRoomTeacher(req.user, dto.roomId);
+    // 归属判定由域层 ModerateUser 执行（S4 域层下沉：操作者必须是房主，非房主 PERMISSION_DENIED→403）
     const res = await grpcCall(
       this.liveService.moderateUser(
         {
@@ -153,12 +161,13 @@ export class PushController implements OnModuleInit {
   }
 
   @Post('kick')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
   async kick(
     @Body() dto: ModerationKickDto,
     @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
   ): Promise<{ updated: true }> {
-    await this.assertRoomTeacher(req.user, dto.roomId);
+    // 归属判定由域层 ModerateUser 执行（S4 域层下沉）
     const res = await grpcCall(
       this.liveService.moderateUser(
         { room_id: dto.roomId, user_id: dto.userId, kind: 'kick', op: 'set', minutes: 0 },
@@ -185,12 +194,13 @@ export class PushController implements OnModuleInit {
   }
 
   @Post('release')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(TEACHER_ROLE)
   async release(
     @Body() dto: ModerationReleaseDto,
     @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
   ): Promise<{ updated: true }> {
-    await this.assertRoomTeacher(req.user, dto.roomId);
+    // 归属判定由域层 ModerateUser 执行（S4 域层下沉）
     const res = await grpcCall(
       this.liveService.moderateUser(
         {
@@ -223,7 +233,7 @@ export class PushController implements OnModuleInit {
   }
 
   /**
-   * F4 撤回：不做 assertRoomTeacher——发言者（学生）自撤必须放行；
+   * F4 撤回：不做房间归属断言——发言者（学生）自撤必须放行；
    * 权限（发言者本人/房主）+ 2 分钟窗 + 幂等由 live-service RecallMessage 裁决
    * （单一裁决点，防双口径）。成功且非幂等重复 → publish live:recall + 审计 message.recall。
    */

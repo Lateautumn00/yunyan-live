@@ -67,12 +67,9 @@ function createController() {
         data: { items: [{ video_id: '1', room_id: 'r1' }] }
       })
     ),
-    showRoom: vi.fn(() =>
-      of({
-        code: '0',
-        msg: 'ok',
-        data: { room_id: 'r1', live_user_id: 't1' }
-      })
+    // S4 域层下沉：归属判定走 CheckRoomAccess（默认调用者=房主教师）
+    checkRoomAccess: vi.fn(() =>
+      of({ code: '0', msg: 'ok', data: { allowed: true, is_teacher: true } })
     )
   };
   const audit = { publish: vi.fn() };

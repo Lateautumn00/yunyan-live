@@ -243,11 +243,6 @@ interface LiveServiceClient {
     msg: string;
     data: { items: Array<{ video_id: string; room_id: string }> };
   }>;
-  getCoursewareRoom(data: { id: string }): Observable<{
-    code: string;
-    msg: string;
-    data: { room_id: string };
-  }>;
   getUserWatchTimeList(data: {
     page?: number;
     page_size?: number;
@@ -319,13 +314,19 @@ interface LiveServiceClient {
     data: { id: string },
     metadata?: Metadata
   ): Observable<{ code: string; msg: string }>;
-  saveBoardSnapshot(data: {
-    room_id: string;
-    lesson_id?: string;
-    format_version?: number;
-    data: Uint8Array;
-  }): Observable<{ code: string; msg: string }>;
-  listBoardSnapshots(data: { room_id: string; cursor?: string; limit?: number }): Observable<{
+  saveBoardSnapshot(
+    data: {
+      room_id: string;
+      lesson_id?: string;
+      format_version?: number;
+      data: Uint8Array;
+    },
+    metadata?: Metadata
+  ): Observable<{ code: string; msg: string }>;
+  listBoardSnapshots(
+    data: { room_id: string; cursor?: string; limit?: number },
+    metadata?: Metadata
+  ): Observable<{
     code: string;
     msg: string;
     data: {
@@ -340,7 +341,10 @@ interface LiveServiceClient {
       has_more: boolean;
     };
   }>;
-  getBoardSnapshot(data: { id: string }): Observable<{
+  getBoardSnapshot(
+    data: { id: string },
+    metadata?: Metadata
+  ): Observable<{
     code: string;
     msg: string;
     data: {
@@ -351,6 +355,14 @@ interface LiveServiceClient {
       data: Uint8Array;
       created_at: string;
     };
+  }>;
+  checkRoomAccess(
+    data: { room_id: string; user_id: string },
+    metadata?: Metadata
+  ): Observable<{
+    code: string;
+    msg: string;
+    data: { allowed: boolean; is_teacher: boolean };
   }>;
 }
 
@@ -390,16 +402,16 @@ export class LiveController implements OnModuleInit {
     this.authService = this.authClient.getService<AuthServiceClient>('AuthService');
   }
 
-  /** 房间级 403：仅教师（role=1）且为该房间 liveUserId 所有者可访问板书快照（5.9.2，Q4 MVP 仅教师） */
-  private async assertRoomTeacher(
-    user: { userId: string; role?: number },
-    roomId: string
-  ): Promise<void> {
-    if (user.role !== TEACHER_ROLE) {
-      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
-    }
-    const room = await grpcCall(this.liveService.showRoom({ room_id: roomId }));
-    if (room?.data?.live_user_id !== user.userId) {
+  /**
+   * S4 域层下沉：房间归属判定走 live-service CheckRoomAccess（唯一落层）。
+   * 身份经 userIdMetadata 签名透传，域层交叉校验后按 is_teacher 判定；非房主 403。
+   * 仅用于网关本地效果端点（downloadRecording 文件层），gRPC 写接口由域层直接断言。
+   */
+  private async assertRoomOwnerViaCheckAccess(userId: string, roomId: string): Promise<void> {
+    const access = await grpcCall(
+      this.liveService.checkRoomAccess({ room_id: roomId, user_id: userId }, userIdMetadata(userId))
+    );
+    if (!access.data?.allowed || !access.data?.is_teacher) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
   }
@@ -446,8 +458,6 @@ export class LiveController implements OnModuleInit {
     @Body() dto: UpdateLiveDto,
     @Request() req: { user: { userId: string; role?: number } }
   ) {
-    // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
-    await this.assertRoomTeacher(req.user, dto.roomId);
     return grpcCall(
       this.liveService.updateLive(
         {
@@ -508,8 +518,6 @@ export class LiveController implements OnModuleInit {
     @Body() dto: ChangeStatusDto,
     @Request() req: { user: { userId: string; role?: number } }
   ) {
-    // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
-    await this.assertRoomTeacher(req.user, dto.roomId);
     return grpcCall(
       this.liveService.changeStatus(
         {
@@ -608,8 +616,6 @@ export class LiveController implements OnModuleInit {
     @Body('roomId') roomId: string,
     @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
   ) {
-    // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
-    await this.assertRoomTeacher(req.user, roomId);
     await grpcCall(
       this.liveService.deleteLive({ room_id: roomId }, userIdMetadata(req.user.userId))
     );
@@ -632,8 +638,6 @@ export class LiveController implements OnModuleInit {
     @Body() body: { roomId: string; operateType: string },
     @Request() req: { user: { userId: string; role?: number } }
   ) {
-    // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
-    await this.assertRoomTeacher(req.user, body.roomId);
     const result = await grpcCall(
       this.liveService.updateCode({ room_id: body.roomId }, userIdMetadata(req.user.userId))
     );
@@ -800,10 +804,6 @@ export class LiveController implements OnModuleInit {
     @Body('roomIds') roomIds: string[],
     @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
   ) {
-    // S4 补偿控制：逐房间归属断言（域层下沉待 S10b）
-    for (const roomId of roomIds) {
-      await this.assertRoomTeacher(req.user, roomId);
-    }
     const result = await grpcCall(
       this.liveService.deleteVideoByRoomIds({ room_ids: roomIds }, userIdMetadata(req.user.userId))
     );
@@ -828,12 +828,6 @@ export class LiveController implements OnModuleInit {
     @Body('videoIds') videoIds: string[],
     @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
   ) {
-    // S4 补偿控制：video→room 映射后逐房归属断言（映射不存在的 id 跳过＝删除幂等）
-    const map = await grpcCall(this.liveService.getVideoRoomMap({ video_ids: videoIds }));
-    const roomIds = [...new Set((map.data?.items || []).map(i => i.room_id))];
-    for (const roomId of roomIds) {
-      await this.assertRoomTeacher(req.user, roomId);
-    }
     const result = await grpcCall(
       this.liveService.deleteVideoByVideoIds(
         { video_ids: videoIds },
@@ -861,8 +855,6 @@ export class LiveController implements OnModuleInit {
     @Body() dto: CreateCoursewareDto,
     @Request() req: { user: { userId: string; role?: number } }
   ) {
-    // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
-    await this.assertRoomTeacher(req.user, dto.roomId);
     const metadata = userIdMetadata(req.user.userId);
     return grpcCall(
       this.liveService.saveCourseware(
@@ -905,9 +897,6 @@ export class LiveController implements OnModuleInit {
     @Body('id') id: string,
     @Request() req: { user: { userId: string; role?: number }; requestId?: string; ip?: string }
   ) {
-    // S4 补偿控制：courseware→room 映射后归属断言（域层下沉待 S10b）
-    const room = await grpcCall(this.liveService.getCoursewareRoom({ id }));
-    await this.assertRoomTeacher(req.user, room.data.room_id);
     const result = await grpcCall(
       this.liveService.deleteCourseware({ id }, userIdMetadata(req.user.userId))
     );
@@ -930,14 +919,16 @@ export class LiveController implements OnModuleInit {
     @Body() body: { roomId: string; lessonId?: string; data: string },
     @Request() req: { user: { userId: string; role?: number } }
   ) {
-    await this.assertRoomTeacher(req.user, body.roomId);
     await grpcCall(
-      this.liveService.saveBoardSnapshot({
-        room_id: body.roomId,
-        lesson_id: body.lessonId,
-        format_version: 1,
-        data: Buffer.from(body.data || '', 'base64')
-      })
+      this.liveService.saveBoardSnapshot(
+        {
+          room_id: body.roomId,
+          lesson_id: body.lessonId,
+          format_version: 1,
+          data: Buffer.from(body.data || '', 'base64')
+        },
+        userIdMetadata(req.user.userId)
+      )
     );
     return { success: true };
   }
@@ -951,13 +942,15 @@ export class LiveController implements OnModuleInit {
     @Query('limit') limit: string | undefined,
     @Request() req: { user: { userId: string; role?: number } }
   ) {
-    await this.assertRoomTeacher(req.user, roomId);
     const result = await grpcCall(
-      this.liveService.listBoardSnapshots({
-        room_id: roomId,
-        cursor: cursor || undefined,
-        limit: limit ? Number(limit) : undefined
-      })
+      this.liveService.listBoardSnapshots(
+        {
+          room_id: roomId,
+          cursor: cursor || undefined,
+          limit: limit ? Number(limit) : undefined
+        },
+        userIdMetadata(req.user.userId)
+      )
     );
     return {
       items: (result?.data?.items || []).map(item => ({
@@ -979,8 +972,9 @@ export class LiveController implements OnModuleInit {
     @Param('id') id: string,
     @Request() req: { user: { userId: string; role?: number } }
   ) {
-    const snapshot = await grpcCall(this.liveService.getBoardSnapshot({ id }));
-    await this.assertRoomTeacher(req.user, snapshot.data.room_id);
+    const snapshot = await grpcCall(
+      this.liveService.getBoardSnapshot({ id }, userIdMetadata(req.user.userId))
+    );
     return {
       id: snapshot.data.id,
       roomId: snapshot.data.room_id,
@@ -998,8 +992,6 @@ export class LiveController implements OnModuleInit {
     @Body() body: { roomId: string; playBackUrl: string; duration: number },
     @Request() req: { user: { userId: string; role?: number } }
   ) {
-    // S4 补偿控制：房间归属 + 角色（域层下沉待 S10b）
-    await this.assertRoomTeacher(req.user, body.roomId);
     await grpcCall(
       this.liveService.saveVideoRecording(
         {
@@ -1130,11 +1122,12 @@ export class LiveController implements OnModuleInit {
       return res.status(400).json({ code: 400, msg: '非法录制 id' });
     }
 
-    // S4 补偿控制：recording→room 映射后归属断言（映射不存在→交文件层 404）
+    // S4 域层下沉：recording→room 映射后走 CheckRoomAccess 判定（归属判定落域层，签名 metadata 交叉校验）
+    // 映射不存在→交文件层 404（幂等）
     const recMap = await grpcCall(this.liveService.getVideoRoomMap({ video_ids: [id] }));
     const recRoomId = recMap.data?.items?.[0]?.room_id;
     if (recRoomId) {
-      await this.assertRoomTeacher(req.user, recRoomId);
+      await this.assertRoomOwnerViaCheckAccess(req.user.userId, recRoomId);
     }
 
     const hostRecordingsDir = process.env.RECORDINGS_DIR || '/home/janus/recordings';

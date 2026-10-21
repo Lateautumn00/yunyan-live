@@ -10,7 +10,7 @@ interface RequestWithUser {
  * - 未声明 @Roles() → 放行（守卫可全局挂载）
  * - user 缺失/role 不在白名单 → 403
  *
- * S4（补偿控制）：域层下沉待 S10b（gRPC 身份可信）落地。
+ * S4：角色守卫留边缘（JWT role）；房间归属校验已下沉 live-service 域层（S10b 验签 metadata）。
  */
 @Injectable()
 export class RolesGuard implements CanActivate {

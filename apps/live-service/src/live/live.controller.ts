@@ -15,6 +15,24 @@ export class LiveController {
     private readonly checkinService: CheckinService
   ) {}
 
+  /** S4 域层下沉：从已验签 metadata 提取操作者身份；缺失即拒（fail-closed，网关独占 RPC） */
+  private requireSigner(metadata?: Metadata): string {
+    const signer = userIdFromMetadata(metadata);
+    if (!signer) throw grpcError(GrpcStatus.UNAUTHENTICATED, 'missing user-id metadata');
+    return signer;
+  }
+
+  /**
+   * S4 域层下沉：房间归属校验唯一落层（教师 = rooms.liveUserId 匹配，经 checkRoomAccess）。
+   * 非房主抛 PERMISSION_DENIED（网关 grpcCall 映射 403）；signer 必须来自已验签 metadata（S10b）。
+   */
+  private async assertRoomOwner(roomId: string, signer: string): Promise<void> {
+    const access = await this.liveService.checkRoomAccess(roomId, signer);
+    if (!access.isTeacher) {
+      throw grpcError(GrpcStatus.PERMISSION_DENIED, 'not room owner');
+    }
+  }
+
   @GrpcMethod('LiveService', 'CreateLive')
   async createLive(
     data: {
@@ -87,7 +105,9 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'ChangeStatus')
-  async changeStatus(data: { room_id: string; status: number }, _metadata?: Metadata) {
+  async changeStatus(data: { room_id: string; status: number }, metadata?: Metadata) {
+    const signer = this.requireSigner(metadata);
+    await this.assertRoomOwner(data.room_id, signer);
     this.logger.log(`gRPC ChangeStatus: ${data.room_id} -> ${data.status}`);
     const room = await this.liveService.changeStatus({ roomId: data.room_id, status: data.status });
     return ok({
@@ -110,8 +130,10 @@ export class LiveController {
       start_time?: string;
       duration?: number;
     },
-    _metadata?: Metadata
+    metadata?: Metadata
   ) {
+    const signer = this.requireSigner(metadata);
+    await this.assertRoomOwner(data.room_id, signer);
     this.logger.log(`gRPC UpdateLive: ${data.room_id}`);
     const room = await this.liveService.update({
       roomId: data.room_id,
@@ -210,14 +232,18 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'DeleteLive')
-  async deleteLive(data: { room_id: string }, _metadata?: Metadata) {
+  async deleteLive(data: { room_id: string }, metadata?: Metadata) {
+    const signer = this.requireSigner(metadata);
+    await this.assertRoomOwner(data.room_id, signer);
     this.logger.log(`gRPC DeleteLive: ${data.room_id}`);
     await this.liveService.delete(data.room_id);
     return ok();
   }
 
   @GrpcMethod('LiveService', 'UpdateCode')
-  async updateCode(data: { room_id: string }, _metadata?: Metadata) {
+  async updateCode(data: { room_id: string }, metadata?: Metadata) {
+    const signer = this.requireSigner(metadata);
+    await this.assertRoomOwner(data.room_id, signer);
     this.logger.log(`gRPC UpdateCode: ${data.room_id}`);
     const joinCode = await this.liveService.updateCode(data.room_id);
     return ok({ join_code: joinCode });
@@ -321,8 +347,10 @@ export class LiveController {
       record_type: number;
       teacher_name: string;
     },
-    _metadata?: Metadata
+    metadata?: Metadata
   ) {
+    const signer = this.requireSigner(metadata);
+    await this.assertRoomOwner(data.room_id, signer);
     this.logger.log(`gRPC SaveVideoRecording: room=${data.room_id} type=${data.record_type}`);
     await this.liveService.saveVideoRecording({
       roomId: data.room_id,
@@ -400,28 +428,43 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'DeleteVideoByRoomIds')
-  async deleteVideoByRoomIds(data: { room_ids: string[] }, _metadata?: Metadata) {
+  async deleteVideoByRoomIds(data: { room_ids: string[] }, metadata?: Metadata) {
+    const signer = this.requireSigner(metadata);
+    for (const roomId of data.room_ids) {
+      await this.assertRoomOwner(roomId, signer);
+    }
     this.logger.log(`gRPC DeleteVideoByRoomIds: ${data.room_ids}`);
     await this.liveService.deleteVideoByRoomIds(data.room_ids);
     return ok();
   }
 
   @GrpcMethod('LiveService', 'DeleteVideoByVideoIds')
-  async deleteVideoByVideoIds(data: { video_ids: string[] }, _metadata?: Metadata) {
+  async deleteVideoByVideoIds(data: { video_ids: string[] }, metadata?: Metadata) {
+    const signer = this.requireSigner(metadata);
+    // S4 域层下沉：video→room 域内解析后逐房归属断言（未映射 id 跳过＝删除幂等）
+    const rows = await this.liveService.getVideoRoomMap(data.video_ids);
+    for (const roomId of new Set(rows.map(r => r.roomId))) {
+      await this.assertRoomOwner(roomId, signer);
+    }
     this.logger.log(`gRPC DeleteVideoByVideoIds: ${data.video_ids}`);
     await this.liveService.deleteVideoByVideoIds(data.video_ids);
     return ok();
   }
 
   @GrpcMethod('LiveService', 'SaveCourseware')
-  async saveCourseware(data: {
-    room_id: string;
-    filename: string;
-    filext: string;
-    filesize: number;
-    fileurl: string;
-    create_user_id?: string;
-  }) {
+  async saveCourseware(
+    data: {
+      room_id: string;
+      filename: string;
+      filext: string;
+      filesize: number;
+      fileurl: string;
+      create_user_id?: string;
+    },
+    metadata?: Metadata
+  ) {
+    const signer = this.requireSigner(metadata);
+    await this.assertRoomOwner(data.room_id, signer);
     this.logger.log(`gRPC SaveCourseware: room=${data.room_id} name=${data.filename}`);
     await this.liveService.saveCourseware({
       roomId: data.room_id,
@@ -455,7 +498,11 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'DeleteCourseware')
-  async deleteCourseware(data: { id: string }, _metadata?: Metadata) {
+  async deleteCourseware(data: { id: string }, metadata?: Metadata) {
+    const signer = this.requireSigner(metadata);
+    // S4 域层下沉：courseware→room 域内解析后归属断言（不存在→NOT_FOUND 交网关 404）
+    const roomId = await this.liveService.getCoursewareRoom(data.id);
+    await this.assertRoomOwner(roomId, signer);
     this.logger.log(`gRPC DeleteCourseware: ${data.id}`);
     await this.liveService.deleteCourseware(data.id);
     return ok();
@@ -478,12 +525,18 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'SaveBoardSnapshot')
-  async saveBoardSnapshot(data: {
-    room_id: string;
-    lesson_id?: string;
-    format_version?: number;
-    data: Uint8Array;
-  }) {
+  async saveBoardSnapshot(
+    data: {
+      room_id: string;
+      lesson_id?: string;
+      format_version?: number;
+      data: Uint8Array;
+    },
+    metadata?: Metadata
+  ) {
+    // S4 域层下沉：网关用户路径（带身份）断言房主；yjs-ws 系统落盘（无身份）放行
+    const signer = userIdFromMetadata(metadata);
+    if (signer) await this.assertRoomOwner(data.room_id, signer);
     this.logger.log(`gRPC SaveBoardSnapshot: room=${data.room_id} bytes=${data.data?.length}`);
     await this.liveService.saveBoardSnapshot({
       roomId: data.room_id,
@@ -495,7 +548,12 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'ListBoardSnapshots')
-  async listBoardSnapshots(data: { room_id: string; cursor?: string; limit?: number }) {
+  async listBoardSnapshots(
+    data: { room_id: string; cursor?: string; limit?: number },
+    metadata?: Metadata
+  ) {
+    const signer = this.requireSigner(metadata);
+    await this.assertRoomOwner(data.room_id, signer);
     this.logger.log(`gRPC ListBoardSnapshots: room=${data.room_id} cursor=${data.cursor || ''}`);
     const result = await this.liveService.listBoardSnapshots({
       roomId: data.room_id,
@@ -518,9 +576,11 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'GetBoardSnapshot')
-  async getBoardSnapshot(data: { id: string }) {
+  async getBoardSnapshot(data: { id: string }, metadata?: Metadata) {
+    const signer = this.requireSigner(metadata);
     this.logger.log(`gRPC GetBoardSnapshot: ${data.id}`);
     const snapshot = await this.liveService.getBoardSnapshot(data.id);
+    await this.assertRoomOwner(snapshot.roomId, signer);
     return this.boardSnapshotEnvelope(snapshot);
   }
 
@@ -749,6 +809,8 @@ export class LiveController {
     if (op === 'set' && kind === 'mute' && minutes !== 1 && minutes !== 5 && minutes !== 10) {
       return fail('invalid minutes');
     }
+    // S4 域层下沉：操作者必须是房主（PERMISSION_DENIED → 网关 403；勿用 fail 信封，防被映射成 502）
+    await this.assertRoomOwner(data.room_id, byUserId);
     await this.liveService.moderateUser(data.room_id, data.user_id, kind, op, minutes, byUserId);
     return ok();
   }

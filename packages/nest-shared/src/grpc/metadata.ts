@@ -63,6 +63,7 @@ export function verifyUserCall(
   return 'ok';
 }
 
-export function userIdFromMetadata(metadata: Metadata): string {
-  return metadata.get(USER_ID_KEY)?.[0] as string;
+/** metadata 缺省（gRPC handler 未收到 metadata）与 key 缺失同义：返回 undefined */
+export function userIdFromMetadata(metadata: Metadata | undefined): string {
+  return metadata?.get(USER_ID_KEY)?.[0] as string;
 }
