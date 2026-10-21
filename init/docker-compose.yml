@@ -9,8 +9,7 @@
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      # 宿主端口 15432/16379：避开本机其他项目占用 5432/6379（容器网络内仍为 postgres:5432 / redis:6379）
-      - '127.0.0.1:15432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
       # 批次 5：直载 db/schema-baseline.sql（单一事实源，替代已封存的 init/schema.sql）
@@ -28,7 +27,7 @@
     networks: [edge, backend]
     command: redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy noeviction
     ports:
-      - '127.0.0.1:16379:6379'
+      - '127.0.0.1:6379:6379'
     volumes:
       - redisdata:/data
     healthcheck:
