@@ -2,6 +2,7 @@
 
 状态：**✅ 2026-10-20 完成**。台账见 `system-gap-analysis.md` GAP-S10b 行；
 演练证据见 `drills/s10b-identity-record.md`（18/18 ALL PASS）。
+后续项 S4 域层下沉**已于 2026-10-21 完成**（commit `6e9e418`，见台账 GAP-S4 行）。
 
 ## 1. 背景与范围裁定
 
@@ -9,7 +10,7 @@
 
 - **共享密钥 HMAC 签名 metadata**（服务间 gRPC 调用携带 `user-id` 时强制验签）
 - **compose 网络边界**（edge / backend / egress 三网络，`backend` 为 `internal: true`）
-- 完成后 S4 的归属校验可从「网关补偿控制」下沉为域层 synchronous authority（后续独立批次）
+- 完成后 S4 的归属校验可从「网关补偿控制」下沉为域层 synchronous authority（~~后续独立批次~~ **✅ 2026-10-21 完成**）
 
 ## 2. 签名协议
 
