@@ -25,4 +25,5 @@
   code=16 UNAUTHENTICATED；valid-signature/no-user-id → code=13 放行）。
 - 宿主端口冲突（已解决 2026-10-20）：poetry 与 yunyan 曾争抢 5432/6379（WSL 重启后
   败者 `Created`）。拍板后 yunyan compose 改发布 **15432/16379**，两项目可共存，
-  复跑演练不再需要临时停 poetry。
+  复跑演练不再需要临时停 poetry。（**2026-10-21 回退**：确认无冲突后恢复标准口
+  **5432/6379**，revert `9510543`。）
