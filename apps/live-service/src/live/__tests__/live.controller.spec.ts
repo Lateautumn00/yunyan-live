@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
+import { status as GrpcStatus } from '@grpc/grpc-js';
 import { userIdMetadata } from '@yunyan-live/nest-shared';
 import { LiveController } from '../live.controller';
 import type { LiveService } from '../live.service';
+import { expectGrpcError } from './test-utils';
 
 type ServiceMock = Record<string, ReturnType<typeof vi.fn>>;
 
@@ -745,10 +747,33 @@ describe('LiveController gRPC 映射', () => {
   it('CheckRoomAccess：room_id/user_id 透传，data 映射 snake_case', async () => {
     const { controller, service } = makeController();
     service.checkRoomAccess.mockResolvedValue({ allowed: true, isTeacher: false });
-    const res = await controller.checkRoomAccess({ room_id: 'r1', user_id: 'u1' });
+    const res = await controller.checkRoomAccess(
+      { room_id: 'r1', user_id: 'u1' },
+      userIdMetadata('u1')
+    );
     expect(service.checkRoomAccess).toHaveBeenCalledWith('r1', 'u1');
     expect(res.code).toBe('0');
     expect(res.data).toEqual({ allowed: true, is_teacher: false });
+  });
+
+  it('CheckRoomAccess：缺 user-id 身份 → UNAUTHENTICATED，不透传（S10b）', async () => {
+    const { controller, service } = makeController();
+    await expectGrpcError(
+      controller.checkRoomAccess({ room_id: 'r1', user_id: 'u1' }, userIdMetadata('')),
+      GrpcStatus.UNAUTHENTICATED,
+      'missing user-id metadata'
+    );
+    expect(service.checkRoomAccess).not.toHaveBeenCalled();
+  });
+
+  it('CheckRoomAccess：签名身份 ≠ body user_id → PERMISSION_DENIED（S10b）', async () => {
+    const { controller, service } = makeController();
+    await expectGrpcError(
+      controller.checkRoomAccess({ room_id: 'r1', user_id: 'victim' }, userIdMetadata('attacker')),
+      GrpcStatus.PERMISSION_DENIED,
+      'user_id mismatch with authenticated identity'
+    );
+    expect(service.checkRoomAccess).not.toHaveBeenCalled();
   });
 
   it('GetUserWatchTimeList：watch_time 秒数计算与在线 left_at 空串', async () => {

@@ -1,7 +1,7 @@
 import { Controller, Logger } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
-import { Metadata } from '@grpc/grpc-js';
-import { fail, ok, userIdFromMetadata } from '@yunyan-live/nest-shared';
+import { Metadata, status as GrpcStatus } from '@grpc/grpc-js';
+import { fail, grpcError, ok, userIdFromMetadata } from '@yunyan-live/nest-shared';
 
 import { LiveService } from './live.service';
 import { CheckinService, type CheckinSessionView } from './checkin.service';
@@ -532,7 +532,12 @@ export class LiveController {
   }
 
   @GrpcMethod('LiveService', 'CheckRoomAccess')
-  async checkRoomAccess(data: { room_id: string; user_id: string }) {
+  async checkRoomAccess(data: { room_id: string; user_id: string }, metadata: Metadata) {
+    const signer = userIdFromMetadata(metadata);
+    if (!signer) throw grpcError(GrpcStatus.UNAUTHENTICATED, 'missing user-id metadata');
+    if (signer !== data.user_id) {
+      throw grpcError(GrpcStatus.PERMISSION_DENIED, 'user_id mismatch with authenticated identity');
+    }
     const access = await this.liveService.checkRoomAccess(data.room_id, data.user_id);
     return ok({
       data: {

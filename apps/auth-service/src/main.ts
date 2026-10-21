@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
 import {
+  GrpcAuthGuard,
   GrpcMetricsInterceptor,
   createServiceMetrics,
   grpcServerOptions,
@@ -25,7 +26,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe(validationPipeOptions));
 
   const metrics = createServiceMetrics('auth-service');
-  app.useGlobalInterceptors(new GrpcMetricsInterceptor(metrics));
+  app.useGlobalInterceptors(new GrpcMetricsInterceptor(metrics), new GrpcAuthGuard());
 
   await app.listen();
   console.log(`Auth service gRPC listening on port ${process.env.GRPC_PORT || 50051}`);

@@ -3,6 +3,7 @@
     image: postgres:16-alpine
     container_name: yunyan-live-postgres
     restart: unless-stopped
+    networks: [edge, backend]
     environment:
       POSTGRES_DB: yunyan_live
       POSTGRES_USER: postgres
@@ -23,6 +24,7 @@
     image: redis:7-alpine
     container_name: yunyan-live-redis
     restart: unless-stopped
+    networks: [edge, backend]
     command: redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy noeviction
     ports:
       - '127.0.0.1:6379:6379'
@@ -39,6 +41,7 @@
     container_name: yunyan-live-rabbitmq
     hostname: yunyan-rabbitmq
     restart: unless-stopped
+    networks: [edge, backend]
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?}
@@ -65,16 +68,19 @@
     image: yunyan-live-janus:latest
     container_name: janus-gateway
     restart: unless-stopped
+    networks: [edge, backend]
     ports:
       - '8188:8188'
       - '8088:8088'
       - '20000-20100:20000-20100/udp'
     environment:
       - GATEWAY_IP=0.0.0.0
-      - STUN_SERVER=stun.l.google.com
+      # 留空禁用 STUN（GFW 阻断 stun.l.google.com 会导致 janus 启动 FATAL 退出）
+      - STUN_SERVER=${JANUS_STUN_SERVER:-}
       - STUN_PORT=19302
       - RTP_PORT_RANGE=20000-20100
     volumes:
+      - ./entrypoint.sh:/entrypoint.sh:ro
       - /home/janus/recordings:/tmp/janus/recordings
       - janus-logs:/var/log/janus
 
@@ -89,6 +95,7 @@
     container_name: yunyan-live-gateway
     profiles: ['app']
     restart: unless-stopped
+    networks: [edge, backend]
     ports:
       - '127.0.0.1:3001:3001'
     environment:
@@ -97,6 +104,7 @@
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
+      GRPC_SHARED_SECRET: ${GRPC_SHARED_SECRET:?}
       AUTH_GRPC_URL: auth-service:50051
       LIVE_GRPC_URL: live-service:50052
       MAIL_GRPC_URL: mail-service:50053
@@ -138,11 +146,13 @@
     container_name: yunyan-live-auth
     profiles: ['app']
     restart: unless-stopped
+    networks: [backend]
     environment:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/yunyan_live
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
       GRPC_HOST: 0.0.0.0
       GRPC_PORT: '50051'
+      GRPC_SHARED_SECRET: ${GRPC_SHARED_SECRET:?}
       MAIL_GRPC_URL: mail-service:50053
       METRICS_PORT: '9464'
     depends_on:
@@ -169,11 +179,13 @@
     container_name: yunyan-live-live
     profiles: ['app']
     restart: unless-stopped
+    networks: [backend]
     environment:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/yunyan_live
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
       GRPC_HOST: 0.0.0.0
       GRPC_PORT: '50052'
+      GRPC_SHARED_SECRET: ${GRPC_SHARED_SECRET:?}
       JANUS_URL: http://janus-gateway:8088
       TYPEORM_SYNC: 'false'
       RABBITMQ_URL: amqp://${RABBITMQ_USER:?}:${RABBITMQ_PASSWORD:?}@rabbitmq:5672
@@ -202,11 +214,13 @@
     container_name: yunyan-live-mail
     profiles: ['app']
     restart: unless-stopped
+    networks: [backend, egress]
     environment:
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       GRPC_HOST: 0.0.0.0
       GRPC_PORT: '50053'
+      GRPC_SHARED_SECRET: ${GRPC_SHARED_SECRET:?}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:?}:${RABBITMQ_PASSWORD:?}@rabbitmq:5672
       METRICS_PORT: '9466'
     depends_on:
@@ -233,6 +247,7 @@
     container_name: yunyan-live-chat-ws
     profiles: ['app']
     restart: unless-stopped
+    networks: [edge]
     ports:
       - '127.0.0.1:50054:50054'
     environment:
@@ -268,6 +283,7 @@
     container_name: yunyan-live-yjs-ws
     profiles: ['app']
     restart: unless-stopped
+    networks: [edge, backend]
     ports:
       - '127.0.0.1:50055:50055'
     environment:
@@ -276,6 +292,7 @@
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       LIVE_GRPC_URL: live-service:50052
+      GRPC_SHARED_SECRET: ${GRPC_SHARED_SECRET:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -297,6 +314,7 @@
     image: prom/prometheus:v2.53.0
     container_name: yunyan-live-prometheus
     restart: unless-stopped
+    networks: [edge, backend]
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     command:
@@ -316,6 +334,7 @@
     image: prom/alertmanager:v0.27.0
     container_name: yunyan-live-alertmanager
     restart: unless-stopped
+    networks: [edge]
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
     ports:
@@ -328,6 +347,7 @@
     image: prom/node-exporter:v1.8.1
     container_name: yunyan-live-node-exporter
     restart: unless-stopped
+    networks: [edge]
     command:
       - '--path.rootfs=/host'
       - '--collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+)($$|/)'
@@ -343,3 +363,14 @@ volumes:
   janus-logs:
   promdata:
   amdata:
+
+# GAP-S10b 网络边界：
+# - edge   正常桥接（可出网 + 宿主 loopback 端口发布）；仅边缘面服务与共享基础设施在列
+# - backend internal: true（仅容器互访、无外网）；auth/live 等 gRPC 身份面只挂此网
+# - egress 仅 mail-service：SMTP 出网专用，业务容器不可达 mail:50053
+# 隔离目标：edge-only 容器（chat-ws/alertmanager/node-exporter）不可达 auth:50051 / live:50052
+networks:
+  edge:
+  backend:
+    internal: true
+  egress:

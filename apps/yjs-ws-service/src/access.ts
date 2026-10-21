@@ -1,6 +1,6 @@
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
-import { GRPC_LOADER_OPTIONS, resolveProto } from '@yunyan-live/nest-shared';
+import { GRPC_LOADER_OPTIONS, resolveProto, userIdMetadata } from '@yunyan-live/nest-shared';
 
 /**
  * D8 房间访问校验（握手成员校验 + 写权限判定的房间级来源）。
@@ -59,7 +59,7 @@ export async function checkRoomAccess(roomId: string, userId: string): Promise<R
   return new Promise<RoomAccess | null>(resolve => {
     getClient().CheckRoomAccess(
       { room_id: roomId, user_id: userId },
-      new grpc.Metadata(),
+      userIdMetadata(userId),
       { deadline: Date.now() + CHECK_DEADLINE_MS },
       (err, res) => {
         if (err || !res || res.code !== '0' || !res.data) {

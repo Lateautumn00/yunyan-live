@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package eguard;
+
+// GAP-S10b 验签 e2e 探针：最小一元方法，仅供 GrpcAuthGuard 集成测试使用
+service Probe {
+  rpc Ping (PingReq) returns (PingRes) {}
+}
+
+message PingReq {
+  string note = 1;
+}
+
+message PingRes {
+  string note = 1;
+}

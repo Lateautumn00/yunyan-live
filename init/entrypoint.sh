@@ -3,7 +3,9 @@ set -e
 
 # ── Environment variable defaults ─────────────────────────────────────────────
 GATEWAY_IP="${GATEWAY_IP:-0.0.0.0}"
-STUN_SERVER="${STUN_SERVER:-stun.l.google.com}"
+# 留空 = 禁用 STUN（docker dev 环境 GFW 会阻断 stun.l.google.com 导致 janus FATAL 退出）
+# 生产/需要 NAT 穿透时在 .env 配置可达的 STUN 服务器
+STUN_SERVER="${STUN_SERVER:-}"
 STUN_PORT="${STUN_PORT:-19302}"
 RTP_PORT_RANGE="${RTP_PORT_RANGE:-20000-20100}"
 SERVER_NAME="${SERVER_NAME:-JanusServer}"
@@ -16,6 +18,14 @@ RTP_MAX=$(echo "$RTP_PORT_RANGE" | cut -d- -f2)
 CONFIG_DIR="/usr/local/etc/janus"
 
 mkdir -p "$CONFIG_DIR"
+
+# STUN 配置片段：STUN_SERVER 为空则不写 stun_server/stun_port（janus 对空值会 FATAL 退出）
+if [ -n "$STUN_SERVER" ]; then
+  NAT_STUN="    stun_server = \"${STUN_SERVER}\"
+    stun_port = ${STUN_PORT}"
+else
+  NAT_STUN="    # STUN disabled (JANUS_STUN_SERVER empty)"
+fi
 
 # ── Generate janus.jcfg ──────────────────────────────────────────────────────
 cat > "$CONFIG_DIR/janus.jcfg" <<EOF
@@ -39,8 +49,7 @@ nat: {
     full_trickle = true
     ice_lite = false
     ice_tcp = false
-    stun_server = "${STUN_SERVER}"
-    stun_port = ${STUN_PORT}
+${NAT_STUN}
     no_default_rtp_port = false
     rtp_port_range = "${RTP_MIN},${RTP_MAX}"
 }
@@ -71,6 +80,26 @@ general: {
 }
 
 admin: {
+}
+EOF
+
+# ── Generate janus.transport.http.jcfg ───────────────────────────────────────
+cat > "$CONFIG_DIR/janus.transport.http.jcfg" <<EOF
+general: {
+    json = "indented"
+    http = true
+    port = 8088
+    ip = "0.0.0.0"
+    advertised_interface = ""
+    advertised_port = 0
+    base_path = "/janus"
+    allow_cors = true
+    cors_with_credentials = true
+    https = false
+}
+
+admin: {
+    admin_base_path = "/admin"
 }
 EOF
 
@@ -129,6 +158,7 @@ echo "  Gateway IP : ${GATEWAY_IP}"
 echo "  STUN Server: ${STUN_SERVER}:${STUN_PORT}"
 echo "  RTP Range  : ${RTP_PORT_RANGE}"
 echo "  WS Port    : 8188"
+echo "  HTTP Port  : 8088"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 exec /opt/janus/bin/janus -F "$CONFIG_DIR"

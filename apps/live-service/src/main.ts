@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
 import { DataSource } from 'typeorm';
 import {
+  GrpcAuthGuard,
   GrpcMetricsInterceptor,
   createServiceMetrics,
   grpcServerOptions,
@@ -50,7 +51,7 @@ async function bootstrap() {
   });
 
   const metrics = createServiceMetrics('live-service');
-  app.useGlobalInterceptors(new GrpcMetricsInterceptor(metrics));
+  app.useGlobalInterceptors(new GrpcMetricsInterceptor(metrics), new GrpcAuthGuard());
 
   await app.listen();
   console.log(`Live service gRPC listening on port ${process.env.GRPC_PORT || 50052}`);

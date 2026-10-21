@@ -140,6 +140,7 @@ jobs:
       # compose 插值必需项（${VAR:?}）；仅用于校验/构建，不部署
       RABBITMQ_USER: ci
       RABBITMQ_PASSWORD: ci-password
+      GRPC_SHARED_SECRET: ci-shared-secret
     steps:
       - uses: actions/checkout@v4
 
