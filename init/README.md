@@ -17,7 +17,7 @@ cd init
 # 构建镜像（首次约 2-3 分钟，从 Gitee 克隆源码）
 docker compose build
 
-# 启动 Janus
+# 启动基础设施（Janus + PostgreSQL/Redis/RabbitMQ + Prometheus/Alertmanager/node-exporter）
 docker compose up -d
 
 # 查看日志（确认 "WebSockets server started (port 8188)"）
@@ -29,13 +29,13 @@ docker logs janus-gateway --tail 20
 ```bash
 cd ../..  # 回到项目根目录
 
-# 同时启动 Mock Server + Electron Desktop
+# 同时启动后端服务（NestJS 网关 + 微服务）与 Electron 桌面端
 pnpm dev:all
 ```
 
 这会同时启动：
-- **Mock Server** (http://localhost:3001) -- 模拟后端 API
-- **Electron Desktop** -- 前端应用，自动连接 Mock Server 和 Janus
+- **后端服务** -- NestJS API 网关（http://localhost:3001，`apps/server`）+ auth/live/mail/chat-ws/yjs-ws 微服务
+- **Electron Desktop** -- 前端应用，自动连接网关与 Janus
 
 ### 3. 验证服务
 
@@ -56,45 +56,41 @@ echo '{"janus":"keepalive","transaction":"test1"}' | websocat --one-message ws:/
 
 ## 配置前端连接
 
-在 `apps/desktop/.env.development.local` 中配置：
+在 `apps/desktop/.env.development` 中配置：
 
 ```bash
-# Mock Server API
+# NestJS API 网关
 VITE_USER_API=http://localhost:3001/user
 VITE_LIVE_API=http://localhost:3001/live
-VITE_MESSAGE_WS=ws://localhost:3001/socket
 
-# Janus WebSocket（使用 WSL IP，Windows 无法通过 localhost 访问 WSL 内的 Docker）
-VITE_LIVE_SERVER=ws://你的WSL_IP:8188
-```
+# 聊天 / 白板 WebSocket 服务
+VITE_MESSAGE_WS=ws://localhost:50054
+VITE_YJS_WS=ws://localhost:50055
 
-### 获取 WSL IP
-
-```bash
-# 在 WSL 中运行
-hostname -I | awk '{print $1}'
-# 示例输出: 172.18.42.16
+# Janus WebSocket（Docker Desktop 已把端口中继到 Windows 回环，直接用 localhost）
+VITE_LIVE_SERVER=ws://localhost:8188/janus
 ```
 
 ## 环境变量
 
-通过 `docker-compose.yml` 的 `environment` 配置：
+通过 `docker-compose.yml` 的 `environment` 与 `entrypoint.sh` 默认值提供：
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| GATEWAY_IP | 0.0.0.0 | Janus 绑定 IP |
-| STUN_SERVER | stun.l.google.com | STUN 服务器（用于 NAT 穿透） |
-| STUN_PORT | 19302 | STUN 端口 |
+| GATEWAY_IP | 0.0.0.0 | Janus 绑定 IP（compose 硬编码，`.env` 中同名键不透传） |
+| JANUS_STUN_SERVER | （空） | STUN 服务器；默认禁用——GFW 阻断 stun.l.google.com 会导致 Janus 启动 FATAL |
+| STUN_PORT | 19302 | STUN 端口（仅启用 STUN 时生效） |
 | RTP_PORT_RANGE | 20000-20100 | RTP 端口范围 |
-| SERVER_NAME | JanusServer | 实例名称 |
+| SERVER_NAME | JanusServer | 实例名称（entrypoint.sh 默认值，compose 不下发） |
 
 ## 端口说明
 
 | 端口 | 协议 | 用途 |
 |------|------|------|
 | 8188 | WS | Janus WebSocket 信令（前端连接） |
+| 8088 | HTTP | Janus HTTP API（录制控制） |
 | 20000-20100 | UDP | RTP/RTCP 媒体流 |
-| 3001 | HTTP/WS | Mock Server（开发环境） |
+| 3001 | HTTP/WS | NestJS API 网关（宿主 pnpm dev 运行） |
 | 8080 | HTTP | 安装包下载/自动更新静态站（yunyan-live-download） |
 
 ## 插件说明
@@ -206,16 +202,17 @@ docker logs janus-gateway --tail 20
 - 检查 STUN 服务器是否可达：日志中应显示 `Our public address is xxx`
 - 检查 `GATEWAY_IP` 是否设置为正确的 IP
 
-### 5. Windows 无法连接 WSL 内的 Janus
+### 5. Windows 无法通过 localhost 连接 Janus
 
-Windows 无法通过 `localhost` 访问 WSL 内的 Docker 容器。使用 WSL IP：
+Docker Desktop 会把已发布端口中继到 Windows 回环，`ws://localhost:8188/janus`
+在 Windows 侧直接可用（已实测）。若个别环境不通，用 WSL IP 兜底：
 
 ```bash
 # 获取 WSL IP
 hostname -I | awk '{print $1}'
 
-# 更新 .env.development.local
-VITE_LIVE_SERVER=ws://172.x.x.x:8188
+# 更新 apps/desktop/.env.development
+VITE_LIVE_SERVER=ws://172.x.x.x:8188/janus
 ```
 
 ### 6. 重新构建
@@ -292,6 +289,7 @@ init/
 +-- entrypoint.sh                # 启动脚本：从环境变量生成配置 + 启动 Janus
 +-- .env                         # 环境变量（GATEWAY_IP, STUN 等）
 +-- .env.example                 # 环境变量模板
++-- monitoring/                  # Prometheus 告警规则 + Alertmanager 配置
 +-- README.md                    # 本文档
 +-- yunyan-live-download/        # 安装包下载/自动更新静态站（nginx）
 |   +-- docker-compose.yml       # 8080→80，挂载 ./dist
