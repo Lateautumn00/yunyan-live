@@ -51,6 +51,35 @@ describe('SharedViewOverlay（F3.4/F3.5 页内拖拽浮层）', () => {
     expect(w.find('.sv-loading').exists()).toBe(false);
   });
 
+  it('正向：教师端 iframe 内 Esc → emit close（Esc 桥注入）', async () => {
+    const w = mount(SharedViewOverlay, { props: { kind: 'circuit', isTeacher: true } });
+    await vi.waitFor(() => expect(w.find('iframe').exists()).toBe(true));
+    // jsdom 对非 about:blank src 不给 contentDocument——桩一份验证注入链路（Electron 实机为同源真文档/跨域降级）
+    const frame = w.find('iframe').element as HTMLIFrameElement;
+    const stubDoc = document.implementation.createHTMLDocument();
+    Object.defineProperty(frame, 'contentDocument', { value: stubDoc });
+    await w.find('iframe').trigger('load');
+    stubDoc.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(w.emitted('close')).toHaveLength(1);
+  });
+
+  it('负向：学生端不注入 Esc 桥（跟随教师开关，本地 Esc 不关）', async () => {
+    const w = mount(SharedViewOverlay, { props: { kind: 'circuit', isTeacher: false } });
+    await vi.waitFor(() => expect(w.find('iframe').exists()).toBe(true));
+    const frame = w.find('iframe').element as HTMLIFrameElement;
+    const stubDoc = document.implementation.createHTMLDocument();
+    Object.defineProperty(frame, 'contentDocument', { value: stubDoc });
+    await w.find('iframe').trigger('load');
+    stubDoc.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(w.emitted('close')).toBeUndefined();
+  });
+
+  it('正向：focusFrame 可聚焦 iframe（Tab 键盘入口，jsdom focus 为 no-op 不抛）', async () => {
+    const w = mount(SharedViewOverlay, { props: { kind: 'circuit', isTeacher: true } });
+    await vi.waitFor(() => expect(w.find('iframe').exists()).toBe(true));
+    expect(() => w.vm.focusFrame()).not.toThrow();
+  });
+
   it('负向：vendor 寻址失败 → 降级错误态且有重试', async () => {
     (window as any).electronAPI = {
       vendorGetUrl: async () => {

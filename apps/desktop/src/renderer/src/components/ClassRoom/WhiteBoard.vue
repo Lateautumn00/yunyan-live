@@ -45,6 +45,7 @@
 
       <!-- F3.4/F3.5 外挂视图浮层：教师开关+拖拽，学生随 awareness 跟随 -->
       <SharedViewOverlay
+        ref="sharedViewRef"
         :kind="sharedKind"
         :is-teacher="isTeacher"
         @close="closeSharedView"
@@ -2096,6 +2097,8 @@ const {
   userId,
   broadcast: state => provider?.setSharedView(state)
 });
+// F3.4/F3.5 走查修复：浮层组件 ref——Tab 键盘入口经 focusFrame 把焦点送进 iframe
+const sharedViewRef = ref<InstanceType<typeof SharedViewOverlay> | null>(null);
 
 let provider: YjsProvider | null = null;
 let renderer: KonvaRenderer | null = null;
@@ -3653,6 +3656,16 @@ function onSelectionKeydown(e: KeyboardEvent) {
     revocation('next');
     return;
   }
+  // F3.4/F3.5 走查修复：浮层打开时 Tab 直进 iframe（优先于导图 Tab 增子——浮层+导图并存时以浮层为准，
+  // 导图增子可先 Esc/关闭浮层；焦点已在 iframe 内时事件不冒泡父页，由浏览器原生在 iframe 内部遍历）
+  if (key === 'tab' && sharedKind.value) {
+    const frame = document.querySelector('.sv-frame') as HTMLIFrameElement | null;
+    if (frame && document.activeElement !== frame) {
+      e.preventDefault();
+      sharedViewRef.value?.focusFrame();
+      return;
+    }
+  }
   // F4.7：导图上下文 Tab 增子、Enter 增同级（节点编辑框态由其自身处理并截断冒泡）
   if (key === 'tab' || key === 'enter') {
     if (props.isTeacher && (mode.value === 'cur' || mode.value === 'mindmap') && mindContextEl()) {
@@ -3662,6 +3675,11 @@ function onSelectionKeydown(e: KeyboardEvent) {
     }
   }
   if (e.key === 'Escape') {
+    // F3.4/F3.5 走查修复：Esc 关共享视图浮层（仅教师本端；学生跟随广播本就无关）——先于选中清理
+    if (sharedKind.value && props.isTeacher) {
+      closeSharedView();
+      return;
+    }
     // F4.6：截图框选中 Esc = 取消框选（先于选中清理，不透传）
     if (screenshotVisible.value) {
       resetScreenshot();

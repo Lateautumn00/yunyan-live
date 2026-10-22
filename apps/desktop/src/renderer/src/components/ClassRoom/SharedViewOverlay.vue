@@ -68,8 +68,23 @@ watch(
   { immediate: true }
 );
 
+/** Esc 桥：iframe 内按键不冒泡父页（隔离），教师端注入监听 → 关闭浮层；跨域不可达时降级仅父页级 Esc */
+function onFrameKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape') emit('close');
+}
+
+function attachEscapeBridge(): void {
+  if (!props.isTeacher) return;
+  try {
+    frameRef.value?.contentDocument?.addEventListener('keydown', onFrameKeydown);
+  } catch {
+    /* 跨域降级（截图回填同款语义） */
+  }
+}
+
 function onLoad(): void {
   loading.value = false;
+  attachEscapeBridge();
 }
 
 function toggleFullscreen(): void {
@@ -115,11 +130,21 @@ function onDragEnd(_e: PointerEvent): void {
   dragOrigin = null;
 }
 
+/** F3.4/F3.5 走查修复：Tab 键盘入口——父页把焦点送进 iframe（点击聚焦之外的可达路径） */
+function focusFrame(): void {
+  frameRef.value?.contentWindow?.focus();
+}
+
 onBeforeUnmount(() => {
   dragOrigin = null;
+  try {
+    frameRef.value?.contentDocument?.removeEventListener('keydown', onFrameKeydown);
+  } catch {
+    /* 跨域降级 */
+  }
 });
 
-defineExpose({ onHeaderPointerDown, onDragMove, onDragEnd });
+defineExpose({ onHeaderPointerDown, onDragMove, onDragEnd, focusFrame });
 </script>
 
 <template>
