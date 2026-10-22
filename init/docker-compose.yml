@@ -9,9 +9,10 @@
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      # 宿主双绑定：127.0.0.1 本机直连 + 192.168.2.100 跨机（Windows 侧 .env / 演练脚本）；不裸奔 0.0.0.0
+      # 仅回环：127.0.0.1 覆盖宿主（WSL + Windows）本地直连；不裸奔 0.0.0.0
+      # 跨机 LAN 绑定见 docker-compose.lan.yml（Linux 服务器叠加：docker compose -f docker-compose.yml -f docker-compose.lan.yml up -d）
+      # Docker Desktop/WSL 引擎无法绑定非回环宿主 IP（cannot assign requested address），本机勿加 LAN 绑定
       - '127.0.0.1:5432:5432'
-      - '192.168.2.100:5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
       # 批次 5：直载 db/schema-baseline.sql（单一事实源，替代已封存的 init/schema.sql）
@@ -29,9 +30,8 @@
     networks: [edge, backend]
     command: redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy noeviction
     ports:
-      # 宿主双绑定：同 postgres，跨机访问（mail/server/yjs 旧 .env 与跨机演练）走 192.168.2.100
+      # 同 postgres：回环本地直连；LAN 绑定见 docker-compose.lan.yml
       - '127.0.0.1:6379:6379'
-      - '192.168.2.100:6379:6379'
     volumes:
       - redisdata:/data
     healthcheck:
