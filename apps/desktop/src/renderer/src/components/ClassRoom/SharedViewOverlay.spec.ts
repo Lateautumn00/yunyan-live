@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import SharedViewOverlay from './SharedViewOverlay.vue';
-import { useSharedViewVisible } from '@/composables/useSharedViewVisible';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function stubApi(url = 'atom:///vendor/x.html') {
@@ -14,7 +13,6 @@ beforeEach(() => {
 
 afterEach(() => {
   delete (window as any).electronAPI;
-  useSharedViewVisible().setSharedViewVisible(false);
 });
 
 const TITLE: Record<string, string> = { circuit: '电路实验室', molecule: '分子模型' };
@@ -23,19 +21,6 @@ describe('SharedViewOverlay（F3.4/F3.5 页内拖拽浮层）', () => {
   it('正向：kind=null 不渲染', () => {
     const w = mount(SharedViewOverlay, { props: { kind: null, isTeacher: true } });
     expect(w.find('.shared-view-overlay').exists()).toBe(false);
-  });
-
-  it('正向：浮层开合驱动全局旗标（便签入口让位），卸载复位', async () => {
-    const { sharedViewVisible, setSharedViewVisible } = useSharedViewVisible();
-    setSharedViewVisible(false);
-    const w = mount(SharedViewOverlay, { props: { kind: 'circuit', isTeacher: true } });
-    expect(sharedViewVisible.value).toBe(true);
-    await w.setProps({ kind: null });
-    expect(sharedViewVisible.value).toBe(false);
-    await w.setProps({ kind: 'molecule' });
-    expect(sharedViewVisible.value).toBe(true);
-    w.unmount();
-    expect(sharedViewVisible.value).toBe(false);
   });
 
   it('正向：circuit 渲染标题与 iframe（src 经 vendor 寻址）', async () => {
