@@ -74,10 +74,27 @@ describe('SharedViewOverlay（F3.4/F3.5 页内拖拽浮层）', () => {
     expect(w.emitted('close')).toBeUndefined();
   });
 
-  it('正向：focusFrame 可聚焦 iframe（Tab 键盘入口，jsdom focus 为 no-op 不抛）', async () => {
+  it('正向：focusFrame 聚焦 iframe（Tab 键盘入口，jsdom focus 为 no-op 不抛）', async () => {
     const w = mount(SharedViewOverlay, { props: { kind: 'circuit', isTeacher: true } });
     await vi.waitFor(() => expect(w.find('iframe').exists()).toBe(true));
     expect(() => w.vm.focusFrame()).not.toThrow();
+  });
+
+  it('正向：focusFrame 落焦到 iframe 内首个可聚焦元素（可见焦点环路径）', async () => {
+    const w = mount(SharedViewOverlay, { props: { kind: 'circuit', isTeacher: true } });
+    await vi.waitFor(() => expect(w.find('iframe').exists()).toBe(true));
+    const frame = w.find('iframe').element as HTMLIFrameElement;
+    const stubDoc = document.implementation.createHTMLDocument();
+    const btn = stubDoc.createElement('button');
+    stubDoc.body.appendChild(btn);
+    const btnFocus = vi.spyOn(btn, 'focus');
+    const winFocus = vi.fn();
+    Object.defineProperty(frame, 'contentWindow', {
+      value: { focus: winFocus, document: stubDoc }
+    });
+    w.vm.focusFrame();
+    expect(winFocus).toHaveBeenCalledTimes(1);
+    expect(btnFocus).toHaveBeenCalledTimes(1);
   });
 
   it('负向：vendor 寻址失败 → 降级错误态且有重试', async () => {

@@ -130,9 +130,19 @@ function onDragEnd(_e: PointerEvent): void {
   dragOrigin = null;
 }
 
-/** F3.4/F3.5 走查修复：Tab 键盘入口——父页把焦点送进 iframe（点击聚焦之外的可达路径） */
+/** F3.4/F3.5 走查修复：Tab 键盘入口——焦点送进 iframe 并落到首个可聚焦元素（保证可见焦点环）；跨域降级为浏览上下文聚焦 */
 function focusFrame(): void {
-  frameRef.value?.contentWindow?.focus();
+  const win = frameRef.value?.contentWindow;
+  if (!win) return;
+  win.focus();
+  try {
+    const el = win.document.querySelector<HTMLElement>(
+      'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    el?.focus();
+  } catch {
+    /* 跨域降级：已聚焦浏览上下文，下一次 Tab 由浏览器进 iframe 内首个可聚焦元素 */
+  }
 }
 
 onBeforeUnmount(() => {
@@ -253,6 +263,11 @@ defineExpose({ onHeaderPointerDown, onDragMove, onDragEnd, focusFrame });
   width: 100%;
   height: 100%;
   border: 0;
+}
+/* 走查修复：焦点进入浮层（iframe 文档聚焦时 iframe 元素匹配 :focus）→ 整框蓝描边，Tab 后可见反馈 */
+.sv-frame:focus {
+  outline: 2px solid #409eff;
+  outline-offset: -2px;
 }
 .sv-loading,
 .sv-error {
