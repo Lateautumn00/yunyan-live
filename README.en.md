@@ -16,6 +16,8 @@
 - 📝 **Real-time collaborative whiteboard** — Yjs + y-websocket sync across clients, with shapes, freehand smoothing, and STEM tools (math / chemistry / circuit / molecule)
 - 📊 **PPT courseware sharing** — LibreOffice converts uploads to PDF, rendered page-by-page with pdf.js; media library, screenshots, and board-notes export included
 - 📼 **Recording & playback** — Janus recordings are transcoded to MP4; manage, watch replays, and download from the admin console
+- 🛡️ **Classroom moderation** — chat mute / kick / message recall / word filtering, with a full-chain audit log
+- 📈 **Monitoring & alerting** — Prometheus + Alertmanager + node-exporter out of the box, first batch of 8 alert rules
 - 🏗️ **Fully self-hosted** — Docker Compose boots PostgreSQL / Redis / RabbitMQ / Janus; your data never leaves your server
 - 💻 **Cross-platform desktop** — Electron apps for Windows / macOS / Linux with electron-updater auto-update
 - 🔧 **Microservice backend** — NestJS gateway + gRPC services (auth / live / mail / chat / whiteboard), all TypeScript
@@ -111,6 +113,12 @@ cp init/.env.example                  init/.env
 
 # Edit as needed — server addresses and secrets (all .env files are gitignored)
 
+# init/.env has two required values (compose enforces them with :?; leaving them
+# empty makes `docker compose up` fail immediately)
+# Generate: openssl rand -hex 32
+#   RABBITMQ_PASSWORD=    # chat persistence queue credentials
+#   GRPC_SHARED_SECRET=   # shared HMAC identity-signing secret for the five gRPC services
+
 # Generate the password encryption key pair (once, or on rotation)
 pnpm gen:keys --write-env   # RSA-2048: public key ships with the desktop app, private key goes to apps/auth-service/.env
 ```
@@ -165,8 +173,15 @@ Everything except `.env.example` is gitignored — fill in real addresses freely
 ```bash
 cd init
 
-# First start auto-creates tables (schema.sql)
+# First start auto-creates tables (loads db/schema-baseline.sql)
+# Default profile starts infrastructure + monitoring:
+#   PostgreSQL / Redis / RabbitMQ / Janus / Prometheus / Alertmanager / node-exporter
 docker compose up -d --build
+
+# The six business services (gateway/auth/live/mail/chat-ws/yjs-ws) additionally
+# need --profile app. Note: they share ports with host `pnpm dev`
+# (3001/50054/50055/9464-9466) — run one or the other, never both.
+# docker compose --profile app up -d --build
 
 # Check PostgreSQL logs to confirm tables were created
 docker logs yunyan-live-postgres --tail 20
@@ -174,7 +189,7 @@ docker logs yunyan-live-postgres --tail 20
 
 Database init notes:
 
-- On first start, the PostgreSQL container runs `schema.sql` and creates 8 tables
+- On first start, the PostgreSQL container loads `db/schema-baseline.sql` and creates 14 tables (same source of truth as the CI schema gate)
 - Existing data volumes are not re-initialized (skipped when the `pgdata` volume exists)
 - Reset the database: `docker compose down -v && docker compose up -d`
 
@@ -202,10 +217,15 @@ Open the desktop app → register page → email, username, password → pick a 
 ┌─────────────────────────────────────────────────────────┐
 │  Docker                                                  │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐ │
-│  │ PostgreSQL   │ │ Redis        │ │ Janus Gateway    │ │
-│  │ :5432        │ │ :6379        │ │ :8188 (WS)       │ │
-│  │              │ │              │ │ :8088 (HTTP API) │ │
-│  │              │ │              │ │ :20000-20100/UDP │ │
+│  │ PostgreSQL   │ │ Redis        │ │ RabbitMQ         │ │
+│  │ :5432        │ │ :6379        │ │ :5672/:15672     │ │
+│  └──────────────┘ └──────────────┘ └──────────────────┘ │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐ │
+│  │ Janus        │ │ Prometheus   │ │ Alertmanager     │ │
+│  │ :8188 (WS)   │ │ :9090        │ │ :9093            │ │
+│  │ :8088 (HTTP) │ │              │ │ node-exporter    │ │
+│  │ :20000-20100 │ │              │ │ :9100            │ │
+│  │  /UDP        │ │              │ │                  │ │
 │  └──────────────┘ └──────────────┘ └──────────────────┘ │
 │  Recordings: /home/janus/recordings                      │
 └─────────────────────────────────────────────────────────┘
@@ -240,8 +260,13 @@ Open the desktop app → register page → email, username, password → pick a 
 ```bash
 cd init
 
-# Build and start
+# Default: infrastructure + monitoring
+# (PostgreSQL / Redis / RabbitMQ / Janus / Prometheus / Alertmanager / node-exporter)
 docker compose up -d --build
+
+# Business services containerized (gateway/auth/live/mail/chat-ws/yjs-ws).
+# Note: mutually exclusive with host `pnpm dev` on ports 3001/50054/50055/9464-9466.
+docker compose --profile app up -d --build
 
 # Status
 docker compose ps
@@ -256,12 +281,12 @@ docker logs yunyan-live-redis --tail 20
 
 The PostgreSQL container uses `/docker-entrypoint-initdb.d/`:
 
-- On first start it runs the mounted `schema.sql`, creating 8 tables
+- On first start it loads the mounted `db/schema-baseline.sql`, creating 14 tables
 - Mounted via volumes in `docker-compose.yml`:
   ```yaml
   volumes:
     - pgdata:/var/lib/postgresql/data
-    - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    - ../db/schema-baseline.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
   ```
 
 **Reset the database** (wipe all data and recreate tables):
@@ -269,21 +294,27 @@ The PostgreSQL container uses `/docker-entrypoint-initdb.d/`:
 ```bash
 cd init
 docker compose down -v    # delete data volumes
-docker compose up -d      # restart; schema.sql runs again
+docker compose up -d      # restart; schema-baseline.sql runs again
 ```
 
-**Upgrading an existing database (DDL first)**: a fresh database is created automatically by `schema.sql`
-(including `chat_messages`); for an **existing** database, run the idempotent migration manually first:
+**Upgrading an existing database (the migration runner is the only entry)**: a fresh database is
+built straight from the baseline; for an existing schema without migration records (e.g. first-time
+enrollment of a production database), register it first, then upgrade:
 
 ```bash
-docker compose exec -T yunyan-live-postgres psql -U postgres -d yunyan_live < \
-  apps/chat-ws-service/src/migrations/20261007_create_chat_messages.sql
+pnpm db:migrate:status                                       # inspect pending / registration state
+node scripts/db-migrate.mjs --baseline                       # existing schema: register only, no DDL
+pnpm db:migrate                                              # apply everything pending under db/migrations/
 ```
 
-(The migration uses `IF NOT EXISTS` inside a transaction and is safe to re-run.)
+Mechanics, rules, and the SOP for adding new migrations: see [`db/README.md`](db/README.md).
+`apps/*/src/migrations/` is sealed — **do not** run SQL from there by hand; new tables/columns must go
+through `db/migrations/` with `db/schema-baseline.sql` kept in sync (CI schema diff gate enforces this).
 
-> **Backup baseline (TODO)**: no scheduled backups exist yet. Establish a PostgreSQL backup baseline
-> (including the Redis AOF volume) before production deployment; RPO/RTO targets TBD.
+> **Backup baseline**: PostgreSQL daily backups, file-level backups, and restore-drill scripts are in
+> the repo (`scripts/backup-postgres.sh` / `scripts/backup-files.sh` / `scripts/restore-drill.sh`);
+> configure cron on the deployment host — see "Backup & restore" below. Drill records are archived in
+> [`docs/research/drills/restore-drill-record.md`](docs/research/drills/restore-drill-record.md).
 
 ### Verify services
 
@@ -293,6 +324,13 @@ docker exec yunyan-live-postgres pg_isready -U postgres
 
 # Redis
 docker exec yunyan-live-redis redis-cli ping
+
+# RabbitMQ health
+docker exec yunyan-live-rabbitmq rabbitmq-diagnostics -q ping
+
+# Prometheus / Alertmanager (both loopback-only)
+curl http://127.0.0.1:9090/-/healthy
+curl http://127.0.0.1:9093/-/healthy
 
 # Janus WebSocket (requires websocat)
 echo '{"janus":"keepalive","transaction":"test1"}' \
@@ -310,35 +348,79 @@ docker compose down          # stop containers
 docker compose down -v       # stop and delete data volumes (including DB data)
 ```
 
+### Backup & restore
+
+Baseline targets: RPO ≤ 1 day (daily backups; WAL-archival PITR later), RTO ≤ 1h (guaranteed by restore drills).
+
+| Coverage           | Solution                                                                           |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| PostgreSQL         | `scripts/backup-postgres.sh` (pg_dump -Fc, 7-day retention by default)             |
+| RabbitMQ volume    | `scripts/backup-files.sh` (docker volume → tar.gz)                                 |
+| Janus recordings   | `scripts/backup-files.sh` (`RECORDINGS_DIR`, default `/home/janus/recordings`)     |
+| Courseware/uploads | `scripts/backup-files.sh` (`UPLOADS_DIR`, default `apps/server/uploads`)           |
+| Restore drill      | `scripts/restore-drill.sh` (one-shot container import + smoke queries, **run monthly**) |
+| Redis              | AOF enabled (`appendonly everysec`); volume-level archival is enough               |
+| Encryption         | Both backup scripts support `BACKUP_PASSPHRASE` → `openssl aes-256-cbc` (.enc output) |
+
+Example cron on the deployment host (PG backup 03:00 daily, file backup 03:30 daily, drill 04:00 on the 1st of each month):
+
+```bash
+0 3 * * *  BACKUP_PASSPHRASE=$(cat /root/yunyan-backup.key) /path/to/yunyan-live/scripts/backup-postgres.sh /var/backups/yunyan-live
+30 3 * * * BACKUP_PASSPHRASE=$(cat /root/yunyan-backup.key) RECORDINGS_DIR=/home/janus/recordings /path/to/yunyan-live/scripts/backup-files.sh /var/backups/yunyan-live
+0 4 1 * *  /path/to/yunyan-live/scripts/restore-drill.sh "$(ls -t /var/backups/yunyan-live/pg-yunyan_live-*.dump* | head -1)"
+```
+
+> A failed restore drill = an invalid backup. Drill records (date / backup file / table count /
+> verdict) are **appended to `docs/research/drills/restore-drill-record.md`** (append-only);
+> first entry: 2026-10-17 PASS.
+
+> **Offsite / object-storage push (to be configured on the deployment host — no credentials here)**:
+>
+> - [ ] Provide an object-storage bucket (S3/OSS/COS) + credentials on the deployment host at `/root/.yunyan-backup.env` (mode 600, never committed)
+> - [ ] Append `aws s3 cp` (or rclone) at the end of the backup scripts to push `.dump.enc` / `.tar.gz.enc`
+> - [ ] Configure cross-region replication or bucket versioning; wire the local disk watermark WARN lines into monitoring
+> - [ ] A lost key file = unusable backups; store the key offsite (separate from bucket credentials)
+
 ### Docker environment variables
 
 Configure in `init/.env`:
 
-| Variable         | Default             | Description                                  |
-| ---------------- | ------------------- | -------------------------------------------- |
-| `GATEWAY_IP`     | `0.0.0.0`           | Janus bind IP (set to your VM's actual IP)   |
-| `STUN_SERVER`    | `stun.l.google.com` | STUN server (NAT traversal)                  |
-| `STUN_PORT`      | `19302`             | STUN port                                    |
-| `RTP_PORT_RANGE` | `20000-20100`       | RTP media port range                         |
+| Variable                 | Default                    | Description                                                                     |
+| ------------------------ | -------------------------- | ------------------------------------------------------------------------------- |
+| `GATEWAY_IP`             | `0.0.0.0`                  | Janus bind IP (set to your VM's actual IP)                                      |
+| `STUN_SERVER`            | `stun.l.google.com`        | STUN server (NAT traversal)                                                     |
+| `STUN_PORT`              | `19302`                    | STUN port                                                                       |
+| `RTP_PORT_RANGE`         | `20000-20100`              | RTP media port range                                                            |
+| `POSTGRES_PASSWORD`      | falls back to `postgres`   | PostgreSQL password; override in production (only takes effect on first pgdata init) |
+| `JWT_SECRET`             | falls back to `dev-only-jwt-secret` | JWT signing secret; override in production                             |
+| `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | empty (**required**) | Chat-ws persistence queue credentials; compose enforces with `:?`, generate via `openssl rand -hex 32` |
+| `GRPC_SHARED_SECRET`     | empty (**required**)       | Shared HMAC identity-signing secret for the five gRPC services; compose enforces with `:?` |
 
 ## Ports
 
-| Port        | Protocol  | Purpose                              |
-| ----------- | --------- | ------------------------------------ |
-| 3001        | TCP       | Gateway HTTP API                     |
-| 8080        | TCP       | Installer download / auto-update static site (nginx) |
-| 5432        | TCP       | PostgreSQL                           |
-| 6379        | TCP       | Redis                                |
-| 5672        | TCP       | RabbitMQ AMQP (bound to 127.0.0.1)   |
-| 15672       | TCP       | RabbitMQ management UI (127.0.0.1)   |
-| 8088        | TCP       | Janus HTTP API (recording control)   |
-| 8188        | WebSocket | Janus signaling (WebRTC)             |
-| 50051       | gRPC      | Auth Service                         |
-| 50052       | gRPC      | Live Service                         |
-| 50053       | gRPC      | Mail Service                         |
-| 50054       | WebSocket | Chat WS Service                      |
-| 50055       | WebSocket | Yjs WS Service (whiteboard)          |
-| 20000-20100 | UDP       | RTP/RTCP media                       |
+| Port        | Protocol  | Purpose                                                      | Bind                             |
+| ----------- | --------- | ------------------------------------------------------------ | -------------------------------- |
+| 3001        | TCP       | Gateway HTTP API                                             | loopback (compose)               |
+| 8080        | TCP       | Installer download / auto-update static site (nginx)         | all interfaces                   |
+| 5432        | TCP       | PostgreSQL                                                   | 127.0.0.1 + LAN dual-bind        |
+| 6379        | TCP       | Redis                                                        | 127.0.0.1 + LAN dual-bind        |
+| 5672        | TCP       | RabbitMQ AMQP (bound to 127.0.0.1)                           | loopback                         |
+| 15672       | TCP       | RabbitMQ management UI (127.0.0.1)                           | loopback                         |
+| 8088        | TCP       | Janus HTTP API (recording control)                           | all interfaces                   |
+| 8188        | WebSocket | Janus signaling (WebRTC)                                     | all interfaces                   |
+| 50051       | gRPC      | Auth Service                                                 | loopback (default)               |
+| 50052       | gRPC      | Live Service                                                 | loopback (default)               |
+| 50053       | gRPC      | Mail Service                                                 | loopback (default)               |
+| 50054       | WebSocket | Chat WS Service                                              | loopback (compose)               |
+| 50055       | WebSocket | Yjs WS Service (whiteboard)                                  | loopback (compose)               |
+| 20000-20100 | UDP       | RTP/RTCP media                                               | all interfaces                   |
+| 9090        | TCP       | Prometheus (monitoring)                                      | loopback                         |
+| 9093        | TCP       | Alertmanager (alerting)                                      | loopback                         |
+| 9100        | TCP       | node-exporter (host metrics)                                 | loopback                         |
+
+> gRPC services bind `127.0.0.1` by default (`GRPC_HOST` overrides; set `0.0.0.0` for containerized deployments).
+> PostgreSQL/Redis are dual-bound to `127.0.0.1` + `192.168.2.100` by compose (for cross-machine LAN access; never expose to the public internet).
+> Business services (3001/50054/50055) are loopback-only in compose: for cross-machine desktop access, run them via host `pnpm dev`, or add LAN bindings to compose following the pg/redis dual-bind pattern. gRPC metrics ports 9464 (auth) / 9465 (live) / 9466 (mail) are reachable only from host dev or inside the container network — not published to the host.
 
 ## Environment Variables
 
@@ -359,6 +441,11 @@ REDIS_PORT=6379
 
 # LibreOffice (PPT to PDF conversion)
 SOFFICE_PATH=/usr/bin/libreoffice
+
+# HMAC path-signing secret for /uploads reads (>=16 chars); generate a persistent
+# value with `openssl rand -hex 32` on the deployment host. If missing, each restart
+# randomizes it and every previously issued upload URL 404s.
+UPLOAD_SIGNING_SECRET=
 
 # SMTP
 SMTP_HOST=smtp.qq.com
@@ -395,32 +482,37 @@ VITE_UPLOAD_PPT_URL=http://192.168.x.x:3001/upload/ppt
 
 ### Users (`/user`)
 
-| Method | Path                          | Description      | Auth |
-| ------ | ----------------------------- | ---------------- | ---- |
-| POST   | `/user/user/login`          | Login            | No   |
-| POST   | `/user/user/register`       | Register         | No   |
-| POST   | `/user/user/logout`         | Logout           | No   |
-| GET    | `/user/user/getUserMsg`     | Get user profile | JWT  |
-| POST   | `/user/user/updatePassword` | Update password  | JWT  |
-| GET    | `/user/user/getNowTime`     | Server time      | No   |
+| Method | Path                           | Description                   | Auth |
+| ------ | ------------------------------ | ----------------------------- | ---- |
+| POST   | `/user/user/login`          | Login                         | No   |
+| POST   | `/user/user/register`       | Register                      | No   |
+| POST   | `/user/user/logout`         | Logout                        | JWT  |
+| POST   | `/user/user/resetPassword`  | Reset password (email code)   | No   |
+| POST   | `/user/user/changePassword` | Change password               | JWT  |
+| GET    | `/user/user/getUserMsg`     | Get user profile              | JWT  |
+| POST   | `/user/user/updateUserName` | Update display name           | JWT  |
+| GET    | `/user/user/getNowTime`     | Server time                   | No   |
 
 ### Live (`/live`)
 
-| Method | Path                                                   | Description           | Auth |
-| ------ | ------------------------------------------------------ | --------------------- | ---- |
-| POST   | `/live/liveInfo/createLive`                          | Create live room      | JWT  |
-| POST   | `/live/liveInfo/joinLive`                            | Join by code          | No   |
-| GET    | `/live/liveInfo/showRoomInfo`                        | Room info             | No   |
-| PUT    | `/live/liveInfo/changeLiveStatus`                    | Change live status    | No   |
-| POST   | `/live/liveInfo/cmsLiveList`                         | Live list             | No   |
-| GET    | `/live/liveInfo/cmsLiveDetail`                       | Live detail           | No   |
-| DELETE | `/live/liveInfo/deleteLive`                          | Delete live room      | JWT  |
-| PUT    | `/live/liveInfo/updateLiveCode`                      | Update join code      | No   |
-| GET    | `/live/liveInfo/getCurrentIp`                        | Current IP            | No   |
-| GET    | `/live/liveInfo/videoList`                           | Recording list        | No   |
-| GET    | `/live/liveInfo/videoDetail`                         | Recording detail      | No   |
-| DELETE | `/live/liveInfo/deleteVideo`                         | Delete recording      | JWT  |
-| DELETE | `/live/liveInfo/deleteVideoByIds`                    | Batch delete          | JWT  |
+> All endpoints require JWT except `showRoomInfo`. The full list (check-in / transfer / courseware /
+> board snapshots / watch time, etc.) lives in `docs/apis/server/live.md` and `docs/apis/server/checkin.md`.
+
+| Method | Path                                | Description           | Auth |
+| ------ | ----------------------------------- | --------------------- | ---- |
+| POST   | `/live/liveInfo/createLive`          | Create live room      | JWT  |
+| POST   | `/live/liveInfo/joinLive`            | Join by code          | JWT  |
+| GET    | `/live/liveInfo/showRoomInfo`        | Room info             | No   |
+| PUT    | `/live/liveInfo/changeLiveStatus`    | Change live status    | JWT  |
+| POST   | `/live/liveInfo/cmsLiveList`         | Live list             | JWT  |
+| GET    | `/live/liveInfo/cmsLiveDetail`       | Live detail           | JWT  |
+| DELETE | `/live/liveInfo/deleteLive`          | Delete live room      | JWT  |
+| PUT    | `/live/liveInfo/updateLiveCode`      | Update join code      | JWT  |
+| GET    | `/live/liveInfo/studentRooms`        | Student's room list   | JWT  |
+| GET    | `/live/liveInfo/videoList`           | Recording list        | JWT  |
+| GET    | `/live/liveInfo/videoDetail`         | Recording detail      | JWT  |
+| DELETE | `/live/liveInfo/deleteVideo`         | Delete recording      | JWT  |
+| DELETE | `/live/liveInfo/deleteVideoByIds`    | Batch delete          | JWT  |
 | GET    | `/live/liveInfo/downloadRecording/:id`               | Check download status | JWT  |
 | GET    | `/live/liveInfo/downloadRecording/:id?download=true` | Download MP4          | JWT  |
 
@@ -504,6 +596,14 @@ Run from the repo root:
 | `pnpm test`              | Run all tests                        |
 | `pnpm test:desktop`      | Desktop tests                        |
 | `pnpm format`            | Prettier format                      |
+| `pnpm format:check`      | Prettier format check                |
+| `pnpm db:migrate`        | Apply pending database migrations    |
+| `pnpm db:migrate:status` | Show migration pending/registration  |
+| `pnpm gen:keys`          | Generate password-encryption key pair |
+| `pnpm audit:gate`        | Audit-log integrity gate             |
+
+The `scripts/` directory also contains ops shell scripts (backup / restore drills, partition & index
+EXPLAIN drills, retention cleanup, etc.) — see each script's header comment and the "Backup & restore" section.
 
 Inside `apps/desktop`:
 

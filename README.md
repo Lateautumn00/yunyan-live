@@ -16,6 +16,8 @@
 - 📝 **实时协作白板** —— Yjs + y-websocket 多端同步，手绘规整、图形、数学/化学/电路/分子等学科工具
 - 📊 **PPT 课件直播** —— 上传后 LibreOffice 转 PDF、pdf.js 按页渲染，支持素材收藏、截图与板书导出
 - 📼 **录制与回放** —— Janus 录制自动转码 MP4，后台管理回放列表，支持在线观看与下载
+- 🛡️ **课堂管控** —— 聊天禁言/踢出/撤回/敏感词过滤，全链路审计日志
+- 📈 **监控告警** —— Prometheus + Alertmanager + node-exporter 一键起，首批 8 条告警
 - 🏗️ **全栈自托管** —— Docker Compose 一键启动 PostgreSQL / Redis / RabbitMQ / Janus，数据完全自持
 - 💻 **三平台桌面端** —— Electron 打包 Windows / macOS / Linux，支持 electron-updater 自动更新
 - 🔧 **微服务后端** —— NestJS 网关 + gRPC 微服务（认证/直播/邮件/聊天/白板），TypeScript 全栈
@@ -47,35 +49,32 @@
 yunyan-live/
 ├── apps/
 │   ├── desktop/                          # Electron 桌面端
-│   │   ├── src/renderer/src/
-│   │   │   ├── pages/
-│   │   │   │   ├── index.vue             # 首页（登录/参加码）
-│   │   │   │   ├── classroom/            # 教室页面
-│   │   │   │   │   ├── smallteacher.vue  # 小班-教师端
-│   │   │   │   │   ├── smallstudent.vue  # 小班-学生端
-│   │   │   │   │   ├── largeteacher.vue  # 大班-教师端
-│   │   │   │   │   └── largestudent.vue  # 大班-学生端
-│   │   │   │   └── backstage/            # 后台管理
-│   │   │   └── components/
-│   │   │       └── ClassRoom/
-│   │   │           ├── Small/Video.vue   # 小班视频组件
-│   │   │           ├── Small/Chat.vue    # 小班聊天组件
-│   │   │           ├── Video.vue         # 大班视频组件
-│   │   │           ├── Chat.vue          # 大班聊天组件
-│   │   │           └── WhiteBoard.vue    # 白板组件
-│   │   ├── .env.example                     # 桌面端环境模板（入库）
-│   │   ├── .env.development                 # 开发用，pnpm dev:desktop 读取（不提交）
-│   │   └── .env.production                  # 打包用，pnpm build:desktop 读取（不提交）
+│   │   ├── src/
+│   │   │   ├── main/                     # 主进程（录制/自动更新/IPC/媒体）
+│   │   │   └── renderer/src/
+│   │   │       ├── pages/
+│   │   │       │   ├── login/            # 登录页
+│   │   │       │   ├── join/             # 分享链接加入页（deep link）
+│   │   │       │   └── classroom/        # 教室（大/小班统一入口 Classroom.vue）
+│   │   │       ├── components/
+│   │   │       │   ├── ClassRoom/        # 教室组件（视频/聊天/白板/签到/回放…）
+│   │   │       │   ├── teacher/          # 教师工具（分享链接/房间操作/课件上传）
+│   │   │       │   ├── LandingPage/      # 设备测试等首页组件
+│   │   │       │   └── Notes/            # 便签
+│   │   │       └── composables/          # 聊天虚拟窗口/签到/房间等组合式函数
+│   │   ├── .env.example                  # 桌面端环境模板（入库）
+│   │   ├── .env.development              # 开发用，pnpm dev:desktop 读取（不提交）
+│   │   └── .env.production               # 打包用，pnpm build:desktop 读取（不提交）
 │   │
-│   ├── server/                           # API 网关 (NestJS)
+│   ├── server/                           # API 网关 (NestJS :3001)
 │   │   └── src/
-│   │       ├── auth/                     # JWT 认证模块
+│   │       ├── auth/                     # JWT 认证 + 登录限流
 │   │       ├── users/                    # 用户模块
-│   │       ├── live/                     # 直播模块（房间 CRUD + 录制下载）
+│   │       ├── live/                     # 直播模块（房间 CRUD + 签到 + 录制下载）
 │   │       ├── gateway/                  # WebSocket Chat Gateway
-│   │       ├── janus/                    # Janus HTTP API 客户端
-│   │       ├── upload/                   # 文件上传（图片/PPT）
-│   │       └── common/                   # 公共模块（拦截器/守卫/装饰器）
+│   │       ├── upload/                   # 文件上传（图片/PPT，HMAC 路径签名）
+│   │       ├── mail/                     # SMTP 邮件中继
+│   │       └── common/                   # 公共模块（拦截器/守卫/gRPC helper）
 │   │
 │   ├── auth-service/                     # 认证微服务 (gRPC :50051)
 │   ├── live-service/                     # 直播微服务 (gRPC :50052)
@@ -90,18 +89,28 @@ yunyan-live/
 │   ├── types/                            # TypeScript 类型定义
 │   ├── utils/                            # 通用工具函数
 │   ├── validation/                       # 表单校验规则
-│   └── shared/                           # 共享代码
+│   ├── shared/                           # 共享实体（TypeORM entities）
+│   └── nest-shared/                      # Nest 共享模块（指标/审计/通知/会话管控/gRPC 鉴权）
 │
-├── init/                               # Docker 部署（Janus + PostgreSQL + Redis）
-│   ├── Dockerfile                      # 多阶段构建 Janus 镜像
-│   ├── docker-compose.yml              # 容器编排
-│   ├── entrypoint.sh                   # 启动脚本（生成 Janus 配置）
-│   ├── .env.example                    # Docker 环境变量模板
-│   └── yunyan-live-download/           # 安装包下载/自动更新静态站（nginx :8080）
+├── db/
+│   ├── schema-baseline.sql               # 期望态 schema 快照（与 CI diff 门禁同一事实源）
+│   ├── migrations/                       # forward-only 迁移（唯一 DDL 入口）
+│   └── README.md                         # 迁移机制与新增迁移 SOP
+│
+├── scripts/                              # 迁移/备份/恢复演练/密钥生成等运维脚本
+│
+├── init/                                 # Docker 部署（基础设施 + --profile app 业务服务 + 监控）
+│   ├── Dockerfile                        # 多阶段构建 Janus 镜像
+│   ├── docker-compose.yml                # 容器编排
+│   ├── entrypoint.sh                     # 启动脚本（生成 Janus 配置）
+│   ├── .env.example                      # Docker 环境变量模板
+│   ├── monitoring/                       # Prometheus 告警规则 / Alertmanager 配置
+│   └── yunyan-live-download/             # 安装包下载/自动更新静态站（nginx :8080）
 │       ├── docker-compose.yml
 │       ├── nginx.conf
-│       └── dist/{win,mac,linux}/       # 更新目录（.gitkeep 占位，二进制不入库）
+│       └── dist/{win,mac,linux}/         # 更新目录（.gitkeep 占位，二进制不入库）
 │
+├── docs/                                 # API 文档（apis/）/ 发版手册 / 研究记录（research/）
 ├── package.json                          # 根 package.json（pnpm workspace）
 ├── pnpm-workspace.yaml                   # pnpm 工作区配置
 └── turbo.json                            # Turborepo 任务配置
@@ -180,6 +189,11 @@ cp init/.env.example                  init/.env
 
 # 按需编辑，填入你的服务器地址与密钥（各 .env 均已被 gitignore）
 
+# init/.env 有两个必填项（compose 以 :? 强制，留空 docker compose up 直接失败）
+# 生成口令: openssl rand -hex 32
+#   RABBITMQ_PASSWORD=    # chat 落库链路凭据
+#   GRPC_SHARED_SECRET=   # 五服务 gRPC HMAC 身份签名共享密钥
+
 # 生成密码加密密钥对（首次或轮换时执行一次）
 pnpm gen:keys --write-env   # RSA-2048：公钥内置桌面端，私钥写入 apps/auth-service/.env
 ```
@@ -235,7 +249,12 @@ VITE_UPLOAD_PPT_URL=http://192.168.x.x:3001/upload/ppt
 cd init
 
 # 首次启动会自动建表（直载 db/schema-baseline.sql）
+# 缺省启动基础设施 + 监控：PostgreSQL / Redis / RabbitMQ / Janus / Prometheus / Alertmanager / node-exporter
 docker compose up -d --build
+
+# 业务 6 服务（gateway/auth/live/mail/chat-ws/yjs-ws）容器化运行时再加 --profile app
+# 注意：与宿主机 pnpm dev 同端口互斥（3001/50054/50055/9464-9466），二选一运行
+# docker compose --profile app up -d --build
 
 # 查看 PostgreSQL 日志，确认表已创建
 docker logs yunyan-live-postgres --tail 20
@@ -271,10 +290,15 @@ pnpm dev:desktop   # Electron 桌面端
 ┌─────────────────────────────────────────────────────────┐
 │  Docker                                                  │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐ │
-│  │ PostgreSQL   │ │ Redis        │ │ Janus Gateway    │ │
-│  │ :5432        │ │ :6379        │ │ :8188 (WS)       │ │
-│  │              │ │              │ │ :8088 (HTTP API) │ │
-│  │              │ │              │ │ :20000-20100/UDP │ │
+│  │ PostgreSQL   │ │ Redis        │ │ RabbitMQ         │ │
+│  │ :5432        │ │ :6379        │ │ :5672/:15672     │ │
+│  └──────────────┘ └──────────────┘ └──────────────────┘ │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐ │
+│  │ Janus        │ │ Prometheus   │ │ Alertmanager     │ │
+│  │ :8188 (WS)   │ │ :9090        │ │ :9093            │ │
+│  │ :8088 (HTTP) │ │              │ │ node-exporter    │ │
+│  │ :20000-20100 │ │              │ │ :9100            │ │
+│  │  /UDP        │ │              │ │                  │ │
 │  └──────────────┘ └──────────────┘ └──────────────────┘ │
 │  录制文件: /home/janus/recordings                        │
 └─────────────────────────────────────────────────────────┘
@@ -309,8 +333,12 @@ pnpm dev:desktop   # Electron 桌面端
 ```bash
 cd init
 
-# 构建并启动
+# 缺省：基础设施 + 监控（PostgreSQL / Redis / RabbitMQ / Janus / Prometheus / Alertmanager / node-exporter）
 docker compose up -d --build
+
+# 业务 6 服务容器化（gateway/auth/live/mail/chat-ws/yjs-ws）
+# 注意：与宿主机 pnpm dev 同端口互斥（3001/50054/50055/9464-9466），二选一运行
+docker compose --profile app up -d --build
 
 # 查看状态
 docker compose ps
@@ -367,6 +395,13 @@ docker exec yunyan-live-postgres pg_isready -U postgres
 
 # Redis
 docker exec yunyan-live-redis redis-cli ping
+
+# RabbitMQ 管理台（浏览器）或健康检查
+docker exec yunyan-live-rabbitmq rabbitmq-diagnostics -q ping
+
+# Prometheus / Alertmanager（均只绑 127.0.0.1）
+curl http://127.0.0.1:9090/-/healthy
+curl http://127.0.0.1:9093/-/healthy
 
 # Janus WebSocket（需要 websocat）
 echo '{"janus":"keepalive","transaction":"test1"}' \
@@ -427,29 +462,37 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 | `STUN_PORT`      | `19302`             | STUN 端口                          |
 | `RTP_PORT_RANGE` | `20000-20100`       | RTP 媒体流端口范围                 |
 | `POSTGRES_PASSWORD` | 回退 `postgres`  | PostgreSQL 口令；生产部署务必覆盖（仅 pgdata 卷首次初始化生效） |
-| `UPLOAD_SIGNING_SECRET` | 进程随机（失效） | server `/uploads` 读取签名密钥（≥16 字符）；部署机用 `openssl rand -hex 32` 生成持久值，缺失则重启后历史上传 URL 全部 404 |
+| `JWT_SECRET`     | 回退 `dev-only-jwt-secret` | JWT 签名密钥；生产部署务必覆盖 |
+| `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | 空（**必填**） | chat-ws 落库链路凭据；compose 以 `:?` 强制，口令 `openssl rand -hex 32` |
+| `GRPC_SHARED_SECRET` | 空（**必填**） | 五服务 gRPC HMAC 身份签名共享密钥（GAP-S10b）；compose 以 `:?` 强制 |
 
 ## 端口说明
 
 | 端口        | 协议      | 用途                                 | 绑定           |
-| ----------- | --------- | ------------------------------------ | -------------- |
-| 3001        | TCP       | Gateway HTTP API                     | 全接口         |
-| 8080        | TCP       | 安装包下载/自动更新静态站（nginx）   | 全接口         |
-| 5432        | TCP       | PostgreSQL 数据库                    | 仅本机         |
-| 6379        | TCP       | Redis 缓存                           | 仅本机         |
-| 5672        | TCP       | RabbitMQ AMQP（仅 127.0.0.1 绑定）   | 仅本机         |
-| 15672       | TCP       | RabbitMQ 管理台（仅 127.0.0.1 绑定） | 仅本机         |
-| 8088        | TCP       | Janus HTTP API（录制控制）           | 全接口         |
-| 8188        | WebSocket | Janus 信令（WebRTC 连接）            | 全接口         |
-| 50051       | gRPC      | Auth Service（认证）                 | 仅本机（默认） |
-| 50052       | gRPC      | Live Service（直播）                 | 仅本机（默认） |
-| 50053       | gRPC      | Mail Service（邮件）                 | 仅本机（默认） |
-| 50054       | WebSocket | Chat WS Service（聊天）              | 全接口         |
-| 50055       | WebSocket | Yjs WS Service（白板）               | 全接口         |
-| 20000-20100 | UDP       | RTP/RTCP 媒体流                      | 全接口         |
+| ----------- | --------- | ------------------------------------ | ------------------------------ |
+| 3001        | TCP       | Gateway HTTP API                     | 仅本机（compose）              |
+| 8080        | TCP       | 安装包下载/自动更新静态站（nginx）   | 全接口                         |
+| 5432        | TCP       | PostgreSQL 数据库                    | 127.0.0.1 + LAN 双绑定         |
+| 6379        | TCP       | Redis 缓存                           | 127.0.0.1 + LAN 双绑定         |
+| 5672        | TCP       | RabbitMQ AMQP（仅 127.0.0.1 绑定）   | 仅本机                         |
+| 15672       | TCP       | RabbitMQ 管理台（仅 127.0.0.1 绑定） | 仅本机                         |
+| 8088        | TCP       | Janus HTTP API（录制控制）           | 全接口                         |
+| 8188        | WebSocket | Janus 信令（WebRTC 连接）            | 全接口                         |
+| 50051       | gRPC      | Auth Service（认证）                 | 仅本机（默认）                 |
+| 50052       | gRPC      | Live Service（直播）                 | 仅本机（默认）                 |
+| 50053       | gRPC      | Mail Service（邮件）                 | 仅本机（默认）                 |
+| 50054       | WebSocket | Chat WS Service（聊天）              | 仅本机（compose）              |
+| 50055       | WebSocket | Yjs WS Service（白板）               | 仅本机（compose）              |
+| 20000-20100 | UDP       | RTP/RTCP 媒体流                      | 全接口                         |
+| 9090        | TCP       | Prometheus（监控）                   | 仅本机                         |
+| 9093        | TCP       | Alertmanager（告警）                 | 仅本机                         |
+| 9100        | TCP       | node-exporter（宿主指标）            | 仅本机                         |
 
 > gRPC 服务默认仅绑 `127.0.0.1`（各服务 `GRPC_HOST` 可覆盖，容器化部署时设 `0.0.0.0`）；
-> PostgreSQL/Redis 端口由 compose 绑定 `127.0.0.1`，勿发布到公网。
+> PostgreSQL/Redis 由 compose 双绑定 `127.0.0.1` + `192.168.2.100`（LAN 跨机用，勿发布到公网）。
+> 业务服务（3001/50054/50055）compose 只绑 `127.0.0.1`：跨机访问桌面端时改用宿主机 `pnpm dev` 运行业务服务，
+> 或参照 pg/redis 双绑定在 compose 增加 LAN 绑定。gRPC metrics 端口 9464（auth）/9465（live）/9466（mail）
+> 仅宿主 dev 或容器网络内可达，未发布到宿主。
 
 ## 环境变量配置
 
@@ -470,6 +513,10 @@ REDIS_PORT=6379
 
 # LibreOffice (PPT to PDF conversion)
 SOFFICE_PATH=/usr/bin/libreoffice
+
+# /uploads 读取签名密钥（HMAC 路径签名，≥16 字符）；部署机用 openssl rand -hex 32
+# 生成持久值，缺失则进程每次重启随机生成、历史上传 URL 全部 404
+UPLOAD_SIGNING_SECRET=
 
 # SMTP
 SMTP_HOST=smtp.qq.com
@@ -620,6 +667,14 @@ Janus 录制文件命名：
 | `pnpm test`              | 运行所有测试               |
 | `pnpm test:desktop`      | 运行桌面端测试             |
 | `pnpm format`            | Prettier 格式化代码        |
+| `pnpm format:check`      | Prettier 格式检查          |
+| `pnpm db:migrate`        | 应用待办数据库迁移         |
+| `pnpm db:migrate:status` | 查看迁移待办/登记状态      |
+| `pnpm gen:keys`          | 生成密码加密 RSA 密钥对    |
+| `pnpm audit:gate`        | 审计日志完整性门禁         |
+
+`scripts/` 目录另含运维 shell 脚本（备份/恢复演练/分区与索引 EXPLAIN 演练/留存清理等），
+用法见脚本头部注释与「备份与恢复」一节。
 
 在 `apps/desktop` 目录下：
 
