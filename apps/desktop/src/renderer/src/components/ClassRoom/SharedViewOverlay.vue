@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { vendorUrl } from './whiteboard/vendorUrl';
 import { captureCanvasFromDoc } from './whiteboard/sharedViewCapture';
 import type { SharedViewKind } from './whiteboard/types';
+import { useSharedViewVisible } from '@/composables/useSharedViewVisible';
 
 /** F3.4/F3.5 页内拖拽浮层：外挂工具视图宿主（教师开关+拖拽，学生跟随只读） */
 const props = defineProps<{
@@ -16,6 +17,15 @@ const emit = defineEmits<{
   (e: 'close'): void;
   (e: 'capture', dataUrl: string): void;
 }>();
+
+// 全局让位：便签悬浮球 z1500 压过浮层 z40——浮层打开期间隐藏便签入口（App 侧消费），卸载复位
+const { setSharedViewVisible } = useSharedViewVisible();
+watch(
+  () => props.kind,
+  kind => setSharedViewVisible(!!kind),
+  { immediate: true }
+);
+onBeforeUnmount(() => setSharedViewVisible(false));
 
 const REL: Record<SharedViewKind, string> = {
   circuit: 'circuitjs/circuitjs.html',

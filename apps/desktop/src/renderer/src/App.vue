@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router';
 import { useUserStore } from '@/store/user';
 import { useUpdater } from '@/composables/useUpdater';
 import { useStickyNotes } from '@/composables/useStickyNotes';
+import { useSharedViewVisible } from '@/composables/useSharedViewVisible';
 import StickyNoteFab from '@/components/Notes/StickyNoteFab.vue';
 import StickyNoteDialog from '@/components/Notes/StickyNoteDialog.vue';
 
@@ -61,6 +62,8 @@ const dialogTitle = computed(() => {
 
 // 便签全局挂载门控：登录态 + 非登录页（必须在脚本侧；模板内读 localStorage 不是响应式依赖）
 const showStickyNotes = computed(() => route.path !== '/login' && !!localStorage.getItem('token'));
+// 外挂视图（电路/分子浮层）打开期间隐藏便签悬浮球让位（z1500 会浮进 iframe），对话框不受影响
+const { sharedViewVisible } = useSharedViewVisible();
 
 function onPagehide(): void {
   void flushStickyNotes();
@@ -98,7 +101,7 @@ watch(
   <div id="app">
     <router-view />
     <template v-if="showStickyNotes">
-      <StickyNoteFab />
+      <StickyNoteFab v-if="!sharedViewVisible" />
       <StickyNoteDialog />
     </template>
     <el-dialog

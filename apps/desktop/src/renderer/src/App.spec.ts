@@ -4,6 +4,8 @@ import { setActivePinia } from 'pinia';
 import type { ElectronApi } from '@yunyan-live/ipc';
 import { ok, mountPage } from '@/testing/utils';
 import { useUpdater } from '@/composables/useUpdater';
+import { useSharedViewVisible } from '@/composables/useSharedViewVisible';
+import StickyNoteDialog from '@/components/Notes/StickyNoteDialog.vue';
 import App from '@/App.vue';
 
 const mocks = vi.hoisted(() => ({
@@ -67,6 +69,7 @@ beforeEach(() => {
 afterEach(() => {
   wrapper?.unmount();
   wrapper = undefined;
+  useSharedViewVisible().setSharedViewVisible(false);
   vi.useRealTimers();
   vi.clearAllMocks();
 });
@@ -159,5 +162,13 @@ describe('App.vue', () => {
     });
     wrapper = mounted.wrapper;
     expect(wrapper.find('.sticky-note-fab').exists()).toBe(false);
+  });
+
+  it('外挂视图打开期间隐藏便签入口（对话框保持挂载）', async () => {
+    localStorage.setItem('token', 'T1');
+    useSharedViewVisible().setSharedViewVisible(true);
+    const w = await mountApp();
+    expect(w.find('.sticky-note-fab').exists()).toBe(false);
+    expect(w.findComponent(StickyNoteDialog).exists()).toBe(true);
   });
 });
