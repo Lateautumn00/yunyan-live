@@ -198,7 +198,8 @@ defineExpose({ onHeaderPointerDown, onDragMove, onDragEnd, focusFrame });
 .shared-view-overlay {
   position: absolute;
   inset: 0;
-  z-index: 40;
+  /* 层级槽位：便签球 1500 < 本浮层 1600 < EP 弹窗/EmojiPicker 2000 < el-message 3000 */
+  z-index: 1600;
 }
 .shared-view-overlay.fullscreen {
   background: rgba(0, 0, 0, 0.45);
