@@ -1678,17 +1678,17 @@ function placeAsset(a: FavoriteAsset): void {
   closeAssets();
 }
 
-/** F3.4 外挂视图截图回填：iframe canvas dataURL → 当前页 image 元素（视口中心落点） */
-function onSharedCapture(dataUrl: string): void {
-  if (!provider || !renderer || !dataUrl) return;
+/** F3.4 外挂视图截图回填：主视图 canvas dataURL → 当前页 image 元素（保源宽高比，视口中心落点） */
+function onSharedCapture(capture: { url: string; width: number; height: number }): void {
+  if (!provider || !renderer || !capture.url) return;
   const w = 240;
-  const h = 180;
+  const h = Math.min(600, Math.max(60, Math.round((w * capture.height) / capture.width)));
   const stage = renderer.getStage();
   const lp = toLayerCoords({ x: stage.width() / 2, y: stage.height() / 2 });
   provider.addShape({
     id: uid(),
     type: 'image',
-    url: dataUrl,
+    url: capture.url,
     x: Math.round(lp.x - w / 2),
     y: Math.round(lp.y - h / 2),
     width: w,

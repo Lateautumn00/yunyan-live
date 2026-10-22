@@ -158,7 +158,9 @@ describe('SharedViewOverlay（F3.4/F3.5 页内拖拽浮层）', () => {
     canvas.toDataURL = () => 'data:image/png;base64,CAP';
     doc!.body.appendChild(canvas);
     await w.find('.sv-capture').trigger('click');
-    expect(w.emitted('capture')?.[0]).toEqual(['data:image/png;base64,CAP']);
+    expect(w.emitted('capture')?.[0]?.[0]).toMatchObject({
+      url: 'data:image/png;base64,CAP'
+    });
     w.unmount();
   });
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { vendorUrl } from './whiteboard/vendorUrl';
-import { captureCanvasFromDoc } from './whiteboard/sharedViewCapture';
+import { captureCanvasFromDoc, type SharedViewCapture } from './whiteboard/sharedViewCapture';
 import type { SharedViewKind } from './whiteboard/types';
 
 /** F3.4/F3.5 页内拖拽浮层：外挂工具视图宿主（教师开关+拖拽，学生跟随只读） */
@@ -14,7 +14,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'capture', dataUrl: string): void;
+  (e: 'capture', payload: SharedViewCapture): void;
 }>();
 
 const REL: Record<SharedViewKind, string> = {
@@ -91,11 +91,11 @@ function toggleFullscreen(): void {
   fullscreen.value = !fullscreen.value;
 }
 
-/** F3.4 截图回填：取 iframe 内 canvas → emit 给父页落画布（无 canvas/跨域不 emit） */
+/** F3.4 截图回填：取 iframe 主视图 canvas → emit 给父页落画布（无 canvas/跨域不 emit） */
 function captureToBoard(): void {
   const frame = frameRef.value;
-  const dataUrl = captureCanvasFromDoc(frame?.contentDocument ?? null);
-  if (dataUrl) emit('capture', dataUrl);
+  const capture = captureCanvasFromDoc(frame?.contentDocument ?? null);
+  if (capture) emit('capture', capture);
 }
 
 const frameRef = ref<HTMLIFrameElement | null>(null);
