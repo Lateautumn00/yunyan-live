@@ -9,10 +9,12 @@
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      # 仅回环：127.0.0.1 覆盖宿主（WSL + Windows）本地直连；不裸奔 0.0.0.0
-      # 跨机 LAN 绑定见 docker-compose.lan.yml（Linux 服务器叠加：docker compose -f docker-compose.yml -f docker-compose.lan.yml up -d）
-      # Docker Desktop/WSL 引擎无法绑定非回环宿主 IP（cannot assign requested address），本机勿加 LAN 绑定
+      # 双条目，compose 渲染后同值自动去重：
+      # - 本机（Docker Desktop/WSL）：不设 LAN_IP → 两条同为 127.0.0.1 → 去重为仅回环
+      #   （引擎无法绑非回环宿主 IP，cannot assign requested address；WSL+Windows 经回环中继双向可达）
+      # - 服务器：.env 设 LAN_IP=192.168.2.100 → 回环 + LAN 双绑（跨机直连，不裸奔 0.0.0.0）
       - '127.0.0.1:5432:5432'
+      - '${LAN_IP:-127.0.0.1}:5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
       # 批次 5：直载 db/schema-baseline.sql（单一事实源，替代已封存的 init/schema.sql）
@@ -30,8 +32,9 @@
     networks: [edge, backend]
     command: redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy noeviction
     ports:
-      # 同 postgres：回环本地直连；LAN 绑定见 docker-compose.lan.yml
+      # 同 postgres：本机去重为回环；服务器设 LAN_IP 后双绑
       - '127.0.0.1:6379:6379'
+      - '${LAN_IP:-127.0.0.1}:6379:6379'
     volumes:
       - redisdata:/data
     healthcheck:
