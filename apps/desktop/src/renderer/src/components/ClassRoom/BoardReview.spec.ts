@@ -59,14 +59,16 @@ function makeSnapshotB64(
   opts?: {
     viewport?: { x: number; y: number; zoom: number; sw?: number; sh?: number };
     startIndex?: number;
+    darkFirst?: boolean;
   }
 ): string {
   const doc = new Y.Doc();
   const pages = doc.getArray<Y.Map<any>>('pages');
-  for (const id of pageIds) {
+  pageIds.forEach((id, i) => {
     const p = new Y.Map();
     p.set('id', id);
     pages.push([p]);
+    if (i === 0 && opts?.darkFirst) p.set('dark', true);
     const elements = new Y.Array();
     p.set('elements', elements);
     const el = new Y.Map();
@@ -75,7 +77,7 @@ function makeSnapshotB64(
     el.set('x', 5);
     el.set('y', 6);
     elements.push([el]);
-  }
+  });
   if (opts?.startIndex !== undefined) {
     doc.getMap<number>('currentPageIndex').set('index', opts.startIndex);
   }
@@ -132,7 +134,7 @@ describe('BoardReview 课后回看（F6.3）', () => {
       data: { items: [{ id: 's1', roomId: 'r1' }], hasMore: false }
     });
     liveMocks.boardSnapshot.mockResolvedValue({
-      data: { id: 's1', data: makeSnapshotB64(['p1', 'p2']) }
+      data: { id: 's1', data: makeSnapshotB64(['p1', 'p2'], { darkFirst: true }) }
     });
     const wrapper = mountReview();
     await vi.waitFor(() => {
@@ -144,6 +146,7 @@ describe('BoardReview 课后回看（F6.3）', () => {
       expect(vm.pages.map(p => p.id)).toEqual(['p1', 'p2']);
     });
     expect(vm.selectedId).toBe('s1');
+    expect(wrapper.find('.br-stage.dark').exists()).toBe(true);
     expect(liveMocks.boardSnapshot).toHaveBeenCalledWith('s1');
     wrapper.unmount();
   });

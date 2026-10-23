@@ -22,7 +22,7 @@
       <div class="br-view">
         <div v-if="viewLoading" class="br-state">快照生成中…</div>
         <div v-else-if="viewError" class="br-state br-error">{{ viewError }}</div>
-        <div v-else ref="stageEl" class="br-stage" />
+        <div v-else ref="stageEl" class="br-stage" :class="{ dark: pageDark }" />
         <div v-if="pages.length > 1" class="br-pagenav">
           <span class="br-nav" @click="showPageIdx(Math.max(0, pageIdx - 1))">上一页</span>
           <span class="br-num">{{ pageIdx + 1 }}/{{ pages.length }}</span>
@@ -85,8 +85,9 @@ const selectedId = ref('');
 const viewLoading = ref(false);
 const viewError = ref('');
 const stageEl = ref<HTMLElement | null>(null);
-const pages = ref<Array<{ id: string; elements: any }>>([]);
+const pages = ref<Array<{ id: string; elements: any; dark?: boolean }>>([]);
 const pageIdx = ref(0);
+const pageDark = ref(false);
 let renderer: KonvaRenderer | null = null;
 let lastDoc: Y.Doc | null = null;
 
@@ -172,6 +173,7 @@ function renderPage(idx: number) {
   renderer.addPage(0, page.id);
   renderer.showPage(0);
   renderer.bindElements(page.elements);
+  pageDark.value = page.dark === true;
   if (lastDoc) applyDocViewport(lastDoc, renderer);
 }
 
@@ -375,6 +377,10 @@ defineExpose({ fetchHistory, open, pages, pageIdx, items, error, selectedId });
       .br-stage {
         flex: 1;
         min-height: 0;
+        background: #fff;
+        &.dark {
+          background: #35543f;
+        }
       }
       .br-pagenav {
         display: flex;

@@ -12,10 +12,13 @@ export function decodeBoardSnapshot(base64: string): Y.Doc {
   return doc;
 }
 
-export function readSnapshotPages(doc: Y.Doc): Array<{ id: string; elements: Y.Array<any> }> {
+export function readSnapshotPages(
+  doc: Y.Doc
+): Array<{ id: string; elements: Y.Array<any>; dark: boolean }> {
   const pages = doc.getArray<Y.Map<any>>('pages');
   return pages.toArray().map(p => ({
     id: String(p.get('id') ?? ''),
-    elements: (p.get('elements') as Y.Array<any>) ?? new Y.Array()
+    elements: (p.get('elements') as Y.Array<any>) ?? new Y.Array(),
+    dark: p.get('dark') === true
   }));
 }
