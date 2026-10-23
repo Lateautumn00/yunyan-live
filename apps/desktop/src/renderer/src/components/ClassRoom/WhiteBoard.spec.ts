@@ -658,6 +658,63 @@ describe('WhiteBoard.vue', () => {
     wrapper.unmount();
   });
 
+  // F6.5：微课录制态反馈（暂停态须与录制中可区分）
+  describe('F6.5 微课录制态反馈', () => {
+    beforeEach(() => {
+      Object.assign(window, {
+        electronAPI: {
+          getSources: vi.fn(async () => [{ id: 'screen:0:0', name: 'Screen 1' }]),
+          recordingSaveBlob: vi.fn(async () => ({ success: true }))
+        }
+      });
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: {
+          getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] }))
+        }
+      });
+      class MicroRecorderStub {
+        start() {}
+        pause() {}
+        resume() {}
+        stop() {}
+        addEventListener() {}
+      }
+      Object.defineProperty(globalThis, 'MediaRecorder', {
+        configurable: true,
+        writable: true,
+        value: MicroRecorderStub
+      });
+    });
+
+    afterEach(() => {
+      Reflect.deleteProperty(window, 'electronAPI');
+    });
+
+    it('录制 → 暂停 → 继续：on/paused class 随态切换', async () => {
+      const wrapper = mountWB();
+      const btn = () => wrapper.find('.microlecture');
+      expect(btn().exists()).toBe(true);
+      expect(btn().classes()).not.toContain('on');
+      await btn().trigger('click');
+      await vi.waitFor(() => {
+        expect(btn().classes()).toContain('on');
+      });
+      expect(btn().classes()).not.toContain('paused');
+      await btn().trigger('click');
+      await vi.waitFor(() => {
+        expect(btn().classes()).toContain('paused');
+      });
+      await btn().trigger('click');
+      await vi.waitFor(() => {
+        const cls = btn().classes();
+        expect(cls).toContain('on');
+        expect(cls).not.toContain('paused');
+      });
+      wrapper.unmount();
+    });
+  });
+
   // §4.9.2 工具栏 IA：11 项一级（7 直达 + 4 分组）、24 子项无丢失、互斥、记忆
   describe('§4.9.2 工具栏 IA 分类收纳', () => {
     const GROUP_IDS = ['shape', 'annotate', 'subject', 'resource'] as const;

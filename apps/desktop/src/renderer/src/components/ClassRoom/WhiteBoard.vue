@@ -260,8 +260,12 @@
           </div>
         </el-tooltip>
         <!-- F6.5：微课录制（区分 Top.vue 的直播录制）：空闲点击开始，录制中暂停/继续 -->
-        <el-tooltip content="微课录制 · 屏幕录成本地视频（录制中点击暂停/继续）" placement="top">
-          <div class="microlecture" :class="{ on: microState !== 'idle' }" @click="onMicroToggle">
+        <el-tooltip :content="microTip" placement="top">
+          <div
+            class="microlecture"
+            :class="{ on: microState !== 'idle', paused: microState === 'paused' }"
+            @click="onMicroToggle"
+          >
             <el-icon><VideoCameraFilled /></el-icon>
           </div>
         </el-tooltip>
@@ -1769,6 +1773,21 @@ function onMicroToggle() {
   else if (microState.value === 'recording') pauseMicroLecture();
   else if (microState.value === 'paused') resumeMicroLecture();
 }
+
+const microTip = computed(() => {
+  switch (microState.value) {
+    case 'starting':
+      return '微课录制启动中…';
+    case 'recording':
+      return '微课录制中 · 点击暂停';
+    case 'paused':
+      return '微课已暂停 · 点击继续';
+    case 'saving':
+      return '微课录制保存中…';
+    default:
+      return '微课录制 · 屏幕录成本地视频（录制中点击暂停/继续）';
+  }
+});
 
 function onMicroStop() {
   void stopMicroLecture();
@@ -6173,11 +6192,17 @@ defineExpose({
       color: #fff;
     }
   }
-  // F6.5：微课录制（录制中红点高亮；停止键方块红）
+  // F6.5：微课录制（录制中红点高亮；暂停灰态区分；停止键方块红）
   .microlecture.on {
     background-color: #fde2e2;
     .el-icon {
       color: #e0383e;
+    }
+  }
+  .microlecture.paused {
+    background-color: #f0f0f0;
+    .el-icon {
+      color: #909399;
     }
   }
   .micro-stop {
