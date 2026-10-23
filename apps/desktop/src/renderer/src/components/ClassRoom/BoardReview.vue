@@ -124,6 +124,10 @@ async function open(id: string) {
     pages.value = readSnapshotPages(doc);
     // 先结束加载态让舞台节点入 DOM，再渲染（否则 stageEl 为空、renderPage 空转）
     viewLoading.value = false;
+    if (!pages.value.length) {
+      viewError.value = '快照内容为空';
+      return;
+    }
     await nextTick();
     renderPage(0);
   } catch {
@@ -170,6 +174,10 @@ async function openReplay() {
   replayLoading.value = true;
   try {
     const data = await fetchReplay(props.roomId, undefined, 0);
+    if (!data.baseline && data.events.length > 0) {
+      replayError.value = '回放基线缺失，无法回放';
+      return;
+    }
     replayCtrl?.destroy();
     replayCtrl = new ReplayController();
     replayCtrl.load(data);

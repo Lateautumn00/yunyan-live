@@ -110,6 +110,10 @@ function onTrack(e: MouseEvent) {
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 4px;
     padding: 2px 4px;
+    option {
+      background: #fff;
+      color: #303133;
+    }
   }
   .rc-track {
     position: relative;
