@@ -60,6 +60,7 @@
 <script setup lang="ts">
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ref, onMounted, nextTick, onBeforeUnmount } from 'vue';
+import type * as Y from 'yjs';
 import Live from '@/api/backstage';
 import { KonvaRenderer } from './whiteboard/KonvaRenderer';
 import { decodeBoardSnapshot, readSnapshotPages } from './whiteboard/boardReview';
@@ -87,6 +88,25 @@ const stageEl = ref<HTMLElement | null>(null);
 const pages = ref<Array<{ id: string; elements: any }>>([]);
 const pageIdx = ref(0);
 let renderer: KonvaRenderer | null = null;
+let lastDoc: Y.Doc | null = null;
+
+/** 文档视口（老师当时的平移/缩放）应用到回看渲染器；跨窗口尺寸按直播端同式缩放 */
+function applyDocViewport(doc: Y.Doc, ren: KonvaRenderer) {
+  const vp = doc.getMap<number>('viewportOffset');
+  const sw = vp.get('sw') || 0;
+  const sh = vp.get('sh') || 0;
+  const stage = ren.getStage();
+  let k = 1;
+  if (sw > 0 && sh > 0 && stage.width() > 0 && stage.height() > 0) {
+    k = Math.min(stage.width() / sw, stage.height() / sh);
+  }
+  if (!vp.has('x') && ren.getNodeCount() > 0 && stage.width() > 0 && stage.height() > 0) {
+    ren.zoomFitAll();
+    return;
+  }
+  ren.setViewport((vp.get('x') || 0) * k, (vp.get('y') || 0) * k);
+  ren.setZoom(Math.max(1, Math.min(200, (vp.get('zoom') || 100) * k)));
+}
 
 function formatTime(v?: string | number): string {
   if (!v) return '—';
@@ -128,8 +148,11 @@ async function open(id: string) {
       viewError.value = '快照内容为空';
       return;
     }
+    lastDoc = doc;
+    const idx = doc.getMap<number>('currentPageIndex').get('index') ?? 0;
+    pageIdx.value = Math.min(idx, Math.max(0, pages.value.length - 1));
     await nextTick();
-    renderPage(0);
+    renderPage(pageIdx.value);
   } catch {
     viewError.value = '快照加载失败';
     viewLoading.value = false;
@@ -149,6 +172,7 @@ function renderPage(idx: number) {
   renderer.addPage(0, page.id);
   renderer.showPage(0);
   renderer.bindElements(page.elements);
+  if (lastDoc) applyDocViewport(lastDoc, renderer);
 }
 
 function showPageIdx(idx: number) {
@@ -196,6 +220,7 @@ async function openReplay() {
 function renderReplay() {
   const ctrl = replayCtrl;
   if (!ctrl) return;
+  lastDoc = ctrl.doc;
   pages.value = readSnapshotPages(ctrl.doc);
   const idx = ctrl.doc.getMap<number>('currentPageIndex').get('index') ?? 0;
   pageIdx.value = Math.min(idx, Math.max(0, pages.value.length - 1));

@@ -31,9 +31,36 @@ vi.mock('./whiteboard/replayPlayer', async importOriginal => {
   };
 });
 
+const rendererSpies = vi.hoisted(() => ({
+  setViewport: vi.fn(),
+  setZoom: vi.fn()
+}));
+
+vi.mock('./whiteboard/KonvaRenderer', () => {
+  class KonvaRenderer {
+    setSelectMode = vi.fn();
+    addPage = vi.fn();
+    showPage = vi.fn();
+    bindElements = vi.fn();
+    destroy = vi.fn();
+    getNodeCount = () => 1;
+    zoomFitAll = vi.fn();
+    setViewport = rendererSpies.setViewport;
+    setZoom = rendererSpies.setZoom;
+    getStage = () => ({ width: () => 0, height: () => 0 });
+  }
+  return { KonvaRenderer };
+});
+
 import BoardReview from './BoardReview.vue';
 
-function makeSnapshotB64(pageIds: string[]): string {
+function makeSnapshotB64(
+  pageIds: string[],
+  opts?: {
+    viewport?: { x: number; y: number; zoom: number; sw?: number; sh?: number };
+    startIndex?: number;
+  }
+): string {
   const doc = new Y.Doc();
   const pages = doc.getArray<Y.Map<any>>('pages');
   for (const id of pageIds) {
@@ -48,6 +75,17 @@ function makeSnapshotB64(pageIds: string[]): string {
     el.set('x', 5);
     el.set('y', 6);
     elements.push([el]);
+  }
+  if (opts?.startIndex !== undefined) {
+    doc.getMap<number>('currentPageIndex').set('index', opts.startIndex);
+  }
+  if (opts?.viewport) {
+    const vp = doc.getMap<number>('viewportOffset');
+    vp.set('x', opts.viewport.x);
+    vp.set('y', opts.viewport.y);
+    vp.set('zoom', opts.viewport.zoom);
+    if (opts.viewport.sw !== undefined) vp.set('sw', opts.viewport.sw);
+    if (opts.viewport.sh !== undefined) vp.set('sh', opts.viewport.sh);
   }
   const update = Y.encodeStateAsUpdate(doc);
   let binary = '';
@@ -107,6 +145,33 @@ describe('BoardReview 课后回看（F6.3）', () => {
     });
     expect(vm.selectedId).toBe('s1');
     expect(liveMocks.boardSnapshot).toHaveBeenCalledWith('s1');
+    wrapper.unmount();
+  });
+
+  it('正向：快照打开在文档当前页并应用文档视口（viewportOffset）', async () => {
+    liveMocks.boardHistory.mockResolvedValue({
+      data: { items: [{ id: 's1', roomId: 'r1' }], hasMore: false }
+    });
+    liveMocks.boardSnapshot.mockResolvedValue({
+      data: {
+        id: 's1',
+        data: makeSnapshotB64(['p1', 'p2'], {
+          startIndex: 1,
+          viewport: { x: 120, y: 60, zoom: 150 }
+        })
+      }
+    });
+    const wrapper = mountReview();
+    await vi.waitFor(() => {
+      expect(wrapper.findAll('.br-item')).toHaveLength(1);
+    });
+    await wrapper.find('.br-item').trigger('click');
+    const vm = wrapper.vm as unknown as { pageIdx: number };
+    await vi.waitFor(() => {
+      expect(vm.pageIdx).toBe(1);
+      expect(rendererSpies.setViewport).toHaveBeenCalledWith(120, 60);
+      expect(rendererSpies.setZoom).toHaveBeenCalledWith(150);
+    });
     wrapper.unmount();
   });
 
