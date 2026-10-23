@@ -236,7 +236,7 @@
           </div>
         </el-tooltip>
         <div class="num" @click="editZoom">
-          {{ zoomLevel }}%
+          {{ zoomLevel.toFixed(1) }}%
           <input
             v-show="showZoomInput"
             ref="zoomInputRef"
@@ -4551,8 +4551,11 @@ function computeRemoteView(): { x: number; y: number; zoom: number } {
 // 直应用目标视图：教师端观察器 / 学生端本地 resize 重适配 / 插值终帧共用
 function applyView(v: { x: number; y: number; zoom: number }) {
   renderer!.setViewport(v.x, v.y);
-  renderer!.setZoom(v.zoom);
-  zoomLevel.value = v.zoom;
+  // 教师端 zoom 归一到 1 位小数：k 时序竞态（resize 100ms 节流窗口）会放大出 13 位浮点尾巴，
+  // 且 zoomIn/zoomOut 的 ±1 会永远保留该尾巴；学生端 k 是 contain 适配比例，保持原值
+  const zoom = props.isTeacher ? Math.round(v.zoom * 10) / 10 : v.zoom;
+  renderer!.setZoom(zoom);
+  zoomLevel.value = zoom;
 }
 
 function applyRemoteViewport() {
@@ -4675,7 +4678,7 @@ function layerZoomChange(type: string) {
 
 function editZoom() {
   showZoomInput.value = true;
-  zoomInputValue.value = zoomLevel.value;
+  zoomInputValue.value = Math.round(zoomLevel.value * 10) / 10;
   nextTick(() => zoomInputRef.value?.focus());
 }
 

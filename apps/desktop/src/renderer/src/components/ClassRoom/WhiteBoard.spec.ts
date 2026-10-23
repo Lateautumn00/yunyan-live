@@ -715,6 +715,21 @@ describe('WhiteBoard.vue', () => {
     });
   });
 
+  // 缩放百分比显示：浮点种子（k 时序竞态）不得露出 13 位小数，保留 1 位
+  it('缩放百分比显示保留一位小数（.num 与输入框回显）', async () => {
+    const wrapper = mountWB();
+    const vm = wrapper.vm as unknown as WBVM;
+    vm.zoomLevel = 137.49999999999997;
+    await nextTick();
+    expect(wrapper.find('.num').text()).toContain('137.5%');
+    await wrapper.find('.num').trigger('click');
+    await nextTick();
+    const input = wrapper.find('.num input');
+    expect(input.exists()).toBe(true);
+    expect((input.element as HTMLInputElement).value).toBe('137.5');
+    wrapper.unmount();
+  });
+
   // §4.9.2 工具栏 IA：11 项一级（7 直达 + 4 分组）、24 子项无丢失、互斥、记忆
   describe('§4.9.2 工具栏 IA 分类收纳', () => {
     const GROUP_IDS = ['shape', 'annotate', 'subject', 'resource'] as const;
