@@ -7,6 +7,7 @@ import {
   AdminRolesGuard,
   AuditModule,
   RedisModule,
+  SessionService,
   jwtModuleAsyncOptions
 } from '@yunyan-live/nest-shared';
 import { GatewayClientsModule } from '../gateway/clients.module';
@@ -26,6 +27,7 @@ import { AdminController } from './admin.controller';
     JwtModule.registerAsync(jwtModuleAsyncOptions())
   ],
   controllers: [AdminController],
-  providers: [AdminJwtStrategy, AdminJwtAuthGuard, AdminRolesGuard]
+  // SessionService：封禁时踢在线会话（与 AuthModule 同源，RedisModule 为 @Global）
+  providers: [AdminJwtStrategy, AdminJwtAuthGuard, AdminRolesGuard, SessionService]
 })
 export class AdminModule {}
