@@ -26,7 +26,9 @@ export default [
       parser: vueParser,
       parserOptions: {
         parser: tseslint.parser,
-        extraFileExtensions: ['.vue']
+        extraFileExtensions: ['.vue'],
+        // ESLint 10 在同一次运行里混到仓库根配置时会推导出多个 tsconfig 根目录，显式钉住本包目录
+        tsconfigRootDir: import.meta.dirname
       },
       globals: {
         ...globals.browser,

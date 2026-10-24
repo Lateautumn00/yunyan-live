@@ -75,4 +75,61 @@ export class AdminController {
   async setUserRole(data: { user_id: string; role: number }, metadata: Metadata) {
     return this.adminService.setUserRole(data, metadata);
   }
+
+  // ---------- 批次 7c：全局管理面（只读） ----------
+
+  @GrpcMethod('AdminService', 'ListLiveRooms')
+  async listLiveRooms(data: {
+    page: number;
+    page_size: number;
+    keyword: string;
+    status: number;
+    type: number;
+    start_time_ms: string;
+    end_time_ms: string;
+  }) {
+    return this.adminService.listLiveRooms(data);
+  }
+
+  @GrpcMethod('AdminService', 'GetLiveRoom')
+  async getLiveRoom(data: { room_id: string }) {
+    return this.adminService.getLiveRoom(data);
+  }
+
+  @GrpcMethod('AdminService', 'ListRecordings')
+  async listRecordings(data: {
+    page: number;
+    page_size: number;
+    keyword: string;
+    room_id: string;
+  }) {
+    return this.adminService.listRecordings(data);
+  }
+
+  @GrpcMethod('AdminService', 'ListCoursewares')
+  async listCoursewares(data: {
+    page: number;
+    page_size: number;
+    keyword: string;
+    room_id: string;
+  }) {
+    return this.adminService.listCoursewares(data);
+  }
+
+  @GrpcMethod('AdminService', 'GetDashboardStats')
+  async getDashboardStats() {
+    return this.adminService.getDashboardStats();
+  }
+
+  @GrpcMethod('AdminService', 'ListAuditLogs')
+  async listAuditLogs(data: {
+    page: number;
+    page_size: number;
+    action: string;
+    actor: string;
+    from_ms: string;
+    to_ms: string;
+  }) {
+    return this.adminService.listAuditLogs(data);
+  }
 }

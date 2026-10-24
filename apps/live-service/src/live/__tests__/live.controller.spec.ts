@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { status as GrpcStatus } from '@grpc/grpc-js';
 import type { Metadata } from '@grpc/grpc-js';
-import { userIdMetadata } from '@yunyan-live/nest-shared';
+import { adminIdMetadata, userIdMetadata } from '@yunyan-live/nest-shared';
 import { LiveController } from '../live.controller';
 import type { LiveService } from '../live.service';
 import { expectGrpcError } from './test-utils';
@@ -1165,5 +1165,96 @@ describe('LiveController S4 域层下沉：房间归属断言唯一落层', () =
       'not room owner'
     );
     expect(service.moderateUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('LiveController 批次 7c：管理端删除旁路', () => {
+  const SECRET = 'test-shared-secret';
+  const previousSecret = process.env.GRPC_SHARED_SECRET;
+
+  beforeEach(() => {
+    process.env.GRPC_SHARED_SECRET = SECRET;
+  });
+
+  afterEach(() => {
+    if (previousSecret === undefined) delete process.env.GRPC_SHARED_SECRET;
+    else process.env.GRPC_SHARED_SECRET = previousSecret;
+  });
+
+  it('合法管理员签名：删除他人直播间放行，不触发房主校验', async () => {
+    const { controller, service } = makeController();
+    service.delete.mockResolvedValue(undefined);
+
+    const res = await controller.deleteLive({ room_id: 'r1' }, adminIdMetadata('admin-1', SECRET));
+
+    expect(res).toMatchObject({ code: '0' });
+    expect(service.checkRoomAccess).not.toHaveBeenCalled();
+    expect(service.delete).toHaveBeenCalledWith('r1');
+  });
+
+  it('合法管理员签名：录像（按房间/按 id）与课件删除同样放行', async () => {
+    const { controller, service } = makeController();
+    service.deleteVideoByRoomIds.mockResolvedValue({ success: true });
+    service.deleteVideoByVideoIds.mockResolvedValue({ success: true });
+    service.deleteCourseware.mockResolvedValue(undefined);
+    service.getVideoRoomMap.mockResolvedValue([{ videoId: 'v1', roomId: 'r1' }]);
+    service.getCoursewareRoom.mockResolvedValue('r1');
+    const md = adminIdMetadata('admin-1', SECRET);
+
+    await controller.deleteVideoByRoomIds({ room_ids: ['r1', 'r2'] }, md);
+    await controller.deleteVideoByVideoIds({ video_ids: ['v1'] }, md);
+    await controller.deleteCourseware({ id: 'c1' }, md);
+
+    expect(service.checkRoomAccess).not.toHaveBeenCalled();
+    expect(service.deleteVideoByRoomIds).toHaveBeenCalledWith(['r1', 'r2']);
+    expect(service.deleteVideoByVideoIds).toHaveBeenCalledWith(['v1']);
+    expect(service.deleteCourseware).toHaveBeenCalledWith('c1');
+  });
+
+  it('坏签名：不视为管理员，回落房主校验 → UNAUTHENTICATED 且零落写', async () => {
+    const { controller, service } = makeController();
+
+    await expectGrpcError(
+      controller.deleteLive({ room_id: 'r1' }, adminIdMetadata('admin-1', 'other-secret')),
+      GrpcStatus.UNAUTHENTICATED,
+      'missing user-id metadata'
+    );
+    expect(service.checkRoomAccess).not.toHaveBeenCalled();
+    expect(service.delete).not.toHaveBeenCalled();
+  });
+
+  it('管理员签名不外溢：非删除类写操作仍要求用户身份（不被当成 user-id）', async () => {
+    const { controller, service } = makeController();
+
+    await expectGrpcError(
+      controller.changeStatus({ room_id: 'r1', status: 2 }, adminIdMetadata('admin-1', SECRET)),
+      GrpcStatus.UNAUTHENTICATED,
+      'missing user-id metadata'
+    );
+    expect(service.checkRoomAccess).not.toHaveBeenCalled();
+    expect(service.changeStatus).not.toHaveBeenCalled();
+  });
+
+  it('管理员签名不外溢：非删除类写操作携带用户身份时仍按房主校验', async () => {
+    const { controller, service } = makeController();
+    service.checkRoomAccess.mockResolvedValue({ allowed: true, isTeacher: false });
+
+    await expectGrpcError(
+      controller.changeStatus({ room_id: 'r1', status: 2 }, userIdMetadata('student-1', SECRET)),
+      GrpcStatus.PERMISSION_DENIED,
+      'not room owner'
+    );
+    expect(service.changeStatus).not.toHaveBeenCalled();
+  });
+
+  it('教师路径不受影响：删除自家房间仍走房主校验', async () => {
+    const { controller, service } = makeController();
+    mockOwner(service);
+    service.delete.mockResolvedValue(undefined);
+
+    await controller.deleteLive({ room_id: 'r1' }, userIdMetadata('teacher-1', SECRET));
+
+    expect(service.checkRoomAccess).toHaveBeenCalledWith('r1', 'teacher-1');
+    expect(service.delete).toHaveBeenCalledWith('r1');
   });
 });

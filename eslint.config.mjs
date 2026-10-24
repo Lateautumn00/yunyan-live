@@ -18,6 +18,13 @@ export default tseslint.config(
       '**/*.config.mjs'
     ]
   },
+  {
+    // ESLint 10 跨包多文件运行时会把 apps/admin/web 的 tsconfig 也列为候选根目录，
+    // 显式钉住仓库根，避免 "multiple candidate TSConfigRootDirs" 解析错误。
+    languageOptions: {
+      parserOptions: { tsconfigRootDir: import.meta.dirname }
+    }
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   pluginVue.configs['flat/recommended'],

@@ -15,6 +15,13 @@ service AdminService {
   rpc BanUser (BanUserRequest) returns (CommonResponse) {}
   rpc UnbanUser (UnbanUserRequest) returns (CommonResponse) {}
   rpc SetUserRole (SetUserRoleRequest) returns (CommonResponse) {}
+  // 批次 7c：全局管理面（只读模型，直连共享库；删除动作仍走 live-service 保不变量）
+  rpc ListLiveRooms (ListLiveRoomsRequest) returns (LiveRoomListResponse) {}
+  rpc GetLiveRoom (GetLiveRoomRequest) returns (LiveRoomResponse) {}
+  rpc ListRecordings (ListRecordingsRequest) returns (RecordingListResponse) {}
+  rpc ListCoursewares (ListCoursewaresRequest) returns (CoursewareListResponse) {}
+  rpc GetDashboardStats (DashboardStatsRequest) returns (DashboardStatsResponse) {}
+  rpc ListAuditLogs (ListAuditLogsRequest) returns (AuditLogListResponse) {}
 }
 
 message CommonResponse {
@@ -137,4 +144,148 @@ message UnbanUserRequest {
 message SetUserRoleRequest {
   string user_id = 1;
   int32 role = 2;
+}
+
+// ---- 批次 7c：直播间 / 录像 / 课件全局管理（只读） ----
+// 口径：仅未软删房间（live_rooms."deletedAt" IS NULL）；status 0=全部 / 1=未开播 / 2=直播中 / 3=已结束。
+
+message ListLiveRoomsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string keyword = 3; // 匹配房间标题 / 主讲人用户名
+  int32 status = 4; // 0 = 全部
+  int32 type = 5; // -1 = 全部
+  string start_time_ms = 6; // 房间开始时间下界（毫秒时间戳字符串）
+  string end_time_ms = 7;
+}
+
+message LiveRoomData {
+  string room_id = 1;
+  string title = 2;
+  string live_user_id = 3;
+  string speaker_name = 4;
+  string join_code = 5;
+  int32 status = 6;
+  int32 type = 7;
+  string start_time = 8;
+  int32 duration = 9;
+  int32 live_nums = 10;
+  string created_at = 11;
+}
+
+message LiveRoomListResponse {
+  string code = 1;
+  string msg = 2;
+  int32 total = 3;
+  repeated LiveRoomData items = 4;
+}
+
+message GetLiveRoomRequest {
+  string room_id = 1;
+}
+
+message LiveRoomResponse {
+  string code = 1;
+  string msg = 2;
+  LiveRoomData data = 3;
+}
+
+message ListRecordingsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string keyword = 3; // 匹配文件名 / 房间标题 / 主讲人
+  string room_id = 4; // 精确过滤
+}
+
+message RecordingData {
+  string id = 1;
+  string room_id = 2;
+  string room_title = 3;
+  string file_name = 4;
+  string file_path = 5;
+  int64 file_size = 6;
+  int32 duration = 7;
+  int32 record_type = 8;
+  string teacher_name = 9;
+  string created_at = 10;
+}
+
+message RecordingListResponse {
+  string code = 1;
+  string msg = 2;
+  int32 total = 3;
+  repeated RecordingData items = 4;
+}
+
+message ListCoursewaresRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string keyword = 3; // 匹配文件名 / 房间标题
+  string room_id = 4; // 精确过滤
+}
+
+message CoursewareData {
+  string id = 1;
+  string room_id = 2;
+  string room_title = 3;
+  string filename = 4;
+  string filext = 5;
+  int64 filesize = 6;
+  string fileurl = 7;
+  string create_user_id = 8;
+  string created_at = 9;
+}
+
+message CoursewareListResponse {
+  string code = 1;
+  string msg = 2;
+  int32 total = 3;
+  repeated CoursewareData items = 4;
+}
+
+message DashboardStatsRequest {}
+
+message DashboardStatsData {
+  int64 total_users = 1;
+  int64 today_new_users = 2;
+  int64 banned_users = 3;
+  int64 total_live_rooms = 4;
+  int64 active_live_rooms = 5;
+  int64 total_records = 6;
+  int64 total_coursewares = 7;
+  int64 today_new_rooms = 8;
+}
+
+message DashboardStatsResponse {
+  string code = 1;
+  string msg = 2;
+  DashboardStatsData data = 3;
+}
+
+message ListAuditLogsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string action = 3; // 精确动作（如 live.delete）；空 = 全部
+  string actor = 4; // 操作者模糊匹配
+  string from_ms = 5; // 时间窗下界；空 = now-7d
+  string to_ms = 6; // 时间窗上界；空 = now
+}
+
+message AuditLogData {
+  string id = 1;
+  string occurred_at = 2;
+  string actor = 3;
+  string action = 4;
+  string target_type = 5;
+  string target_id = 6;
+  string request_id = 7;
+  string ip = 8;
+  string detail = 9; // JSON 字符串
+}
+
+message AuditLogListResponse {
+  string code = 1;
+  string msg = 2;
+  int32 total = 3;
+  repeated AuditLogData items = 4;
 }

@@ -1,20 +1,26 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import { listAuditLogs, type AuditLogItem } from '@/api/admin';
 
 defineOptions({ name: 'AdminAuditLogs' });
 
 /**
  * 审计日志查看（批次 7c）
- * 当前 7a 阶段：占位页面，7c 接入 gateway /admin/audit/logs 后动态填充。
+ * 数据源：audit_logs 追加即不可变（0003 迁移行级触发器）；该表无二级索引，
+ * 因此查询一律按时间窗收敛（默认近 7 天），后端 ORDER BY id DESC 走复合 PK。
  */
 const loading = ref(false);
-const tableData = ref<any[]>([]);
+const tableData = ref<AuditLogItem[]>([]);
 const total = ref(0);
 const page = ref(1);
 const pageSize = ref(50);
 const actionFilter = ref('');
 const actorFilter = ref('');
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const defaultRange = (): [Date, Date] => [new Date(Date.now() - 7 * DAY_MS), new Date()];
+const range = ref<[Date, Date]>(defaultRange());
 
 /** 12 + 7 = 19 类审计动作（S12 原 12 类 + 批次 7 新增 7 类） */
 const actionOptions = [
@@ -47,12 +53,17 @@ const actionOptions = [
 async function fetchLogs() {
   loading.value = true;
   try {
-    // 7c：接入 gateway /admin/audit/logs API
-    // const res = await listAuditLogs({ page, pageSize, action: actionFilter.value, actor: actorFilter.value });
-    // tableData.value = res.items;
-    // total.value = res.total;
-    tableData.value = [];
-    total.value = 0;
+    const [from, to] = range.value ?? defaultRange();
+    const res = await listAuditLogs({
+      page: page.value,
+      pageSize: pageSize.value,
+      action: actionFilter.value || undefined,
+      actor: actorFilter.value || undefined,
+      from: String(from.getTime()),
+      to: String(to.getTime())
+    });
+    tableData.value = res.items;
+    total.value = res.total;
   } catch (e: any) {
     ElMessage.error(e?.message || '加载审计日志失败');
   } finally {
@@ -60,9 +71,20 @@ async function fetchLogs() {
   }
 }
 
+function search() {
+  page.value = 1;
+  void fetchLogs();
+}
+
 function formatTime(ts: string | null) {
   if (!ts) return '—';
-  return new Date(ts).toLocaleString('zh-CN');
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('zh-CN');
+}
+
+function formatDetail(detail: unknown) {
+  if (detail === null || detail === undefined || detail === '') return '—';
+  return typeof detail === 'string' ? detail : JSON.stringify(detail);
 }
 
 onMounted(fetchLogs);
@@ -71,8 +93,8 @@ onMounted(fetchLogs);
 <template>
   <div class="admin-audit-logs">
     <el-alert
-      title="审计日志（7c 待接入）"
-      description="只读展示所有审计事件，支持按动作类型和操作者过滤。数据源为 audit_logs 分区表，追加即不可变。"
+      title="审计日志（只读）"
+      description="数据源为 audit_logs 追加即不可变表。默认查询近 7 天；该表无二级索引，请用时间窗收敛后再按动作/操作者过滤。"
       type="info"
       show-icon
       :closable="false"
@@ -81,6 +103,15 @@ onMounted(fetchLogs);
 
     <!-- 搜索栏 -->
     <div class="search-bar">
+      <el-date-picker
+        v-model="range"
+        type="datetimerange"
+        range-separator="至"
+        start-placeholder="开始时间"
+        end-placeholder="结束时间"
+        :clearable="false"
+        style="width: 380px"
+      />
       <el-select v-model="actionFilter" placeholder="审计动作" clearable style="width: 200px">
         <el-option
           v-for="opt in actionOptions"
@@ -94,9 +125,9 @@ onMounted(fetchLogs);
         placeholder="操作者（guid / username）"
         clearable
         style="width: 220px"
-        @keyup.enter="fetchLogs"
+        @keyup.enter="search"
       />
-      <el-button type="primary" @click="fetchLogs"> 查询 </el-button>
+      <el-button type="primary" @click="search">查询</el-button>
     </div>
 
     <!-- 日志表格 -->
@@ -107,7 +138,7 @@ onMounted(fetchLogs);
         </template>
       </el-table-column>
       <el-table-column prop="actor" label="操作者" width="200" show-overflow-tooltip />
-      <el-table-column prop="action" label="动作" width="160">
+      <el-table-column prop="action" label="动作" width="180">
         <template #default="{ row }">
           <el-tag size="small" type="info">
             {{ row.action }}
@@ -120,8 +151,7 @@ onMounted(fetchLogs);
       <el-table-column prop="requestId" label="Request ID" width="200" show-overflow-tooltip />
       <el-table-column label="详情" min-width="200">
         <template #default="{ row }">
-          <span v-if="row.detail" class="detail">{{ JSON.stringify(row.detail) }}</span>
-          <span v-else>—</span>
+          <span class="detail">{{ formatDetail(row.detail) }}</span>
         </template>
       </el-table-column>
     </el-table>
@@ -135,7 +165,7 @@ onMounted(fetchLogs);
       layout="total, sizes, prev, pager, next, jumper"
       style="margin-top: 16px; justify-content: flex-end"
       @current-change="fetchLogs"
-      @size-change="fetchLogs"
+      @size-change="search"
     />
   </div>
 </template>
@@ -150,6 +180,7 @@ onMounted(fetchLogs);
   gap: 12px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .detail {

@@ -108,3 +108,141 @@ export const setUserRole = (userId: string, role: number) =>
   http.request<{ code: number; msg: string }>('post', `/admin/users/${userId}/role`, {
     data: { role }
   });
+
+// ---------- 批次 7c：直播间全局管理 ----------
+
+export interface LiveRoomItem {
+  roomId: string;
+  title: string;
+  liveUserId: string;
+  speakerName: string;
+  joinCode: string;
+  status: number;
+  type: number;
+  startTime: string;
+  duration: number;
+  liveNums: number;
+  createdAt: string;
+}
+
+export interface RecordingItem {
+  id: string;
+  roomId: string;
+  roomTitle: string;
+  fileName: string;
+  filePath: string;
+  fileSize: number;
+  duration: number;
+  recordType: number;
+  teacherName: string;
+  createdAt: string;
+}
+
+export interface CoursewareItem {
+  id: string;
+  roomId: string;
+  roomTitle: string;
+  filename: string;
+  filext: string;
+  filesize: number;
+  fileurl: string;
+  createUserId: string;
+  createdAt: string;
+}
+
+export interface PagedLiveRooms {
+  total: number;
+  items: LiveRoomItem[];
+}
+
+export interface PagedRecordings {
+  total: number;
+  items: RecordingItem[];
+}
+
+export interface PagedCoursewares {
+  total: number;
+  items: CoursewareItem[];
+}
+
+export interface DashboardStats {
+  totalUsers: number;
+  todayNewUsers: number;
+  bannedUsers: number;
+  totalLiveRooms: number;
+  activeLiveRooms: number;
+  totalRecords: number;
+  totalCoursewares: number;
+  todayNewRooms: number;
+}
+
+export interface AuditLogItem {
+  id: string;
+  occurredAt: string;
+  actor: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  requestId: string;
+  ip: string;
+  detail: unknown;
+}
+
+export interface PagedAuditLogs {
+  total: number;
+  items: AuditLogItem[];
+}
+
+export const listLiveRooms = (params: {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  status?: number;
+  type?: number;
+  startTime?: string;
+  endTime?: string;
+}) => http.request<PagedLiveRooms>('get', '/admin/live/rooms', { params });
+
+export const getLiveRoom = (roomId: string) =>
+  http.request<LiveRoomItem>('get', `/admin/live/rooms/${roomId}`);
+
+export const deleteLiveRoom = (roomId: string) =>
+  http.request<{ code: number; msg: string }>('delete', `/admin/live/rooms/${roomId}`);
+
+export const listRecordings = (params: {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  roomId?: string;
+}) => http.request<PagedRecordings>('get', '/admin/live/recordings', { params });
+
+export const deleteRecordings = (by: 'room' | 'video', ids: string[]) =>
+  http.request<{ code: number; msg: string; deleted: number }>(
+    'post',
+    '/admin/live/recordings/delete',
+    { data: { by, ids } }
+  );
+
+export const listCoursewares = (params: {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  roomId?: string;
+}) => http.request<PagedCoursewares>('get', '/admin/live/coursewares', { params });
+
+export const deleteCourseware = (id: string) =>
+  http.request<{ code: number; msg: string }>('delete', `/admin/live/coursewares/${id}`);
+
+// ---------- 批次 7c：数据看板 / 审计日志 ----------
+
+export const getDashboardStats = () =>
+  http.request<DashboardStats>('get', '/admin/dashboard/stats');
+
+export const listAuditLogs = (params: {
+  page?: number;
+  pageSize?: number;
+  action?: string;
+  actor?: string;
+  from?: string;
+  to?: string;
+}) => http.request<PagedAuditLogs>('get', '/admin/audit/logs', { params });

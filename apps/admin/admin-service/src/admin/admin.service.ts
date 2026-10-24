@@ -3,6 +3,17 @@ import { status } from '@grpc/grpc-js';
 import { grpcError, ok, userIdFromMetadata } from '@yunyan-live/nest-shared';
 import { AdminsService } from './admins.service';
 import { UsersAdminService } from '../users-admin/users-admin.service';
+import {
+  LiveAdminService,
+  type CoursewareRow,
+  type LiveRoomRow,
+  type RecordingRow
+} from '../live-admin/live-admin.service';
+import {
+  DashboardAdminService,
+  type DashboardStatsRow
+} from '../dashboard-admin/dashboard-admin.service';
+import { AuditAdminService, type AuditLogRow } from '../audit-admin/audit-admin.service';
 import type { Metadata } from '@grpc/grpc-js';
 
 // ---------- gRPC 信封类型（export 供 controller 标注返回类型，声明文件生成需要） ----------
@@ -85,11 +96,56 @@ export interface CommonResult {
   msg: string;
 }
 
+// ---------- 批次 7c：全局管理面信封 ----------
+
+export interface LiveRoomListResult {
+  code: string;
+  msg: string;
+  total: number;
+  items: LiveRoomRow[];
+}
+
+export interface LiveRoomGetResult {
+  code: string;
+  msg: string;
+  data: LiveRoomRow;
+}
+
+export interface RecordingListResult {
+  code: string;
+  msg: string;
+  total: number;
+  items: RecordingRow[];
+}
+
+export interface CoursewareListResult {
+  code: string;
+  msg: string;
+  total: number;
+  items: CoursewareRow[];
+}
+
+export interface DashboardStatsResult {
+  code: string;
+  msg: string;
+  data: DashboardStatsRow;
+}
+
+export interface AuditLogListResult {
+  code: string;
+  msg: string;
+  total: number;
+  items: AuditLogRow[];
+}
+
 @Injectable()
 export class AdminService {
   constructor(
     private adminsService: AdminsService,
-    private usersAdminService: UsersAdminService
+    private usersAdminService: UsersAdminService,
+    private liveAdminService: LiveAdminService,
+    private dashboardAdminService: DashboardAdminService,
+    private auditAdminService: AuditAdminService
   ) {}
 
   // 登录成功后吊销旧会话（7b 扩展点；此处 7a 先不接 Redis，留接口）
@@ -281,6 +337,89 @@ export class AdminService {
     await this.usersAdminService.setRole(data.user_id, data.role);
     // S12 审计动作 admin.role_change
     return ok({}) as unknown as CommonResult;
+  }
+
+  // ---------- 批次 7c：全局管理面（只读；删除动作走 live-service） ----------
+
+  async listLiveRooms(data: {
+    page: number;
+    page_size: number;
+    keyword: string;
+    status: number;
+    type: number;
+    start_time_ms: string;
+    end_time_ms: string;
+  }): Promise<LiveRoomListResult> {
+    const { total, items } = await this.liveAdminService.listLiveRooms({
+      page: data.page || 1,
+      pageSize: data.page_size || 20,
+      keyword: data.keyword || undefined,
+      status: data.status || 0,
+      type: data.type ?? -1,
+      startTimeMs: data.start_time_ms || undefined,
+      endTimeMs: data.end_time_ms || undefined
+    });
+    return ok({ total, items }) as unknown as LiveRoomListResult;
+  }
+
+  async getLiveRoom(data: { room_id: string }): Promise<LiveRoomGetResult> {
+    const room = await this.liveAdminService.getLiveRoom(data.room_id);
+    if (!room) throw grpcError(status.NOT_FOUND, 'room not found');
+    return ok({ data: room }) as unknown as LiveRoomGetResult;
+  }
+
+  async listRecordings(data: {
+    page: number;
+    page_size: number;
+    keyword: string;
+    room_id: string;
+  }): Promise<RecordingListResult> {
+    const { total, items } = await this.liveAdminService.listRecordings({
+      page: data.page || 1,
+      pageSize: data.page_size || 20,
+      keyword: data.keyword || undefined,
+      roomId: data.room_id || undefined
+    });
+    return ok({ total, items }) as unknown as RecordingListResult;
+  }
+
+  async listCoursewares(data: {
+    page: number;
+    page_size: number;
+    keyword: string;
+    room_id: string;
+  }): Promise<CoursewareListResult> {
+    const { total, items } = await this.liveAdminService.listCoursewares({
+      page: data.page || 1,
+      pageSize: data.page_size || 20,
+      keyword: data.keyword || undefined,
+      roomId: data.room_id || undefined
+    });
+    return ok({ total, items }) as unknown as CoursewareListResult;
+  }
+
+  async getDashboardStats(): Promise<DashboardStatsResult> {
+    const data = await this.dashboardAdminService.stats();
+    return ok({ data }) as unknown as DashboardStatsResult;
+  }
+
+  async listAuditLogs(data: {
+    page: number;
+    page_size: number;
+    action: string;
+    actor: string;
+    from_ms: string;
+    to_ms: string;
+  }): Promise<AuditLogListResult> {
+    const { total, items } = await this.auditAdminService.list({
+      page: data.page || 1,
+      pageSize: data.page_size || 50,
+      action: data.action || undefined,
+      actor: data.actor || undefined,
+      fromMs: data.from_ms || undefined,
+      toMs: data.to_ms || undefined
+    });
+    return ok({ total, items }) as unknown as AuditLogListResult;
   }
 
   /**

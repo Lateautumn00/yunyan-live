@@ -19,7 +19,7 @@
 import { ClientGrpc } from '@nestjs/microservices';
 import { Metadata } from '@grpc/grpc-js';
 import { Observable } from 'rxjs';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';

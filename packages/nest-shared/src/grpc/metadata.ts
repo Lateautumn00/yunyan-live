@@ -67,3 +67,70 @@ export function verifyUserCall(
 export function userIdFromMetadata(metadata: Metadata | undefined): string {
   return metadata?.get(USER_ID_KEY)?.[0] as string;
 }
+
+// ---------------- 管理后台身份（批次 7c） ----------------
+// 与 S10b user 签名并列、key 与签名域前缀均独立：管理员身份不可由教师/学生链路伪造，
+// 反之亦然。管理端删除类 RPC 携带 admin-id + 签名，域层据此放行房主校验。
+
+export const ADMIN_ID_KEY = 'admin-id';
+export const ADMIN_TS_KEY = 'admin-ts';
+export const ADMIN_SIG_KEY = 'admin-sig';
+
+function computeAdminSig(adminId: string, ts: string, secret: string): string {
+  return createHmac('sha256', secret).update(`admin:${adminId}:${ts}`).digest('hex');
+}
+
+/** 管理端 gRPC 调用身份：admin-id 独立 key，签名域加 `admin:` 前缀防跨链路重放。 */
+export function adminIdMetadata(
+  adminId: string,
+  secret: string | undefined = process.env.GRPC_SHARED_SECRET
+): Metadata {
+  const metadata = new Metadata();
+  metadata.add(ADMIN_ID_KEY, adminId);
+  if (secret) {
+    const ts = String(Date.now());
+    metadata.add(ADMIN_TS_KEY, ts);
+    metadata.add(ADMIN_SIG_KEY, computeAdminSig(adminId, ts, secret));
+  }
+  return metadata;
+}
+
+export type AdminCallVerifyResult = UserCallVerifyResult;
+
+/** 管理端验签（纯函数）。与 verifyUserCall 同口径：absent/no-secret 放行以保留本地开发。 */
+export function verifyAdminCall(
+  metadata: Metadata | undefined,
+  secret: string | undefined,
+  now: number = Date.now()
+): AdminCallVerifyResult {
+  const adminId = metadata?.get(ADMIN_ID_KEY)?.[0];
+  if (adminId === undefined || adminId === '') return 'absent';
+  if (!secret) return 'no-secret';
+  const ts = metadata?.get(ADMIN_TS_KEY)?.[0];
+  const sig = metadata?.get(ADMIN_SIG_KEY)?.[0];
+  if (typeof ts !== 'string' || typeof sig !== 'string' || ts === '' || sig === '') {
+    return 'missing';
+  }
+  const tsNum = Number(ts);
+  if (!Number.isFinite(tsNum) || Math.abs(now - tsNum) > USER_SIG_MAX_AGE_MS) return 'stale';
+  const expected = Buffer.from(computeAdminSig(String(adminId), ts, secret), 'utf8');
+  const actual = Buffer.from(sig, 'utf8');
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    return 'bad-signature';
+  }
+  return 'ok';
+}
+
+/**
+ * 已验签的管理员 id：仅 ok / no-secret 返回；其余（含坏签名、过期）→ undefined，
+ * 调用方按"无管理员身份"处理，落回原有的 fail-closed 校验。
+ */
+export function adminIdFromMetadata(
+  metadata: Metadata | undefined,
+  secret: string | undefined = process.env.GRPC_SHARED_SECRET,
+  now: number = Date.now()
+): string | undefined {
+  const result = verifyAdminCall(metadata, secret, now);
+  if (result !== 'ok' && result !== 'no-secret') return undefined;
+  return metadata?.get(ADMIN_ID_KEY)?.[0] as string | undefined;
+}

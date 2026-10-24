@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   OnModuleInit,
@@ -21,6 +22,7 @@ import {
   AUDIT_ACTIONS,
   AUDIT_PUBLISHER,
   JWT_EXPIRES_IN_SECONDS,
+  adminIdMetadata,
   ok,
   SessionService,
   userIdMetadata,
@@ -85,6 +87,84 @@ interface AdminLoginEnvelope {
   data?: AdminLoginData;
 }
 
+// ---------- 批次 7c：全局管理面 ----------
+
+interface LiveRoomItem {
+  room_id: string;
+  title: string;
+  live_user_id: string;
+  speaker_name: string;
+  join_code: string;
+  status: number;
+  type: number;
+  start_time: string;
+  duration: number;
+  live_nums: number;
+  created_at: string;
+}
+
+interface RecordingItem {
+  id: string;
+  room_id: string;
+  room_title: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  duration: number;
+  record_type: number;
+  teacher_name: string;
+  created_at: string;
+}
+
+interface CoursewareItem {
+  id: string;
+  room_id: string;
+  room_title: string;
+  filename: string;
+  filext: string;
+  filesize: number;
+  fileurl: string;
+  create_user_id: string;
+  created_at: string;
+}
+
+interface DashboardStatsData {
+  total_users: number;
+  today_new_users: number;
+  banned_users: number;
+  total_live_rooms: number;
+  active_live_rooms: number;
+  total_records: number;
+  total_coursewares: number;
+  today_new_rooms: number;
+}
+
+interface AuditLogItem {
+  id: string;
+  occurred_at: string;
+  actor: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  request_id: string;
+  ip: string;
+  detail: string;
+}
+
+/** live-service 管理端写操作的最小面（删除类必须经域层保 Janus/软删不变量）。 */
+interface LiveAdminClient {
+  deleteLive(data: { room_id: string }, metadata?: unknown): Observable<CommonResponse>;
+  deleteVideoByRoomIds(
+    data: { room_ids: string[] },
+    metadata?: unknown
+  ): Observable<CommonResponse>;
+  deleteVideoByVideoIds(
+    data: { video_ids: string[] },
+    metadata?: unknown
+  ): Observable<CommonResponse>;
+  deleteCourseware(data: { id: string }, metadata?: unknown): Observable<CommonResponse>;
+}
+
 interface AdminServiceClient {
   adminLogin(data: { username: string; password: string }): Observable<AdminLoginEnvelope>;
   getAdmin(data: { admin_id: string }): Observable<AdminEnvelope>;
@@ -122,6 +202,44 @@ interface AdminServiceClient {
     data: { user_id: string; role: number },
     metadata?: unknown
   ): Observable<CommonResponse>;
+  // 批次 7c
+  listLiveRooms(data: {
+    page: number;
+    page_size: number;
+    keyword: string;
+    status: number;
+    type: number;
+    start_time_ms: string;
+    end_time_ms: string;
+  }): Observable<{ code: string; msg: string; total: number; items: LiveRoomItem[] }>;
+  getLiveRoom(data: {
+    room_id: string;
+  }): Observable<{ code: string; msg: string; data?: LiveRoomItem }>;
+  listRecordings(data: {
+    page: number;
+    page_size: number;
+    keyword: string;
+    room_id: string;
+  }): Observable<{ code: string; msg: string; total: number; items: RecordingItem[] }>;
+  listCoursewares(data: {
+    page: number;
+    page_size: number;
+    keyword: string;
+    room_id: string;
+  }): Observable<{ code: string; msg: string; total: number; items: CoursewareItem[] }>;
+  getDashboardStats(data: Record<string, never>): Observable<{
+    code: string;
+    msg: string;
+    data?: DashboardStatsData;
+  }>;
+  listAuditLogs(data: {
+    page: number;
+    page_size: number;
+    action: string;
+    actor: string;
+    from_ms: string;
+    to_ms: string;
+  }): Observable<{ code: string; msg: string; total: number; items: AuditLogItem[] }>;
 }
 
 interface AdminRequestUser {
@@ -144,15 +262,18 @@ interface AdminRequestUser {
 export class AdminController implements OnModuleInit {
   constructor(
     @Inject('ADMIN_GRPC') private adminClient: ClientGrpc,
+    @Inject('LIVE_GRPC') private liveClient: ClientGrpc,
     private jwtService: JwtService,
     private sessionService: SessionService,
     @Inject(AUDIT_PUBLISHER) private audit: AuditPublisher
   ) {}
 
   private adminService: AdminServiceClient;
+  private liveService: LiveAdminClient;
 
   onModuleInit() {
     this.adminService = this.adminClient.getService<AdminServiceClient>('AdminService');
+    this.liveService = this.liveClient.getService<LiveAdminClient>('LiveService');
   }
 
   // ---------- 登录（免鉴权，限流） ----------
@@ -346,7 +467,19 @@ export class AdminController implements OnModuleInit {
         status: status || '-1'
       })
     );
-    return { total: result.total ?? 0, items: result.items ?? [] };
+    return {
+      total: result.total ?? 0,
+      items: (result.items ?? []).map(u => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        role: u.role,
+        status: u.status,
+        bannedAt: u.banned_at,
+        bannedBy: u.banned_by,
+        createdAt: u.created_at
+      }))
+    };
   }
 
   @Get('users/:id')
@@ -354,7 +487,17 @@ export class AdminController implements OnModuleInit {
   @AdminRoles(1, 2)
   async getUser(@Param('id') userId: string) {
     const result = await grpcCall(this.adminService.getUser({ user_id: userId }));
-    return result.data;
+    const u = result.data!;
+    return {
+      id: u.id,
+      username: u.username,
+      email: u.email,
+      role: u.role,
+      status: u.status,
+      bannedAt: u.banned_at,
+      bannedBy: u.banned_by,
+      createdAt: u.created_at
+    };
   }
 
   @Post('users/:id/ban')
@@ -421,5 +564,280 @@ export class AdminController implements OnModuleInit {
       detail: { role: body.role }
     });
     return result;
+  }
+
+  // ---------- 批次 7c：直播间全局管理 ----------
+  // 读端点经 ADMIN_GRPC 直查共享库（管理面读模型）；写端点经 LIVE_GRPC 保 Janus/软删不变量。
+
+  @Get('live/rooms')
+  @UseGuards(AdminJwtAuthGuard, AdminRolesGuard)
+  @AdminRoles(1, 2)
+  async listLiveRooms(
+    @Query('page') page = '1',
+    @Query('pageSize') pageSize = '20',
+    @Query('keyword') keyword = '',
+    @Query('status') status = '0',
+    @Query('type') type = '-1',
+    @Query('startTime') startTime = '',
+    @Query('endTime') endTime = ''
+  ) {
+    const result = await grpcCall(
+      this.adminService.listLiveRooms({
+        page: Number(page) || 1,
+        page_size: Number(pageSize) || 20,
+        keyword,
+        status: Number(status) || 0,
+        type: Number(type),
+        start_time_ms: startTime,
+        end_time_ms: endTime
+      })
+    );
+    return {
+      total: result.total ?? 0,
+      items: (result.items ?? []).map(r => ({
+        roomId: r.room_id,
+        title: r.title,
+        liveUserId: r.live_user_id,
+        speakerName: r.speaker_name,
+        joinCode: r.join_code,
+        status: r.status,
+        type: r.type,
+        startTime: r.start_time,
+        duration: r.duration,
+        liveNums: r.live_nums,
+        createdAt: r.created_at
+      }))
+    };
+  }
+
+  @Get('live/rooms/:roomId')
+  @UseGuards(AdminJwtAuthGuard, AdminRolesGuard)
+  @AdminRoles(1, 2)
+  async getLiveRoom(@Param('roomId') roomId: string) {
+    const result = await grpcCall(this.adminService.getLiveRoom({ room_id: roomId }));
+    const r = result.data!;
+    return {
+      roomId: r.room_id,
+      title: r.title,
+      liveUserId: r.live_user_id,
+      speakerName: r.speaker_name,
+      joinCode: r.join_code,
+      status: r.status,
+      type: r.type,
+      startTime: r.start_time,
+      duration: r.duration,
+      liveNums: r.live_nums,
+      createdAt: r.created_at
+    };
+  }
+
+  @Delete('live/rooms/:roomId')
+  @UseGuards(AdminJwtAuthGuard, AdminRolesGuard)
+  @AdminRoles(1)
+  async deleteLiveRoom(@Param('roomId') roomId: string, @Request() req: AdminRequestUser) {
+    await grpcCall(
+      this.liveService.deleteLive({ room_id: roomId }, adminIdMetadata(req.user.adminId))
+    );
+    this.audit.publish({
+      actor: req.user.adminId,
+      action: AUDIT_ACTIONS.DELETE_LIVE,
+      targetType: 'room',
+      targetId: roomId,
+      requestId: req.requestId,
+      ip: req.ip,
+      detail: { byAdmin: true }
+    });
+    return ok({});
+  }
+
+  @Get('live/recordings')
+  @UseGuards(AdminJwtAuthGuard, AdminRolesGuard)
+  @AdminRoles(1, 2)
+  async listRecordings(
+    @Query('page') page = '1',
+    @Query('pageSize') pageSize = '20',
+    @Query('keyword') keyword = '',
+    @Query('roomId') roomId = ''
+  ) {
+    const result = await grpcCall(
+      this.adminService.listRecordings({
+        page: Number(page) || 1,
+        page_size: Number(pageSize) || 20,
+        keyword,
+        room_id: roomId
+      })
+    );
+    return {
+      total: result.total ?? 0,
+      items: (result.items ?? []).map(r => ({
+        id: r.id,
+        roomId: r.room_id,
+        roomTitle: r.room_title,
+        fileName: r.file_name,
+        filePath: r.file_path,
+        fileSize: r.file_size,
+        duration: r.duration,
+        recordType: r.record_type,
+        teacherName: r.teacher_name,
+        createdAt: r.created_at
+      }))
+    };
+  }
+
+  /**
+   * 批量删除录像：`by=room` 按房间删、`by=video` 按录像 id 删。
+   * 审计动作区分 video.delete_rooms / video.delete_ids（沿用 S12 既有枚举）。
+   */
+  @Post('live/recordings/delete')
+  @UseGuards(AdminJwtAuthGuard, AdminRolesGuard)
+  @AdminRoles(1)
+  async deleteRecordings(
+    @Body() body: { by: 'room' | 'video'; ids: string[] },
+    @Request() req: AdminRequestUser
+  ) {
+    const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : [];
+    if (ids.length === 0) return ok({ deleted: 0 });
+    const metadata = adminIdMetadata(req.user.adminId);
+    if (body.by === 'video') {
+      await grpcCall(this.liveService.deleteVideoByVideoIds({ video_ids: ids }, metadata));
+      this.audit.publish({
+        actor: req.user.adminId,
+        action: AUDIT_ACTIONS.DELETE_VIDEO_IDS,
+        targetType: 'video',
+        targetId: ids.join(','),
+        requestId: req.requestId,
+        ip: req.ip,
+        detail: { byAdmin: true, count: ids.length }
+      });
+    } else {
+      await grpcCall(this.liveService.deleteVideoByRoomIds({ room_ids: ids }, metadata));
+      this.audit.publish({
+        actor: req.user.adminId,
+        action: AUDIT_ACTIONS.DELETE_VIDEO_ROOMS,
+        targetType: 'room',
+        targetId: ids.join(','),
+        requestId: req.requestId,
+        ip: req.ip,
+        detail: { byAdmin: true, count: ids.length }
+      });
+    }
+    return ok({ deleted: ids.length });
+  }
+
+  @Get('live/coursewares')
+  @UseGuards(AdminJwtAuthGuard, AdminRolesGuard)
+  @AdminRoles(1, 2)
+  async listCoursewares(
+    @Query('page') page = '1',
+    @Query('pageSize') pageSize = '20',
+    @Query('keyword') keyword = '',
+    @Query('roomId') roomId = ''
+  ) {
+    const result = await grpcCall(
+      this.adminService.listCoursewares({
+        page: Number(page) || 1,
+        page_size: Number(pageSize) || 20,
+        keyword,
+        room_id: roomId
+      })
+    );
+    return {
+      total: result.total ?? 0,
+      items: (result.items ?? []).map(c => ({
+        id: c.id,
+        roomId: c.room_id,
+        roomTitle: c.room_title,
+        filename: c.filename,
+        filext: c.filext,
+        filesize: c.filesize,
+        fileurl: c.fileurl,
+        createUserId: c.create_user_id,
+        createdAt: c.created_at
+      }))
+    };
+  }
+
+  @Delete('live/coursewares/:id')
+  @UseGuards(AdminJwtAuthGuard, AdminRolesGuard)
+  @AdminRoles(1)
+  async deleteCourseware(@Param('id') id: string, @Request() req: AdminRequestUser) {
+    await grpcCall(this.liveService.deleteCourseware({ id }, adminIdMetadata(req.user.adminId)));
+    this.audit.publish({
+      actor: req.user.adminId,
+      action: AUDIT_ACTIONS.DELETE_COURSEWARE,
+      targetType: 'courseware',
+      targetId: id,
+      requestId: req.requestId,
+      ip: req.ip,
+      detail: { byAdmin: true }
+    });
+    return ok({});
+  }
+
+  // ---------- 批次 7c：数据看板 / 审计日志（只读） ----------
+
+  @Get('dashboard/stats')
+  @UseGuards(AdminJwtAuthGuard, AdminRolesGuard)
+  @AdminRoles(1, 2)
+  async dashboardStats() {
+    const result = await grpcCall(this.adminService.getDashboardStats({}));
+    const d = result.data;
+    return {
+      totalUsers: Number(d?.total_users ?? 0),
+      todayNewUsers: Number(d?.today_new_users ?? 0),
+      bannedUsers: Number(d?.banned_users ?? 0),
+      totalLiveRooms: Number(d?.total_live_rooms ?? 0),
+      activeLiveRooms: Number(d?.active_live_rooms ?? 0),
+      totalRecords: Number(d?.total_records ?? 0),
+      totalCoursewares: Number(d?.total_coursewares ?? 0),
+      todayNewRooms: Number(d?.today_new_rooms ?? 0)
+    };
+  }
+
+  @Get('audit/logs')
+  @UseGuards(AdminJwtAuthGuard, AdminRolesGuard)
+  @AdminRoles(1, 2)
+  async listAuditLogs(
+    @Query('page') page = '1',
+    @Query('pageSize') pageSize = '50',
+    @Query('action') action = '',
+    @Query('actor') actor = '',
+    @Query('from') from = '',
+    @Query('to') to = ''
+  ) {
+    const result = await grpcCall(
+      this.adminService.listAuditLogs({
+        page: Number(page) || 1,
+        page_size: Number(pageSize) || 50,
+        action,
+        actor,
+        from_ms: from,
+        to_ms: to
+      })
+    );
+    return {
+      total: result.total ?? 0,
+      items: (result.items ?? []).map(row => {
+        let detail: unknown = null;
+        if (row.detail) {
+          try {
+            detail = JSON.parse(row.detail);
+          } catch {
+            detail = row.detail;
+          }
+        }
+        return {
+          id: row.id,
+          occurredAt: row.occurred_at,
+          actor: row.actor,
+          action: row.action,
+          targetType: row.target_type,
+          targetId: row.target_id,
+          requestId: row.request_id,
+          ip: row.ip,
+          detail
+        };
+      })
+    };
   }
 }

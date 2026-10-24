@@ -1,7 +1,13 @@
 import { Controller, Logger } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { Metadata, status as GrpcStatus } from '@grpc/grpc-js';
-import { fail, grpcError, ok, userIdFromMetadata } from '@yunyan-live/nest-shared';
+import {
+  adminIdFromMetadata,
+  fail,
+  grpcError,
+  ok,
+  userIdFromMetadata
+} from '@yunyan-live/nest-shared';
 
 import { LiveService } from './live.service';
 import { CheckinService, type CheckinSessionView } from './checkin.service';
@@ -31,6 +37,16 @@ export class LiveController {
     if (!access.isTeacher) {
       throw grpcError(GrpcStatus.PERMISSION_DENIED, 'not room owner');
     }
+  }
+
+  /**
+   * 批次 7c：管理端删除旁路。
+   * - 携带已验签 admin-id（HMAC，key 与 user-id 物理隔离）→ 放行，供后台全局删除；
+   * - 否则回落 S4 口径：必须有 user-id 且为房主（fail-closed，坏签名等同无身份）。
+   */
+  private async assertRoomOwnerOrAdmin(roomId: string, metadata?: Metadata): Promise<void> {
+    if (adminIdFromMetadata(metadata)) return;
+    await this.assertRoomOwner(roomId, this.requireSigner(metadata));
   }
 
   @GrpcMethod('LiveService', 'CreateLive')
@@ -233,8 +249,7 @@ export class LiveController {
 
   @GrpcMethod('LiveService', 'DeleteLive')
   async deleteLive(data: { room_id: string }, metadata?: Metadata) {
-    const signer = this.requireSigner(metadata);
-    await this.assertRoomOwner(data.room_id, signer);
+    await this.assertRoomOwnerOrAdmin(data.room_id, metadata);
     this.logger.log(`gRPC DeleteLive: ${data.room_id}`);
     await this.liveService.delete(data.room_id);
     return ok();
@@ -429,9 +444,8 @@ export class LiveController {
 
   @GrpcMethod('LiveService', 'DeleteVideoByRoomIds')
   async deleteVideoByRoomIds(data: { room_ids: string[] }, metadata?: Metadata) {
-    const signer = this.requireSigner(metadata);
     for (const roomId of data.room_ids) {
-      await this.assertRoomOwner(roomId, signer);
+      await this.assertRoomOwnerOrAdmin(roomId, metadata);
     }
     this.logger.log(`gRPC DeleteVideoByRoomIds: ${data.room_ids}`);
     await this.liveService.deleteVideoByRoomIds(data.room_ids);
@@ -440,11 +454,10 @@ export class LiveController {
 
   @GrpcMethod('LiveService', 'DeleteVideoByVideoIds')
   async deleteVideoByVideoIds(data: { video_ids: string[] }, metadata?: Metadata) {
-    const signer = this.requireSigner(metadata);
     // S4 域层下沉：video→room 域内解析后逐房归属断言（未映射 id 跳过＝删除幂等）
     const rows = await this.liveService.getVideoRoomMap(data.video_ids);
     for (const roomId of new Set(rows.map(r => r.roomId))) {
-      await this.assertRoomOwner(roomId, signer);
+      await this.assertRoomOwnerOrAdmin(roomId, metadata);
     }
     this.logger.log(`gRPC DeleteVideoByVideoIds: ${data.video_ids}`);
     await this.liveService.deleteVideoByVideoIds(data.video_ids);
@@ -499,10 +512,9 @@ export class LiveController {
 
   @GrpcMethod('LiveService', 'DeleteCourseware')
   async deleteCourseware(data: { id: string }, metadata?: Metadata) {
-    const signer = this.requireSigner(metadata);
     // S4 域层下沉：courseware→room 域内解析后归属断言（不存在→NOT_FOUND 交网关 404）
     const roomId = await this.liveService.getCoursewareRoom(data.id);
-    await this.assertRoomOwner(roomId, signer);
+    await this.assertRoomOwnerOrAdmin(roomId, metadata);
     this.logger.log(`gRPC DeleteCourseware: ${data.id}`);
     await this.liveService.deleteCourseware(data.id);
     return ok();
