@@ -8,7 +8,8 @@
  */
 import { randomBytes, scryptSync, randomUUID } from 'node:crypto';
 
-const [, username = 'admin', password = 'Admin@2025', roleArg = '1'] = process.argv;
+// process.argv = [node, scriptPath, username, password, role] —— 前两项必须跳过
+const [, , username = 'admin', password = 'Admin@2025', roleArg = '1'] = process.argv;
 const role = Number(roleArg);
 
 const SCRYPT_N = 131072;
@@ -16,10 +17,17 @@ const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const KEYLEN = 64;
 const SALT_BYTES = 16;
+// OpenSSL 默认 maxmem=32 MiB，而 128*N*r ≈ 128 MiB；不显式放宽会抛 ERR_CRYPTO_INVALID_SCRYPT_PARAMS
+const SCRYPT_MAXMEM = 128 * SCRYPT_N * SCRYPT_R + 1024 * 1024;
 const PREFIX = 'scrypt:$';
 
 const salt = randomBytes(SALT_BYTES);
-const hash = scryptSync(password, salt, KEYLEN, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P });
+const hash = scryptSync(password, salt, KEYLEN, {
+  N: SCRYPT_N,
+  r: SCRYPT_R,
+  p: SCRYPT_P,
+  maxmem: SCRYPT_MAXMEM
+});
 const passwordHash = `${PREFIX}${SCRYPT_N}-${SCRYPT_R}-${SCRYPT_P}$${salt.toString('hex')}$${hash.toString('hex')}`;
 
 const id = randomUUID();
