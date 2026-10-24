@@ -183,6 +183,7 @@ cp apps/live-service/.env.example     apps/live-service/.env
 cp apps/mail-service/.env.example     apps/mail-service/.env
 cp apps/chat-ws-service/.env.example  apps/chat-ws-service/.env
 cp apps/yjs-ws-service/.env.example   apps/yjs-ws-service/.env
+cp apps/admin/admin-service/.env.example apps/admin/admin-service/.env
 cp apps/desktop/.env.example          apps/desktop/.env.development
 cp apps/desktop/.env.example          apps/desktop/.env.production   # 仅 pnpm build 打包时需要
 cp init/.env.example                  init/.env
@@ -192,7 +193,7 @@ cp init/.env.example                  init/.env
 # init/.env 有两个必填项（compose 以 :? 强制，留空 docker compose up 直接失败）
 # 生成口令: openssl rand -hex 32
 #   RABBITMQ_PASSWORD=    # chat 落库链路凭据
-#   GRPC_SHARED_SECRET=   # 五服务 gRPC HMAC 身份签名共享密钥
+#   GRPC_SHARED_SECRET=   # 六服务 gRPC HMAC 身份签名共享密钥（含 admin-service）
 
 # 生成密码加密密钥对（首次或轮换时执行一次）
 pnpm gen:keys --write-env   # RSA-2048：公钥内置桌面端，私钥写入 apps/auth-service/.env
@@ -464,7 +465,7 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 | `POSTGRES_PASSWORD` | 回退 `postgres`  | PostgreSQL 口令；生产部署务必覆盖（仅 pgdata 卷首次初始化生效） |
 | `JWT_SECRET`     | 回退 `dev-only-jwt-secret` | JWT 签名密钥；生产部署务必覆盖 |
 | `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | 空（**必填**） | chat-ws 落库链路凭据；compose 以 `:?` 强制，口令 `openssl rand -hex 32` |
-| `GRPC_SHARED_SECRET` | 空（**必填**） | 五服务 gRPC HMAC 身份签名共享密钥（GAP-S10b）；compose 以 `:?` 强制 |
+| `GRPC_SHARED_SECRET` | 空（**必填**） | 六服务 gRPC HMAC 身份签名共享密钥（GAP-S10b，含 admin-service）；compose 以 `:?` 强制 |
 
 ## 端口说明
 
@@ -483,6 +484,8 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 | 50053       | gRPC      | Mail Service（邮件）                 | 仅本机（默认）                 |
 | 50054       | WebSocket | Chat WS Service（聊天）              | 仅本机（compose）              |
 | 50055       | WebSocket | Yjs WS Service（白板）               | 仅本机（compose）              |
+| 50056       | gRPC      | Admin Service（管理后台）            | 仅容器网络（compose 未发布）   |
+| 8848        | TCP       | 管理后台 Web（admin-web 容器）       | 仅本机                         |
 | 20000-20100 | UDP       | RTP/RTCP 媒体流                      | 全接口                         |
 | 9090        | TCP       | Prometheus（监控）                   | 仅本机                         |
 | 9093        | TCP       | Alertmanager（告警）                 | 仅本机                         |
@@ -491,8 +494,9 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 > gRPC 服务默认仅绑 `127.0.0.1`（各服务 `GRPC_HOST` 可覆盖，容器化部署时设 `0.0.0.0`）；
 > PostgreSQL/Redis 由 compose 双绑定 `127.0.0.1` + `192.168.2.100`（LAN 跨机用，勿发布到公网）。
 > 业务服务（3001/50054/50055）compose 只绑 `127.0.0.1`：跨机访问桌面端时改用宿主机 `pnpm dev` 运行业务服务，
-> 或参照 pg/redis 双绑定在 compose 增加 LAN 绑定。gRPC metrics 端口 9464（auth）/9465（live）/9466（mail）
-> 仅宿主 dev 或容器网络内可达，未发布到宿主。
+> 或参照 pg/redis 双绑定在 compose 增加 LAN 绑定。gRPC metrics 端口 9464（auth）/9465（live）/9466（mail）/
+> 9467（admin）仅宿主 dev 或容器网络内可达，未发布到宿主。管理后台 Web（8848）只反代 `/api` 到 gateway，
+> API 其余路径不经它暴露。
 
 ## 环境变量配置
 

@@ -4,9 +4,8 @@ import { type UserConfigExport, type ConfigEnv, loadEnv } from 'vite';
 import { root, alias, wrapperEnv, pathResolve, __APP_INFO__ } from './build/utils.ts';
 
 export default async ({ mode }: ConfigEnv): Promise<UserConfigExport> => {
-  const { VITE_CDN, VITE_PORT, VITE_COMPRESSION, VITE_PUBLIC_PATH } = wrapperEnv(
-    loadEnv(mode, root)
-  );
+  const env = loadEnv(mode, root);
+  const { VITE_CDN, VITE_PORT, VITE_COMPRESSION, VITE_PUBLIC_PATH } = wrapperEnv(env);
   return {
     base: VITE_PUBLIC_PATH,
     root,
@@ -19,7 +18,14 @@ export default async ({ mode }: ConfigEnv): Promise<UserConfigExport> => {
       port: VITE_PORT,
       host: '0.0.0.0',
       // 本地跨域代理 https://cn.vitejs.dev/config/server-options.html#server-proxy
-      proxy: {},
+      proxy: {
+        // API 统一前缀 /api：转发到 gateway 并剥掉前缀（生产由 nginx 做同规则反代）
+        '/api': {
+          target: env.VITE_BASE_API || 'http://localhost:3001',
+          changeOrigin: true,
+          rewrite: path => path.replace(/^\/api/, '')
+        }
+      },
       // 预热文件以提前转换和缓存结果，降低启动期间的初始页面加载时长并防止转换瀑布
       warmup: {
         clientFiles: ['./index.html', './src/{views,components}/*']

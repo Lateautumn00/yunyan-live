@@ -32,6 +32,11 @@ scrape_configs:
     static_configs:
       - targets: ['mail-service:9466']
 
+  # 批次 7：管理后台（/metrics 走 9467）
+  - job_name: admin-service
+    static_configs:
+      - targets: ['admin-service:9467']
+
   - job_name: chat-ws-service
     static_configs:
       - targets: ['chat-ws-service:50054']
