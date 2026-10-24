@@ -67,6 +67,11 @@ export default [
       'vue/one-component-per-file': 'off',
       'vue/require-default-prop': 'off',
       'vue/attribute-hyphenation': 'off',
+      'vue/max-attributes-per-line': 'off',
+      'vue/singleline-html-element-content-newline': 'off',
+      'vue/multiline-html-element-content-newline': 'off',
+      'vue/html-self-closing': 'off',
+      'vue/html-indent': 'off',
       'no-undef': 'off'
     }
   }
