@@ -18,18 +18,6 @@ import type { Metadata } from '@grpc/grpc-js';
 
 // ---------- gRPC 信封类型（export 供 controller 标注返回类型，声明文件生成需要） ----------
 
-export interface AdminAuthData {
-  access_token: string;
-  expires_in: number;
-  id: string;
-  username: string;
-  email: string | null;
-  role: number;
-  status: string;
-  last_login_at: string | null;
-  created_at: string;
-}
-
 export interface AdminItem {
   id: string;
   username: string;
@@ -56,13 +44,8 @@ export interface AdminLoginResult {
   msg: string;
   access_token: string;
   expires_in: number;
-  id: string;
-  username: string;
-  email: string;
-  role: number;
-  status: string;
-  last_login_at: string | null;
-  created_at: string;
+  /** 与 admin.proto 的 AdminAuthResponse.data（AdminData）对齐 */
+  data: AdminItem;
 }
 
 export interface AdminGetResult {
@@ -197,17 +180,13 @@ export class AdminService {
     if (!admin) throw grpcError(status.UNAUTHENTICATED, '管理员账号或密码错误');
     if (admin.status !== 'active') throw grpcError(status.FAILED_PRECONDITION, '账号已停用');
     await this.adminsService.touchLastLogin(admin.id);
+    // 信封必须与 admin.proto 的 AdminAuthResponse 对齐：管理员信息在 data 里，
+    // 顶层只放 access_token / expires_in（此前把字段平铺，data 为空导致网关读 admin.id 抛错）
     const result = ok({
       access_token: '',
       expires_in: 0,
-      id: admin.id,
-      username: admin.username,
-      email: admin.email ?? '',
-      role: admin.role,
-      status: admin.status,
-      last_login_at: admin.lastLoginAt ? admin.lastLoginAt.toISOString() : null,
-      created_at: admin.createdAt.toISOString()
-    } as unknown as AdminAuthData);
+      data: this.toAdminItem(admin)
+    });
     return result as unknown as AdminLoginResult;
   }
 
