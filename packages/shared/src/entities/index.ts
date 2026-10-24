@@ -1,4 +1,5 @@
 export { User } from './user.entity';
+export { Admin } from './admin.entity';
 export { LiveRoom } from './live-room.entity';
 export { LiveParticipant } from './live-participant.entity';
 export { LiveTransferCode } from './live-transfer-code.entity';

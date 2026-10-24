@@ -14,6 +14,8 @@ export interface JwtPayload {
   email: string;
   role: number;
   sid?: string;
+  /** 批次 7 / GAP-F8：管理员 token 显式携带 aud='admin'；用户 token 无此字段 */
+  aud?: string;
 }
 
 /** 启动时读取 JWT_SECRET，缺失则打印指引并退出（WS 网关 fail-fast） */
@@ -26,13 +28,21 @@ export function requireJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
   return secret;
 }
 
-/** 校验 token，返回载荷；无效/过期返回 null（关闭码/HTTP 状态由调用方决定） */
+/**
+ * 校验 token，返回载荷；无效/过期返回 null。
+ * 批次 7 / GAP-F8：显式拒绝 admin audience 的 token（WS 网关等用户侧调用点）。
+ * admin token（aud='admin'）若被误用于 WS 握手，其 role=1 会被 chat-ws 误判为教师；
+ * 此处直接拒，杜绝跨受众越权。
+ */
 export function verifyToken(token: string, secret: string): JwtPayload | null {
+  let payload: JwtPayload;
   try {
-    return jwt.verify(token, secret) as JwtPayload;
+    payload = jwt.verify(token, secret) as JwtPayload;
   } catch {
     return null;
   }
+  if (payload.aud === 'admin') return null;
+  return payload;
 }
 
 /** server / auth-service 共用的 JwtModule.registerAsync 配置（secret + 7d 默认值单源） */

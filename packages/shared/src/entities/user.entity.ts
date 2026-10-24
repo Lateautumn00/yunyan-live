@@ -23,6 +23,12 @@ export class User {
   @Column({ type: 'int', default: 2 })
   role: number; // 1=teacher, 2=student
 
+  @Column({ name: 'banned_at', type: 'timestamptz', nullable: true })
+  bannedAt: Date | null;
+
+  @Column({ name: 'banned_by', type: 'varchar', length: 50, nullable: true })
+  bannedBy: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

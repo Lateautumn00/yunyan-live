@@ -18,7 +18,15 @@ export const AUDIT_ACTIONS = {
   MODERATION_MUTE: 'moderation.mute',
   MODERATION_KICK: 'moderation.kick',
   MODERATION_RELEASE: 'moderation.release',
-  MESSAGE_RECALL: 'message.recall'
+  MESSAGE_RECALL: 'message.recall',
+  // 批次 7 / GAP-F8：管理后台审计动作（同步 docs/research/data-retention-policy.md）
+  ADMIN_BAN_USER: 'admin.ban_user',
+  ADMIN_UNBAN_USER: 'admin.unban_user',
+  ADMIN_ROLE_CHANGE: 'admin.role_change',
+  ADMIN_ADMIN_CREATE: 'admin.admin_create',
+  ADMIN_ADMIN_STATUS_CHANGE: 'admin.status_change',
+  ADMIN_LOGIN_OK: 'admin.login.ok',
+  ADMIN_LOGIN_FAILED: 'admin.login.failed'
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

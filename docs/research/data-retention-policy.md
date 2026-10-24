@@ -50,6 +50,13 @@
 | `moderation.kick`      | POST live/push/kick gRPC 落库成功且广播后（F3）                 | userId             | `userId`（被踢者）（target=room）                   |
 | `moderation.release`   | POST live/push/release gRPC 落库成功且广播后（F3）              | userId             | `userId`, `kind`（target=room）                     |
 | `message.recall`       | POST live/push/recall gRPC 落库成功且广播后（F4）；幂等重复不记 | userId             | `roomId`（target=message, targetId=msgId）          |
+| `admin.login.ok`       | POST admin/login 上游 admin-service 认证成功                    | adminId            | —                                                   |
+| `admin.login.failed`   | admin/login 上游 gRPC 拒绝（捕获后重抛，不吞）                  | username           | `reason=rejected`                                   |
+| `admin.ban_user`       | POST admin/users/:id/ban 成功后（含 revokeAllSessions）         | adminId            | `reason`（target=user, targetId=userId）            |
+| `admin.unban_user`     | POST admin/users/:id/unban 成功后                               | adminId            | —（target=user, targetId=userId）                   |
+| `admin.role_change`    | POST admin/users/:id/role 或 admins/:id/role 成功后             | adminId            | `role`（target 视 targetType）                      |
+| `admin.admin_create`   | POST admin/admins 成功后                                        | adminId            | `username`, `role`（target=admin）                  |
+| `admin.status_change`  | POST admin/admins/:id/status 成功后                             | adminId            | `status`（target=admin）                            |
 
 - **降级留痕（拍板）**：板书导出（F6.1 `exportBoard`）是纯客户端导出，无服务端端点，
   **不可审计**——经拍板不为打点新增端点，该记录点以此文档降级说明收口。

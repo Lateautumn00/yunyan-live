@@ -30,6 +30,15 @@ import { grpcClientOptions, resolveProto } from '@yunyan-live/nest-shared';
           protoPath: resolveProto('live.proto'),
           url: process.env.LIVE_GRPC_URL || 'localhost:50052'
         })
+      },
+      {
+        name: 'ADMIN_GRPC',
+        transport: Transport.GRPC,
+        options: grpcClientOptions({
+          package: 'admin',
+          protoPath: resolveProto('admin.proto'),
+          url: process.env.ADMIN_GRPC_URL || 'localhost:50056'
+        })
       }
     ])
   ],

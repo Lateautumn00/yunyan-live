@@ -1,0 +1,140 @@
+syntax = "proto3";
+package admin;
+
+// 批次 7 / GAP-F8：独立管理后台（admins 表与 users 完全解耦，独立 gRPC 服务 :50056）。
+// 信封风格与 auth.proto 一致：{code, msg, data}。
+service AdminService {
+  rpc AdminLogin (AdminLoginRequest) returns (AdminAuthResponse) {}
+  rpc GetAdmin (GetAdminRequest) returns (AdminResponse) {}
+  rpc ListAdmins (ListAdminsRequest) returns (AdminListResponse) {}
+  rpc CreateAdmin (CreateAdminRequest) returns (AdminResponse) {}
+  rpc UpdateAdminRole (UpdateAdminRoleRequest) returns (CommonResponse) {}
+  rpc SetAdminStatus (SetAdminStatusRequest) returns (CommonResponse) {}
+  rpc ListUsers (ListUsersRequest) returns (UserListResponse) {}
+  rpc GetUser (GetUserRequest) returns (UserResponse) {}
+  rpc BanUser (BanUserRequest) returns (CommonResponse) {}
+  rpc UnbanUser (UnbanUserRequest) returns (CommonResponse) {}
+  rpc SetUserRole (SetUserRoleRequest) returns (CommonResponse) {}
+}
+
+message CommonResponse {
+  string code = 1;
+  string msg = 2;
+}
+
+// ---- 管理员账号 ----
+
+message AdminLoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message AdminAuthResponse {
+  string code = 1;
+  string msg = 2;
+  string access_token = 3;
+  int32 expires_in = 4;
+  AdminData data = 5;
+}
+
+message AdminData {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  int32 role = 4;
+  string status = 5;
+  string last_login_at = 6;
+  string created_at = 7;
+}
+
+message GetAdminRequest {
+  string admin_id = 1;
+}
+
+message AdminResponse {
+  string code = 1;
+  string msg = 2;
+  AdminData data = 3;
+}
+
+message ListAdminsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string keyword = 3;
+}
+
+message AdminListResponse {
+  string code = 1;
+  string msg = 2;
+  int32 total = 3;
+  repeated AdminData items = 4;
+}
+
+message CreateAdminRequest {
+  string username = 1;
+  string email = 2;
+  string password = 3;
+  int32 role = 4;
+}
+
+message UpdateAdminRoleRequest {
+  string admin_id = 1;
+  int32 role = 2;
+}
+
+message SetAdminStatusRequest {
+  string admin_id = 1;
+  string status = 2; // active | disabled
+}
+
+// ---- 用户管理（操作 users 表） ----
+
+message ListUsersRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string keyword = 3; // 匹配 username / email
+  int32 role = 4; // 缺省 -1 = 全部
+  string status = 5; // active | banned | -1 全部
+}
+
+message UserData {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  int32 role = 4;
+  string created_at = 5;
+  string status = 6; // active | banned
+  string banned_at = 7;
+  string banned_by = 8;
+}
+
+message UserListResponse {
+  string code = 1;
+  string msg = 2;
+  int32 total = 3;
+  repeated UserData items = 4;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message UserResponse {
+  string code = 1;
+  string msg = 2;
+  UserData data = 3;
+}
+
+message BanUserRequest {
+  string user_id = 1;
+  string reason = 2;
+}
+
+message UnbanUserRequest {
+  string user_id = 1;
+}
+
+message SetUserRoleRequest {
+  string user_id = 1;
+  int32 role = 2;
+}
