@@ -430,6 +430,7 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 | RabbitMQ 数据卷  | `scripts/backup-files.sh`（docker 卷 → tar.gz）                                 |
 | Janus 录像       | `scripts/backup-files.sh`（`RECORDINGS_DIR` 默认 `/home/janus/recordings`）     |
 | 课件/图片落盘    | `scripts/backup-files.sh`（`UPLOADS_DIR` 默认 `apps/server/uploads`）           |
+| 白板回放         | 命名卷 `yjsreplay`（可选项；7 天 TTL 的增量日志，丢失只影响历史回放）           |
 | 恢复演练         | `scripts/restore-drill.sh`（一次性容器导入 + 冒烟查询，**每月必跑**）           |
 | Redis            | AOF 已开（`appendonly everysec`），卷级归档即可                                 |
 | 加密             | 两个备份脚本均支持 `BACKUP_PASSPHRASE` → `openssl aes-256-cbc`（.enc 产物）      |

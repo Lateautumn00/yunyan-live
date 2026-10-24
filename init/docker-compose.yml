@@ -334,6 +334,10 @@
       REDIS_PORT: '6379'
       LIVE_GRPC_URL: live-service:50052
       GRPC_SHARED_SECRET: ${GRPC_SHARED_SECRET:?}
+      # 白板回放（yjs 增量日志）落盘目录：命名卷持久化，容器重建后仍可回放
+      REPLAY_DIR: /app/apps/yjs-ws-service/data/replay
+    volumes:
+      - yjsreplay:/app/apps/yjs-ws-service/data
     depends_on:
       redis:
         condition: service_healthy
@@ -431,6 +435,7 @@ volumes:
   janus-logs:
   promdata:
   amdata:
+  yjsreplay:
 
 # GAP-S10b 网络边界：
 # - edge   正常桥接（可出网 + 宿主 loopback 端口发布）；仅边缘面服务与共享基础设施在列
