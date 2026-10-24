@@ -31,6 +31,10 @@ pnpm-debug.log*
 **/coverage/
 **/.vite/
 
+# --- 运行时数据（不入库） ---
+# yjs-ws-service 白板回放：REPLAY_DIR 默认 data/replay（每房间增量日志，7 天惰性过期）
+apps/yjs-ws-service/data/
+
 # --- electron-builder artifacts ---
 **/*.exe
 **/*.dmg
