@@ -36,6 +36,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "gen:keys": "node scripts/gen-password-keypair.mjs",
+    "env:sync": "node scripts/sync-env.mjs",
     "prepare": "husky"
   },
   "lint-staged": {
