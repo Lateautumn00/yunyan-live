@@ -35,14 +35,19 @@ function setupPrivateKeyEnv() {
   ).toString('base64');
 }
 
-function buildService(options?: { passwordHash?: string; emailExists?: boolean }) {
+function buildService(options?: {
+  passwordHash?: string;
+  emailExists?: boolean;
+  bannedAt?: Date | null;
+}) {
   const passwordHash = options?.passwordHash ?? bcrypt.hashSync(PLAIN_OLD_PASSWORD, 10);
   const user = {
     id: USER_ID,
     username: '张三',
     email: 'teacher@example.com',
     passwordHash,
-    role: 1
+    role: 1,
+    bannedAt: options?.bannedAt ?? null
   };
   const usersService = {
     findByEmail: vi.fn((_email?: unknown) => (options?.emailExists === false ? null : user)),
@@ -96,6 +101,17 @@ describe('AuthService password flows (RSA-OAEP encrypted)', () => {
         password: await encryptForClient('Wrong!pass1')
       })
     ).rejects.toThrow(/密码错误/);
+  });
+
+  it('login rejects banned user even with correct password（封禁语义①禁登录）', async () => {
+    const { service, jwtService } = buildService({ bannedAt: new Date('2026-10-01T00:00:00Z') });
+    await expect(
+      service.login({
+        email: 'teacher@example.com',
+        password: await encryptForClient(PLAIN_OLD_PASSWORD)
+      })
+    ).rejects.toThrow(/账号已被封禁/);
+    expect(jwtService.sign).not.toHaveBeenCalled();
   });
 
   it('login rejects legacy plaintext password', async () => {

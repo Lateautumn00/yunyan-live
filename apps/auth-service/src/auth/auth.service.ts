@@ -45,6 +45,10 @@ export class AuthService implements OnModuleInit {
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) throw grpcError(status.UNAUTHENTICATED, '密码错误');
 
+    // 批次 7b/7c：封禁语义①「禁登录」——banned_at 非空即拒（0008 迁移列）。
+    // 放在密码校验之后，避免向非账号持有人泄露封禁状态。
+    if (user.bannedAt) throw grpcError(status.PERMISSION_DENIED, '账号已被封禁');
+
     const token = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role });
     return ok({
       access_token: token,
