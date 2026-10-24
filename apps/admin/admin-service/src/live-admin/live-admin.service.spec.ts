@@ -47,6 +47,8 @@ describe('LiveAdminService（批次 7c 全局只读模型）', () => {
     const [countSql, countParams] = query.mock.calls[0] as [string, unknown[]];
     const [pageSql, pageParams] = query.mock.calls[1] as [string, unknown[]];
     expect(countSql).toContain('r."deletedAt" IS NULL');
+    // users.id 是 uuid、live_rooms."liveUserId" 是 varchar，必须显式 cast（否则 PG 报 operator does not exist）
+    expect(countSql).toContain('u.id::text = r."liveUserId"');
     expect(countSql).toContain('r.title ILIKE');
     expect(countSql).toContain('u.username ILIKE');
     expect(countSql).toContain('r.status =');

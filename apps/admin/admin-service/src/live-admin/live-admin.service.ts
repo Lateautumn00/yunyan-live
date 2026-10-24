@@ -114,7 +114,7 @@ export class LiveAdminService {
     if (query.endTimeMs) {
       where.push(`r."startTime" <= ${add(new Date(Number(query.endTimeMs)))}`);
     }
-    const from = `FROM live_rooms r LEFT JOIN users u ON u.id = r."liveUserId" WHERE ${where.join(' AND ')}`;
+    const from = `FROM live_rooms r LEFT JOIN users u ON u.id::text = r."liveUserId" WHERE ${where.join(' AND ')}`;
 
     const countSql = `SELECT COUNT(*)::int AS total ${from}`;
     const pageSql = `
@@ -160,7 +160,7 @@ export class LiveAdminService {
               COALESCE(u.username, '') AS "speakerName", r."joinCode" AS "joinCode",
               r.status, r.type, r."startTime" AS "startTime", r.duration,
               r."liveNums" AS "liveNums", r."createdAt" AS "createdAt"
-       FROM live_rooms r LEFT JOIN users u ON u.id = r."liveUserId"
+       FROM live_rooms r LEFT JOIN users u ON u.id::text = r."liveUserId"
        WHERE r."roomId" = $1 AND r."deletedAt" IS NULL`,
       [roomId]
     )) as Record<string, unknown>[];
