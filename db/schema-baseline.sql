@@ -47,6 +47,25 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: admins; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.admins (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    username character varying(100) NOT NULL,
+    email character varying(200),
+    password_hash character varying(255) NOT NULL,
+    role smallint DEFAULT 1 NOT NULL,
+    status character varying(20) DEFAULT 'active'::character varying NOT NULL,
+    last_login_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT admins_role_check CHECK (((role = 1) OR (role = 2))),
+    CONSTRAINT admins_status_check CHECK ((((status)::text = 'active'::text) OR ((status)::text = 'disabled'::text)))
+);
+
+
+--
 -- Name: audit_logs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -294,7 +313,9 @@ CREATE TABLE public.users (
     password_hash character varying(255) NOT NULL,
     role integer DEFAULT 2 NOT NULL,
     created_at timestamp without time zone DEFAULT now() NOT NULL,
-    updated_at timestamp without time zone DEFAULT now() NOT NULL
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    banned_at timestamp with time zone,
+    banned_by character varying(50)
 );
 
 
@@ -370,6 +391,22 @@ ALTER TABLE ONLY public.live_participants
 
 ALTER TABLE ONLY public.live_rooms
     ADD CONSTRAINT "UQ_b7f166379f1fff0052ea5bbef89" UNIQUE ("joinCode");
+
+
+--
+-- Name: admins admins_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.admins
+    ADD CONSTRAINT admins_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: admins admins_username_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.admins
+    ADD CONSTRAINT admins_username_key UNIQUE (username);
 
 
 --
@@ -490,6 +527,20 @@ CREATE UNIQUE INDEX "UQ_checkin_records_session_user" ON public.checkin_records 
 
 
 --
+-- Name: idx_admins_role; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_admins_role ON public.admins USING btree (role);
+
+
+--
+-- Name: idx_admins_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_admins_status ON public.admins USING btree (status);
+
+
+--
 -- Name: idx_board_tool_usage_created; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -578,6 +629,13 @@ CREATE INDEX idx_user_watch_times_created ON public.user_watch_times USING btree
 --
 
 CREATE INDEX idx_user_watch_times_room_created ON public.user_watch_times USING btree (room_id, created_at);
+
+
+--
+-- Name: idx_users_banned_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_users_banned_at ON public.users USING btree (banned_at) WHERE (banned_at IS NOT NULL);
 
 
 --
