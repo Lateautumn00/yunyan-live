@@ -1,6 +1,6 @@
 # 云砚直播（Yunyan Live）接口文档总索引
 
-本文档覆盖 `yunyan-live-electron` monorepo 中全部 6 个微服务的对外接口，按微服务分目录归档。
+本文档覆盖 `yunyan-live-electron` monorepo 中全部 7 个微服务的对外接口，按微服务分目录归档。
 
 ## 服务与端口
 
@@ -12,6 +12,9 @@
 | mail-service | [mail-service/mail.md](mail-service/mail.md) | gRPC + MQ | 50053 | 邮件验证码 |
 | chat-ws-service | [chat-ws-service/chat.md](chat-ws-service/chat.md) | WebSocket | 50054 | 聊天 / 白板状态转发 |
 | yjs-ws-service | [yjs-ws-service/yjs.md](yjs-ws-service/yjs.md) | WebSocket | 50055 | Yjs 白板协同 |
+| admin-service | [admin-service/admin.md](admin-service/admin.md) | gRPC | 50056 | 管理后台数据面（指标 9467） |
+
+另有 **admin-web**（`apps/admin/web`）：独立的管理后台 SPA，容器端口 8848，只反代 `/api` 到 Gateway 的 `/admin/*`，不直连任何微服务。
 
 ## 通用约定
 
@@ -52,6 +55,13 @@
 ### 4. 参数校验
 
 Gateway 启用全局 `ValidationPipe`（`whitelist: true, forbidNonWhitelisted: true`），未知字段会触发 400。
+
+### 5. 管理后台（admin-service / admin-web）
+
+- 管理端路由组为 `/admin/*`，文档见 [server/admin.md](server/admin.md)；gRPC 数据面见 [admin-service/admin.md](admin-service/admin.md)。
+- **鉴权独立**：管理员 JWT 的 `aud` 为 `admin`，与用户 JWT（`/user/user/login` 签发）互不通用；`role` 1=超管、2=运营。
+- **账号独立**：`admins` 表与 `users` 零外键，管理员密码为 `scrypt` 格式（不走用户侧 RSA 加密链路）。
+- admin-web 的 `/api/admin/*` 在开发（vite proxy）与生产（nginx）都会剥掉 `/api` 前缀后转发到 Gateway。
 
 ## 状态码速查
 
