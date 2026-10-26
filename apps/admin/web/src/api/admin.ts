@@ -15,16 +15,12 @@ export interface AdminLoginResult {
 }
 
 export interface AdminMeResult {
-  code: number;
-  msg: string;
-  data: {
-    id: string;
-    username: string;
-    email: string | null;
-    role: number;
-    status: string;
-    lastLoginAt: string | null;
-  };
+  id: string;
+  username: string;
+  email: string | null;
+  role: number;
+  status: string;
+  lastLoginAt: string | null;
 }
 
 export interface AdminItem {

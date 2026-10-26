@@ -30,6 +30,24 @@ const defaultConfig: AxiosRequestConfig = {
   }
 };
 
+/**
+ * Gateway 的 ResponseInterceptor 对所有 HTTP 响应统一包裹为
+ * `{ code: 1000, msg, data }`；管理后台各接口的类型与视图都按裸 data 消费，
+ * 因此在这里一次性解包，避免每个调用点重复写 `res.data.data`。
+ * 非 1000 的业务错误由 HttpExceptionFilter 转成非 2xx，走 axios error 分支，不在此处理。
+ */
+function unwrapEnvelope<T>(body: T): T {
+  if (
+    body &&
+    typeof body === 'object' &&
+    (body as { code?: number }).code === 1000 &&
+    'data' in (body as Record<string, unknown>)
+  ) {
+    return (body as unknown as { data: T }).data;
+  }
+  return body;
+}
+
 class PureHttp {
   constructor() {
     this.httpInterceptorsRequest();
@@ -83,13 +101,13 @@ class PureHttp {
         // 优先判断post/get等方法是否传入回调，否则执行初始化设置等回调
         if (typeof $config.beforeResponseCallback === 'function') {
           $config.beforeResponseCallback(response);
-          return response.data;
+          return unwrapEnvelope(response.data);
         }
         if (PureHttp.initConfig.beforeResponseCallback) {
           PureHttp.initConfig.beforeResponseCallback(response);
-          return response.data;
+          return unwrapEnvelope(response.data);
         }
-        return response.data;
+        return unwrapEnvelope(response.data);
       },
       (error: PureHttpError) => {
         const $error = error;
