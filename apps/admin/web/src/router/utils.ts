@@ -172,6 +172,13 @@ function handleAsyncRoutes(routeList) {
   addPathMatch();
 }
 
+/** 应用后端下发的动态路由（管理后台无此接口，空数据或失败时保持静态路由）*/
+function applyAsyncRoutes(data: unknown) {
+  if (Array.isArray(data) && data.length > 0) {
+    handleAsyncRoutes(cloneDeep(data));
+  }
+}
+
 /** 初始化路由（`new Promise` 写法防止在异步请求中造成无限循环）*/
 function initRouter() {
   if (getConfig()?.CachingAsyncRoutes) {
@@ -185,27 +192,25 @@ function initRouter() {
       });
     } else {
       return new Promise(resolve => {
-        getAsyncRoutes().then(({ code, data }) => {
-          if (code === 0) {
-            handleAsyncRoutes(cloneDeep(data));
-            storageLocal().setItem(key, data);
+        getAsyncRoutes()
+          .then(({ code, data }) => {
+            if (code === 0) {
+              applyAsyncRoutes(data);
+              storageLocal().setItem(key, data);
+            }
             resolve(router);
-          } else {
-            resolve(router);
-          }
-        });
+          })
+          .catch(() => resolve(router));
       });
     }
   } else {
     return new Promise(resolve => {
-      getAsyncRoutes().then(({ code, data }) => {
-        if (code === 0) {
-          handleAsyncRoutes(cloneDeep(data));
+      getAsyncRoutes()
+        .then(({ code, data }) => {
+          if (code === 0) applyAsyncRoutes(data);
           resolve(router);
-        } else {
-          resolve(router);
-        }
-      });
+        })
+        .catch(() => resolve(router));
     });
   }
 }
@@ -318,7 +323,7 @@ function addAsyncRoutes(arrRoutes: Array<RouteRecordRaw>) {
 }
 
 /** 获取路由历史模式 https://next.router.vuejs.org/zh/guide/essentials/history-mode.html */
-function getHistoryMode(routerHistory): RouterHistory {
+function getHistoryMode(routerHistory = 'h5'): RouterHistory {
   // len为1 代表只有历史模式 为2 代表历史模式中存在base参数 https://next.router.vuejs.org/zh/api/#%E5%8F%82%E6%95%B0-1
   const historyMode = routerHistory.split(',');
   const leftMode = historyMode[0];

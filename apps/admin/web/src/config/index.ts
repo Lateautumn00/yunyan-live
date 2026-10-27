@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { App } from 'vue';
 
 let config: object = {};
-const { VITE_PUBLIC_PATH } = import.meta.env;
+const { VITE_PUBLIC_PATH = '/' } = import.meta.env;
 
 const setConfig = (cfg?: unknown) => {
   config = Object.assign(config, cfg);

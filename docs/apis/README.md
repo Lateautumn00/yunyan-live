@@ -61,6 +61,8 @@ Gateway 启用全局 `ValidationPipe`（`whitelist: true, forbidNonWhitelisted: 
 - **鉴权独立**：管理员 JWT 的 `aud` 为 `admin`，与用户 JWT（`/user/user/login` 签发）互不通用；`role` 1=超管、2=运营。
 - **账号独立**：`admins` 表与 `users` 零外键，管理员密码为 `scrypt` 格式（不走用户侧 RSA 加密链路）。
 - admin-web 的 `/api/admin/*` 在开发（vite proxy）与生产（nginx）都会剥掉 `/api` 前缀后直连 admin-service（3100）。
+- admin-web 必需 env（见 `apps/admin/web/.env.example`）：`VITE_BASE_API`（vite proxy 目标，开发指 `http://localhost:3100`）、`VITE_ROUTER_HISTORY=h5`、`VITE_PUBLIC_PATH=/`、`VITE_PORT=8848`。后三项在代码内有默认值（h5 / `/` / 8848），但显式配置可避免不同机器的差异。
+- admin-web 不依赖后端动态路由：`/get-async-routes` 无实现，`initRouter()` 请求失败时降级为静态路由（不会阻塞登录/刷新）。
 
 ## 状态码速查
 
