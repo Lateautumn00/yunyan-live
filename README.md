@@ -485,7 +485,7 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 | 50053       | gRPC      | Mail Service（邮件）                 | 仅本机（默认）                 |
 | 50054       | WebSocket | Chat WS Service（聊天）              | 仅本机（compose）              |
 | 50055       | WebSocket | Yjs WS Service（白板）               | 仅本机（compose）              |
-| 50056       | gRPC      | Admin Service（管理后台）            | 仅容器网络（compose 未发布）   |
+| 3100        | TCP       | Admin Service（管理后台 API）        | 仅容器网络（compose 未发布）   |
 | 8848        | TCP       | 管理后台 Web（admin-web 容器）       | 仅本机                         |
 | 20000-20100 | UDP       | RTP/RTCP 媒体流                      | 全接口                         |
 | 9090        | TCP       | Prometheus（监控）                   | 仅本机                         |
@@ -496,7 +496,7 @@ docker compose down -v       # 停止并删除数据卷（含数据库数据）
 > PostgreSQL/Redis 由 compose 双绑定 `127.0.0.1` + `192.168.2.100`（LAN 跨机用，勿发布到公网）。
 > 业务服务（3001/50054/50055）compose 只绑 `127.0.0.1`：跨机访问桌面端时改用宿主机 `pnpm dev` 运行业务服务，
 > 或参照 pg/redis 双绑定在 compose 增加 LAN 绑定。gRPC metrics 端口 9464（auth）/9465（live）/9466（mail）/
-> 9467（admin）仅宿主 dev 或容器网络内可达，未发布到宿主。管理后台 Web（8848）只反代 `/api` 到 gateway，
+> 9467（admin）仅宿主 dev 或容器网络内可达，未发布到宿主。管理后台 Web（8848）只反代 `/api` 到 admin-service（3100），
 > API 其余路径不经它暴露。
 
 ## 环境变量配置

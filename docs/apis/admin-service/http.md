@@ -1,21 +1,31 @@
-# 管理后台接口 `/admin`
+# 管理后台 HTTP 接口（admin-service）
 
-控制器：`apps/server/src/admin/admin.controller.ts`（`AdminController`），路由前缀 `/admin`，共 **20** 个端点。
-数据面全部经 gRPC 转发：`ADMIN_GRPC` → admin-service（:50056），删除类写端点经 `LIVE_GRPC` → live-service（:50052）。
-管理后台 Web（`apps/admin/web`）的 `/api/admin/*` 由 vite（开发）或 nginx（生产）剥掉 `/api` 前缀后转发到本组路由。
+服务：`apps/admin/admin-service`，控制器 `src/http/admin-http.controller.ts`，路由前缀 `/admin`，共 **20** 个端点。
+监听 **3100**（`ADMIN_PORT`），指标 `/metrics` 同时挂在 3100 与 **9467**（`METRICS_PORT`，Prometheus 抓取口）。
+数据面直连共享库（`DATABASE_URL`），TypeORM 实体仅 `Admin` / `User`，`synchronize: false`（DDL 只走 `db/migrations/`）。
+
+> 批次 7 之后管理后台不再经网关：原 `apps/server` 的 `/admin/*` 路由与 `ADMIN_GRPC` 客户端、admin-service 的 gRPC 面（50056）已移除。
+> 管理后台 Web（`apps/admin/web`）的 `/api/admin/*` 由 vite（开发）或 nginx（生产）剥掉 `/api` 前缀后直连本服务。
+
+## Base URL
+
+```
+http://<host>:3100
+```
 
 ## 鉴权与权限
 
 - **管理端 JWT 独立**：`AdminJwtStrategy` 校验 `aud === 'admin'`，与用户 `JwtStrategy` 物理隔离；用户 token 调 `/admin/*` 一律 401，反之亦然。
-- 令牌由 `POST /admin/login` 签发，有效期 **7 天**（无 refresh 流程），载荷 `{ sub: adminId, username, role, aud: 'admin' }`。
+- 令牌由 `POST /admin/login` **在本服务签发**，有效期 **7 天**（无 refresh 流程），载荷 `{ sub: adminId, username, role, aud: 'admin' }`。
 - RBAC：`role` **1 = 超管**，**2 = 运营**。读端点（列表/详情/看板/审计）`@AdminRoles(1, 2)`；写端点（管理员管理、封禁/解封、改角色、删除）`@AdminRoles(1)`。越权 → 403。
-- `POST /admin/login` 免鉴权，限流 **5 次 / 60s**（`STRICT_THROTTLE`），超限 429。
+- `POST /admin/login` 免鉴权，限流 **5 次 / 60s**（进程内滑动窗口，多实例不共享），超限 429。
+- CORS 允许来源：环境变量 `CORS_ORIGINS`（缺省 `http://localhost:8848`）。
 
 ## 响应约定
 
-- 与其他网关接口一致：`ResponseInterceptor` 统一包裹为 `{ code: 1000, msg: 'success', data: <下方「data」> }`。
+- 所有响应经 `ResponseInterceptor` 统一包裹为 `{ code: 1000, msg: 'success', data: <下方「data」> }`。
 - 错误由 `HttpExceptionFilter` 转为非 2xx：`{ code: <HTTP>, msg: '...' }`。
-- gRPC 状态映射：`NOT_FOUND→404`、`UNAUTHENTICATED→401`、`PERMISSION_DENIED→403`、`ALREADY_EXISTS→409`、`INVALID_ARGUMENT→400`、`INTERNAL→500`、`UNAVAILABLE→503`；未列入映射的状态（如 `FAILED_PRECONDITION`）→ 500。
+- 错误映射：`NOT_FOUND→404`、`UNAUTHENTICATED→401`、`PERMISSION_DENIED→403`、`ALREADY_EXISTS→409`、`INVALID_ARGUMENT→400`、`INTERNAL→500`、`UNAVAILABLE→503`；登录停用账号 `FAILED_PRECONDITION→403`（控制器内显式转换）。
 - 前端 `apps/admin/web/src/utils/http` 在响应拦截器里统一解包，视图直接消费 `data`。
 
 ## 端点总览
@@ -70,7 +80,7 @@
 }
 ```
 
-- 账号/密码错误 → 401；`status=disabled` → 500（admin-service 抛 `FAILED_PRECONDITION`，未在状态映射表内，已知粗糙点）。
+- 账号/密码错误 → 401；`status=disabled` → 403。
 - 成功/失败均写审计：`admin.login.ok` / `admin.login.failed`（失败记录 `actor=提交的用户名`、`detail.reason='rejected'`）。
 
 ## 2. 当前管理员
@@ -114,7 +124,7 @@ Body `{ "role": 1 | 2 }`。`data`：`{ code: "0", msg: "success" }`。审计 `ad
 
 `POST /admin/admins/:id/status`（仅超管）
 
-Body `{ "status": "active" | "disabled" }`。停用后该账号登录被拒；已签发 token 不主动吊销。审计 `admin.status_change`。
+Body `{ "status": "active" | "disabled" }`。停用后该账号登录被拒（403）；已签发 token 不主动吊销。审计 `admin.status_change`。
 
 ## 7. 用户列表
 
@@ -144,7 +154,7 @@ Body `{ "reason"?: string }`（缺省 `admin.ban`，仅进审计 detail，不落
 行为三语义：
 
 1. 写 `users.banned_at = now()`、`banned_by = <adminId>`（`AND banned_at IS NULL`，重复封禁幂等不改首次时间）；
-2. 网关同步调 `SessionService.revokeAllSessions(userId)`，经 Redis `session:kick` 踢掉在线 HTTP/WS 会话；
+2. 控制器同步调 `SessionService.revokeAllSessions(userId)`，经 Redis `session:kick` 踢掉在线 HTTP/WS 会话；
 3. **不中断进行中的直播**（封禁只影响登录与新建房间）。
 
 审计 `admin.ban_user`（`detail.reason`）。
@@ -184,7 +194,7 @@ Body `{ "role": 1 | 2 }`（1=老师 / 2=学生）。审计 `admin.role_change`�
 
 `DELETE /admin/live/rooms/:roomId`（仅超管）
 
-经 live-service `DeleteLive` 软删（保留 Janus/录像不变量），metadata 使用 `admin-id` 签名（`admin:<id>:<ts>`）旁路房主校验。`data`：`{}`。审计 `live.delete`（`detail.byAdmin=true`）。
+本服务直接处理：先 best-effort 调 Janus `destroy`（`JANUS_URL`，失败仅告警不阻断），再 `UPDATE live_rooms SET "deletedAt" = now()`（`AND "deletedAt" IS NULL`），未命中 404。录像/课件不级联删除。`data`：`{}`。审计 `live.delete`（`detail.byAdmin=true`）。
 
 ## 15. 录像列表
 
@@ -208,7 +218,7 @@ Body `{ "role": 1 | 2 }`（1=老师 / 2=学生）。审计 `admin.role_change`�
 | by   | `'room' \| 'video'` | 是   | 按房间 id 删 / 按录像 id 删             |
 | ids  | string[]            | 是   | 空数组直接返回 `{ deleted: 0 }`，不报错 |
 
-`data`：`{ deleted: <ids.length> }`。审计：`by=video` → `video.delete_ids`；`by=room` → `video.delete_rooms`。
+`data`：`{ deleted: <实际删除行数> }`。审计：`by=video` → `video.delete_ids`；`by=room` → `video.delete_rooms`。
 
 ## 17. 课件列表
 
@@ -225,7 +235,7 @@ Body `{ "role": 1 | 2 }`（1=老师 / 2=学生）。审计 `admin.role_change`�
 
 ## 18. 删除课件
 
-`DELETE /admin/live/coursewares/:id`（仅超管）→ live-service `DeleteCourseware`（`admin-id` 签名）。审计 `courseware.delete`。
+`DELETE /admin/live/coursewares/:id`（仅超管）→ 物理删除，未命中 404。`data`：`{}`。审计 `courseware.delete`。
 
 ## 19. 数据看板
 

@@ -1,245 +1,90 @@
-# admin-service 接口（gRPC）
+# admin-service 服务说明
 
-服务：`apps/admin/admin-service`，端口 **50056**（`GRPC_PORT`），协议包 `admin.proto`（`package admin`），服务名 `AdminService`。
-指标：`/metrics` 监听 **9467**（`METRICS_PORT`）。数据面：直连共享库（`DATABASE_URL`），TypeORM 实体仅 `Admin` / `User`，`synchronize: false`（DDL 只走 `db/migrations/`）。
+服务：`apps/admin/admin-service`，单进程 HTTP（NestJS + Express），监听 **3100**（`ADMIN_PORT`）。
+端点清单见 [http.md](http.md)；指标 `/metrics` 同时挂在 3100 与 **9467**（`METRICS_PORT`，Prometheus 抓取口）。
+数据面：直连共享库（`DATABASE_URL`），TypeORM 实体仅 `Admin` / `User`，`synchronize: false`（DDL 只走 `db/migrations/`）。
 
-内部服务仅供 Gateway 通过 gRPC 调用，不对外暴露 HTTP。管理后台的 HTTP 面见 [../server/admin.md](../server/admin.md)。
+> 批次 7 起不再使用 gRPC：`admin.proto`、50056 监听、`GRPC_*` 环境变量、网关 `ADMIN_GRPC` 客户端与 `/admin/*` 路由均已移除。
 
-## 通用说明
+## 运行
 
-- 所有 RPC 为 unary（请求-响应）。
-- 成功响应为 `{ code: "0", msg: "success", ... }`；失败抛 `RpcException`，由 Gateway `grpcCall` 映射为 HTTP 状态码（401/403/404/409/400/500/502）。
-- **身份 metadata**（S10b，两套 key 互不相通）：
-  - `user-id` / `user-ts` / `user-sig`：签名域 `HMAC-SHA256("{userId}:{ts}")`，5 分钟防重放窗。**admin-service 的写 RPC 用这一套**（Gateway 把管理员 id 写进 `user-id`），`actorFrom()` 缺失即 `UNAUTHENTICATED`。
-  - `admin-id` / `admin-ts` / `admin-sig`：签名域 `HMAC-SHA256("admin:{adminId}:{ts}")`，仅用于 Gateway → live-service 的管理端删除（房主校验旁路），admin-service 不消费。
-- 未配置 `GRPC_SHARED_SECRET` 时跳过验签（本地开发）；未携带身份 metadata 的调用按 `absent` 放行，因此**写 RPC 自身仍做 fail-closed 断言**。
-- **密码**：`admins.password_hash` 为 `scrypt:$131072-8-1$<salt-hex>$<hash-hex>`（`node:crypto`，salt 16B，key 64B）。与 `users.password_hash` 的 bcrypt 格式互不识别，防交叉登录。管理员密码不经 RSA 加密链路（与用户登录不同，Gateway 原样透传明文，仅限内网 gRPC）。
-- **零外键**：`admins` 与 `users` 无任何外键关系，`users.banned_by` 只存管理员 id 字符串。
-- 分页：`page` 从 1 开始；列表 `page_size` 钳制在 1–100（审计日志 1–200）。
+```bash
+# 依赖基础设施（PostgreSQL / Redis / RabbitMQ）
+docker compose -f init/docker-compose.yml up -d
 
-## 消息结构
+# 启动服务（.env 从 .env.example 复制）
+pnpm dev:admin-service
+```
+
+管理后台 Web 另起 `pnpm dev:admin`（vite，8848），其 `/api/*` 代理到本服务 3100。
+
+## 环境变量
+
+| 变量              | 默认                    | 说明                                       |
+| ----------------- | ----------------------- | ------------------------------------------ |
+| `ADMIN_PORT`      | `3100`                  | HTTP 监听端口                              |
+| `DATABASE_URL`    | —                       | 共享库连接串                               |
+| `JWT_SECRET`      | —                       | admin JWT 签名密钥（audience=admin）       |
+| `JWT_EXPIRES_IN`  | `7d`                    | 令牌有效期                                 |
+| `REDIS_HOST/PORT` | `127.0.0.1:6379`        | 封禁踢会话（`session:kick`）               |
+| `RABBITMQ_URL`    | —                       | 审计事件管线；留空则审计事件丢弃并告警     |
+| `JANUS_URL`       | `http://127.0.0.1:8088` | 删除直播间时销毁 Janus 房间（best-effort） |
+| `CORS_ORIGINS`    | `http://localhost:8848` | 允许的浏览器来源                           |
+| `METRICS_PORT`    | `9467`                  | 独立指标端口                               |
+
+## 数据模型
 
 ### AdminData
 
-| 字段          | 类型   | 说明                     |
-| ------------- | ------ | ------------------------ |
-| id            | string | 管理员 ID（uuid）        |
-| username      | string | 登录名（唯一）           |
-| email         | string | 邮箱，可为空             |
-| role          | int32  | 1=超管，2=运营           |
-| status        | string | `active` / `disabled`    |
-| last_login_at | string | ISO8601，未登录过为 null |
-| created_at    | string | ISO8601                  |
+| 字段        | 类型   | 说明                     |
+| ----------- | ------ | ------------------------ |
+| id          | string | 管理员 ID（uuid）        |
+| username    | string | 登录名（唯一）           |
+| email       | string | 邮箱，可为空             |
+| role        | int32  | 1=超管，2=运营           |
+| status      | string | `active` / `disabled`    |
+| lastLoginAt | string | ISO8601，未登录过为 null |
+| createdAt   | string | ISO8601                  |
 
 ### UserData
 
-| 字段       | 类型   | 说明                                |
-| ---------- | ------ | ----------------------------------- |
-| id         | string | 用户 ID（uuid）                     |
-| username   | string | 用户名                              |
-| email      | string | 邮箱                                |
-| role       | int32  | 1=老师，2=学生                      |
-| status     | string | 派生值：`banned_at` 非空即 `banned` |
-| banned_at  | string | ISO8601，未封禁为 null              |
-| banned_by  | string | 封禁操作者（admin id），零外键      |
-| created_at | string | ISO8601                             |
+| 字段      | 类型   | 说明                               |
+| --------- | ------ | ---------------------------------- |
+| id        | string | 用户 ID（uuid）                    |
+| username  | string | 用户名                             |
+| email     | string | 邮箱                               |
+| role      | int32  | 1=老师，2=学生                     |
+| status    | string | 派生值：`bannedAt` 非空即 `banned` |
+| bannedAt  | string | ISO8601，未封禁为 null             |
+| bannedBy  | string | 封禁操作者（admin id），零外键     |
+| createdAt | string | ISO8601                            |
 
-### CommonResponse
+## 关键约束
 
-`{ code: "0", msg: "success" }`，写操作不带数据。
+- **密码**：`admins.password_hash` 为 `scrypt:$131072-8-1$<salt-hex>$<hash-hex>`（`node:crypto`，salt 16B，key 64B）。与 `users.password_hash` 的 bcrypt 格式互不识别，防交叉登录。管理员密码不经 RSA 加密链路（内网直连，控制器原样接收明文）。
+- **零外键**：`admins` 与 `users` 无任何外键关系，`users.banned_by` 只存管理员 id 字符串。
+- **分页**：`page` 从 1 开始；列表 `pageSize` 钳制在 1–100（审计日志 1–200）。
+- **登录限流**：进程内滑动窗口 5 次/60s（多实例不共享；如需全局限流再迁到 Redis）。
+- **删除语义**：直播间软删（`live_rooms."deletedAt"`，先 best-effort 销毁 Janus 房间）；录像/课件物理删除，未命中返回 404。
+- **SQL 注意**：`live_rooms` / `video_recordings` / `coursewares` 为 camelCase 引号列（`db/schema-baseline.sql:240-269,305-318,212-224`），`users` 为 snake_case；`u.id::text = r."liveUserId"` 需显式 cast。
+- **审计**：动作常量见 `packages/nest-shared/src/audit/constants.ts`（点号命名，如 `admin.ban_user`），经 `AuditModule` 发 MQ；保留策略见 `docs/research/data-retention-policy.md`。
+- **审计查询**：`audit_logs` 不建二级索引，查询强制带时间窗（默认近 7 天），排序固定 `ORDER BY id DESC`。
 
-## RPC 列表
+## 目录结构
 
-### 1. AdminLogin
-
-| 字段     | 类型   | 必填 | 说明             |
-| -------- | ------ | ---- | ---------------- |
-| username | string | 是   | 管理员登录名     |
-| password | string | 是   | 明文密码（内网） |
-
-校验 scrypt 哈希 + `status === 'active'`；成功写 `last_login_at`，返回 `access_token: ""`、`expires_in: 0`，管理员信息放 `data`（`AdminData`）。
-**JWT 由 Gateway 签发**（`aud: 'admin'`，7 天），admin-service 不持有 `JWT_SECRET`。
-失败：账号/密码错误 → `UNAUTHENTICATED`；`status=disabled` → `FAILED_PRECONDITION`（Gateway 映射 412）。
-
-### 2. GetAdmin
-
-| 字段     | 类型   | 必填 | 说明      |
-| -------- | ------ | ---- | --------- |
-| admin_id | string | 是   | 管理员 ID |
-
-不存在 → `NOT_FOUND`。
-
-### 3. ListAdmins
-
-| 字段      | 类型   | 必填 | 说明                          |
-| --------- | ------ | ---- | ----------------------------- |
-| page      | int32  | 否   | 默认 1                        |
-| page_size | int32  | 否   | 默认 20，钳制 1–100           |
-| keyword   | string | 否   | 模糊匹配 `username` / `email` |
-
-返回 `total` + `items: AdminData[]`。
-
-### 4. CreateAdmin
-
-| 字段     | 类型   | 必填 | 说明                           |
-| -------- | ------ | ---- | ------------------------------ |
-| username | string | 是   | 唯一，冲突 → `ALREADY_EXISTS`  |
-| email    | string | 否   | 空串表示不填                   |
-| password | string | 是   | 明文，服务端 scrypt 后落库     |
-| role     | int32  | 否   | 1/2，非法 → `INVALID_ARGUMENT` |
-
-需要 `user-id` 验签 metadata（`actorFrom`）。返回新建的 `AdminData`。
-
-### 5. UpdateAdminRole
-
-| 字段     | 类型   | 必填 | 说明       |
-| -------- | ------ | ---- | ---------- |
-| admin_id | string | 是   | 目标管理员 |
-| role     | int32  | 是   | 1/2        |
-
-需要验签 metadata；目标不存在 → `NOT_FOUND`；role 非法 → `INVALID_ARGUMENT`。
-
-### 6. SetAdminStatus
-
-| 字段     | 类型   | 必填 | 说明                  |
-| -------- | ------ | ---- | --------------------- |
-| admin_id | string | 是   | 目标管理员            |
-| status   | string | 是   | `active` / `disabled` |
-
-需要验签 metadata。停用后该管理员再登录 → `FAILED_PRECONDITION`；已签发的 JWT 不主动吊销（7 天自然过期，端点侧按 `status` 校验）。
-
-### 7. ListUsers
-
-| 字段      | 类型   | 必填 | 说明                                  |
-| --------- | ------ | ---- | ------------------------------------- |
-| page      | int32  | 否   | 默认 1                                |
-| page_size | int32  | 否   | 默认 20，钳制 1–100                   |
-| keyword   | string | 否   | 模糊匹配 `username` / `email`         |
-| role      | int32  | 否   | 1=老师 / 2=学生；`-1` 或 0 = 全部     |
-| status    | string | 否   | `active` / `banned`；空或 `-1` = 全部 |
-
-返回 `total` + `items: UserData[]`。
-
-### 8. GetUser
-
-| 字段    | 类型   | 必填 | 说明    |
-| ------- | ------ | ---- | ------- |
-| user_id | string | 是   | 用户 ID |
-
-不存在 → `NOT_FOUND`。
-
-### 9. BanUser
-
-| 字段    | 类型   | 必填 | 说明                                    |
-| ------- | ------ | ---- | --------------------------------------- |
-| user_id | string | 是   | 目标用户                                |
-| reason  | string | 否   | 仅用于审计 detail，admin-service 不落库 |
-
-需要验签 metadata：`banned_at = now()`、`banned_by = actor`，`AND banned_at IS NULL`（重复封禁幂等，不改首次时间）。
-**封禁三语义**：① 禁登录（auth-service Login 前查 `banned_at`）② 踢在线会话（Gateway 端点侧 `SessionService.revokeAllSessions`，不在本 RPC 内）③ 进行中直播不中断。
-
-### 10. UnbanUser
-
-| 字段    | 类型   | 必填 | 说明     |
-| ------- | ------ | ---- | -------- |
-| user_id | string | 是   | 目标用户 |
-
-需要验签 metadata：清空 `banned_at` / `banned_by`。
-
-### 11. SetUserRole
-
-| 字段    | 类型   | 必填 | 说明            |
-| ------- | ------ | ---- | --------------- |
-| user_id | string | 是   | 目标用户        |
-| role    | int32  | 是   | 1=老师 / 2=学生 |
-
-需要验签 metadata；role 非法 → `INVALID_ARGUMENT`；用户不存在 → `NOT_FOUND`。
-
-### 12. ListLiveRooms
-
-全局只读直播间列表（管理面读模型，跨房主）。
-
-| 字段          | 类型   | 必填 | 说明                                 |
-| ------------- | ------ | ---- | ------------------------------------ |
-| page          | int32  | 否   | 默认 1                               |
-| page_size     | int32  | 否   | 默认 20，钳制 1–100                  |
-| keyword       | string | 否   | 模糊匹配房间标题 / 主讲人用户名      |
-| status        | int32  | 否   | `0` = 全部；其余精确匹配             |
-| type          | int32  | 否   | `-1` = 全部                          |
-| start_time_ms | string | 否   | 房间开始时间下界（毫秒时间戳字符串） |
-| end_time_ms   | string | 否   | 房间开始时间上界                     |
-
-约束：`"deletedAt" IS NULL`（软删房间不出现）；`LEFT JOIN users ON u.id::text = r."liveUserId"`（uuid ↔ varchar 必须显式 cast）；排序 `"createdAt" DESC, "roomId" DESC`。
-
-### 13. GetLiveRoom
-
-| 字段    | 类型   | 必填 | 说明    |
-| ------- | ------ | ---- | ------- |
-| room_id | string | 是   | 房间 ID |
-
-软删房间 → `NOT_FOUND`。
-
-### 14. ListRecordings
-
-| 字段      | 类型   | 必填 | 说明                               |
-| --------- | ------ | ---- | ---------------------------------- |
-| page      | int32  | 否   | 默认 1                             |
-| page_size | int32  | 否   | 默认 20，钳制 1–100                |
-| keyword   | string | 否   | 模糊匹配文件名 / 房间标题 / 主讲人 |
-| room_id   | string | 否   | 精确过滤                           |
-
-只返回未软删房间下的录像（`LEFT JOIN live_rooms` + `"deletedAt" IS NULL`）。
-
-### 15. ListCoursewares
-
-| 字段      | 类型   | 必填 | 说明                      |
-| --------- | ------ | ---- | ------------------------- |
-| page      | int32  | 否   | 默认 1                    |
-| page_size | int32  | 否   | 默认 20，钳制 1–100       |
-| keyword   | string | 否   | 模糊匹配文件名 / 房间标题 |
-| room_id   | string | 否   | 精确过滤                  |
-
-同上：只含未软删房间的课件。
-
-### 16. GetDashboardStats
-
-无请求字段。返回 `data: DashboardStatsData`（8 项 `int64`）：
-
-| 字段              | 口径                                               |
-| ----------------- | -------------------------------------------------- |
-| total_users       | `COUNT(*) FROM users`                              |
-| today_new_users   | `created_at >= date_trunc('day', now())`           |
-| banned_users      | `banned_at IS NOT NULL`                            |
-| total_live_rooms  | `"deletedAt" IS NULL`                              |
-| active_live_rooms | 未软删且 `status = 2`（直播中）                    |
-| total_records     | `COUNT(*) FROM video_recordings`                   |
-| total_coursewares | `COUNT(*) FROM coursewares`                        |
-| today_new_rooms   | 未软删且 `"createdAt" >= date_trunc('day', now())` |
-
-"今日" 以数据库本地时区为准（单条 SQL，8 个子查询一次往返）。
-
-### 17. ListAuditLogs
-
-| 字段      | 类型   | 必填 | 说明                                  |
-| --------- | ------ | ---- | ------------------------------------- |
-| page      | int32  | 否   | 默认 1                                |
-| page_size | int32  | 否   | 默认 50，钳制 1–200                   |
-| action    | string | 否   | 精确匹配，如 `live.delete`；空 = 全部 |
-| actor     | string | 否   | 模糊匹配                              |
-| from_ms   | string | 否   | 时间窗下界（毫秒）；空 = `to - 7d`    |
-| to_ms     | string | 否   | 时间窗上界（毫秒）；空 = now          |
-
-硬约束（`docs/research/index-inventory.md`）：`audit_logs` **不建二级索引**，查询一律带时间窗（缺省近 7 天），排序固定 `ORDER BY id DESC`（走复合 PK 前缀 = 写入序），**禁止**按 `occurred_at` 排序。`detail` 为 JSON 字符串，Gateway 侧 `JSON.parse` 后下发。
-
-## 示例（Gateway 调用）
-
-```ts
-// 登录：管理员信息在 data 里，token 由网关签发
-const result = await grpcCall(this.adminService.adminLogin({ username, password }));
-const admin = result.data; // AdminData
-
-// 写操作：必须带验签 metadata（管理员 id 写入 user-id）
-await grpcCall(
-  this.adminService.banUser({ user_id: userId, reason }, userIdMetadata(req.user.adminId))
-);
+```
+src/
+  main.ts                     # HTTP 引导：3100 + /metrics + 9467
+  app.module.ts               # AdminHttpModule
+  http/
+    admin-http.module.ts      # TypeORM / Redis / Audit / Passport / JWT 装配
+    admin-http.controller.ts  # 20 个端点
+    login-throttle.guard.ts   # 登录限流（内存）
+    janus.client.ts           # 删除房间时销毁 Janus room
+  admin/                      # AdminService（账号、登录、封禁/角色）
+  users-admin/                # 用户读模型
+  live-admin/                 # 直播间 / 录像 / 课件读模型 + 删除
+  dashboard/                  # 看板聚合
+  audit-admin/                # 审计日志查询
+  admins/                     # admins 表仓储（scrypt）
 ```
