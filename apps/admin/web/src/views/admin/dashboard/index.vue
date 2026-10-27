@@ -7,7 +7,7 @@ defineOptions({ name: 'AdminDashboard' });
 
 /**
  * 数据看板（批次 7c）
- * 数据源：gateway /admin/dashboard/stats → admin-service 直查共享库。
+ * 数据源：admin-service /admin/dashboard/stats → admin-service 直查共享库。
  * 口径：activeLiveRooms = status 2（直播中）且未软删；"今日" 以数据库本地日为准。
  */
 const loading = ref(false);

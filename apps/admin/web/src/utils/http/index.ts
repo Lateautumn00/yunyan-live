@@ -14,7 +14,7 @@ import { getToken, formatToken } from '@/utils/auth';
 
 // 相关配置请参考：www.axios-js.com/zh-cn/docs/#axios-request-config-1
 const defaultConfig: AxiosRequestConfig = {
-  // 管理后台 API 统一走 /api 前缀：开发由 vite proxy 转发，生产由 nginx 反代到 gateway。
+  // 管理后台 API 统一走 /api 前缀：开发由 vite proxy 转发，生产由 nginx 反代到 admin-service。
   // 这样 SPA 路由（/admin/...）与 API 路径不会在刷新时互相抢占。
   baseURL: (import.meta.env.VITE_API_BASE as string) || '/api',
   // 请求超时时间
@@ -31,7 +31,7 @@ const defaultConfig: AxiosRequestConfig = {
 };
 
 /**
- * Gateway 的 ResponseInterceptor 对所有 HTTP 响应统一包裹为
+ * admin-service 的 ResponseInterceptor 对所有 HTTP 响应统一包裹为
  * `{ code: 1000, msg, data }`；管理后台各接口的类型与视图都按裸 data 消费，
  * 因此在这里一次性解包，避免每个调用点重复写 `res.data.data`。
  * 非 1000 的业务错误由 HttpExceptionFilter 转成非 2xx，走 axios error 分支，不在此处理。

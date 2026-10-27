@@ -19,9 +19,9 @@ export default async ({ mode }: ConfigEnv): Promise<UserConfigExport> => {
       host: '0.0.0.0',
       // 本地跨域代理 https://cn.vitejs.dev/config/server-options.html#server-proxy
       proxy: {
-        // API 统一前缀 /api：转发到 gateway 并剥掉前缀（生产由 nginx 做同规则反代）
+        // API 统一前缀 /api：转发到 admin-service 并剥掉前缀（生产由 nginx 做同规则反代）
         '/api': {
-          target: env.VITE_BASE_API || 'http://localhost:3001',
+          target: env.VITE_BASE_API || 'http://localhost:3100',
           changeOrigin: true,
           rewrite: path => path.replace(/^\/api/, '')
         }

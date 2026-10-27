@@ -93,7 +93,7 @@
 
   # ==== O3 业务服务（批次 5）：走 --profile app，缺省 `docker compose up` 仍只起基础设施 ====
   # 起停: docker compose --profile app up -d --build
-  # 注意: 与宿主机 pnpm dev 同端口互斥（3001/50054/50055/50056/8848/9464-9467），二选一运行
+  # 注意: 与宿主机 pnpm dev 同端口互斥（3001/3100/50054/50055/8848/9464-9467），二选一运行
   gateway:
     build:
       context: ..
@@ -115,7 +115,6 @@
       AUTH_GRPC_URL: auth-service:50051
       LIVE_GRPC_URL: live-service:50052
       MAIL_GRPC_URL: mail-service:50053
-      ADMIN_GRPC_URL: admin-service:50056
       JANUS_URL: http://janus-gateway:8088
       RABBITMQ_URL: amqp://${RABBITMQ_USER:?}:${RABBITMQ_PASSWORD:?}@rabbitmq:5672
       RECORDINGS_DIR: /home/janus/recordings
@@ -134,8 +133,6 @@
       live-service:
         condition: service_started
       mail-service:
-        condition: service_started
-      admin-service:
         condition: service_started
     healthcheck:
       test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:3001/health || exit 1']
@@ -182,7 +179,7 @@
         max-file: '3'
 
   # 批次 7 / GAP-F8：独立管理后台服务（admins 表与 users 零外键，独立 gRPC）
-  # 仅 backend 网络：不对外暴露，只由 gateway 的 /admin 路由组经 ADMIN_GRPC 调用
+  # 仅 backend 网络：不对外暴露，由 admin-web nginx 反代 /api -> 3100
   admin-service:
     build:
       context: ..
@@ -193,13 +190,20 @@
     restart: unless-stopped
     networks: [backend]
     environment:
+      ADMIN_PORT: '3100'
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/yunyan_live
-      GRPC_HOST: 0.0.0.0
-      GRPC_PORT: '50056'
-      GRPC_SHARED_SECRET: ${GRPC_SHARED_SECRET:?}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:?}:${RABBITMQ_PASSWORD:?}@rabbitmq:5672
+      JANUS_URL: http://janus-gateway:8088
       METRICS_PORT: '9467'
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1:9467/metrics || exit 1']
@@ -364,11 +368,11 @@
     container_name: yunyan-live-admin-web
     profiles: ['app']
     restart: unless-stopped
-    networks: [edge]
+    networks: [edge, backend]
     ports:
       - '127.0.0.1:8848:80'
     depends_on:
-      gateway:
+      admin-service:
         condition: service_started
     healthcheck:
       test: ['CMD-SHELL', 'wget -q -O- http://127.0.0.1/healthz || exit 1']

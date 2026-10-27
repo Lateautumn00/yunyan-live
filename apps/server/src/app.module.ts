@@ -9,7 +9,6 @@ import { UsersModule } from './users/users.module';
 import { LiveModule } from './live/live.module';
 import { MailModule } from './mail/mail.module';
 import { UploadModule } from './upload/upload.module';
-import { AdminModule } from './admin/admin.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DEFAULT_THROTTLE, RateLimitGuard } from './common/guards/rate-limit.guard';
@@ -27,8 +26,7 @@ import { DEFAULT_THROTTLE, RateLimitGuard } from './common/guards/rate-limit.gua
     UsersModule,
     LiveModule,
     MailModule,
-    UploadModule,
-    AdminModule
+    UploadModule
   ],
   controllers: [AppController],
   providers: [

@@ -18,7 +18,7 @@ defineOptions({ name: 'AdminLiveList' });
 
 /**
  * 直播间全局管理（批次 7c）
- * - 读：gateway /admin/live/{rooms,recordings,coursewares} → admin-service 直查共享库
+ * - 读：admin-service /admin/live/{rooms,recordings,coursewares} → admin-service 直查共享库
  * - 写：删除经 live-service（Janus 销毁 + 软删），仅超管（role=1）可见
  */
 const userStore = useUserStoreHook();
