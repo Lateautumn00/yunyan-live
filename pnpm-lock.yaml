@@ -81,9 +81,6 @@ importers:
       '@grpc/grpc-js':
         specifier: ~1.14.6
         version: 1.14.6
-      '@grpc/proto-loader':
-        specifier: ^0.8.1
-        version: 0.8.1
       '@nestjs/common':
         specifier: ^10.0.0
         version: 10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -99,6 +96,12 @@ importers:
       '@nestjs/microservices':
         specifier: ^10.4.22
         version: 10.4.22(@grpc/grpc-js@1.14.6)(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(@nestjs/websockets@10.4.22)(amqplib@2.0.1)(ioredis@6.0.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/passport':
+        specifier: ^10.0.3
+        version: 10.0.3(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(passport@0.7.0)
+      '@nestjs/platform-express':
+        specifier: ^10.4.22
+        version: 10.4.22(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)
       '@nestjs/typeorm':
         specifier: ^10.0.0
         version: 10.0.2(@nestjs/common@10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(pg@8.23.1)(ts-node@10.9.2(@types/node@22.20.5)(typescript@5.9.3)))
@@ -108,9 +111,15 @@ importers:
       '@yunyan-live/shared':
         specifier: workspace:*
         version: link:../../../packages/shared
+      axios:
+        specifier: ^1.20.0
+        version: 1.20.0
       dotenv:
         specifier: ^16.6.1
         version: 16.6.1
+      passport:
+        specifier: ^0.7.0
+        version: 0.7.0
       pg:
         specifier: ^8.0.0
         version: 8.23.1
@@ -130,6 +139,9 @@ importers:
       '@nestjs/cli':
         specifier: ^10.0.0
         version: 10.4.9(esbuild@0.28.2)
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.5

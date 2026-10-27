@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Admin, User } from '@yunyan-live/shared';
-import { AdminModule } from './admin/admin.module';
+import { AdminHttpModule } from './http/admin-http.module';
 
 @Module({
   imports: [
@@ -16,7 +16,7 @@ import { AdminModule } from './admin/admin.module';
       }),
       inject: [ConfigService]
     }),
-    AdminModule
+    AdminHttpModule
   ]
 })
 export class AppModule {}

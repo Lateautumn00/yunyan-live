@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { status } from '@grpc/grpc-js';
-import { grpcError, ok, userIdFromMetadata } from '@yunyan-live/nest-shared';
+import { grpcError, ok } from '@yunyan-live/nest-shared';
 import { AdminsService } from './admins.service';
 import { UsersAdminService } from '../users-admin/users-admin.service';
 import {
@@ -14,7 +14,6 @@ import {
   type DashboardStatsRow
 } from '../dashboard-admin/dashboard-admin.service';
 import { AuditAdminService, type AuditLogRow } from '../audit-admin/audit-admin.service';
-import type { Metadata } from '@grpc/grpc-js';
 
 // ---------- gRPC 信封类型（export 供 controller 标注返回类型，声明文件生成需要） ----------
 
@@ -44,7 +43,7 @@ export interface AdminLoginResult {
   msg: string;
   access_token: string;
   expires_in: number;
-  /** 与 admin.proto 的 AdminAuthResponse.data（AdminData）对齐 */
+  /** 与 HTTP 层 AdminData 结构对齐 */
   data: AdminItem;
 }
 
@@ -174,14 +173,14 @@ export class AdminService {
     };
   }
 
-  /** 管理员登录：校验 admins 表（scrypt）；gateway 侧统一签发 admin JWT（audience=admin）。 */
+  /** 管理员登录：校验 admins 表（scrypt）；JWT 由 HTTP 控制器在本进程签发（audience=admin）。 */
   async adminLogin(data: { username: string; password: string }): Promise<AdminLoginResult> {
     const admin = await this.adminsService.verifyCredentials(data.username, data.password);
     if (!admin) throw grpcError(status.UNAUTHENTICATED, '管理员账号或密码错误');
     if (admin.status !== 'active') throw grpcError(status.FAILED_PRECONDITION, '账号已停用');
     await this.adminsService.touchLastLogin(admin.id);
-    // 信封必须与 admin.proto 的 AdminAuthResponse 对齐：管理员信息在 data 里，
-    // 顶层只放 access_token / expires_in（此前把字段平铺，data 为空导致网关读 admin.id 抛错）
+    // 保持既有信封形状（管理员信息在 data 里，顶层只放 access_token / expires_in）；
+    // token 由控制器填充，服务层不感知 JWT。
     const result = ok({
       access_token: '',
       expires_in: 0,
@@ -190,7 +189,7 @@ export class AdminService {
     return result as unknown as AdminLoginResult;
   }
 
-  async getAdmin(data: { admin_id: string }, _metadata: Metadata): Promise<AdminGetResult> {
+  async getAdmin(data: { admin_id: string }): Promise<AdminGetResult> {
     const admin = await this.adminsService.findById(data.admin_id);
     if (!admin) throw grpcError(status.NOT_FOUND, 'admin not found');
     return ok({ data: this.toAdminItem(admin) }) as unknown as AdminGetResult;
@@ -211,9 +210,8 @@ export class AdminService {
 
   async createAdmin(
     data: { username: string; email: string; password: string; role: number },
-    metadata: Metadata
+    _actorId: string
   ): Promise<AdminGetResult> {
-    this.actorFrom(metadata);
     try {
       const admin = await this.adminsService.create({
         username: data.username,
@@ -233,9 +231,8 @@ export class AdminService {
 
   async updateAdminRole(
     data: { admin_id: string; role: number },
-    metadata: Metadata
+    _actorId: string
   ): Promise<CommonResult> {
-    this.actorFrom(metadata);
     if (data.role !== 1 && data.role !== 2) {
       throw grpcError(status.INVALID_ARGUMENT, 'role must be 1 or 2');
     }
@@ -247,9 +244,8 @@ export class AdminService {
 
   async setAdminStatus(
     data: { admin_id: string; status: string },
-    metadata: Metadata
+    _actorId: string
   ): Promise<CommonResult> {
-    this.actorFrom(metadata);
     if (data.status !== 'active' && data.status !== 'disabled') {
       throw grpcError(status.INVALID_ARGUMENT, "status must be 'active' or 'disabled'");
     }
@@ -282,21 +278,18 @@ export class AdminService {
     return ok({ data: this.toUserItem(user) }) as unknown as UserGetResult;
   }
 
-  async banUser(
-    data: { user_id: string; reason: string },
-    metadata: Metadata
-  ): Promise<CommonResult> {
-    const actor = this.actorFrom(metadata);
+  async banUser(data: { user_id: string; reason: string }, actorId: string): Promise<CommonResult> {
+    const actor = actorId;
     const target = await this.usersAdminService.findById(data.user_id);
     if (!target) throw grpcError(status.NOT_FOUND, 'user not found');
     await this.usersAdminService.banUser(data.user_id, actor);
-    // 7b：gateway 端点同步调 SessionService.revokeAllSessions（踢在线会话）
+    // 封禁三语义：禁登录（auth-service 登录前查 banned_at）/ 踢会话（HTTP 控制器调用
+    // SessionService.revokeAllSessions）/ 进行中直播不中断。
     // S12 审计动作 admin.ban_user（detail 含 reason，走白名单脱敏）
     return ok({}) as unknown as CommonResult;
   }
 
-  async unbanUser(data: { user_id: string }, metadata: Metadata): Promise<CommonResult> {
-    this.actorFrom(metadata);
+  async unbanUser(data: { user_id: string }, _actorId: string): Promise<CommonResult> {
     const target = await this.usersAdminService.findById(data.user_id);
     if (!target) throw grpcError(status.NOT_FOUND, 'user not found');
     await this.usersAdminService.unbanUser(data.user_id);
@@ -305,9 +298,8 @@ export class AdminService {
 
   async setUserRole(
     data: { user_id: string; role: number },
-    metadata: Metadata
+    _actorId: string
   ): Promise<CommonResult> {
-    this.actorFrom(metadata);
     if (data.role !== 1 && data.role !== 2) {
       throw grpcError(status.INVALID_ARGUMENT, 'role must be 1 or 2');
     }
@@ -399,19 +391,5 @@ export class AdminService {
       toMs: data.to_ms || undefined
     });
     return ok({ total, items }) as unknown as AuditLogListResult;
-  }
-
-  /**
-   * 写操作身份断言（S4 惯用写法，fail-closed）：
-   * 仅信任全局 GrpcAuthGuard 验签通过的签名 metadata（userIdMetadata 携带 user-id/user-ts/user-sig）。
-   * user-id 即操作者（admin 侧调用方把 admin guid 写入 user-id 键，复用 S10b 验签闭环，
-   * 7b 收紧为 admin-service 专属 key 时再改）。
-   */
-  private actorFrom(metadata: Metadata): string {
-    const id = userIdFromMetadata(metadata);
-    if (!id) {
-      throw grpcError(status.UNAUTHENTICATED, 'missing admin actor metadata');
-    }
-    return id;
   }
 }

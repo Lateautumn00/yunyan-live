@@ -7,7 +7,7 @@ import { User } from '@yunyan-live/shared';
  * 批次 7 / GAP-F8：users 表管理面（封禁/角色复核/全局列表）。
  * 封禁语义拍板：
  *   1. 禁登录：banned_at IS NOT NULL 时，auth-service Login 拒绝（登录前查，0008 迁移加列）。
- *   2. 踢在线会话：gateway /admin/ban 端点经 SessionService.revokeAllSessions（WS 经 session:kick 频道踢在线连接）。
+ *   2. 踢在线会话：admin-service /admin/ban 端点经 SessionService.revokeAllSessions（WS 经 session:kick 频道踢在线连接）。
  *   3. 进行中直播不中断：封禁只影响登录/新建房间，已加入的进行中直播允许看完。
  * 零外键：banned_by 存 admin id 字符串，不建 FK。
  */

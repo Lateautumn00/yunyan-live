@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
+import { status as GrpcStatus } from '@grpc/grpc-js';
 import { DataSource } from 'typeorm';
+import { grpcError } from '@yunyan-live/nest-shared';
 
 /**
  * 批次 7c：直播间 / 录像 / 课件全局只读模型。
@@ -8,7 +10,8 @@ import { DataSource } from 'typeorm';
  * 为什么直连共享库而不是转发 live-service：
  * admin-service 已是管理面读模型（`users-admin` 直接读 users），全服务共用同一 PG；
  * 一次 JOIN 即可带出主讲人/房间标题，免去网关逐条 gRPC 回查。
- * **删除不在此处**：必须走 live-service（Janus 销毁 + 软删 + 归属语义），见 gateway /admin/live/* 写端点。
+ * 删除同样在本服务内完成：直播间先 best-effort 通知 Janus 销毁，再软删；
+ * 录像/课件为物理删除（与 live-service 同语义）。
  *
  * SQL 注意：live_rooms / video_recordings / coursewares 为 camelCase 引号列
  * （`db/schema-baseline.sql:240-269,305-318,212-224`），users 为 snake_case。
@@ -273,5 +276,49 @@ export class LiveAdminService {
       createdAt: iso(row.createdAt)
     }));
     return { total, items };
+  }
+
+  // ---------- 管理面删除（单进程直连 DB，替代原网关 → live-service gRPC） ----------
+
+  /** 删除直播间：软删（Janus 销毁由控制器先行 best-effort 调用，失败不阻断） */
+  async deleteRoom(roomId: string): Promise<{ roomId: string }> {
+    const rows = (await this.dataSource.query(
+      `UPDATE live_rooms SET "deletedAt" = now()
+       WHERE "roomId" = $1 AND "deletedAt" IS NULL
+       RETURNING "roomId"`,
+      [roomId]
+    )) as { roomId: string }[];
+    if (rows.length === 0) throw grpcError(GrpcStatus.NOT_FOUND, 'room not found');
+    return { roomId: rows[0]!.roomId };
+  }
+
+  /** 按录像 id 批量删除（物理删除，与 live-service deleteVideoByVideoIds 同语义） */
+  async deleteVideosByIds(ids: string[]): Promise<{ deleted: number }> {
+    if (ids.length === 0) return { deleted: 0 };
+    const rows = (await this.dataSource.query(
+      `DELETE FROM video_recordings WHERE id = ANY($1::uuid[]) RETURNING id`,
+      [ids]
+    )) as { id: string }[];
+    return { deleted: rows.length };
+  }
+
+  /** 按房间批量删除录像（与 live-service deleteVideoByRoomIds 同语义） */
+  async deleteVideosByRoomIds(roomIds: string[]): Promise<{ deleted: number }> {
+    if (roomIds.length === 0) return { deleted: 0 };
+    const rows = (await this.dataSource.query(
+      `DELETE FROM video_recordings WHERE "roomId" = ANY($1::text[]) RETURNING id`,
+      [roomIds]
+    )) as { id: string }[];
+    return { deleted: rows.length };
+  }
+
+  /** 删除课件（物理删除；未命中抛 NOT_FOUND，避免静默成功） */
+  async deleteCourseware(id: string): Promise<{ deleted: number }> {
+    const rows = (await this.dataSource.query(
+      `DELETE FROM coursewares WHERE id = $1::uuid RETURNING id`,
+      [id]
+    )) as { id: string }[];
+    if (rows.length === 0) throw grpcError(GrpcStatus.NOT_FOUND, 'courseware not found');
+    return { deleted: rows.length };
   }
 }

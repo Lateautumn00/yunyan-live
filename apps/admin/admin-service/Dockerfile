@@ -46,6 +46,6 @@ COPY --from=builder /app/packages/nest-shared/src/protos ./packages/nest-shared/
 
 WORKDIR /app/apps/admin/admin-service
 
-EXPOSE 50056 9467
+EXPOSE 3100 9467
 
 CMD ["node", "dist/main.js"]

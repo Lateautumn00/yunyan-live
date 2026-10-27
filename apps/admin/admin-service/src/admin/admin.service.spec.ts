@@ -5,7 +5,7 @@ import { AdminService } from './admin.service';
 import type { AdminsService } from './admins.service';
 
 /**
- * 回归点：adminLogin 的信封必须与 admin.proto 的 AdminAuthResponse 对齐——
+ * 回归点：adminLogin 的信封必须与 HTTP 层约定的 AdminData 结构对齐——
  * 管理员信息放在 data 里，顶层只有 access_token / expires_in。
  * 曾经把字段平铺在顶层，gRPC 序列化后 data 为空，网关读 `result.data.id` 直接 500。
  */
