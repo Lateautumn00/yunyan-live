@@ -1,19 +1,19 @@
 import { $t } from '@/plugins/i18n';
-const Layout = () => import('@/layout/index.vue');
 
 /** 用户管理模块（封禁 + 角色复核） */
 export default {
   path: '/admin/users',
-  component: Layout,
   name: 'AdminUserMgmt',
+  redirect: '/admin/users/list',
   meta: {
     icon: 'ri:user-3-line',
     title: $t('menus.adminUserMgmt'),
-    showLink: true
+    showLink: true,
+    rank: 2
   },
   children: [
     {
-      path: 'list',
+      path: '/admin/users/list',
       name: 'AdminUserList',
       component: () => import('@/views/admin/users/index.vue'),
       meta: {
@@ -22,7 +22,7 @@ export default {
       }
     },
     {
-      path: 'banned',
+      path: '/admin/users/banned',
       name: 'AdminUserBanned',
       component: () => import('@/views/admin/users/banned.vue'),
       meta: {

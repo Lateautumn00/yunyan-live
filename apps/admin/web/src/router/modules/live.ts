@@ -1,19 +1,19 @@
 import { $t } from '@/plugins/i18n';
-const Layout = () => import('@/layout/index.vue');
 
 /** 直播间全局管理模块 */
 export default {
   path: '/admin/live',
-  component: Layout,
   name: 'AdminLiveMgmt',
+  redirect: '/admin/live/list',
   meta: {
     icon: 'ri:live-line',
     title: $t('menus.adminLiveMgmt'),
-    showLink: true
+    showLink: true,
+    rank: 3
   },
   children: [
     {
-      path: 'list',
+      path: '/admin/live/list',
       name: 'AdminLiveList',
       component: () => import('@/views/admin/live/index.vue'),
       meta: {
