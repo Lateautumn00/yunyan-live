@@ -16,7 +16,6 @@ import {
   storageLocal,
   isIncludeAllChildren
 } from '@pureadmin/utils';
-import { getConfig } from '@/config';
 import { buildHierarchyTree } from '@/utils/tree';
 import { userKey, type DataInfo } from '@/utils/auth';
 import { type menuType, routerArrays } from '@/layout/types';
@@ -25,9 +24,6 @@ import { usePermissionStoreHook } from '@/store/modules/permission';
 const IFrame = () => import('@/layout/frame.vue');
 // https://cn.vitejs.dev/guide/features.html#glob-import
 const modulesRoutes = import.meta.glob('/src/views/**/*.{vue,tsx}');
-
-// 动态路由
-import { getAsyncRoutes } from '@/api/routes';
 
 const PAGE_NOT_FOUND_ROUTE_NAME = 'PageNotFound' as const;
 
@@ -172,47 +168,12 @@ function handleAsyncRoutes(routeList) {
   addPathMatch();
 }
 
-/** 应用后端下发的动态路由（管理后台无此接口，空数据或失败时保持静态路由）*/
-function applyAsyncRoutes(data: unknown) {
-  if (Array.isArray(data) && data.length > 0) {
-    handleAsyncRoutes(cloneDeep(data));
-  }
-}
-
 /** 初始化路由（`new Promise` 写法防止在异步请求中造成无限循环）*/
 function initRouter() {
-  if (getConfig()?.CachingAsyncRoutes) {
-    // 开启动态路由缓存本地localStorage
-    const key = 'async-routes';
-    const asyncRouteList = storageLocal().getItem(key) as any;
-    if (asyncRouteList && asyncRouteList?.length > 0) {
-      return new Promise(resolve => {
-        handleAsyncRoutes(asyncRouteList);
-        resolve(router);
-      });
-    } else {
-      return new Promise(resolve => {
-        getAsyncRoutes()
-          .then(({ code, data }) => {
-            if (code === 0) {
-              applyAsyncRoutes(data);
-              storageLocal().setItem(key, data);
-            }
-            resolve(router);
-          })
-          .catch(() => resolve(router));
-      });
-    }
-  } else {
-    return new Promise(resolve => {
-      getAsyncRoutes()
-        .then(({ code, data }) => {
-          if (code === 0) applyAsyncRoutes(data);
-          resolve(router);
-        })
-        .catch(() => resolve(router));
-    });
-  }
+  return new Promise(resolve => {
+    handleAsyncRoutes([]);
+    resolve(router);
+  });
 }
 
 /**
