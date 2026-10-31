@@ -7,6 +7,7 @@ import { MotionPlugin } from '@vueuse/motion';
 import { useEcharts } from '@/plugins/echarts';
 import { createApp, type Directive } from 'vue';
 import { useElementPlus } from '@/plugins/elementPlus';
+import { injectResponsiveStorage } from '@/utils/responsive';
 
 // 引入重置样式
 import './style/reset.scss';
@@ -49,6 +50,7 @@ getPlatformConfig(app).then(async _config => {
   setupStore(app);
   app.use(router);
   await router.isReady();
+  injectResponsiveStorage(app, _config);
   app.use(MotionPlugin).use(useI18n).use(useElementPlus).use(useEcharts);
   app.mount('#app');
 });
